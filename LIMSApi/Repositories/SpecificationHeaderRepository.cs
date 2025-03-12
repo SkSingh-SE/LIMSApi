@@ -1,0 +1,151 @@
+﻿using System.Linq.Dynamic.Core;
+using LIMSApi.Data;
+using LIMSApi.Dtos;
+using LIMSApi.Models;
+using LIMSApi.Repositories.Interface;
+using Microsoft.EntityFrameworkCore;
+
+namespace LIMSApi.Repositories
+{
+    public class SpecificationHeaderRepository : ISpecificationHeaderRepository
+    {
+        private readonly LIMSContext _context;
+
+        public SpecificationHeaderRepository(LIMSContext context)
+        {
+            _context = context;
+        }
+
+        public async Task AddSpecificationHeader(SpecificationHeader model)
+        {
+            await _context.SpecificationHeaders.AddAsync(model);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task DeleteSpecificationHeader(long id)
+        {
+            var existingSpecificationHeader = await _context.SpecificationHeaders.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
+            if (existingSpecificationHeader != null)
+            {
+                existingSpecificationHeader.IsActive = false;
+                existingSpecificationHeader.ModifiedOn = DateTime.UtcNow;
+                _context.SpecificationHeaders.Update(existingSpecificationHeader);
+                await _context.SaveChangesAsync();
+            }
+        }
+
+        public async Task<SpecificationHeader?> GetSpecificationHeaderById(long id)
+        {
+            return await _context.SpecificationHeaders.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
+        }
+
+        public async Task UpdateSpecificationHeader(SpecificationHeader model)
+        {
+            _context.SpecificationHeaders.Update(model);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<PagedResponse<object>> GetAllSpecificationHeaders(PageFilter filter)
+        {
+            var _query = from c in _context.SpecificationHeaders where c.IsActive 
+                         join so in _context.StandardOrganizationMasters
+                         on c.StandardOrganizationID equals so.ID into soGroup
+                         from so in soGroup.DefaultIfEmpty()
+                         
+                         select new
+                         {
+                             c.ID,
+                             c.SpecificationCode,
+                             c.Standard,
+                             c.Part,
+                             c.StandardOrganizationID,
+                             StandardOrganizationName = so.Name,
+                             c.UNSSteelNumber,
+                             c.AliasName,
+                             c.Grade,
+                             c.StandardYear
+                         };
+
+            if (filter.Filters != null)
+            {
+                foreach (var filterItem in filter.Filters)
+                {
+                    if (string.IsNullOrWhiteSpace(filterItem.Value))
+                    {
+                        continue;
+                    }
+                    var propertyName = filterItem.Key;
+                    var value = filterItem.Value;
+
+                    _query = _query.Where($"{propertyName}.Contains(@0)", value);
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.searchTerm))
+            {
+                var search = filter.searchTerm.Trim().ToLower();
+                _query = _query.Where(x => (x.SpecificationCode != null && x.SpecificationCode.ToLower().Contains(search))
+                || (x.Standard != null && x.Standard.ToLower().Contains(search))
+                || (x.Part != null && x.Part.ToLower().Contains(search))
+                || (x.StandardYear != null && x.StandardYear.ToLower().Contains(search))
+                || (x.UNSSteelNumber != null && x.UNSSteelNumber.ToLower().Contains(search))
+                || (x.Grade != null && x.Grade.ToLower().Contains(search))
+                || (x.AliasName != null && x.AliasName.ToLower().Contains(search))
+                );
+            }
+
+            if (filter.SortBy != null && filter.SortBy.Any())
+            {
+                var sortingExpressions = filter.SortBy
+                   .Select(s => $"{s.Key} {(s.Value ? "descending" : "ascending")}");
+                string orderByString = string.Join(", ", sortingExpressions);
+
+                _query = _query.OrderBy(orderByString);
+            }
+
+            // Total Records Count
+            int totalRecords = await _query.CountAsync();
+
+            // Apply Pagination
+            var items = await _query
+                .Skip((filter.PageNumber - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .ToListAsync();
+
+            return new PagedResponse<object>(items.Cast<object>().ToList(), totalRecords, filter.PageNumber, filter.PageSize);
+        }
+
+        public async Task<List<DropdwonSelector>> GetSpecificationHeaderDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = from a in _context.SpecificationHeaders where a.IsActive select a;
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var search = searchTerm.Trim().ToLower();
+                _query = _query.Where(x =>(x.AliasName != null && x.AliasName.ToLower().Contains(search)));
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            {
+                Id = x.ID,
+                Name = x.AliasName != null ? x.AliasName : x.SpecificationCode,
+            })).ToListAsync();
+
+            return data;
+        }
+
+        public async Task<bool> ExistsByName(string name)
+        {
+            return await _context.SpecificationHeaders.AnyAsync(x => x.SpecificationCode == name && x.IsActive);
+        }
+
+        public async Task<bool> ExistsByNameAndNotId(string name, long Id)
+        {
+            return await _context.SpecificationHeaders.AnyAsync(x => x.SpecificationCode == name && x.ID != Id && x.IsActive);
+        }
+    }
+}

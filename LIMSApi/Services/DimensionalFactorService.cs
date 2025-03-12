@@ -1,0 +1,84 @@
+﻿using LIMSApi.Dtos;
+using LIMSApi.Models;
+using LIMSApi.Repositories.Interface;
+using LIMSApi.Services.Interface;
+
+namespace LIMSApi.Services
+{
+    public class DimensionalFactorService : IDimensionalFactorService
+    {
+        private readonly IDimensionalFactorRepository _dimensionalRepository;
+        private readonly ILogger<DimensionalFactorService> _logger;
+
+        public DimensionalFactorService(IDimensionalFactorRepository dimensionalRepo, ILogger<DimensionalFactorService> logger)
+        {
+            _dimensionalRepository = dimensionalRepo;
+            _logger = logger;
+        }
+
+        public async Task CreateDimensionalFactor(DimensionalFactorMaster model)
+        {
+            if (string.IsNullOrWhiteSpace(model.Name))
+                throw new ArgumentException("DimensionalFactor name should not be empty!");
+
+            bool exists = await _dimensionalRepository.ExistsByName(model.Name);
+            if (exists)
+                throw new InvalidOperationException("DimensionalFactor already exists!");
+
+            await _dimensionalRepository.AddDimensionalFactor(model);
+            _logger.LogInformation("DimensionalFactor '{DimensionalFactorName}' created successfully.", model.Name);
+        }
+
+        public async Task ModifyDimensionalFactor(DimensionalFactorMaster model)
+        {
+            if (model.ID == 0)
+                throw new ArgumentException("DimensionalFactor ID should not be empty!");
+
+            bool exists = await _dimensionalRepository.ExistsByNameAndNotId(model.Name, model.ID);
+            if (exists)
+                throw new InvalidOperationException("Same DimensionalFactor already exists!");
+
+            var existingDimensionalFactor = await _dimensionalRepository.GetDimensionalFactorById(model.ID);
+            if (existingDimensionalFactor == null)
+                throw new InvalidOperationException("DimensionalFactor not found!");
+
+            existingDimensionalFactor.Name = model.Name;
+            existingDimensionalFactor.ModifiedOn = DateTime.UtcNow;
+
+            await _dimensionalRepository.UpdateDimensionalFactor(existingDimensionalFactor);
+            _logger.LogInformation("DimensionalFactor '{DimensionalFactorName}' updated successfully.", model.Name);
+        }
+
+        public async Task RemoveDimensionalFactor(long id)
+        {
+            var existingDimensionalFactor = await _dimensionalRepository.GetDimensionalFactorById(id);
+            if (existingDimensionalFactor == null)
+                throw new InvalidOperationException("DimensionalFactor not found!");
+
+            existingDimensionalFactor.IsActive = false;
+            existingDimensionalFactor.ModifiedOn = DateTime.UtcNow;
+
+            await _dimensionalRepository.UpdateDimensionalFactor(existingDimensionalFactor);
+            _logger.LogInformation("DimensionalFactor with ID '{DimensionalFactorId}' deleted successfully.", id);
+        }
+
+        public async Task<DimensionalFactorMaster> GetDimensionalFactorDetails(long id)
+        {
+            var classification = await _dimensionalRepository.GetDimensionalFactorById(id);
+            if (classification == null)
+                throw new InvalidOperationException("DimensionalFactor not found!");
+
+            return classification;
+        }
+
+        public async Task<PagedResponse<object>> FetchDimensionalFactorList(PageFilter filter)
+        {
+            return await _dimensionalRepository.GetAllDimensionalFactors(filter);
+        }
+
+        public async Task<List<DropdwonSelector>> GetDimensionalFactorDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _dimensionalRepository.GetDimensionalFactorDropdown(searchTerm, pageNo, pageSize);
+        }
+    }
+}

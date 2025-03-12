@@ -1,0 +1,102 @@
+﻿using System.Linq.Dynamic.Core;
+using LIMSApi.Data;
+using LIMSApi.Dtos;
+using LIMSApi.Models;
+using LIMSApi.Repositories.Interface;
+using Microsoft.EntityFrameworkCore;
+
+namespace LIMSApi.Repositories
+{
+    public class SiteActivityRepository : ISiteActivityRepository
+    {
+        private readonly LIMSContext _context;
+
+        public SiteActivityRepository(LIMSContext context)
+        {
+            _context = context;
+        }
+
+        public async Task AddSiteActivity(SiteActivity  model)
+        {
+            await _context.SiteActivities.AddAsync(model);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task AddMultipleSiteActivities(List<SiteActivity> activities)
+        {
+            await _context.SiteActivities.AddRangeAsync(activities);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task DeleteSiteActivity(long id)
+        {
+            var existingSiteActivity = await _context.SiteActivities.FirstOrDefaultAsync(x => x.ID == id);
+            if (existingSiteActivity != null)
+            {
+                existingSiteActivity.ModifiedOn = DateTime.UtcNow;
+                _context.SiteActivities.Update(existingSiteActivity);
+                await _context.SaveChangesAsync();
+            }
+        }
+
+        public async Task<SiteActivity?> GetSiteActivityById(long id)
+        {
+            return await _context.SiteActivities.FirstOrDefaultAsync(x => x.ID == id);
+        }
+
+        public async Task UpdateSiteActivity(SiteActivity model)
+        {
+            _context.SiteActivities.Update(model);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<PagedResponse<object>> GetAllSiteActivitys(PageFilter filter)
+        {
+            var _query = from c in _context.SiteActivities select c;
+
+            if (filter.Filters != null)
+            {
+                foreach (var filterItem in filter.Filters)
+                {
+                    if (string.IsNullOrWhiteSpace(filterItem.Value))
+                    {
+                        continue;
+                    }
+                    var propertyName = filterItem.Key;
+                    var value = filterItem.Value;
+
+                    _query = _query.Where($"{propertyName}.Contains(@0)", value);
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.searchTerm))
+            {
+                var search = filter.searchTerm.Trim().ToLower();
+                _query = _query.Where(x => (x.Description != null && x.Description.ToLower().Contains(search))
+                                    );
+            }
+
+            if (filter.SortBy != null && filter.SortBy.Any())
+            {
+                var sortingExpressions = filter.SortBy
+                   .Select(s => $"{s.Key} {(s.Value ? "descending" : "ascending")}");
+                string orderByString = string.Join(", ", sortingExpressions);
+
+                _query = _query.OrderBy(orderByString);
+            }
+
+            // Total Records Count
+            int totalRecords = await _query.CountAsync();
+
+            // Apply Pagination
+            var items = await _query
+                .Skip((filter.PageNumber - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .ToListAsync();
+
+            return new PagedResponse<object>(items.Cast<object>().ToList(), totalRecords, filter.PageNumber, filter.PageSize);
+        }
+
+        
+    }
+}
