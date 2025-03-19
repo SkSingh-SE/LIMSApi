@@ -18,25 +18,9 @@ namespace LIMSApi.Controllers
         [HttpPost("uploadFile")]
         public async Task<IActionResult> UploadFile(IFormFile file,  int fileType, int? year)
         {
-            try
-            {
-                if (file == null || file.Length == 0)
-                    return BadRequest("No file uploaded.");
-
-                FileType fileTypes;
-                if (!Enum.IsDefined(typeof(FileType), fileType))
-                    return BadRequest("Invalid file type.");
-
-                fileTypes = (FileType)fileType;
-
-                await _fileService.UploadFileAsync(file, fileTypes, year);
-                return Ok(new { message = "File uploaded successfully" });
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"File Upload Error: {ex.Message}");
-                return StatusCode(500, $"Error: {ex.Message}");
-            }
+            FileType fileTypes = (FileType)fileType;
+            var uploadFile = await _fileService.UploadFileAsync(file, fileTypes, year);
+            return Ok(uploadFile);
         }
 
 

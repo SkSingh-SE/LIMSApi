@@ -14,5 +14,18 @@ namespace LIMSApi.Repositories.Interface
         Task<List<DropdwonSelector>> GetEmployeeDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<bool> ExistsByEmail(string email);
         Task<bool> ExistsByEmailAndNotId(string email, long id);
+
+
+        // Employee Qualification Management
+        Task AddEmployeeQualification(EmployeeQualification qualification);
+        Task UpdateEmployeeQualification(EmployeeQualification qualification);
+        Task DeleteEmployeeQualification(long id);
+        Task<List<EmployeeQualification>> GetEmployeeQualifications(long employeeId);
+
+        // Employee Document Management
+        Task AddEmployeeDocument(EmployeeDocument document);
+        Task DeleteEmployeeDocument(long id);
+        Task<EmployeeDocument?> GetEmployeeDocumentById(long id);
+        Task<List<EmployeeDocument>> GetEmployeeDocuments(long employeeId);
     }
 }

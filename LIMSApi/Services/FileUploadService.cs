@@ -3,6 +3,7 @@ using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
+using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace LIMSApi.Services
 {
@@ -16,54 +17,65 @@ namespace LIMSApi.Services
         {
             _fileUploadRepository = fileUploadRepo;
             _logger = logger;
-            _baseUploadDirectory = configuration["FileUploadSettings:UploadDirectory"] ?? "uploads";
+            _baseUploadDirectory = configuration["FileUploadSettings:UploadDirectory"] ?? "Uploads";
             _loggedInUser = LoggedInUserProvider.CurrentUser;
         }
         public async Task<UploadFile> GetFileAsync(long id)
         {
             var uploadedFile = await _fileUploadRepository.GetFileAsync(id);
             _logger.LogInformation("Fetching Uploaded file : '{FileName}'.", uploadedFile.OriginalFileName);
-            if(uploadedFile == null)
+            if (uploadedFile == null)
                 throw new InvalidOperationException("File not found!");
             return uploadedFile;
         }
 
-        public async Task UploadFileAsync(IFormFile file, FileType fileType, int? year)
+        public async Task<UploadFile> UploadFileAsync(IFormFile file, FileType fileType, int? year)
         {
-            if (file == null || file.Length == 0)
-                throw new ArgumentException("File cannot be empty");
-
-            string originalFileName = Path.GetFileName(file.FileName);
-            string newFileName = $"{Guid.NewGuid()}_{originalFileName}";
-
-
-            string uploadDirectory = getFileTypePath(fileType,year);
-
-            if (!Directory.Exists(uploadDirectory))
-                Directory.CreateDirectory(uploadDirectory);
-
-            string filePath = Path.Combine(uploadDirectory, newFileName);
-
-            using (var stream = new FileStream(filePath, FileMode.Create))
+            try
             {
-                await file.CopyToAsync(stream);
+                if (file == null || file.Length == 0)
+                    throw new ArgumentException("File cannot be empty");
+
+                string originalFileName = Path.GetFileName(file.FileName);
+                string newFileName = $"{Guid.NewGuid()}_{originalFileName}";
+
+
+                string uploadDirectory = getFileTypePath(fileType, year);
+
+                var curD = Directory.GetCurrentDirectory();
+
+                if (!Directory.Exists(uploadDirectory))
+                    Directory.CreateDirectory(uploadDirectory);
+
+                string filePath = Path.Combine(uploadDirectory, newFileName);
+
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await file.CopyToAsync(stream);
+                }
+
+                var uploadedFile = new UploadFile
+                {
+                    OriginalFileName = originalFileName,
+                    StoredFileName = newFileName,
+                    FileType = fileType,
+                    FileExtension = Path.GetExtension(originalFileName),
+                    FilePath = filePath,
+                    FileSize = file.Length,
+                    Year = year ?? DateTime.UtcNow.Year,
+                    CreatedOn = DateTime.UtcNow,
+                    CreatedBy = _loggedInUser?.EmployeeID ?? 0,
+                    CompanyCode = _loggedInUser?.CompanyCode ?? "NA"
+                };
+
+                var uploaded = await _fileUploadRepository.UploadFileAsync(uploadedFile);
+                return uploaded;
             }
-
-            var uploadedFile = new UploadFile
+            catch (Exception ex)
             {
-                OriginalFileName = originalFileName,
-                StoredFileName = newFileName,
-                FileType = fileType,
-                FileExtension = Path.GetExtension(originalFileName),
-                FilePath = filePath,
-                FileSize = file.Length,
-                Year = year ?? DateTime.UtcNow.Year,
-                CreatedOn = DateTime.UtcNow,
-                CreatedBy = _loggedInUser?.EmployeeID ?? 0,
-                CompanyCode = _loggedInUser?.CompanyCode ?? "NA"
-            };
-
-             await _fileUploadRepository.UploadFileAsync(uploadedFile);
+                _logger.LogError(ex, "Error while uploading file");
+                throw;
+            }
         }
         public string getFileTypePath(FileType fileType, int? year)
         {

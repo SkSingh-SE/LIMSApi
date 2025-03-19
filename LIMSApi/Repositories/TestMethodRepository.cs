@@ -8,50 +8,49 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Repositories
 {
-    public class TestTypeRepository : ITestTypeRepository
+    public class TestMethodRepository : ITestMethodRepository
     {
         private readonly LIMSContext _context;
         private LoggedInUserDTO loggedInUser;
 
-        public TestTypeRepository(LIMSContext context)
+        public TestMethodRepository(LIMSContext context)
         {
             _context = context;
             loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
-        public async Task AddTestType(TestTypeMaster model)
+        public async Task AddTestMethod(TestMethodMaster model)
         {
-            model.CompanyCode = loggedInUser.CompanyCode;
-            await _context.TestTypeMasters.AddAsync(model);
+            await _context.TestMethodMasters.AddAsync(model);
             await _context.SaveChangesAsync();
         }
 
-        public async Task DeleteTestType(long id)
+        public async Task DeleteTestMethod(long id)
         {
-            var existingTestType = await _context.TestTypeMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
-            if (existingTestType != null)
+            var existingTestMethod = await _context.TestMethodMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            if (existingTestMethod != null)
             {
-                existingTestType.IsActive = false;
-                existingTestType.ModifiedOn = DateTime.UtcNow;
-                _context.TestTypeMasters.Update(existingTestType);
+                existingTestMethod.IsActive = false;
+                existingTestMethod.ModifiedOn = DateTime.UtcNow;
+                _context.TestMethodMasters.Update(existingTestMethod);
                 await _context.SaveChangesAsync();
             }
         }
 
-        public async Task<TestTypeMaster?> GetTestTypeById(long id)
+        public async Task<TestMethodMaster?> GetTestMethodById(long id)
         {
-            return await _context.TestTypeMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.TestMethodMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
-        public async Task UpdateTestType(TestTypeMaster model)
+        public async Task UpdateTestMethod(TestMethodMaster model)
         {
-            _context.TestTypeMasters.Update(model);
+            _context.TestMethodMasters.Update(model);
             await _context.SaveChangesAsync();
         }
 
-        public async Task<PagedResponse<object>> GetAllTestTypes(PageFilter filter)
+        public async Task<PagedResponse<object>> GetAllTestMethods(PageFilter filter)
         {
-            var _query = from c in _context.TestTypeMasters where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c;
+            var _query = from c in _context.TestMethodMasters where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c;
 
             if (filter.Filters != null)
             {
@@ -95,11 +94,11 @@ namespace LIMSApi.Repositories
             return new PagedResponse<object>(items.Cast<object>().ToList(), totalRecords, filter.PageNumber, filter.PageSize);
         }
 
-        public async Task<List<DropdwonSelector>> GetTestTypeDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> GetTestMethodDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.TestTypeMasters where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode select a;
+            var _query = from a in _context.TestMethodMasters where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode select a;
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
@@ -120,12 +119,12 @@ namespace LIMSApi.Repositories
 
         public async Task<bool> ExistsByName(string name)
         {
-            return await _context.TestTypeMasters.AnyAsync(x => x.Name == name && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.TestMethodMasters.AnyAsync(x => x.Name == name && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
         public async Task<bool> ExistsByNameAndNotId(string name, long Id)
         {
-            return await _context.TestTypeMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.TestMethodMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
     }
 }

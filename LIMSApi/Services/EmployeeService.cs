@@ -44,13 +44,18 @@ namespace LIMSApi.Services
 
             existingEmployee.Name = model.Name;
             existingEmployee.Gender = model.Gender;
-            existingEmployee.BirthDate = model.BirthDate;
-            existingEmployee.JoinDate = model.JoinDate;
+            existingEmployee.DateOfBirth = model.DateOfBirth;
+            existingEmployee.DateOfJoin = model.DateOfJoin;
             existingEmployee.MobileNo = model.MobileNo;
             existingEmployee.EmergencyMobileNo = model.EmergencyMobileNo;
-            existingEmployee.EmergencyMobileNo = model.EmergencyMobileNo;
-            existingEmployee.ResidentialAddress = model.ResidentialAddress;
-            existingEmployee.PermanentResidentialAddress = model.PermanentResidentialAddress;
+            existingEmployee.ResidentialAddressLine1 = model.ResidentialAddressLine1;
+            existingEmployee.ResidentialAddressLine2 = model.ResidentialAddressLine2;
+            existingEmployee.ResidentialPinCode = model.ResidentialPinCode;
+            existingEmployee.ResidentialAreaID = model.ResidentialAreaID;
+            existingEmployee.PermanentAddressLine1 = model.PermanentAddressLine1;
+            existingEmployee.PermanentAddressLine2 = model.PermanentAddressLine2;
+            existingEmployee.PermanentPinCode = model.PermanentPinCode;
+            existingEmployee.PermanentAreaID = model.PermanentAreaID;
             existingEmployee.IsTeamHead = model.IsTeamHead;
             existingEmployee.DigitalSignature = model.DigitalSignature;
             existingEmployee.IsMarried = model.IsMarried;
@@ -62,8 +67,12 @@ namespace LIMSApi.Services
             existingEmployee.DepartmentID = model.DepartmentID;
             existingEmployee.DesignationID = model.DesignationID;
             existingEmployee.UserID = model.UserID;
-            existingEmployee.TestTypeID = model.TestTypeID;
-
+            existingEmployee.PANNumber = model.PANNumber;
+            existingEmployee.BankName = model.BankName;
+            existingEmployee.Branch = model.Branch;
+            existingEmployee.AccountNumber = model.AccountNumber;
+            existingEmployee.IFSCCode = model.IFSCCode;
+            existingEmployee.AccountHolderName = model.AccountHolderName;
 
             existingEmployee.ModifiedOn = DateTime.UtcNow;
 
@@ -86,11 +95,11 @@ namespace LIMSApi.Services
 
         public async Task<EmployeeMaster> GetEmployeeDetails(long id)
         {
-            var classification = await _employeeRepository.GetEmployeeById(id);
-            if (classification == null)
+            var employee = await _employeeRepository.GetEmployeeById(id);
+            if (employee == null)
                 throw new InvalidOperationException("Employee not found!");
 
-            return classification;
+            return employee;
         }
 
         public async Task<PagedResponse<object>> FetchEmployeeList(PageFilter filter)
@@ -101,6 +110,51 @@ namespace LIMSApi.Services
         public async Task<List<DropdwonSelector>> GetEmployeeDropdown(string? searchTerm, int pageNo, int pageSize)
         {
             return await _employeeRepository.GetEmployeeDropdown(searchTerm, pageNo, pageSize);
+        }
+
+        // Employee Qualification Management
+        public async Task AddEmployeeQualification(EmployeeQualification qualification)
+        {
+            _logger.LogInformation("Qualification '{Qualification}' created successfully.", qualification.Qualification);
+            await _employeeRepository.AddEmployeeQualification(qualification);
+        }
+
+        public async Task UpdateEmployeeQualification(EmployeeQualification qualification)
+        {
+            _logger.LogInformation("Qualification '{Qualification}' updated successfully.", qualification.Qualification);
+            await _employeeRepository.UpdateEmployeeQualification(qualification);
+        }
+
+        public async Task DeleteEmployeeQualification(long id)
+        {
+            await _employeeRepository.DeleteEmployeeQualification(id);
+        }
+
+        public async Task<List<EmployeeQualification>> GetEmployeeQualifications(long employeeId)
+        {
+            return await _employeeRepository.GetEmployeeQualifications(employeeId);
+        }
+
+        // Employee Document Management
+        public async Task AddEmployeeDocument(EmployeeDocument document)
+        {
+            _logger.LogInformation("Document '{document}' created successfully.", document.DocumentType);
+            await _employeeRepository.AddEmployeeDocument(document);
+        }
+
+        public async Task DeleteEmployeeDocument(long id)
+        {
+            await _employeeRepository.DeleteEmployeeDocument(id);
+        }
+
+        public async Task<EmployeeDocument?> GetEmployeeDocumentById(long id)
+        {
+            return await _employeeRepository.GetEmployeeDocumentById(id);
+        }
+
+        public async Task<List<EmployeeDocument>> GetEmployeeDocuments(long employeeId)
+        {
+            return await _employeeRepository.GetEmployeeDocuments(employeeId);
         }
     }
 }

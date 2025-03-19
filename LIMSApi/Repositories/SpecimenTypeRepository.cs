@@ -8,50 +8,55 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Repositories
 {
-    public class TestTypeRepository : ITestTypeRepository
+    public class SpecimenTypeRepository : ISpecimenTypeRepository
     {
         private readonly LIMSContext _context;
         private LoggedInUserDTO loggedInUser;
-
-        public TestTypeRepository(LIMSContext context)
+        public SpecimenTypeRepository(LIMSContext context)
         {
             _context = context;
             loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
-        public async Task AddTestType(TestTypeMaster model)
+        public async Task<SpecimenTypeMaster> AddSpecimenType(SpecimenTypeMaster model)
         {
             model.CompanyCode = loggedInUser.CompanyCode;
-            await _context.TestTypeMasters.AddAsync(model);
+            await _context.SpecimenTypeMasters.AddAsync(model);
             await _context.SaveChangesAsync();
+            return model;
         }
 
-        public async Task DeleteTestType(long id)
+        public async Task<SpecimenTypeMaster> DeleteSpecimenType(long id)
         {
-            var existingTestType = await _context.TestTypeMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
-            if (existingTestType != null)
+            var existingSpecimenType = await _context.SpecimenTypeMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            if (existingSpecimenType != null)
             {
-                existingTestType.IsActive = false;
-                existingTestType.ModifiedOn = DateTime.UtcNow;
-                _context.TestTypeMasters.Update(existingTestType);
+                existingSpecimenType.IsActive = false;
+                _context.SpecimenTypeMasters.Update(existingSpecimenType);
                 await _context.SaveChangesAsync();
             }
+            else
+            {
+                throw new InvalidOperationException("Specimen Type not found!");
+            }
+            return existingSpecimenType;
         }
 
-        public async Task<TestTypeMaster?> GetTestTypeById(long id)
+        public async Task<SpecimenTypeMaster?> GetSpecimenTypeById(long id)
         {
-            return await _context.TestTypeMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.SpecimenTypeMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
-        public async Task UpdateTestType(TestTypeMaster model)
+        public async Task<SpecimenTypeMaster> UpdateSpecimenType(SpecimenTypeMaster model)
         {
-            _context.TestTypeMasters.Update(model);
+            _context.SpecimenTypeMasters.Update(model);
             await _context.SaveChangesAsync();
+            return model;
         }
 
-        public async Task<PagedResponse<object>> GetAllTestTypes(PageFilter filter)
+        public async Task<PagedResponse<object>> GetAllSpecimenTypes(PageFilter filter)
         {
-            var _query = from c in _context.TestTypeMasters where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c;
+            var _query = from c in _context.SpecimenTypeMasters where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c;
 
             if (filter.Filters != null)
             {
@@ -73,14 +78,9 @@ namespace LIMSApi.Repositories
                 var search = filter.searchTerm.Trim().ToLower();
                 _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
             }
-
-            if (filter.SortBy != null && filter.SortBy.Any())
+            if (filter.SortByColumn != null)
             {
-                var sortingExpressions = filter.SortBy
-                   .Select(s => $"{s.Key} {(s.Value ? "descending" : "ascending")}");
-                string orderByString = string.Join(", ", sortingExpressions);
-
-                _query = _query.OrderBy(orderByString);
+                _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
             }
 
             // Total Records Count
@@ -95,16 +95,16 @@ namespace LIMSApi.Repositories
             return new PagedResponse<object>(items.Cast<object>().ToList(), totalRecords, filter.PageNumber, filter.PageSize);
         }
 
-        public async Task<List<DropdwonSelector>> GetTestTypeDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> GetSpecimenTypeDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.TestTypeMasters where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode select a;
+            var _query = from a in _context.SpecimenTypeMasters where a.IsActive select a;
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x =>  (x.Name != null && x.Name.ToLower().Contains(search)));
+                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
             }
 
             var skip = pageNo * pageSize;
@@ -120,12 +120,12 @@ namespace LIMSApi.Repositories
 
         public async Task<bool> ExistsByName(string name)
         {
-            return await _context.TestTypeMasters.AnyAsync(x => x.Name == name && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.SpecimenTypeMasters.AnyAsync(x => x.Name == name && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
         public async Task<bool> ExistsByNameAndNotId(string name, long Id)
         {
-            return await _context.TestTypeMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.SpecimenTypeMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive&& x.CompanyCode == loggedInUser.CompanyCode);
         }
     }
 }

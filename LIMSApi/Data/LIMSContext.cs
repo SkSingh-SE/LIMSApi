@@ -32,6 +32,8 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<DimensionalFactorMaster> DimensionalFactorMasters { get; set; }
 
     public virtual DbSet<EmployeeMaster> EmployeeMasters { get; set; }
+    public virtual DbSet<EmployeeQualification> EmployeeQualifications { get; set; }
+    public virtual DbSet<EmployeeDocument> EmployeeDocuments { get; set; }
     public virtual DbSet<EquipmentMaster>  EquipmentMasters { get; set; }
 
     public virtual DbSet<EquipmentTypeMaster> EquipmentTypeMasters { get; set; }
@@ -60,10 +62,16 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<SpecificationLine> SpecificationLines { get; set; }
 
     public virtual DbSet<SpecimenOrientationMaster> SpecimenOrientationMasters { get; set; }
+    public virtual DbSet<SpecimenTypeMaster> SpecimenTypeMasters { get; set; }
 
     public virtual DbSet<StandardOrganizationMaster> StandardOrganizationMasters { get; set; }
 
     public virtual DbSet<StateMaster> StateMasters { get; set; }
+    public virtual DbSet<TestGroup> TestGroups { get; set; }
+    public virtual DbSet<TestGroupMapping> TestGroupMappings { get; set; }
+    public virtual DbSet<TestMaster> TestMasters { get; set; }
+    public virtual DbSet<TestMethodMaster> TestMethodMasters { get; set; }
+    public virtual DbSet<TestMethodStandard> TestMethodStandards { get; set; }
     public virtual DbSet<TestTypeMaster> TestTypeMasters { get; set; }
 
     public virtual DbSet<UniversalCodeTypeMaster> UniversalCodeTypeMasters { get; set; }

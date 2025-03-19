@@ -107,6 +107,12 @@ builder.Services.AddScoped<ISiteActivityRepository, SiteActivityRepository>();
 builder.Services.AddScoped<ISiteErrorRepository, SiteErrorRepository>();
 builder.Services.AddScoped<IDesignationRepository, DesignationRepository>();
 builder.Services.AddScoped<IFileUploadRepository, FileUploadRepository>();
+builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
+builder.Services.AddScoped<ISpecimenTypeRepository, SpecimenTypeRepository>();
+builder.Services.AddScoped<ITestMasterRepository, TestMasterRepository>();
+builder.Services.AddScoped<ITestMethodRepository, TestMethodRepository>();
+builder.Services.AddScoped<ITestMethodStandardRepository, TestMethodStandardRepository>();
+builder.Services.AddScoped<ITestGroupRepository, TestGroupRepository>();
 
 // Register Services
 builder.Services.AddScoped<IUserService, UserService>();
@@ -119,6 +125,10 @@ builder.Services.AddScoped<ISiteActivityService, SiteActivityService>();
 builder.Services.AddScoped<ISiteErrorService, SiteErrorService>();
 builder.Services.AddScoped<IDesignationService, DesignationService>();
 builder.Services.AddScoped<IFileUploadService, FileUploadService>();
+builder.Services.AddScoped<IEmployeeService, EmployeeService>();
+builder.Services.AddScoped<ISpecimenTypeService, SpecimenTypeService>();
+builder.Services.AddScoped<ITestGroupService, TestGroupService>();
+
 
 
 

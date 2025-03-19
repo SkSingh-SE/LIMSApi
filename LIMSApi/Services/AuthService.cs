@@ -27,16 +27,33 @@ namespace LIMSApi.Services
             _passwordHasher = new PasswordHasher<UserMaster>();
             _configuration = configuration;
         }
-
+        public static DateTimeOffset ConvertToTimeZone(DateTime utcDateTime, string timeZoneId)
+        {
+            var timeZone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+            return TimeZoneInfo.ConvertTimeFromUtc(utcDateTime, timeZone);
+        }
         public async Task<string> Authenticate(LoginDTO login)
         {
+            var date1 = DateTime.UtcNow;
+            var date2 = DateTime.Now;
+            var date3 = DateTimeOffset.Now;
+            var date4 = DateTimeOffset.UtcNow;
+
+            Console.WriteLine(date1);
+            Console.WriteLine( date2);
+            Console.WriteLine(date3);
+            Console.WriteLine(date4);
+
+            DateTimeOffset localTime = ConvertToTimeZone(date1, "India Standard Time");
+            Console.WriteLine(localTime);
+
             var user = await _userRepository.GetUserByEmail(login.Email);
 
             if (user == null)
             {
                 throw new UnauthorizedAccessException($"Login failed for user: {login.Email}");
             }
-
+            
             // Validate password hash
             var result = _passwordHasher.VerifyHashedPassword(user, user.Password, login.Password);
 

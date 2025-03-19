@@ -9,4 +9,5 @@
         public string CompanyCode { get; set; } = "LIMS";
         public bool IsActive { get; set; } = true;
     }
+
 }
