@@ -1,6 +1,7 @@
 ﻿using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using Microsoft.EntityFrameworkCore;
@@ -10,14 +11,17 @@ namespace LIMSApi.Repositories
     public class StateRepository : IStateRepository
     {
         private readonly LIMSContext _context;
-
+        private LoggedInUserDTO loggedInUser;
         public StateRepository(LIMSContext context)
         {
             _context = context;
+            loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
         public async Task AddState(StateMaster state)
         {
+            state.CompanyCode = state.CompanyCode ?? loggedInUser.CompanyCode;
+            state.CreatedBy = loggedInUser.EmployeeID;
             await _context.StateMasters.AddAsync(state);
             await _context.SaveChangesAsync();
         }
@@ -72,13 +76,9 @@ namespace LIMSApi.Repositories
                                      );
             }
 
-            if (filter.SortBy != null && filter.SortBy.Any())
+            if (filter.SortByColumn != null)
             {
-                var sortingExpressions = filter.SortBy
-                   .Select(s => $"{s.Key} {(s.Value ? "descending" : "ascending")}");
-                string orderByString = string.Join(", ", sortingExpressions);
-
-                _query = _query.OrderBy(orderByString);
+                _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
             }
 
             // Total Records Count
@@ -97,7 +97,10 @@ namespace LIMSApi.Repositories
         {
             return await _context.StateMasters.AnyAsync(x => x.Name == name && x.IsActive);
         }
-
+        public async Task<StateMaster?> GetByName(string name)
+        {
+            return await _context.StateMasters.FirstOrDefaultAsync(x => x.Name == name && x.IsActive);
+        }
         public async Task<bool> ExistsByNameAndNotId(string name, long id)
         {
             return await _context.StateMasters.AnyAsync(x => x.Name == name && x.ID != id && x.IsActive);

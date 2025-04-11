@@ -9,11 +9,15 @@ namespace LIMSApi.Services
     {
         private readonly IEmployeeRepository _employeeRepository;
         private readonly ILogger<EmployeeService> _logger;
+        private readonly IFileUploadService _uploadService;
+        private readonly IAuthService _authService;
 
-        public EmployeeService(IEmployeeRepository employeeRepo, ILogger<EmployeeService> logger)
+        public EmployeeService(IEmployeeRepository employeeRepo, ILogger<EmployeeService> logger, IFileUploadService uploadService, IAuthService authService)
         {
             _employeeRepository = employeeRepo;
             _logger = logger;
+            _uploadService = uploadService;
+            _authService = authService;
         }
 
         public async Task CreateEmployee(EmployeeMaster model)
@@ -25,8 +29,23 @@ namespace LIMSApi.Services
             if (exists)
                 throw new InvalidOperationException("Employee already exists!");
 
-            await _employeeRepository.AddEmployee(model);
+            var createdEmployee = await _employeeRepository.AddEmployee(model);
             _logger.LogInformation("Employee '{EmployeeName}' created successfully.", model.Name);
+
+            UserMaster newUser = new UserMaster
+            {
+                EmployeeID = createdEmployee.ID,
+                UserName = model.EmailId,
+                Password = $"{model.ID}_{model.EmailId}_{model.ID}",
+                RoleID = 1,
+                RoleName = "User",
+                IsActive = true,
+                CreatedOn = DateTime.UtcNow,
+                CreatedBy = model.CreatedBy,
+                CompanyCode = model.CompanyCode
+            };
+            await _authService.RegisterUser(newUser);
+
         }
 
         public async Task ModifyEmployee(EmployeeMaster model)
@@ -58,12 +77,12 @@ namespace LIMSApi.Services
             existingEmployee.PermanentAreaID = model.PermanentAreaID;
             existingEmployee.IsTeamHead = model.IsTeamHead;
             existingEmployee.DigitalSignature = model.DigitalSignature;
-            existingEmployee.IsMarried = model.IsMarried;
+            existingEmployee.MaritalStatus = model.MaritalStatus;
             existingEmployee.SpouseName = model.SpouseName;
             existingEmployee.FatherName = model.FatherName;
             existingEmployee.MotherName = model.MotherName;
             existingEmployee.BloodGroup = model.BloodGroup;
-            existingEmployee.ReportingTo = model.ReportingTo;
+            existingEmployee.ReportingManagerID = model.ReportingManagerID;
             existingEmployee.DepartmentID = model.DepartmentID;
             existingEmployee.DesignationID = model.DesignationID;
             existingEmployee.UserID = model.UserID;
@@ -156,5 +175,144 @@ namespace LIMSApi.Services
         {
             return await _employeeRepository.GetEmployeeDocuments(employeeId);
         }
+
+        public async Task CreateDocuments(List<EmployeeDocument> model)
+        {
+           foreach(var document in model)
+            {
+                if (document.file != null)
+                {
+                    var fileUploadResponse = await _uploadService.UploadFileAsync(document.file,FileType.Employee,null,document.FileName);
+                    if (fileUploadResponse == null)
+                        throw new InvalidOperationException("File upload failed!");
+                    document.FilePath = fileUploadResponse.FilePath;
+                    document.FileName = fileUploadResponse.OriginalFileName;
+                    document.UploadReferenceID = fileUploadResponse.ID;
+                    document.UploadedOn = DateTime.UtcNow;  
+
+                    await _employeeRepository.AddEmployeeDocument(document);
+                }
+            }
+            _logger.LogInformation("Documents created successfully.");  
+        }
+
+        public async Task CreateQualifications(List<EmployeeQualification> model)
+        {
+            foreach(var qualification in model)
+            {
+                await _employeeRepository.AddEmployeeQualification(qualification);
+            }
+        }
+
+        public async Task ModifyDocuments(List<EmployeeDocument> model)
+        {
+            var employeeId = model.FirstOrDefault()?.EmployeeID ?? 0;
+            if (employeeId == 0) return;
+
+            // Fetch existing documents
+            var existingDocs = await _employeeRepository.GetEmployeeDocuments(employeeId);
+            var incomingIds = model.Where(d => d.ID != 0).Select(d => d.ID).ToList();
+
+            // 1. Delete documents that were removed
+            var toDelete = existingDocs.Where(d => !incomingIds.Contains(d.ID)).ToList();
+            foreach (var doc in toDelete)
+            {
+                await _employeeRepository.DeleteEmployeeDocument(doc.ID);
+            }
+
+            // 2. Update or add
+            foreach (var document in model)
+            {
+                if (document.ID != 0)
+                {
+                    var existingDoc = await _employeeRepository.GetEmployeeDocumentById(document.ID);
+                    if (existingDoc != null)
+                    {
+                        // Replace file if a new one is uploaded
+                        if (document.file != null)
+                        {
+                            var fileUploadResponse = await _uploadService.UploadFileAsync(document.file, FileType.Employee, null, document.DocumentType);
+                            if (fileUploadResponse == null)
+                                throw new InvalidOperationException("File upload failed!");
+
+                            existingDoc.FilePath = fileUploadResponse.FilePath;
+                            existingDoc.FileName = fileUploadResponse.OriginalFileName;
+                            existingDoc.UploadReferenceID = fileUploadResponse.ID;
+                            existingDoc.UploadedOn = DateTime.UtcNow;
+                        }else
+                        {
+                            existingDoc.FileName = document.FileName;
+                            existingDoc.FilePath = document.FilePath;
+                        }
+                        existingDoc.DocumentType = document.DocumentType;
+                        existingDoc.ModifiedOn = DateTime.UtcNow;
+
+                        await _employeeRepository.UpdateEmployeeDocument(existingDoc);
+                    }
+                }
+                else
+                {
+                    // New document
+                    if (document.file != null)
+                    {
+                        var fileUploadResponse = await _uploadService.UploadFileAsync(document.file, FileType.Employee, null, document.FileName);
+                        if (fileUploadResponse == null)
+                            throw new InvalidOperationException("File upload failed!");
+
+                        document.FilePath = fileUploadResponse.FilePath;
+                        document.FileName = fileUploadResponse.OriginalFileName;
+                        document.UploadReferenceID = fileUploadResponse.ID;
+                        document.UploadedOn = DateTime.UtcNow;
+
+                        await _employeeRepository.AddEmployeeDocument(document);
+                    }
+                }
+            }
+
+            _logger.LogInformation("Documents modified successfully.");
+        }
+
+
+
+        public async Task ModifyQualifications(List<EmployeeQualification> model)
+        {
+            var employeeId = model.FirstOrDefault()?.EmployeeID ?? 0;
+            if (employeeId == 0) return;
+
+            var existingQualifications = await _employeeRepository.GetEmployeeQualifications(employeeId);
+            var incomingIds = model.Where(x => x.ID > 0).Select(x => x.ID).ToList();
+
+            // 1. Delete qualifications that are not in the incoming list
+            var toDelete = existingQualifications.Where(x => !incomingIds.Contains(x.ID)).ToList();
+            foreach (var item in toDelete)
+            {
+                await _employeeRepository.DeleteEmployeeQualification(item.ID);
+            }
+
+            // 2. Update existing or add new
+            foreach (var qualification in model)
+            {
+                if (qualification.ID > 0)
+                {
+                    var existingQualification = await _employeeRepository.GetEmployeeQualificationById(qualification.ID);
+                    if (existingQualification != null)
+                    {
+                        existingQualification.Qualification = qualification.Qualification;
+                        existingQualification.SchoolOrUniversity = qualification.SchoolOrUniversity;
+                        existingQualification.PassingYear = qualification.PassingYear;
+                        existingQualification.ModifiedOn = DateTime.UtcNow;
+
+                        await _employeeRepository.UpdateEmployeeQualification(existingQualification);
+                    }
+                }
+                else
+                {
+                    qualification.CreatedOn = DateTime.UtcNow;
+                    await _employeeRepository.AddEmployeeQualification(qualification);
+                }
+            }
+        }
+
+
     }
 }

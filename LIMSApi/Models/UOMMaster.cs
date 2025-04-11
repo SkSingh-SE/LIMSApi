@@ -6,7 +6,7 @@ namespace LIMSApi.Models
     {
         [Key]
         public long ID { get; set; }
-        [StringLength(50)]
+        [StringLength(100)]
         public required string Name { get; set; }
     }
 }

@@ -9,4 +9,6 @@ public partial class ParameterUnitMaster : AuditProperty
     public long ID { get; set; }
     [StringLength(100)]
     public required string Name { get; set; }
+    [Required,StringLength(10)]
+    public required string ConversaionFactor { get; set; }
 }

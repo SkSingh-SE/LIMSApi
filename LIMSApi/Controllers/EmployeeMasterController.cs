@@ -37,14 +37,40 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> PutEmployeeMaster(EmployeeMaster model)
         {
             await _employeeService.ModifyEmployee(model);
-            return Ok($"Employee '{model.Name}' updated successfully.");
+            return Ok(new { message = $"Employee '{model.Name}' updated successfully" });
         }
 
         [HttpPost("create")]
         public async Task<ActionResult<EmployeeMaster>> PostEmployeeMaster(EmployeeMaster model)
         {
             await _employeeService.CreateEmployee(model);
-            return Ok($"Employee '{model.Name}' created successfully");
+            return Ok(new { message = $"Employee '{model.Name}' created successfully" });
+        }
+        [HttpPost("doucument/create")]
+        public async Task<IActionResult> PostEmployeeDocuments(List<EmployeeDocument> model)
+        {
+            await _employeeService.CreateDocuments(model);
+            return Ok(new { message = $"Employee Ducuments created successfully" });
+
+        }
+        [HttpPost("qualification/create")]
+        public async Task<IActionResult> PostEmployeeQualifications(List<EmployeeQualification> model)
+        {
+            await _employeeService.CreateQualifications(model);
+            return Ok(new { message = $"Employee Qualifications created successfully" });
+        }
+
+        [HttpPut("document/update")]
+        public async Task<IActionResult> UpdateEmployeeDocuments([FromForm] List<EmployeeDocument> Documents)
+        {
+            await _employeeService.ModifyDocuments(Documents);
+            return Ok(new { message = $"Employee Documents updated successfully" });
+        }
+        [HttpPut("qualification/update")]
+        public async Task<IActionResult> UpdateEmployeeQualifications(List<EmployeeQualification> model)
+        {
+            await _employeeService.ModifyQualifications(model);
+            return Ok(new { message = $"Employee Qualifications updated successfully" });
         }
 
         [HttpDelete("delete/{id}")]
@@ -55,7 +81,7 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("Employee not found!");
             }
-            return Ok($"Employee '{entity.Name}' created successfully");
+            return Ok(new { message = $"Employee '{entity.Name}' created successfully" });
         }
 
         [HttpGet("dropdown")]

@@ -59,9 +59,9 @@ namespace LIMSApi.Controllers
         }
 
         [HttpGet("getAreaWithPincode")]
-        public async Task <IActionResult> GetAreaWithPincode(string? searchTerm, int pageNo, int pageSize)
+        public async Task <IActionResult> GetAreaWithPincode(string pincode)
         {
-            var data = await _areaService.GetAreaWithPincode(searchTerm, pageNo, pageSize);
+            var data = await _areaService.GetAreaWithPincode(pincode);
             return data == null ? NoContent() : Ok(data);
         }
     }

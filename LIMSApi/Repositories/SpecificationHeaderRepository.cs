@@ -94,13 +94,9 @@ namespace LIMSApi.Repositories
                 );
             }
 
-            if (filter.SortBy != null && filter.SortBy.Any())
+            if (filter.SortByColumn != null)
             {
-                var sortingExpressions = filter.SortBy
-                   .Select(s => $"{s.Key} {(s.Value ? "descending" : "ascending")}");
-                string orderByString = string.Join(", ", sortingExpressions);
-
-                _query = _query.OrderBy(orderByString);
+                _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
             }
 
             // Total Records Count

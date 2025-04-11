@@ -22,14 +22,14 @@ namespace LIMSApi.Services
         }
         public async Task<UploadFile> GetFileAsync(long id)
         {
-            var uploadedFile = await _fileUploadRepository.GetFileAsync(id);
+            var uploadedFile = await _fileUploadRepository.GetUploadFile(id);
             _logger.LogInformation("Fetching Uploaded file : '{FileName}'.", uploadedFile.OriginalFileName);
             if (uploadedFile == null)
                 throw new InvalidOperationException("File not found!");
             return uploadedFile;
         }
 
-        public async Task<UploadFile> UploadFileAsync(IFormFile file, FileType fileType, int? year)
+        public async Task<UploadFile> UploadFileAsync(IFormFile file, FileType fileType, int? year, string? identifier = "")
         {
             try
             {
@@ -37,7 +37,9 @@ namespace LIMSApi.Services
                     throw new ArgumentException("File cannot be empty");
 
                 string originalFileName = Path.GetFileName(file.FileName);
-                string newFileName = $"{Guid.NewGuid()}_{originalFileName}";
+                string originalFileExtension = Path.GetExtension(file.FileName);
+                string newFileName = $"{Guid.NewGuid()}_{fileType}{(string.IsNullOrWhiteSpace(identifier) ? "" : $"_{identifier}")}{originalFileExtension}";
+
 
 
                 string uploadDirectory = getFileTypePath(fileType, year);
@@ -59,7 +61,7 @@ namespace LIMSApi.Services
                     OriginalFileName = originalFileName,
                     StoredFileName = newFileName,
                     FileType = fileType,
-                    FileExtension = Path.GetExtension(originalFileName),
+                    FileExtension = originalFileExtension,
                     FilePath = filePath,
                     FileSize = file.Length,
                     Year = year ?? DateTime.UtcNow.Year,
@@ -68,7 +70,7 @@ namespace LIMSApi.Services
                     CompanyCode = _loggedInUser?.CompanyCode ?? "NA"
                 };
 
-                var uploaded = await _fileUploadRepository.UploadFileAsync(uploadedFile);
+                var uploaded = await _fileUploadRepository.UploadFile(uploadedFile);
                 return uploaded;
             }
             catch (Exception ex)
@@ -127,5 +129,17 @@ namespace LIMSApi.Services
             return uploadDirectory;
         }
 
+        public async Task RemoveFileAsync(long Id)
+        {
+            var existingFile = await _fileUploadRepository.GetUploadFile(Id);
+            if(existingFile != null)
+            {
+                if (File.Exists(existingFile.FilePath))
+                {
+                    File.Delete(existingFile.FilePath);
+                    await _fileUploadRepository.RemoveFile(existingFile);
+                }
+            }
+        }
     }
 }

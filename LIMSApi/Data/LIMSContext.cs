@@ -17,31 +17,42 @@ public partial class LIMSContext : DbContext
     }
 
     public virtual DbSet<AreaMaster> AreaMasters { get; set; }
+    public virtual DbSet<BankMaster> BankMasters { get; set; }
+    public virtual DbSet<CalibrationAgencyMaster> CalibrationAgencyMasters { get; set; }
     public virtual DbSet<CityMaster> CityMasters { get; set; }
     public virtual DbSet<ClassificationMaster> ClassificationMasters { get; set; }
     public virtual DbSet<CompanyMaster> CompanyMasters { get; set; }
 
     public virtual DbSet<CountryMaster> CountryMasters { get; set; }
+    public virtual DbSet<CourierMaster> CourierMasters { get; set; }
 
     public virtual DbSet<CurrencyMaster> CurrencyMasters { get; set; }
+    public virtual DbSet<CustomerTypeMaster> CustomerTypeMasters { get; set; }
+    public virtual DbSet<Customer> Customers { get; set; }
+    public virtual DbSet<ContactPerson> ContactPersons { get; set; }
 
     public virtual DbSet<DepartmentMaster> DepartmentMasters { get; set; }
 
     public virtual DbSet<DesignationMaster> DesignationMasters { get; set; }
 
     public virtual DbSet<DimensionalFactorMaster> DimensionalFactorMasters { get; set; }
-
+    public virtual DbSet<DisciplineMaster> DisciplineMasters { get; set; }
+    public virtual DbSet<DispatchModeMaster> DispatchModeMasters { get; set; }
     public virtual DbSet<EmployeeMaster> EmployeeMasters { get; set; }
     public virtual DbSet<EmployeeQualification> EmployeeQualifications { get; set; }
     public virtual DbSet<EmployeeDocument> EmployeeDocuments { get; set; }
-    public virtual DbSet<EquipmentMaster>  EquipmentMasters { get; set; }
+    public virtual DbSet<EquipmentMaster> EquipmentMasters { get; set; }
 
     public virtual DbSet<EquipmentTypeMaster> EquipmentTypeMasters { get; set; }
-    public virtual DbSet<UploadFile> UploadFiles { get; set; }
 
     public virtual DbSet<HeatTreatmentMaster> HeatTreatmentMasters { get; set; }
 
+    public virtual DbSet<ItemMaster> ItemMasters { get; set; }
+    public virtual DbSet<IndustryMaster> IndustryMasters { get; set; }
+    public virtual DbSet<GroupMaster> GroupMasters { get; set; }
+    public virtual DbSet<LabScopeMaster> LabScopeMasters { get; set; }
     public virtual DbSet<MakerMaster> MakerMasters { get; set; }
+    public virtual DbSet<OEMMaster> OEMMasters { get; set; }
     public virtual DbSet<OrganisationMaster> OrganisationMasters { get; set; }
     public virtual DbSet<ParameterMaster> ParameterMasters { get; set; }
 
@@ -52,6 +63,7 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<ProductConditionMaster> ProductConditionMasters { get; set; }
 
     public virtual DbSet<RoleMaster> RoleMasters { get; set; }
+    public virtual DbSet<RemarkMaster> RemarkMasters { get; set; }
 
     public virtual DbSet<SiteActivity> SiteActivities { get; set; }
 
@@ -65,23 +77,31 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<SpecimenTypeMaster> SpecimenTypeMasters { get; set; }
 
     public virtual DbSet<StandardOrganizationMaster> StandardOrganizationMasters { get; set; }
+    public virtual DbSet<SubContractorMaster> SubContractorMasters { get; set; }
 
     public virtual DbSet<StateMaster> StateMasters { get; set; }
+    public virtual DbSet<SubGroupMaster> SubGroupMasters { get; set; }
+    public virtual DbSet<SupplierMaster> SupplierMasters { get; set; }
+    public virtual DbSet<TaxMaster> TaxMasters { get; set; }
     public virtual DbSet<TestGroup> TestGroups { get; set; }
     public virtual DbSet<TestGroupMapping> TestGroupMappings { get; set; }
     public virtual DbSet<TestMaster> TestMasters { get; set; }
     public virtual DbSet<TestMethodMaster> TestMethodMasters { get; set; }
+    public virtual DbSet<TestMethodSubGroup> TestMethodSubGroups { get; set; }
     public virtual DbSet<TestMethodStandard> TestMethodStandards { get; set; }
     public virtual DbSet<TestTypeMaster> TestTypeMasters { get; set; }
+    public virtual DbSet<TPIMaster> TPIMasters { get; set; }
 
     public virtual DbSet<UniversalCodeTypeMaster> UniversalCodeTypeMasters { get; set; }
+    public virtual DbSet<UploadFile> UploadFiles { get; set; }
 
     public virtual DbSet<UserMaster> UserMasters { get; set; }
     public virtual DbSet<UOMMaster> UOMMasters { get; set; }
+    public virtual DbSet<VendorMaster> VendorMasters { get; set; }
 
-//    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-//#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-//        => optionsBuilder.UseSqlServer("Data Source=localhost;Initial Catalog=LIMS_Backup;Integrated Security=True;Encrypt=False");
+    //    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    //#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the BankName= syntax to read it from _configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
+    //        => optionsBuilder.UseSqlServer("Data Source=localhost;Initial Catalog=LIMS_Backup;Integrated Security=True;Encrypt=False");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -102,12 +122,12 @@ public partial class LIMSContext : DbContext
         //    entity.Property(e => e.CurrencyID).HasColumnName("CurrencyID");
         //    entity.Property(e => e.EmailId)
         //        .HasMaxLength(100)
-        //        .HasColumnName("EmailID");
+        //        .HasColumnName("EmailId");
         //    entity.Property(e => e.Gstno)
         //        .HasColumnType("image")
         //        .HasColumnName("GSTNo");
         //    entity.Property(e => e.Logo).HasColumnType("image");
-        //    entity.Property(e => e.MobileNo).HasMaxLength(20);
+        //    entity.Property(e => e.ContactNo1).HasMaxLength(20);
         //    entity.Property(e => e.ModifiedOn).HasColumnType("datetime");
         //    entity.Property(e => e.PhoneNo).HasMaxLength(20);
         //    entity.Property(e => e.RegistrationNo).HasMaxLength(20);
@@ -136,7 +156,7 @@ public partial class LIMSContext : DbContext
         //        .HasColumnType("datetime");
         //    entity.Property(e => e.ModifiedBy).HasMaxLength(50);
         //    entity.Property(e => e.ModifiedOn).HasColumnType("datetime");
-        //    entity.Property(e => e.Name).HasMaxLength(50);
+        //    entity.Property(e => e.BankName).HasMaxLength(50);
         //    entity.Property(e => e.IsActive)
         //        .HasDefaultValue((byte)0)
         //        .HasComment("IsActive(1-Active,0-InActive,2-Delete)");
@@ -159,7 +179,7 @@ public partial class LIMSContext : DbContext
         //        .HasColumnType("datetime");
         //    entity.Property(e => e.ModifiedBy).HasMaxLength(50);
         //    entity.Property(e => e.ModifiedOn).HasColumnType("datetime");
-        //    entity.Property(e => e.Name).HasMaxLength(50);
+        //    entity.Property(e => e.BankName).HasMaxLength(50);
         //    entity.Property(e => e.IsActive)
         //         .HasDefaultValue((byte)0)
         //         .HasComment("IsActive(1-Active,0-InActive,2-Delete)");
@@ -218,7 +238,7 @@ public partial class LIMSContext : DbContext
         //        .HasColumnType("datetime");
         //    entity.Property(e => e.ModifiedBy).HasMaxLength(50);
         //    entity.Property(e => e.ModifiedOn).HasColumnType("datetime");
-        //    entity.Property(e => e.Name).HasMaxLength(100);
+        //    entity.Property(e => e.BankName).HasMaxLength(100);
         //    entity.Property(e => e.IsActive)
         //        .HasDefaultValue((byte)0)
         //        .HasComment("IsActive(1-Active,0-InActive,2-Delete)");
@@ -246,11 +266,11 @@ public partial class LIMSContext : DbContext
         //        .IsUnicode(false)
         //        .IsFixedLength();
         //    entity.Property(e => e.JoinDate).HasColumnType("datetime");
-        //    entity.Property(e => e.MobileNo).HasMaxLength(50);
+        //    entity.Property(e => e.ContactNo1).HasMaxLength(50);
         //    entity.Property(e => e.ModifiedBy).HasMaxLength(50);
         //    entity.Property(e => e.ModifiedOn).HasColumnType("datetime");
         //    entity.Property(e => e.MotherName).HasMaxLength(50);
-        //    entity.Property(e => e.Name).HasMaxLength(50);
+        //    entity.Property(e => e.BankName).HasMaxLength(50);
         //    entity.Property(e => e.SpouseName).HasMaxLength(50);
         //    entity.Property(e => e.IsActive)
         //         .HasDefaultValue((byte)0)
@@ -269,7 +289,7 @@ public partial class LIMSContext : DbContext
         //        .HasDefaultValueSql("(dateadd(minute,(330),getutcdate()))")
         //        .HasColumnType("datetime");
         //    entity.Property(e => e.ModifiedOn).HasColumnType("datetime");
-        //    entity.Property(e => e.Name).HasMaxLength(100);
+        //    entity.Property(e => e.BankName).HasMaxLength(100);
         //});
 
         //modelBuilder.Entity<HeatTreatmentMaster>(entity =>
@@ -284,7 +304,7 @@ public partial class LIMSContext : DbContext
         //        .HasColumnType("datetime");
         //    entity.Property(e => e.ModifiedBy).HasMaxLength(50);
         //    entity.Property(e => e.ModifiedOn).HasColumnType("datetime");
-        //    entity.Property(e => e.Name).HasMaxLength(250);
+        //    entity.Property(e => e.BankName).HasMaxLength(250);
         //    entity.Property(e => e.IsActive)
         //        .HasDefaultValue((byte)0)
         //        .HasComment("IsActive(1-Active,0-InActive,2-Delete)");
@@ -303,7 +323,7 @@ public partial class LIMSContext : DbContext
         //        .HasColumnType("datetime");
         //    entity.Property(e => e.ModifiedBy).HasMaxLength(50);
         //    entity.Property(e => e.ModifiedOn).HasColumnType("datetime");
-        //    entity.Property(e => e.Name).HasMaxLength(250);
+        //    entity.Property(e => e.BankName).HasMaxLength(250);
         //    entity.Property(e => e.ParameterType).HasMaxLength(50);
         //    entity.Property(e => e.IsActive)
         //        .HasDefaultValue((byte)0)
@@ -325,7 +345,7 @@ public partial class LIMSContext : DbContext
         //        .HasColumnType("datetime");
         //    entity.Property(e => e.ModifiedBy).HasMaxLength(50);
         //    entity.Property(e => e.ModifiedOn).HasColumnType("datetime");
-        //    entity.Property(e => e.Name).HasMaxLength(100);
+        //    entity.Property(e => e.BankName).HasMaxLength(100);
         //    entity.Property(e => e.IsActive)
         //        .HasDefaultValue((byte)0)
         //        .HasComment("IsActive(1-Active,0-InActive,2-Delete)");
@@ -369,7 +389,7 @@ public partial class LIMSContext : DbContext
         //        .HasColumnType("datetime");
         //    entity.Property(e => e.ModifiedBy).HasMaxLength(50);
         //    entity.Property(e => e.ModifiedOn).HasColumnType("datetime");
-        //    entity.Property(e => e.Name).HasMaxLength(250);
+        //    entity.Property(e => e.BankName).HasMaxLength(250);
         //    entity.Property(e => e.IsActive)
         //        .HasDefaultValue((byte)0)
         //        .HasComment("IsActive(1-Active,0-InActive,2-Delete)");
@@ -520,7 +540,7 @@ public partial class LIMSContext : DbContext
         //        .HasColumnType("datetime");
         //    entity.Property(e => e.ModifiedBy).HasMaxLength(50);
         //    entity.Property(e => e.ModifiedOn).HasColumnType("datetime");
-        //    entity.Property(e => e.Name).HasMaxLength(100);
+        //    entity.Property(e => e.BankName).HasMaxLength(100);
         //    entity.Property(e => e.IsActive)
         //        .HasDefaultValue((byte)0)
         //        .HasComment("IsActive(1-Active,0-InActive,2-Delete)");
@@ -538,7 +558,7 @@ public partial class LIMSContext : DbContext
         //        .HasColumnType("datetime");
         //    entity.Property(e => e.ModifiedBy).HasMaxLength(50);
         //    entity.Property(e => e.ModifiedOn).HasColumnType("datetime");
-        //    entity.Property(e => e.Name).HasMaxLength(100);
+        //    entity.Property(e => e.BankName).HasMaxLength(100);
         //    entity.Property(e => e.IsActive)
         //        .HasDefaultValue((byte)0)
         //        .HasComment("IsActive(1-Active,0-InActive,2-Delete)");
@@ -565,7 +585,7 @@ public partial class LIMSContext : DbContext
         //        .HasColumnName("GSTCode");
         //    entity.Property(e => e.ModifiedBy).HasMaxLength(50);
         //    entity.Property(e => e.ModifiedOn).HasColumnType("datetime");
-        //    entity.Property(e => e.Name).HasMaxLength(50);
+        //    entity.Property(e => e.BankName).HasMaxLength(50);
         //    entity.Property(e => e.IsActive)
         //        .HasDefaultValue((byte)0)
         //        .HasComment("IsActive(1-Active,0-InActive,2-Delete)");
@@ -583,7 +603,7 @@ public partial class LIMSContext : DbContext
         //        .HasColumnType("datetime");
         //    entity.Property(e => e.ModifiedBy).HasMaxLength(50);
         //    entity.Property(e => e.ModifiedOn).HasColumnType("datetime");
-        //    entity.Property(e => e.Name).HasMaxLength(100);
+        //    entity.Property(e => e.BankName).HasMaxLength(100);
         //    entity.Property(e => e.IsActive)
         //        .HasDefaultValue((byte)0)
         //        .HasComment("IsActive(1-Active,0-InActive,2-Delete)");
@@ -601,7 +621,7 @@ public partial class LIMSContext : DbContext
         //        .HasColumnType("datetime");
         //    entity.Property(e => e.EmailId)
         //        .HasMaxLength(100)
-        //        .HasColumnName("EmailID");
+        //        .HasColumnName("EmailId");
         //    entity.Property(e => e.EmployeeID).HasColumnName("EmployeeID");
         //    entity.Property(e => e.ModifiedBy).HasMaxLength(50);
         //    entity.Property(e => e.ModifiedOn).HasColumnType("datetime");
@@ -643,7 +663,7 @@ public partial class LIMSContext : DbContext
             activities.Add(new SiteActivity
             {
                 ModuleName = tableName,
-                TraceId = primaryKey, 
+                TraceId = primaryKey,
                 Ipaddress = ipAddress,
                 Browser = browser,
                 Action = action,
@@ -662,10 +682,10 @@ public partial class LIMSContext : DbContext
             var action = entry.State.ToString();
 
             var activity = activities.FirstOrDefault(a => a.ModuleName == tableName);
-            if (activity != null && activity.Action.Trim().ToLower() ==  "added")
+            if (activity != null && activity.Action.Trim().ToLower() == "added")
             {
                 activity.TraceId = newPrimaryKey;
-                
+
             }
         }
 
@@ -681,5 +701,5 @@ public partial class LIMSContext : DbContext
 
         return result;
     }
-   
+
 }

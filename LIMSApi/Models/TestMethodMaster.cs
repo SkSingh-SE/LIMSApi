@@ -12,15 +12,10 @@ namespace LIMSApi.Models
         public required string Name { get; set; }
         [StringLength(100)]
         public string? Caption { get; set; }
-        [StringLength(100)]
-        public string? TestMethodSubGroup { get; set; }
-        [StringLength(500)]
-        public string? InvoiceCase { get; set; }
         public long? LabDepartmentID { get; set; }
-        [Column(TypeName = "decimal(10,2)")]
-        public decimal? TestCharge { get; set; }
-        public int FixedTimeDuration {  get; set; }
-        public string? SampleSize { get; set; }
+        [ForeignKey("LabDepartmentID")]
+        public virtual DepartmentMaster? LabDepartment { get; set; }
+        public ICollection<TestMethodSubGroup> SubGroups { get; set; } = new List<TestMethodSubGroup>();
 
     }
 }

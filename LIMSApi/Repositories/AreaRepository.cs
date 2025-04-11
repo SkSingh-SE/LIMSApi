@@ -1,6 +1,7 @@
 ﻿using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using Microsoft.EntityFrameworkCore;
@@ -10,16 +11,21 @@ namespace LIMSApi.Repositories
     public class AreaRepository : IAreaRepository
     {
         private readonly LIMSContext _context;
+        private LoggedInUserDTO loggedInUser;
 
         public AreaRepository(LIMSContext context)
         {
             _context = context;
+            loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
-        public async Task AddArea(AreaMaster model)
+        public async Task<AreaMaster> AddArea(AreaMaster model)
         {
+            model.CompanyCode = model.CompanyCode ?? loggedInUser.CompanyCode;
+            model.CreatedBy = loggedInUser.EmployeeID;
             await _context.AreaMasters.AddAsync(model);
             await _context.SaveChangesAsync();
+            return model;
         }
 
         public async Task DeleteArea(long id)
@@ -71,13 +77,9 @@ namespace LIMSApi.Repositories
                                      || (x.Name != null && x.Name.ToLower().Contains(search)));
             }
 
-            if (filter.SortBy != null && filter.SortBy.Any())
+            if (filter.SortByColumn != null)
             {
-                var sortingExpressions = filter.SortBy
-                   .Select(s => $"{s.Key} {(s.Value ? "descending" : "ascending")}");
-                string orderByString = string.Join(", ", sortingExpressions);
-
-                _query = _query.OrderBy(orderByString);
+                _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
             }
 
             // Total Records Count
@@ -92,29 +94,33 @@ namespace LIMSApi.Repositories
             return new PagedResponse<AreaMaster>(items, totalRecords, filter.PageNumber, filter.PageSize);
         }
 
-        public async Task<List<DropdwonSelector>> GetAreaWithPincode(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<AreaDropdownDTO>> GetAreaWithPincode(string pincode)
         {
-            var _query = from a in _context.AreaMasters where a.IsActive select a;
-
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                var search = searchTerm.Trim();
-                _query = _query.Where(x => (x.Pincode != null && x.Pincode.Contains(search)) || x.Name.Contains(search));
-            }
-            var skip = pageNo * pageSize;
-
-            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
-            {
-                Id = x.ID,
-                Name = x.Pincode != null ? $"{x.Name}-({x.Pincode})" : $"{x.Name}",
-            })).ToListAsync();
+            var data = await (_context.AreaMasters.Include(c => c.City).ThenInclude(s => s.State).ThenInclude(ci => ci.Country)
+                .Where(x => x.IsActive && x.Pincode == pincode)
+                .Select(x => new AreaDropdownDTO
+                {
+                    AreaId = x.ID,
+                    AreaName = x.Name,
+                    CityId = x.CityID,
+                    CityName = x.City.Name,
+                    StateId = x.City.StateID,
+                    StateName = x.City.State.Name,
+                    CountryId = x.City.State.CountryID,
+                    CountryName = x.City.State.Country.Name
+                })
+                .ToListAsync());
 
             return data;
         }
 
         public async Task<bool> ExistsByName(string name)
         {
-            return await _context.AreaMasters.AnyAsync(x=>x.Name == name && x.IsActive);
+            return await _context.AreaMasters.AnyAsync(x => x.Name == name && x.IsActive);
+        }
+        public async Task<AreaMaster> GetAreaByName(string name)
+        {
+            return await _context.AreaMasters.FirstOrDefaultAsync(x => x.Name == name && x.IsActive);
         }
 
         public async Task<bool> ExistsByNameAndNotId(string name, long Id)

@@ -1,6 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
+using LIMSApi.Repositories;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
 
@@ -51,12 +52,46 @@ namespace LIMSApi.Services
 
             existingTestMethod.Name = model.Name;
             existingTestMethod.Caption = model.Caption;
-            existingTestMethod.InvoiceCase = model.InvoiceCase;
-            existingTestMethod.FixedTimeDuration = model.FixedTimeDuration;
-            existingTestMethod.TestCharge = model.TestCharge;
             existingTestMethod.LabDepartmentID = model.LabDepartmentID;
             existingTestMethod.ModifiedOn = DateTime.UtcNow;
             existingTestMethod.ModifiedBy = loggedInUser.EmployeeID;
+
+            // remove unwanted mappings
+            if (existingTestMethod.SubGroups.Any())
+            {
+                var subGroupToRemove = existingTestMethod.SubGroups.Where(sub => !model.SubGroups.Any(m => m.ID == sub.ID)).ToList();
+                foreach (var subGroup in subGroupToRemove)
+                {
+                    existingTestMethod.SubGroups.Remove(subGroup);
+                }
+            }
+
+            if (model.SubGroups != null && model.SubGroups.Any())
+            {
+                // Add or update mappings
+                foreach (var subGroup in model.SubGroups)
+                {
+                    subGroup.TestMethodID = model.ID;
+
+                    var existingSubGroups = existingTestMethod.SubGroups
+                        .FirstOrDefault(m => m.ID == subGroup.ID);
+
+                    if (existingSubGroups != null)
+                    {
+                        existingSubGroups.TestMethodID = model.ID;
+                        existingSubGroups.Name = subGroup.Name;
+                        existingSubGroups.InvoiceCase = subGroup.InvoiceCase;
+                        existingSubGroups.FixedTimeDuration = subGroup.FixedTimeDuration;
+                        existingSubGroups.SampleSize = subGroup.SampleSize;
+                        existingSubGroups.TestCharge = subGroup.TestCharge;
+
+                    }
+                    else
+                    {
+                        existingTestMethod.SubGroups.Add(subGroup);
+                    }
+                }
+            }
 
             await _testMethodRepository.UpdateTestMethod(existingTestMethod);
             _logger.LogInformation("TestMethod '{TestMethodName}' updated successfully.", model.Name);
@@ -78,11 +113,11 @@ namespace LIMSApi.Services
 
         public async Task<TestMethodMaster> GetTestMethodDetails(long id)
         {
-            var classification = await _testMethodRepository.GetTestMethodById(id);
-            if (classification == null)
+            var existingTestMethod = await _testMethodRepository.GetTestMethodById(id);
+            if (existingTestMethod == null)
                 throw new InvalidOperationException("TestMethod not found!");
 
-            return classification;
+            return existingTestMethod;
         }
 
         public async Task<PagedResponse<object>> FetchTestMethodList(PageFilter filter)

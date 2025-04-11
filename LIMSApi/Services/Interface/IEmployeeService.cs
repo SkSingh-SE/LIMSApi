@@ -6,7 +6,11 @@ namespace LIMSApi.Services.Interface
     public interface IEmployeeService
     {
         Task CreateEmployee(EmployeeMaster model);
+        Task CreateDocuments(List<EmployeeDocument> model);
+        Task CreateQualifications(List<EmployeeQualification> model);
         Task ModifyEmployee(EmployeeMaster model);
+        Task ModifyDocuments(List<EmployeeDocument> model);
+        Task ModifyQualifications(List<EmployeeQualification> model);
         Task RemoveEmployee(long id);
         Task<EmployeeMaster> GetEmployeeDetails(long id);
         Task<PagedResponse<object>> FetchEmployeeList(PageFilter filter);

@@ -67,17 +67,13 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Description != null && x.Description.ToLower().Contains(search))
+                _query = _query.Where(x => ( x.ID.ToString().Contains(search))
                                      || (x.Name != null && x.Name.ToLower().Contains(search)));
             }
 
-            if (filter.SortBy != null && filter.SortBy.Any())
+            if (filter.SortByColumn != null)
             {
-                var sortingExpressions = filter.SortBy
-                   .Select(s => $"{s.Key} {(s.Value ? "descending" : "ascending")}");
-                string orderByString = string.Join(", ", sortingExpressions);
-
-                _query = _query.OrderBy(orderByString);
+                _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
             }
 
             // Total Records Count
@@ -101,7 +97,7 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Description != null && x.Description.ToLower().Contains(search))
+                _query = _query.Where(x =>  x.ID.ToString().Contains(search)
                                       || (x.Name != null && x.Name.ToLower().Contains(search)));
             }
 

@@ -1,0 +1,16 @@
+﻿using LIMSApi.Dtos;
+using LIMSApi.Models;
+
+namespace LIMSApi.Services.Interface
+{
+    public interface ICustomerService
+    {
+        Task CreateCustomer(Customer model);
+        Task ModifyCustomer(Customer model);
+        Task RemoveCustomer(long id);
+        Task<Customer> GetCustomerDetails(long id);
+        Task<PagedResponse<object>> FetchCustomerList(PageFilter filter);
+
+        Task<List<DropdwonSelector>> GetCustomerDropdown(string? searchTerm, int pageNo, int pageSize);
+    }
+}

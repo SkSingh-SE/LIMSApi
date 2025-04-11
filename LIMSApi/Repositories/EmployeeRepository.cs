@@ -19,11 +19,11 @@ namespace LIMSApi.Repositories
             loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
-        public async Task AddEmployee(EmployeeMaster model)
+        public async Task<EmployeeMaster> AddEmployee(EmployeeMaster model)
         {
-            model.CompanyCode = loggedInUser.CompanyCode;
             await _context.EmployeeMasters.AddAsync(model);
             await _context.SaveChangesAsync();
+            return model;
         }
 
         public async Task DeleteEmployee(long id)
@@ -44,25 +44,30 @@ namespace LIMSApi.Repositories
            .Include(e => e.Department)
            .Include(e => e.Designation)
            .Include(e => e.ReportingManager)
+           .Include(x => x.Qualifications)
+           .Include(x => x.Documents)
            .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
         public async Task UpdateEmployee(EmployeeMaster model)
         {
             model.CompanyCode = loggedInUser.CompanyCode;
+            model.ModifiedBy = loggedInUser.EmployeeID;
+            model.ModifiedOn = DateTime.UtcNow;
             _context.EmployeeMasters.Update(model);
             await _context.SaveChangesAsync();
+            
         }
 
         public async Task<PagedResponse<object>> GetAllEmployees(PageFilter filter)
         {
-            var _query = from e in _context.EmployeeMasters
+            var _query = (from e in _context.EmployeeMasters
                          where e.IsActive && e.CompanyCode == loggedInUser.CompanyCode
                          join d in _context.DepartmentMasters on e.DepartmentID equals d.ID into dpGroup
                          from dp in dpGroup.DefaultIfEmpty()
 
                          join ds in _context.DesignationMasters on e.DesignationID equals ds.ID into dsGroup
-                         from ds in dpGroup.DefaultIfEmpty()
+                         from ds in dsGroup.DefaultIfEmpty()
                          select new
                          {
                              e.ID,
@@ -75,23 +80,9 @@ namespace LIMSApi.Repositories
                              DepartmentName = dp.Name,
                              e.DesignationID,
                              DesignationName = ds.Name
-                         };
+                         }).AsQueryable().ApplyFilters(filter.Filter);
 
-            if (filter.Filters != null)
-            {
-                foreach (var filterItem in filter.Filters)
-                {
-                    if (string.IsNullOrWhiteSpace(filterItem.Value))
-                    {
-                        continue;
-                    }
-                    var propertyName = filterItem.Key;
-                    var value = filterItem.Value;
-
-                    _query = _query.Where($"{propertyName}.Contains(@0)", value);
-                }
-            }
-
+            
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
@@ -124,7 +115,8 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                _query = _query.Where(x => x.ID.ToString().Contains(search) 
+                ||x.Name != null && x.Name.ToLower().Contains(search));
             }
 
             var skip = pageNo * pageSize;
@@ -152,6 +144,8 @@ namespace LIMSApi.Repositories
         public async Task AddEmployeeQualification(EmployeeQualification qualification)
         {
             qualification.CompanyCode = loggedInUser.CompanyCode;
+            qualification.CreatedBy = loggedInUser.EmployeeID;
+            qualification.CreatedOn = DateTime.UtcNow;
             await _context.EmployeeQualifications.AddAsync(qualification);
             await _context.SaveChangesAsync();
         }
@@ -159,6 +153,8 @@ namespace LIMSApi.Repositories
         public async Task UpdateEmployeeQualification(EmployeeQualification qualification)
         {
             qualification.CompanyCode = loggedInUser.CompanyCode;
+            qualification.ModifiedBy = loggedInUser.EmployeeID;
+            qualification.ModifiedOn = DateTime.UtcNow;
             _context.EmployeeQualifications.Update(qualification);
             await _context.SaveChangesAsync();
         }
@@ -171,6 +167,10 @@ namespace LIMSApi.Repositories
                 _context.EmployeeQualifications.Remove(qualification);
                 await _context.SaveChangesAsync();
             }
+        }
+        public async Task<EmployeeQualification?> GetEmployeeQualificationById(long id)
+        {
+            return await _context.EmployeeQualifications.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
         public async Task<List<EmployeeQualification>> GetEmployeeQualifications(long employeeId)
@@ -187,7 +187,14 @@ namespace LIMSApi.Repositories
             await _context.EmployeeDocuments.AddAsync(document);
             await _context.SaveChangesAsync();
         }
-
+        public async Task UpdateEmployeeDocument(EmployeeDocument document)
+        {
+            document.CompanyCode = loggedInUser.CompanyCode;
+            document.ModifiedBy = loggedInUser.EmployeeID;
+            document.ModifiedOn = DateTime.UtcNow;
+            _context.EmployeeDocuments.Update(document);
+            await _context.SaveChangesAsync();
+        }
         public async Task DeleteEmployeeDocument(long id)
         {
             var document = await _context.EmployeeDocuments.FindAsync(id);

@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using LIMSApi.Dtos;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace LIMSApi.Models
 {
@@ -15,23 +16,25 @@ namespace LIMSApi.Models
         public long UploadReferenceID { get; set; }
 
         public required string DocumentType { get; set; } 
+        public bool IsAdditional { get; set; }
 
-        [Required]
         [StringLength(500)]
-        public string FileName { get; set; } = string.Empty; 
+        public string? FileName { get; set; } = string.Empty; 
 
-        [Required]
         [StringLength(500)]
-        public string FilePath { get; set; } = string.Empty;
+        public string? FilePath { get; set; } = string.Empty;
         public DateTime UploadedOn { get; set; } = DateTime.UtcNow;
 
-        [ForeignKey("EmployeeID")]
-        public EmployeeMaster? Employee { get; set; }
-
-        [NotMapped]
+        
         [ForeignKey("UploadReferenceID")]
         public UploadFile? UploadFile { get; set; }
 
+        [ForeignKey("EmployeeID")]
+        [JsonIgnore]
+        public EmployeeMaster? Employee { get; set; }
+
+        [NotMapped]
+        public IFormFile? file { get; set; }
 
     }
 }

@@ -5,7 +5,7 @@ namespace LIMSApi.Repositories.Interface
 {
     public interface IEmployeeRepository
     {
-        Task AddEmployee(EmployeeMaster model);
+        Task<EmployeeMaster> AddEmployee(EmployeeMaster model);
         Task UpdateEmployee(EmployeeMaster model);
         Task DeleteEmployee(long id);
         Task<EmployeeMaster> GetEmployeeById(long id);
@@ -19,11 +19,13 @@ namespace LIMSApi.Repositories.Interface
         // Employee Qualification Management
         Task AddEmployeeQualification(EmployeeQualification qualification);
         Task UpdateEmployeeQualification(EmployeeQualification qualification);
+        Task<EmployeeQualification?> GetEmployeeQualificationById(long Id);
         Task DeleteEmployeeQualification(long id);
         Task<List<EmployeeQualification>> GetEmployeeQualifications(long employeeId);
 
         // Employee Document Management
         Task AddEmployeeDocument(EmployeeDocument document);
+        Task UpdateEmployeeDocument(EmployeeDocument document);
         Task DeleteEmployeeDocument(long id);
         Task<EmployeeDocument?> GetEmployeeDocumentById(long id);
         Task<List<EmployeeDocument>> GetEmployeeDocuments(long employeeId);

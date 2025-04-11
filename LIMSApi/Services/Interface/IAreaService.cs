@@ -11,6 +11,6 @@ namespace LIMSApi.Services.Interface
         Task<AreaMaster> GetAreaDetails(long id);
         Task<PagedResponse<AreaMaster>> FetchAreas(PageFilter filter);
 
-        Task<List<DropdwonSelector>> GetAreaWithPincode(string? searchTerm, int pageNo, int pageSize);
+        Task<List<AreaDropdownDTO>> GetAreaWithPincode(string pincode);
     }
 }

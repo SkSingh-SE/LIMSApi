@@ -10,21 +10,22 @@ namespace LIMSApi.Models
         public long ID { get; set; }
 
         [Required]
-        [ForeignKey("TestGroup")]
         public long TestGroupID { get; set; }
 
-        public virtual TestGroup? TestGroup { get; set; }
 
         [Required]
-        [ForeignKey("TestMaster")]
         public long TestID { get; set; }
 
-        public virtual TestMaster? TestMaster { get; set; }
-
         [Required]
-        [ForeignKey("TestMethod")]
         public long TestMethodID { get; set; }
 
+        [ForeignKey("TestID")]
+        public virtual TestMaster? TestMaster { get; set; }
+        [ForeignKey("TestGroupID")]
+        public virtual TestGroup? TestGroup { get; set; }
+
+
+        [ForeignKey("TestMethodID")]
         public virtual TestMethodMaster? TestMethod { get; set; }
     }
 }

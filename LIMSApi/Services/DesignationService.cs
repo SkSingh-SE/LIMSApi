@@ -1,4 +1,5 @@
 ﻿using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
@@ -9,11 +10,13 @@ namespace LIMSApi.Services
     {
         private readonly IDesignationRepository _designationRepository;
         private readonly ILogger<DesignationService> _logger;
+        private readonly LoggedInUserDTO loggedInUserDTO;
 
         public DesignationService(IDesignationRepository designationRepo, ILogger<DesignationService> logger)
         {
             _designationRepository = designationRepo;
             _logger = logger;
+            loggedInUserDTO = LoggedInUserProvider.CurrentUser;
         }
 
         public async Task CreateDesignation(DesignationMaster model)
@@ -25,6 +28,9 @@ namespace LIMSApi.Services
             if (exists)
                 throw new InvalidOperationException("Designation already exists!");
 
+            model.CreatedOn = DateTime.UtcNow;
+            model.CreatedBy = loggedInUserDTO.EmployeeID;
+            model.CompanyCode = loggedInUserDTO.CompanyCode;
             await _designationRepository.AddDesignation(model);
             _logger.LogInformation("Designation '{DesignationName}' created successfully.", model.Name);
         }

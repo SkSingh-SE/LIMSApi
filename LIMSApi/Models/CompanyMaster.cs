@@ -10,11 +10,11 @@ public partial class CompanyMaster : AuditProperty
     [Key]
     public long ID { get; set; }
 
-    public string? CompanyName { get; set; }
+    [Required, StringLength(100)]
+    public string CompanyName { get; set; } = string.Empty;
 
-    public string? CompanyType { get; set; }
-
-    public string? CompanyCode { get; set; }
+    [Required, StringLength(100)]
+    public string CompanyType { get; set; } = string.Empty;
 
     public string? PhoneNo { get; set; }
 
@@ -47,11 +47,11 @@ public partial class CompanyMaster : AuditProperty
     // Navigation Property
     [ForeignKey("CountryID")]
     public virtual CountryMaster? Country { get; set; }
-    
+
     [ForeignKey("StateID")]
     public virtual StateMaster? State { get; set; }
     [ForeignKey("CityID")]
-    public virtual CityMaster? City {  get; set; }
+    public virtual CityMaster? City { get; set; }
 
     [ForeignKey("AreaID")]
     public virtual AreaMaster? Area { get; set; }

@@ -5,7 +5,8 @@ namespace LIMSApi.Services.Interface
 {
     public interface IFileUploadService
     {
-        Task<UploadFile> UploadFileAsync(IFormFile file, FileType fileType, int? year );
+        Task<UploadFile> UploadFileAsync(IFormFile file, FileType fileType, int? year, string? identifier );
         Task<UploadFile> GetFileAsync(long id);
+        Task RemoveFileAsync(long id);
     }
 }

@@ -16,7 +16,7 @@ namespace LIMSApi.Services
             _logger = logger;
         }
 
-        public async Task CreateCountry(CountryMaster country)
+        public async Task<CountryMaster> CreateCountry(CountryMaster country)
         {
             if (string.IsNullOrWhiteSpace(country.Name))
                 throw new ArgumentException("Country name should not be empty!");
@@ -27,6 +27,7 @@ namespace LIMSApi.Services
 
             await _countryRepository.AddCountry(country);
             _logger.LogInformation("Country '{CountryName}' created successfully.", country.Name);
+            return country;
         }
 
         public async Task ModifyCountry(CountryMaster country)
@@ -70,6 +71,10 @@ namespace LIMSApi.Services
                 throw new Exception("Country not found!");
 
             return country;
+        }
+        public async Task<CountryMaster?> GetCountryByName(string name)
+        {
+            return await _countryRepository.GetByName(name);
         }
 
         public async Task<PagedResponse<object>> FetchCountries(PageFilter filter)

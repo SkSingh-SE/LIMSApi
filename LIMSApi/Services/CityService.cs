@@ -17,7 +17,7 @@ namespace LIMSApi.Services
             _logger = logger;
         }
 
-        public async Task CreateCity(CityMaster city)
+        public async Task<CityMaster> CreateCity(CityMaster city)
         {
             if (string.IsNullOrWhiteSpace(city.Name))
                 throw new ArgumentException("City name should not be empty!");
@@ -28,6 +28,7 @@ namespace LIMSApi.Services
 
             await _cityRepository.AddCity(city);
             _logger.LogInformation("City '{CityName}' created successfully.", city.Name);
+            return city;
         }
 
         public async Task ModifyCity(CityMaster city)
@@ -76,6 +77,11 @@ namespace LIMSApi.Services
         public async Task<PagedResponse<object>> FetchCities(PageFilter filter)
         {
             return await _cityRepository.GetAllCities(filter);
+        }
+
+        public async Task<CityMaster?> GetCityByName(string name)
+        {
+            return await _cityRepository.GetByName(name);
         }
     }
 }

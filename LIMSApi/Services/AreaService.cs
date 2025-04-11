@@ -2,6 +2,7 @@
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
+using Newtonsoft.Json;
 
 namespace LIMSApi.Services
 {
@@ -9,11 +10,17 @@ namespace LIMSApi.Services
     {
         private readonly IAreaRepository _areaRepository;
         private readonly ILogger<AreaService> _logger;
+        private readonly ICountryService countryService;
+        private readonly IStateService stateService;
+        private readonly ICityService cityService;
 
-        public AreaService(IAreaRepository areaRepository, ILogger<AreaService> logger)
+        public AreaService(IAreaRepository areaRepository, ILogger<AreaService> logger, ICountryService countryService, IStateService stateService, ICityService cityService )
         {
             _areaRepository = areaRepository;
             _logger = logger;
+            this.countryService = countryService;
+            this.stateService = stateService;
+            this.cityService = cityService;
         }
 
         public async Task CreateArea(AreaMaster area)
@@ -77,9 +84,109 @@ namespace LIMSApi.Services
             return await _areaRepository.GetAllAreas(filter);
         }
 
-        public async Task<List<DropdwonSelector>> GetAreaWithPincode(string? searchTerm, int pageNo, int pageSize)
+        public async Task<List<AreaDropdownDTO>> GetAreaWithPincode(string pincode)
         {
-            return await _areaRepository.GetAreaWithPincode(searchTerm, pageNo, pageSize);
+            var areaList = await _areaRepository.GetAreaWithPincode(pincode);
+            if(areaList == null || areaList.Count == 0)
+            {
+                areaList = new List<AreaDropdownDTO>();
+                using (var client = new HttpClient())
+                {
+                    var response = await client.GetAsync($"https://api.postalpincode.in/pincode/{pincode}");
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var content = await response.Content.ReadAsStringAsync();
+                        var apiResponse = JsonConvert.DeserializeObject<List<PostalApiResponse>>(content);
+
+                        if (apiResponse != null && apiResponse[0].Status == "Success")
+                        {
+                            foreach(var item in apiResponse[0].PostOffice)
+                            {
+                                var existingCountry = await countryService.GetCountryByName(item.Country);
+                                if (existingCountry == null)
+                                {
+                                    var country = new CountryMaster
+                                    {
+                                        Name = item.Country,
+                                        IsActive = true,
+                                        CreatedOn = DateTime.UtcNow
+                                    };
+                                    existingCountry = await countryService.CreateCountry(country);
+
+                                }
+                                var existingState = await stateService.GetStateByName(item.State);
+                                if (existingState == null)
+                                {
+                                    var state = new StateMaster
+                                    {
+                                        Name = item.State,
+                                        CountryID = existingCountry.ID,
+                                        IsActive = true,
+                                        CreatedOn = DateTime.UtcNow
+                                    };
+                                    existingState = await stateService.CreateState(state);
+                                }
+
+                                var existingCity = await cityService.GetCityByName(item.Block);
+                                if (existingCity == null)
+                                {
+                                    var city = new CityMaster
+                                    {
+                                        Name = item.Block,
+                                        StateID = existingState.ID,
+                                        IsActive = true,
+                                        CreatedOn = DateTime.UtcNow
+                                    };
+                                    existingCity = await cityService.CreateCity(city);
+                                }
+
+                                var area = new AreaMaster
+                                {
+                                    Name = item.Name,
+                                    Code = item.Name,
+                                    CityID = existingCity.ID,
+                                    Pincode = item.Pincode,
+                                    IsActive = true,
+                                    CreatedOn = DateTime.UtcNow
+                                };
+                                var existingArea = await _areaRepository.GetAreaByName(area.Name);
+                                if(existingArea == null)
+                                {
+                                    existingArea = await _areaRepository.AddArea(area);
+                                    areaList.Add(new AreaDropdownDTO
+                                    {
+                                        AreaId = existingArea.ID,
+                                        AreaName = existingArea.Name,
+                                        CityId = existingCity.ID,
+                                        CityName = existingCity.Name,
+                                        StateId = existingState.ID,
+                                        StateName = existingState.Name,
+                                        CountryId = existingCountry.ID,
+                                        CountryName = existingCountry.Name
+                                    });
+                                }
+                                else
+                                {
+                                    areaList.Add(new AreaDropdownDTO
+                                    {
+                                        AreaId = existingArea.ID,
+                                        AreaName = existingArea.Name,
+                                        CityId = existingCity.ID,
+                                        CityName = existingCity.Name,
+                                        StateId = existingState.ID,
+                                        StateName = existingState.Name,
+                                        CountryId = existingCountry.ID,
+                                        CountryName = existingCountry.Name
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return areaList;
+            
         }
     }
 }

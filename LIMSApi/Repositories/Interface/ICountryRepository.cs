@@ -12,5 +12,6 @@ namespace LIMSApi.Repositories.Interface
         Task<PagedResponse<object>> GetAllCountries(PageFilter filter);
         Task<bool> ExistsByName(string name);
         Task<bool> ExistsByNameAndNotId(string name, long id);
+        Task<CountryMaster?> GetByName(string name);
     }
 }

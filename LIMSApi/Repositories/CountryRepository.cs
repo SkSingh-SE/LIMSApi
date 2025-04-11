@@ -6,20 +6,24 @@ using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Dynamic.Core;
+using LIMSApi.Helpers;
 
 namespace LIMSApi.Repositories
 {
     public class CountryRepository : ICountryRepository
     {
         private readonly LIMSContext _context;
-
+        private LoggedInUserDTO loggedInUser;
         public CountryRepository(LIMSContext context)
         {
             _context = context;
+            loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
         public async Task AddCountry(CountryMaster country)
         {
+            country.CompanyCode = country.CompanyCode ?? loggedInUser.CompanyCode;
+            country.CreatedBy = loggedInUser.EmployeeID;
             await _context.CountryMasters.AddAsync(country);
             await _context.SaveChangesAsync();
         }
@@ -74,13 +78,9 @@ namespace LIMSApi.Repositories
                                      );
             }
 
-            if (filter.SortBy != null && filter.SortBy.Any())
+            if (filter.SortByColumn != null)
             {
-                var sortingExpressions = filter.SortBy
-                   .Select(s => $"{s.Key} {(s.Value ? "descending" : "ascending")}");
-                string orderByString = string.Join(", ", sortingExpressions);
-
-                _query = _query.OrderBy(orderByString);
+                _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
             }
 
             // Total Records Count
@@ -99,7 +99,10 @@ namespace LIMSApi.Repositories
         {
             return await _context.CountryMasters.AnyAsync(x => x.Name == name && x.IsActive);
         }
-
+        public async Task<CountryMaster?> GetByName(string name)
+        {
+            return await _context.CountryMasters.FirstOrDefaultAsync(x => x.Name == name && x.IsActive);
+        }
         public async Task<bool> ExistsByNameAndNotId(string name, long id)
         {
             return await _context.CountryMasters.AnyAsync(x => x.Name == name && x.ID != id && x.IsActive);

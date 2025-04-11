@@ -61,5 +61,8 @@ public partial class SpecificationLine : AuditProperty
     public virtual HeatTreatmentMaster? HeatTreatment { get; set; }
     
     [ForeignKey("ProductConditionID1")]
-    public virtual ProductConditionMaster? ProductCondition { get; set; }
+    public virtual ProductConditionMaster? ProductCondition1 { get; set; }
+
+    [ForeignKey("ProductConditionID2")]
+    public virtual ProductConditionMaster? ProductCondition2 { get; set; }
 }

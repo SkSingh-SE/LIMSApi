@@ -1,6 +1,7 @@
 ﻿using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using Microsoft.EntityFrameworkCore;
@@ -10,14 +11,18 @@ namespace LIMSApi.Repositories
     public class CityRepository : ICityRepository
     {
         private readonly LIMSContext _context;
+        private LoggedInUserDTO loggedInUser;
 
         public CityRepository(LIMSContext context)
         {
             _context = context;
+            loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
         public async Task AddCity(CityMaster model)
         {
+            model.CompanyCode = model.CompanyCode ?? loggedInUser.CompanyCode;
+            model.CreatedBy = loggedInUser.EmployeeID;
             await _context.CityMasters.AddAsync(model);
             await _context.SaveChangesAsync();
         }
@@ -71,13 +76,9 @@ namespace LIMSApi.Repositories
                                      || (x.Name != null && x.Name.ToLower().Contains(search)));
             }
 
-            if (filter.SortBy != null && filter.SortBy.Any())
+            if (filter.SortByColumn != null)
             {
-                var sortingExpressions = filter.SortBy
-                   .Select(s => $"{s.Key} {(s.Value ? "descending" : "ascending")}");
-                string orderByString = string.Join(", ", sortingExpressions);
-
-                _query = _query.OrderBy(orderByString);
+                _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
             }
 
             // Total Records Count
@@ -95,6 +96,10 @@ namespace LIMSApi.Repositories
         public async Task<bool> ExistsByName(string name)
         {
             return await _context.CityMasters.AnyAsync(x => x.Name == name && x.IsActive);
+        }
+        public async Task<CityMaster?> GetByName(string name)
+        {
+            return await _context.CityMasters.FirstOrDefaultAsync(x => x.Name == name && x.IsActive);
         }
 
         public async Task<bool> ExistsByNameAndNotId(string name, long id)

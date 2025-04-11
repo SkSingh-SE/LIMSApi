@@ -19,7 +19,7 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> UploadFile(IFormFile file,  int fileType, int? year)
         {
             FileType fileTypes = (FileType)fileType;
-            var uploadFile = await _fileService.UploadFileAsync(file, fileTypes, year);
+            var uploadFile = await _fileService.UploadFileAsync(file, fileTypes, year, "");
             return Ok(uploadFile);
         }
 

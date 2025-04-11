@@ -39,7 +39,7 @@ namespace LIMSApi.Repositories
 
         public async Task<TestMethodMaster?> GetTestMethodById(long id)
         {
-            return await _context.TestMethodMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.TestMethodMasters.Include(t => t.SubGroups).FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
         public async Task UpdateTestMethod(TestMethodMaster model)
@@ -50,7 +50,25 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllTestMethods(PageFilter filter)
         {
-            var _query = from c in _context.TestMethodMasters where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c;
+            var _query = from c in _context.TestMethodMasters
+                         where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
+                         join g in _context.TestMethodSubGroups on c.ID equals g.TestMethodID into g2
+                         from sg in g2.DefaultIfEmpty()
+                         join d in _context.DepartmentMasters on c.LabDepartmentID equals d.ID into dsGroup
+                         from ds in dsGroup.DefaultIfEmpty()
+                         select new
+                         {
+                             c.ID,
+                             c.Name,
+                             c.LabDepartmentID,
+                             DepartmentName = ds.Name,
+                             SubMethodName = sg.Name,
+                             InvoiceCase = sg.InvoiceCase ,
+                             TestCharge = sg.TestCharge ,
+                             FixedTimeDuration = sg.FixedTimeDuration
+
+                         };
+
 
             if (filter.Filters != null)
             {
@@ -73,13 +91,9 @@ namespace LIMSApi.Repositories
                 _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
             }
 
-            if (filter.SortBy != null && filter.SortBy.Any())
+            if (filter.SortByColumn != null)
             {
-                var sortingExpressions = filter.SortBy
-                   .Select(s => $"{s.Key} {(s.Value ? "descending" : "ascending")}");
-                string orderByString = string.Join(", ", sortingExpressions);
-
-                _query = _query.OrderBy(orderByString);
+                _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
             }
 
             // Total Records Count
@@ -103,7 +117,7 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x =>  (x.Name != null && x.Name.ToLower().Contains(search)));
+                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
             }
 
             var skip = pageNo * pageSize;

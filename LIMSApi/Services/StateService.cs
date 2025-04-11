@@ -16,7 +16,7 @@ namespace LIMSApi.Services
             _logger = logger;
         }
 
-        public async Task CreateState(StateMaster state)
+        public async Task<StateMaster> CreateState(StateMaster state)
         {
             if (string.IsNullOrWhiteSpace(state.Name))
                 throw new ArgumentException("State name should not be empty!");
@@ -27,6 +27,7 @@ namespace LIMSApi.Services
 
             await _stateRepository.AddState(state);
             _logger.LogInformation("State '{StateName}' created successfully.", state.Name);
+            return state;
         }
 
         public async Task ModifyState(StateMaster state)
@@ -75,6 +76,11 @@ namespace LIMSApi.Services
         public async Task<PagedResponse<object>> FetchStates(PageFilter filter)
         {
             return await _stateRepository.GetAllStates(filter);
+        }
+
+        public async Task<StateMaster?> GetStateByName(string name)
+        {
+            return await _stateRepository.GetByName(name);
         }
     }
 }

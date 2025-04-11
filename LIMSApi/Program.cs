@@ -83,7 +83,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 
 
-// Register AuthService with a parameter from configuration
+// Register AuthService with a parameter from _configuration
 builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
 builder.Services.AddScoped<LoggedInUserProvider>();
 
@@ -93,7 +93,8 @@ builder.Services.AddScoped<IAuthService>(provider =>
     var userRepository = provider.GetRequiredService<IUserRepository>();
     var logger = provider.GetRequiredService<ILogger<AuthService>>();
     var configuration = provider.GetRequiredService<IConfiguration>();
-    return new AuthService(userRepository, logger, jwtSecret, configuration);
+    var emailService = provider.GetRequiredService<EmailService>();
+    return new AuthService(userRepository, logger, jwtSecret, configuration,emailService);
 });
 
 // Register Repositories
@@ -113,6 +114,27 @@ builder.Services.AddScoped<ITestMasterRepository, TestMasterRepository>();
 builder.Services.AddScoped<ITestMethodRepository, TestMethodRepository>();
 builder.Services.AddScoped<ITestMethodStandardRepository, TestMethodStandardRepository>();
 builder.Services.AddScoped<ITestGroupRepository, TestGroupRepository>();
+builder.Services.AddScoped<ICustomerTypeRepository, CustomerTypeRepository>();
+builder.Services.AddScoped<IItemMasterRepository, ItemMasterRepository>();
+builder.Services.AddScoped<IDispatchModeRepository, DispatchModeRepository>();
+builder.Services.AddScoped<IRemarkRepository, RemarkRepository>();
+builder.Services.AddScoped<ITaxRepository, TaxRepository>();
+builder.Services.AddScoped<IBankRepository,BankRepository>();
+builder.Services.AddScoped<ICourierRepository, CourierRepository>();
+builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
+builder.Services.AddScoped<ISubContractorRepository, SubContractorRepository>();
+builder.Services.AddScoped<ITPIMasterRepository, TPIMasterRepository>();
+builder.Services.AddScoped<ILabScopeRepository, LabScopeRepository>();
+builder.Services.AddScoped<IVendorRepository, VendorRepository>();
+builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
+builder.Services.AddScoped<IDisciplineRepository, DisciplineRepository>();
+builder.Services.AddScoped<IGroupRepository, GroupRepository>();
+builder.Services.AddScoped<ISubGroupRepository, SubGroupRepository>();
+builder.Services.AddScoped<IOEMRepository, OEMRepository>();
+builder.Services.AddScoped<ICalibrationAgencyRepository, CalibrationAgencyRepository>();
+builder.Services.AddScoped<ITestMethodRepository, TestMethodRepository>();
+builder.Services.AddScoped<IDepartmentRepository, DepartmentRepository>();
+
 
 // Register Services
 builder.Services.AddScoped<IUserService, UserService>();
@@ -128,8 +150,29 @@ builder.Services.AddScoped<IFileUploadService, FileUploadService>();
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
 builder.Services.AddScoped<ISpecimenTypeService, SpecimenTypeService>();
 builder.Services.AddScoped<ITestGroupService, TestGroupService>();
-
-
+builder.Services.AddScoped<ICustomerTypeService, CustomerTypeService>();
+builder.Services.AddScoped<IItemMasterService, ItemMasterService>();
+builder.Services.AddScoped<IDispatchModeService,DispatchModeService>();
+builder.Services.AddScoped<IRemarkService,RemarkService>();
+builder.Services.AddScoped<ITaxService,TaxService>();
+builder.Services.AddScoped<IBankService,BankService>();
+builder.Services.AddScoped<ICourierService,CourierService>();
+builder.Services.AddScoped<ICustomerService, CustomerService>();
+builder.Services.AddScoped<ISubContractorService, SubContractorService>();
+builder.Services.AddScoped<ITPIMasterService, TPIMasterService>();
+builder.Services.AddScoped<ILabScopeService, LabScopeService>();
+builder.Services.AddScoped<IVendorService, VendorService>();
+builder.Services.AddScoped<ISupplierService, SupplierService>();
+builder.Services.AddScoped<IDisciplineService, DisciplineService>();
+builder.Services.AddScoped<IGroupService, GroupService>();
+builder.Services.AddScoped<ISubGroupService, SubGroupService>();
+builder.Services.AddScoped<IOEMService, OEMService>();
+builder.Services.AddScoped<ICalibrationAgencyService, CalibrationAgencyService>();
+builder.Services.AddScoped<ITestMethodService, TestMethodService>();
+builder.Services.AddScoped<IDepartmentService,DepartmentService>();
+builder.Services.AddScoped<EmailService>();
+builder.Services.AddScoped<SMSService>();
+builder.Services.AddScoped<WhatsAppService>();
 
 
 var app = builder.Build();

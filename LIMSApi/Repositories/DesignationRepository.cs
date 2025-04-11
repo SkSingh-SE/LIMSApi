@@ -1,9 +1,11 @@
 ﻿using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using Microsoft.EntityFrameworkCore;
+using Newtonsoft.Json.Linq;
 
 namespace LIMSApi.Repositories
 {
@@ -47,22 +49,22 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllDesignations(PageFilter filter)
         {
-            var _query = from c in _context.DesignationMasters where c.IsActive select c;
+            var _query = (from c in _context.DesignationMasters
+                          where c.IsActive
+                          join e in _context.EmployeeMasters on c.CreatedBy equals e.ID into emp
+                          from eg in emp.DefaultIfEmpty()
+                          select new
+                          {
+                              c.ID,
+                              c.Name,
+                              c.Description,
+                              c.CreatedOn,
+                              c.ModifiedOn,
+                              CreatedBy = eg.Name
 
-            if (filter.Filters != null)
-            {
-                foreach (var filterItem in filter.Filters)
-                {
-                    if (string.IsNullOrWhiteSpace(filterItem.Value))
-                    {
-                        continue;
-                    }
-                    var propertyName = filterItem.Key;
-                    var value = filterItem.Value;
+                          }).AsQueryable()
+                            .ApplyFilters(filter.Filter);
 
-                    _query = _query.Where($"{propertyName}.Contains(@0)", value);
-                }
-            }
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
@@ -71,13 +73,9 @@ namespace LIMSApi.Repositories
                                      || (x.Name != null && x.Name.ToLower().Contains(search)));
             }
 
-            if (filter.SortBy != null && filter.SortBy.Any())
+            if (filter.SortByColumn != null)
             {
-                var sortingExpressions = filter.SortBy
-                   .Select(s => $"{s.Key} {(s.Value ? "descending" : "ascending")}");
-                string orderByString = string.Join(", ", sortingExpressions);
-
-                _query = _query.OrderBy(orderByString);
+                _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
             }
 
             // Total Records Count
@@ -101,7 +99,7 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Description != null && x.Description.ToLower().Contains(search))
+                _query = _query.Where(x => ( x.ID.ToString().Contains(search))
                                       || (x.Name != null && x.Name.ToLower().Contains(search)));
             }
 

@@ -12,5 +12,6 @@ namespace LIMSApi.Repositories.Interface
         Task<PagedResponse<object>> GetAllStates(PageFilter filter);
         Task<bool> ExistsByName(string name);
         Task<bool> ExistsByNameAndNotId(string name, long id);
+        Task<StateMaster?> GetByName(string name);
     }
 }

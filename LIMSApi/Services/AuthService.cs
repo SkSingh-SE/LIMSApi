@@ -3,6 +3,7 @@ using System.Security.Authentication;
 using System.Security.Claims;
 using System.Text;
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
@@ -18,21 +19,23 @@ namespace LIMSApi.Services
         private readonly string _jwtSecret;
         private readonly PasswordHasher<UserMaster> _passwordHasher;
         private readonly IConfiguration _configuration;
+        private readonly EmailService emailService;
 
-        public AuthService(IUserRepository userRepository, ILogger<AuthService> logger, string jwtSecret, IConfiguration configuration)
+        public AuthService(IUserRepository userRepository, ILogger<AuthService> logger, string jwtSecret, IConfiguration configuration, EmailService emailService)
         {
             _userRepository = userRepository;
             _logger = logger;
             _jwtSecret = jwtSecret;
             _passwordHasher = new PasswordHasher<UserMaster>();
             _configuration = configuration;
+            this.emailService = emailService;
         }
         public static DateTimeOffset ConvertToTimeZone(DateTime utcDateTime, string timeZoneId)
         {
             var timeZone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
             return TimeZoneInfo.ConvertTimeFromUtc(utcDateTime, timeZone);
         }
-        public async Task<string> Authenticate(LoginDTO login)
+        public async Task<object> Authenticate(LoginDTO login)
         {
             var date1 = DateTime.UtcNow;
             var date2 = DateTime.Now;
@@ -40,7 +43,7 @@ namespace LIMSApi.Services
             var date4 = DateTimeOffset.UtcNow;
 
             Console.WriteLine(date1);
-            Console.WriteLine( date2);
+            Console.WriteLine(date2);
             Console.WriteLine(date3);
             Console.WriteLine(date4);
 
@@ -53,7 +56,7 @@ namespace LIMSApi.Services
             {
                 throw new UnauthorizedAccessException($"Login failed for user: {login.Email}");
             }
-            
+
             // Validate password hash
             var result = _passwordHasher.VerifyHashedPassword(user, user.Password, login.Password);
 
@@ -65,7 +68,17 @@ namespace LIMSApi.Services
             var token = GenerateJwtToken(user);
             _logger.LogInformation("User {Username} logged in successfully", user.UserName);
 
-            return token;
+            var expireHours = Convert.ToInt32(_configuration["Jwt:ExpirationHours"]);
+            var responseObject = new
+            {
+                token = token,
+                name = user.UserName,
+                email = user.EmailId,
+                role = user.RoleName,
+                expiresInSecond = expireHours * 60 * 60,
+                employeeId = user.EmployeeID
+            };
+            return responseObject;
         }
 
         public async Task RegisterUser(UserMaster model)
@@ -80,7 +93,11 @@ namespace LIMSApi.Services
             {
                 UserName = model.UserName,
                 EmailId = model.EmailId,
-                Password = _passwordHasher.HashPassword(null, model.Password)
+                Password = _passwordHasher.HashPassword(null, model.Password),
+                EmployeeID = model.EmployeeID,
+                RoleID = model.RoleID,
+                RoleName = model.RoleName,
+                CompanyCode = model.CompanyCode
             };
 
             await _userRepository.AddUser(user);
@@ -112,7 +129,7 @@ namespace LIMSApi.Services
             var token = tokenHandler.CreateToken(tokenDescriptor);
             return tokenHandler.WriteToken(token);
 
-           
+
         }
     }
 }

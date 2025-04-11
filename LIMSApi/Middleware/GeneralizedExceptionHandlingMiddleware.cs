@@ -101,6 +101,7 @@ namespace LIMSApi.Middleware
                     CompanyCode = "LIMS"
                 };
 
+                await siteErrorService.CreateSiteError(siteError);
                 _logger.LogError(ex, message);
                 await httpContext.Response.WriteAsJsonAsync(errorResponse);
             }

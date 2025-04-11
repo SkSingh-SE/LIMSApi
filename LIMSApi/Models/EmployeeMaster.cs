@@ -49,7 +49,7 @@ public partial class EmployeeMaster : AuditProperty
     [EmailAddress]
     public required string EmailId { get; set; }
 
-    public bool? IsMarried { get; set; }
+    public string? MaritalStatus { get; set; }
 
     [StringLength(100)]
     public string? SpouseName { get; set; }
@@ -85,7 +85,7 @@ public partial class EmployeeMaster : AuditProperty
 
     public long? DepartmentID { get; set; }
 
-    public long? ReportingTo { get; set; }
+    public long? ReportingManagerID { get; set; }
 
     public long? UserID { get; set; }
 

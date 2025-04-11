@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace LIMSApi.Models
 {
@@ -19,10 +20,10 @@ namespace LIMSApi.Models
         public string SchoolOrUniversity { get; set; } = string.Empty;
 
         [Required]
-        [StringLength(50)]
         public int PassingYear { get; set; }
 
         [ForeignKey("EmployeeID")]
+        [JsonIgnore]
         public EmployeeMaster? Employee { get; set; }
     }
 }
