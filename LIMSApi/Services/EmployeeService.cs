@@ -255,7 +255,7 @@ namespace LIMSApi.Services
                     // New document
                     if (document.file != null)
                     {
-                        var fileUploadResponse = await _uploadService.UploadFileAsync(document.file, FileType.Employee, null, document.FileName);
+                        var fileUploadResponse = await _uploadService.UploadFileAsync(document.file, FileType.Employee, null, document.DocumentType);
                         if (fileUploadResponse == null)
                             throw new InvalidOperationException("File upload failed!");
 

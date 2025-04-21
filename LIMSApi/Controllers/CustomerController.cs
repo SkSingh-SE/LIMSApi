@@ -37,14 +37,14 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> PutCustomerMaster(Customer model)
         {
             await _customerService.ModifyCustomer(model);
-            return Ok($"Customer '{model.Name}' updated successfully.");
+            return Ok(new { message = $"Customer '{model.Name}' updated successfully." });
         }
 
         [HttpPost("create")]
         public async Task<ActionResult<Customer>> PostCustomerMaster(Customer model)
         {
             await _customerService.CreateCustomer(model);
-            return Ok($"Customer '{model.Name}' created successfully");
+            return Ok(new { message = $"Customer '{model.Name}' created successfully" });
         }
 
         [HttpDelete("delete/{id}")]
@@ -55,7 +55,7 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("Customer not found!");
             }
-            return Ok($"Customer '{entity.Name}' created successfully");
+            return Ok(new { message = $"Customer '{entity.Name}' created successfully" });
         }
 
         [HttpGet("dropdown")]

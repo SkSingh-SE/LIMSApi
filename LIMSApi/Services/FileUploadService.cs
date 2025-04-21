@@ -13,11 +13,13 @@ namespace LIMSApi.Services
         private readonly ILogger<FileUploadService> _logger;
         private readonly string _baseUploadDirectory;
         private readonly LoggedInUserDTO _loggedInUser;
-        public FileUploadService(IFileUploadRepository fileUploadRepo, ILogger<FileUploadService> logger, IConfiguration configuration)
+        private readonly IWebHostEnvironment _env;
+        public FileUploadService(IFileUploadRepository fileUploadRepo, ILogger<FileUploadService> logger, IConfiguration configuration,IWebHostEnvironment env)
         {
             _fileUploadRepository = fileUploadRepo;
             _logger = logger;
-            _baseUploadDirectory = configuration["FileUploadSettings:UploadDirectory"] ?? "Uploads";
+            _env = env;
+            _baseUploadDirectory = configuration["FileUploadSettings:UploadDirectory"] ?? "/Uploads";
             _loggedInUser = LoggedInUserProvider.CurrentUser;
         }
         public async Task<UploadFile> GetFileAsync(long id)
@@ -40,16 +42,14 @@ namespace LIMSApi.Services
                 string originalFileExtension = Path.GetExtension(file.FileName);
                 string newFileName = $"{Guid.NewGuid()}_{fileType}{(string.IsNullOrWhiteSpace(identifier) ? "" : $"_{identifier}")}{originalFileExtension}";
 
-
-
-                string uploadDirectory = getFileTypePath(fileType, year);
-
-                var curD = Directory.GetCurrentDirectory();
+                string relativeDirectory = getFileTypePath(fileType, year);
+                string uploadDirectory = Path.Combine(_env.WebRootPath, relativeDirectory);
 
                 if (!Directory.Exists(uploadDirectory))
                     Directory.CreateDirectory(uploadDirectory);
 
                 string filePath = Path.Combine(uploadDirectory, newFileName);
+                string relativeFilePath = Path.Combine(relativeDirectory, newFileName);
 
                 using (var stream = new FileStream(filePath, FileMode.Create))
                 {
@@ -62,7 +62,7 @@ namespace LIMSApi.Services
                     StoredFileName = newFileName,
                     FileType = fileType,
                     FileExtension = originalFileExtension,
-                    FilePath = filePath,
+                    FilePath = relativeFilePath,
                     FileSize = file.Length,
                     Year = year ?? DateTime.UtcNow.Year,
                     CreatedOn = DateTime.UtcNow,

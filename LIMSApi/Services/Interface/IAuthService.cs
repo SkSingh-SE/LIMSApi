@@ -7,5 +7,6 @@ namespace LIMSApi.Services.Interface
     {
         Task<object> Authenticate(LoginDTO login);
         Task RegisterUser(UserMaster model);
+        Task<object> GetRefreshToken();
     }
 }

@@ -29,8 +29,6 @@ namespace LIMSApi.Models
 
         public bool IsBlock { get; set; }
 
-        [StringLength(250)]
-        public string? BlockReason { get; set; }
         public long IndustryID { get; set; }
 
         [StringLength(50)]
@@ -73,7 +71,13 @@ namespace LIMSApi.Models
 
         [MaxLength(500)]
         public string? Remark { get; set; }
+        public string? DTestoLoginId { get; set; }
+        public string? DTestoPassword { get; set; }
+        public bool DTestoActive { get; set; }
+        public bool BlockDTestoUser { get; set; }
 
+        [StringLength(250)]
+        public string? BlockReason { get; set; }
 
         [ForeignKey("IndustryID")]
         public virtual IndustryMaster? Industry { get; set; }

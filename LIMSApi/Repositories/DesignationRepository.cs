@@ -12,10 +12,12 @@ namespace LIMSApi.Repositories
     public class DesignationRepository : IDesignationRepository
     {
         private readonly LIMSContext _context;
+        private LoggedInUserDTO loggedInUser;
 
         public DesignationRepository(LIMSContext context)
         {
             _context = context;
+            loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
         public async Task AddDesignation(DesignationMaster model)
@@ -26,7 +28,7 @@ namespace LIMSApi.Repositories
 
         public async Task DeleteDesignation(long id)
         {
-            var existingDesignation = await _context.DesignationMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
+            var existingDesignation = await _context.DesignationMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
             if (existingDesignation != null)
             {
                 existingDesignation.IsActive = false;
@@ -38,7 +40,7 @@ namespace LIMSApi.Repositories
 
         public async Task<DesignationMaster?> GetDesignationById(long id)
         {
-            return await _context.DesignationMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
+            return await _context.DesignationMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
         public async Task UpdateDesignation(DesignationMaster model)
@@ -50,7 +52,7 @@ namespace LIMSApi.Repositories
         public async Task<PagedResponse<object>> GetAllDesignations(PageFilter filter)
         {
             var _query = (from c in _context.DesignationMasters
-                          where c.IsActive
+                          where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
                           join e in _context.EmployeeMasters on c.CreatedBy equals e.ID into emp
                           from eg in emp.DefaultIfEmpty()
                           select new
@@ -59,7 +61,6 @@ namespace LIMSApi.Repositories
                               c.Name,
                               c.Description,
                               c.CreatedOn,
-                              c.ModifiedOn,
                               CreatedBy = eg.Name
 
                           }).AsQueryable()
@@ -94,7 +95,7 @@ namespace LIMSApi.Repositories
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.DesignationMasters where a.IsActive select a;
+            var _query = from a in _context.DesignationMasters where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode select a;
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
@@ -116,12 +117,12 @@ namespace LIMSApi.Repositories
 
         public async Task<bool> ExistsByName(string name)
         {
-            return await _context.DesignationMasters.AnyAsync(x => x.Name == name && x.IsActive);
+            return await _context.DesignationMasters.AnyAsync(x => x.Name == name && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
         public async Task<bool> ExistsByNameAndNotId(string name, long Id)
         {
-            return await _context.DesignationMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive);
+            return await _context.DesignationMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
     }
 }

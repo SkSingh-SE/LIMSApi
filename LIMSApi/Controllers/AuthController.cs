@@ -41,5 +41,13 @@ namespace LIMSApi.Controllers
                 return Unauthorized("Invalid credentials");
             }
         }
+
+        [HttpGet("refresh-token")]
+        public async Task<IActionResult> RefreshToken()
+        {
+            return Ok(await _authService.GetRefreshToken());
+
+        }
+
     }
 }

@@ -1,19 +1,24 @@
 ﻿using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Repositories
 {
+    [Authorize]
     public class DepartmentRepository : IDepartmentRepository
     {
         private readonly LIMSContext _context;
+        private LoggedInUserDTO loggedInUser;
 
         public DepartmentRepository(LIMSContext context)
         {
             _context = context;
+            loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
         public async Task AddDepartment(DepartmentMaster model)
@@ -24,7 +29,7 @@ namespace LIMSApi.Repositories
 
         public async Task DeleteDepartment(long id)
         {
-            var existingDepartment = await _context.DepartmentMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
+            var existingDepartment = await _context.DepartmentMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && loggedInUser.CompanyCode == x.CompanyCode);
             if (existingDepartment != null)
             {
                 existingDepartment.IsActive = false;
@@ -36,7 +41,7 @@ namespace LIMSApi.Repositories
 
         public async Task<DepartmentMaster?> GetDepartmentById(long id)
         {
-            return await _context.DepartmentMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
+            return await _context.DepartmentMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
         public async Task UpdateDepartment(DepartmentMaster model)
@@ -47,22 +52,21 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllDepartments(PageFilter filter)
         {
-            var _query = from c in _context.DepartmentMasters where c.IsActive select c;
+            var _query = (from c in _context.DepartmentMasters
+                          where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
+                          join e in _context.EmployeeMasters on c.CreatedBy equals e.ID into emp
+                          from eg in emp.DefaultIfEmpty()
+                          select new
+                          {
+                              c.ID,
+                              c.Name,
+                              c.Description,
+                              c.CreatedOn,
+                              c.ModifiedOn,
+                              CreatedBy = eg.Name
 
-            if (filter.Filters != null)
-            {
-                foreach (var filterItem in filter.Filters)
-                {
-                    if (string.IsNullOrWhiteSpace(filterItem.Value))
-                    {
-                        continue;
-                    }
-                    var propertyName = filterItem.Key;
-                    var value = filterItem.Value;
-
-                    _query = _query.Where($"{propertyName}.Contains(@0)", value);
-                }
-            }
+                          }).AsQueryable()
+                            .ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
@@ -92,7 +96,7 @@ namespace LIMSApi.Repositories
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.DepartmentMasters where a.IsActive select a;
+            var _query = from a in _context.DepartmentMasters where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode select a;
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
@@ -114,12 +118,12 @@ namespace LIMSApi.Repositories
 
         public async Task<bool> ExistsByName(string name)
         {
-            return await _context.DepartmentMasters.AnyAsync(x => x.Name == name && x.IsActive);
+            return await _context.DepartmentMasters.AnyAsync(x => x.Name == name && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
         public async Task<bool> ExistsByNameAndNotId(string name, long Id)
         {
-            return await _context.DepartmentMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive);
+            return await _context.DepartmentMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
     }
 }

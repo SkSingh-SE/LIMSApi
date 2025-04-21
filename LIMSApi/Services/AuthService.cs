@@ -1,6 +1,7 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Authentication;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -20,7 +21,7 @@ namespace LIMSApi.Services
         private readonly PasswordHasher<UserMaster> _passwordHasher;
         private readonly IConfiguration _configuration;
         private readonly EmailService emailService;
-
+        private LoggedInUserDTO loggedInUserDTO;
         public AuthService(IUserRepository userRepository, ILogger<AuthService> logger, string jwtSecret, IConfiguration configuration, EmailService emailService)
         {
             _userRepository = userRepository;
@@ -29,6 +30,7 @@ namespace LIMSApi.Services
             _passwordHasher = new PasswordHasher<UserMaster>();
             _configuration = configuration;
             this.emailService = emailService;
+            loggedInUserDTO = LoggedInUserProvider.CurrentUser;
         }
         public static DateTimeOffset ConvertToTimeZone(DateTime utcDateTime, string timeZoneId)
         {
@@ -81,6 +83,41 @@ namespace LIMSApi.Services
             return responseObject;
         }
 
+        public async Task<object> GetRefreshToken()
+        {
+            //var oldToken = HttpContext.Request.Headers.Authorization.ToString().Replace("Bearer ", "");
+
+            //var oldToken = loggedInUserDTO?.Email;
+            //if (IsTokenExpired(oldToken))
+            //{
+            //    throw new UnauthorizedAccessException("Token has expired. Please login again.");
+            //}
+
+            if (loggedInUserDTO != null)
+            {
+                var user = await _userRepository.GetUserByEmail(loggedInUserDTO.Email);
+                if (user == null)
+                {
+                    throw new UnauthorizedAccessException($"User not found: {loggedInUserDTO.Email}");
+                }
+
+                var token = GenerateJwtToken(user);
+
+                var expireHours = Convert.ToInt32(_configuration["Jwt:ExpirationHours"]);
+                var responseObject = new
+                {
+                    token = token,
+                    name = user.UserName,
+                    email = user.EmailId,
+                    role = user.RoleName,
+                    expiresInSecond = expireHours  * 60 * 60,
+                    employeeId = user.EmployeeID
+                };
+                return responseObject;
+            }
+            return null;
+        }
+
         public async Task RegisterUser(UserMaster model)
         {
             var existingUser = await _userRepository.GetUserByEmail(model.EmailId);
@@ -128,8 +165,19 @@ namespace LIMSApi.Services
 
             var token = tokenHandler.CreateToken(tokenDescriptor);
             return tokenHandler.WriteToken(token);
-
-
         }
+        private bool IsTokenExpired(string token)
+        {
+            var handler = new JwtSecurityTokenHandler();
+
+            if (!handler.CanReadToken(token))
+                throw new ArgumentException("Invalid JWT token format.");
+
+            var jwtToken = handler.ReadJwtToken(token);
+            var expiry = jwtToken.ValidTo;
+
+            return expiry < DateTime.UtcNow;
+        }
+
     }
 }

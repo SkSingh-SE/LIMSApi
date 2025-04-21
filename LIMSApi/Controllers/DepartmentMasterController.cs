@@ -1,11 +1,13 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LIMSApi.Controllers
 {
+    [Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class DepartmentMasterController : ControllerBase
@@ -37,14 +39,14 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> PutDepartmentMaster(DepartmentMaster model)
         {
             await _departmentService.ModifyDepartment(model);
-            return Ok($"Department '{model.Name}' updated successfully.");
+            return Ok( new { message = $"Department '{model.Name}' updated successfully." });
         }
 
         [HttpPost("create")]
         public async Task<ActionResult<DepartmentMaster>> PostDepartmentMaster(DepartmentMaster model)
         {
             await _departmentService.CreateDepartment(model);
-            return Ok($"Department '{model.Name}' created successfully");
+            return Ok(new { message =  $"Department '{model.Name}' created successfully" });
         }
 
         [HttpDelete("delete/{id}")]
@@ -55,7 +57,8 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("Department not found!");
             }
-            return Ok($"Department '{entity.Name}' created successfully");
+            await _departmentService.RemoveDepartment(id);
+            return Ok( new { message = $"Department '{entity.Name}' created successfully" });
         }
 
         [HttpGet("dropdown")]
