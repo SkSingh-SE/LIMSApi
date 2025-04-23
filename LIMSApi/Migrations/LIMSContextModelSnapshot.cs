@@ -313,6 +313,47 @@ namespace LIMSApi.Migrations
                     b.ToTable("ClassificationMasters");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.CompanyCategoryMaster", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.HasKey("ID");
+
+                    b.ToTable("CompanyCategoryMasters");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.CompanyMaster", b =>
                 {
                     b.Property<long>("ID")
@@ -611,6 +652,9 @@ namespace LIMSApi.Migrations
                     b.Property<int?>("BillingEveryDays")
                         .HasColumnType("int");
 
+                    b.Property<bool>("BlockDTestoUser")
+                        .HasColumnType("bit");
+
                     b.Property<string>("BlockReason")
                         .HasMaxLength(250)
                         .HasColumnType("nvarchar(250)");
@@ -649,14 +693,21 @@ namespace LIMSApi.Migrations
                     b.Property<long>("CurrencyID")
                         .HasColumnType("bigint");
 
-                    b.Property<long>("CustomerTypeID")
-                        .HasColumnType("bigint");
+                    b.Property<string>("CustomerType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("DTestoActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("DTestoLoginId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("DTestoPassword")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("DirectTaxInvoiceNoPerforma")
                         .HasColumnType("bit");
-
-                    b.Property<string>("DispatchModeIDs")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("GSTNA")
                         .HasColumnType("bit");
@@ -734,7 +785,7 @@ namespace LIMSApi.Migrations
                     b.ToTable("Customers");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.CustomerTypeMaster", b =>
+            modelBuilder.Entity("LIMSApi.Models.CustomerCompanyCategory", b =>
                 {
                     b.Property<long>("ID")
                         .ValueGeneratedOnAdd()
@@ -742,37 +793,47 @@ namespace LIMSApi.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
 
-                    b.Property<string>("CompanyCode")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<long>("CreatedBy")
+                    b.Property<long>("CompanyCategoryID")
                         .HasColumnType("bigint");
 
-                    b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(250)
-                        .HasColumnType("nvarchar(250)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<long?>("ModifiedBy")
+                    b.Property<long>("CustomerID")
                         .HasColumnType("bigint");
-
-                    b.Property<DateTime?>("ModifiedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(250)
-                        .HasColumnType("nvarchar(250)");
 
                     b.HasKey("ID");
 
-                    b.ToTable("CustomerTypeMasters");
+                    b.HasIndex("CompanyCategoryID");
+
+                    b.HasIndex("CustomerID");
+
+                    b.ToTable("CustomerCompanyCategories");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.CustomerDispatchMode", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<long?>("CustomerDispatchModeID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("CustomerID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("DispatchModeID")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("CustomerDispatchModeID");
+
+                    b.HasIndex("CustomerID");
+
+                    b.HasIndex("DispatchModeID");
+
+                    b.ToTable("CustomerDispatchModes");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.DepartmentMaster", b =>
@@ -1002,16 +1063,11 @@ namespace LIMSApi.Migrations
                     b.Property<long>("EmployeeID")
                         .HasColumnType("bigint");
 
-                    b.Property<long?>("EmployeeMasterID")
-                        .HasColumnType("bigint");
-
                     b.Property<string>("FileName")
-                        .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("FilePath")
-                        .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
@@ -1035,7 +1091,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.HasIndex("EmployeeMasterID");
+                    b.HasIndex("EmployeeID");
 
                     b.HasIndex("UploadReferenceID");
 
@@ -3427,17 +3483,63 @@ namespace LIMSApi.Migrations
                     b.Navigation("Industry");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.CustomerCompanyCategory", b =>
+                {
+                    b.HasOne("LIMSApi.Models.CompanyCategoryMaster", "CompanyCategory")
+                        .WithMany("CustomerCompanyCategories")
+                        .HasForeignKey("CompanyCategoryID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LIMSApi.Models.Customer", "Customer")
+                        .WithMany("CustomerCompanyCategories")
+                        .HasForeignKey("CustomerID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CompanyCategory");
+
+                    b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.CustomerDispatchMode", b =>
+                {
+                    b.HasOne("LIMSApi.Models.CustomerDispatchMode", null)
+                        .WithMany("CustomerDispatchModes")
+                        .HasForeignKey("CustomerDispatchModeID");
+
+                    b.HasOne("LIMSApi.Models.Customer", "Customer")
+                        .WithMany("CustomerDispatchModes")
+                        .HasForeignKey("CustomerID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LIMSApi.Models.DispatchModeMaster", "DispatchMode")
+                        .WithMany()
+                        .HasForeignKey("DispatchModeID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("DispatchMode");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.EmployeeDocument", b =>
                 {
-                    b.HasOne("LIMSApi.Models.EmployeeMaster", null)
+                    b.HasOne("LIMSApi.Models.EmployeeMaster", "Employee")
                         .WithMany("Documents")
-                        .HasForeignKey("EmployeeMasterID");
+                        .HasForeignKey("EmployeeID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("LIMSApi.Models.UploadFile", "UploadFile")
                         .WithMany()
                         .HasForeignKey("UploadReferenceID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Employee");
 
                     b.Navigation("UploadFile");
                 });
@@ -3662,9 +3764,23 @@ namespace LIMSApi.Migrations
                     b.Navigation("TestMethod");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.CompanyCategoryMaster", b =>
+                {
+                    b.Navigation("CustomerCompanyCategories");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.Customer", b =>
                 {
                     b.Navigation("ContactPersons");
+
+                    b.Navigation("CustomerCompanyCategories");
+
+                    b.Navigation("CustomerDispatchModes");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.CustomerDispatchMode", b =>
+                {
+                    b.Navigation("CustomerDispatchModes");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.EmployeeMaster", b =>

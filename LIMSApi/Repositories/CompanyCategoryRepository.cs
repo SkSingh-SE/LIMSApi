@@ -8,43 +8,43 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Repositories
 {
-    public class CustomerTypeRepository : ICustomerTypeRepository
+    public class CompanyCategoryRepository : ICompanyCategoryRepository
     {
         private readonly LIMSContext _context;
         private LoggedInUserDTO loggedInUser;
 
-        public CustomerTypeRepository(LIMSContext context)
+        public CompanyCategoryRepository(LIMSContext context)
         {
             _context = context;
             loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
-        public async Task AddCustomerType(CustomerTypeMaster model)
+        public async Task AddCustomerType(CompanyCategoryMaster model)
         {
-            await _context.CustomerTypeMasters.AddAsync(model);
+            await _context.CompanyCategoryMasters.AddAsync(model);
             await _context.SaveChangesAsync();
         }
 
-        public async Task DeleteCustomerType(CustomerTypeMaster model)
+        public async Task DeleteCustomerType(CompanyCategoryMaster model)
         {
-           _context.CustomerTypeMasters.Update(model);
+           _context.CompanyCategoryMasters.Update(model);
             await _context.SaveChangesAsync();
         }
 
-        public async Task<CustomerTypeMaster?> GetCustomerTypeById(long id)
+        public async Task<CompanyCategoryMaster?> GetCustomerTypeById(long id)
         {
-            return await _context.CustomerTypeMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.CompanyCategoryMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
-        public async Task UpdateCustomerType(CustomerTypeMaster model)
+        public async Task UpdateCustomerType(CompanyCategoryMaster model)
         {
-            _context.CustomerTypeMasters.Update(model);
+            _context.CompanyCategoryMasters.Update(model);
             await _context.SaveChangesAsync();
         }
 
         public async Task<PagedResponse<object>> GetAllCustomerTypes(PageFilter filter)
         {
-            var _query = from c in _context.CustomerTypeMasters where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c;
+            var _query = from c in _context.CompanyCategoryMasters where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c;
 
             if (filter.Filters != null)
             {
@@ -87,7 +87,7 @@ namespace LIMSApi.Repositories
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.CustomerTypeMasters where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode select a;
+            var _query = from a in _context.CompanyCategoryMasters where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode select a;
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
@@ -108,12 +108,12 @@ namespace LIMSApi.Repositories
 
         public async Task<bool> ExistsByName(string name)
         {
-            return await _context.CustomerTypeMasters.AnyAsync(x => x.Name == name && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.CompanyCategoryMasters.AnyAsync(x => x.Name == name && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
         public async Task<bool> ExistsByNameAndNotId(string name, long Id)
         {
-            return await _context.CustomerTypeMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.CompanyCategoryMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
     }
 }

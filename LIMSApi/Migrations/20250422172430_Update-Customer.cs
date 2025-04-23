@@ -5,7 +5,7 @@
 namespace LIMSApi.Migrations
 {
     /// <inheritdoc />
-    public partial class QualificationUpdate : Migration
+    public partial class UpdateCustomer : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)

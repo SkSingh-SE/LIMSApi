@@ -8,11 +8,11 @@ namespace LIMSApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class CustomerTypeController : ControllerBase
+    public class CompanyCategoryController : ControllerBase
     {
-        private readonly ICustomerTypeService _testMethodService;
+        private readonly ICompanyCategoryService _testMethodService;
 
-        public CustomerTypeController(ICustomerTypeService testMethodService)
+        public CompanyCategoryController(ICompanyCategoryService testMethodService)
         {
             _testMethodService = testMethodService;
         }
@@ -25,7 +25,7 @@ namespace LIMSApi.Controllers
 
 
         [HttpGet("details/{id}")]
-        public async Task<ActionResult<CustomerTypeMaster>> GetCustomerTypeMaster(long id)
+        public async Task<ActionResult<CompanyCategoryMaster>> GetCustomerTypeMaster(long id)
         {
             var entity = await _testMethodService.GetCustomerTypeDetails(id);
 
@@ -34,14 +34,14 @@ namespace LIMSApi.Controllers
 
 
         [HttpPut("update")]
-        public async Task<IActionResult> PutCustomerTypeMaster(CustomerTypeMaster model)
+        public async Task<IActionResult> PutCustomerTypeMaster(CompanyCategoryMaster model)
         {
             await _testMethodService.ModifyCustomerType(model);
             return Ok(new { message = $"CustomerTypeMaster '{model.Name}' updated successfully." });
         }
 
         [HttpPost("create")]
-        public async Task<ActionResult<CustomerTypeMaster>> PostCustomerTypeMaster(CustomerTypeMaster model)
+        public async Task<ActionResult<CompanyCategoryMaster>> PostCustomerTypeMaster(CompanyCategoryMaster model)
         {
             await _testMethodService.CreateCustomerType(model);
             return Ok(new { message = $"CustomerTypeMaster '{model.Name}' created successfully" });

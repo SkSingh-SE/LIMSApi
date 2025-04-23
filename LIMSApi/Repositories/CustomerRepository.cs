@@ -21,11 +21,6 @@ namespace LIMSApi.Repositories
 
         public async Task AddCustomer(Customer model)
         {
-            
-            foreach (var contact in model.ContactPersons)
-            {
-                contact.CustomerID = model.ID; 
-            }
             await _context.Customers.AddAsync(model);
             await _context.SaveChangesAsync();
         }
@@ -42,8 +37,15 @@ namespace LIMSApi.Repositories
 
         public async Task<Customer?> GetCustomerById(long id)
         {
-            return await _context.Customers.Include(tg => tg.ContactPersons).FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.Customers
+                .Include(c => c.ContactPersons)
+                .Include(c => c.CustomerCompanyCategories)
+                    .ThenInclude(ccc => ccc.CompanyCategory)
+                    .Include(d => d.CustomerDispatchModes)
+                    .ThenInclude(d => d.DispatchMode)
+                .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
+
 
         public async Task UpdateCustomer(Customer model)
         {
@@ -54,22 +56,18 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllCustomers(PageFilter filter)
         {
-            var _query = from c in _context.Customers where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c;
-
-            if (filter.Filters != null)
-            {
-                foreach (var filterItem in filter.Filters)
-                {
-                    if (string.IsNullOrWhiteSpace(filterItem.Value))
-                    {
-                        continue;
-                    }
-                    var propertyName = filterItem.Key;
-                    var value = filterItem.Value;
-
-                    _query = _query.Where($"{propertyName}.Contains(@0)", value);
-                }
-            }
+            var _query = (from e in _context.Customers
+                          where e.IsActive && e.CompanyCode == loggedInUser.CompanyCode
+                          select new
+                          {
+                              e.ID,
+                              e.Name,
+                              e.CustomerType,
+                              e.PinCode,
+                              e.Address,
+                              e.GSTNo,
+                              SampleReturn = e.SampleReturn ? "Yes" : "No",
+                          }).AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {

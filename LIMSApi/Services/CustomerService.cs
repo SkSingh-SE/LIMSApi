@@ -33,6 +33,27 @@ namespace LIMSApi.Services
             model.CreatedBy = loggedInUser.EmployeeID;
             model.CompanyCode = loggedInUser.CompanyCode;
 
+            if (model.ContactPersons != null)
+            {
+                foreach (var contact in model.ContactPersons)
+                {
+                    contact.CustomerID = model.ID;
+                }
+            }
+            if (model.CustomerCompanyCategories != null)
+            {
+                foreach (var category in model.CustomerCompanyCategories)
+                {
+                    category.CustomerID = model.ID;
+                }
+            }
+            if(model.CustomerDispatchModes != null && model.CustomerDispatchModes.Any())
+            {
+                foreach (var dispatchMode in model.CustomerDispatchModes)
+                {
+                    dispatchMode.CustomerID = model.ID;
+                }
+            }
             await _customerRepository.AddCustomer(model);
             _logger.LogInformation("Customer '{CustomerName}' created successfully.", model.Name);
         }
@@ -60,14 +81,13 @@ namespace LIMSApi.Services
             existingCustomer.StateID = model.StateID;
             existingCustomer.CountryID = model.CountryID;
             existingCustomer.CurrencyID = model.CurrencyID;
-            existingCustomer.CustomerTypeID = model.CustomerTypeID;
+            existingCustomer.CustomerType = model.CustomerType;
             existingCustomer.IsBlock = model.IsBlock;
             existingCustomer.BlockReason = model.BlockReason;
             existingCustomer.IndustryID = model.IndustryID;
             existingCustomer.GSTNo = model.GSTNo;
             existingCustomer.PANNo = model.PANNo;
             existingCustomer.GSTNA = model.GSTNA;
-            existingCustomer.DispatchModeIDs = model.DispatchModeIDs;
             existingCustomer.SampleReturn = model.SampleReturn;
             existingCustomer.BillingEvery = model.BillingEvery;
             existingCustomer.BillingEveryDays = model.BillingEveryDays;
@@ -110,7 +130,7 @@ namespace LIMSApi.Services
                         existingContactPerson.CustomerID = model.ID;
                         existingContactPerson.Salutation = contactPerson.Salutation;
                         existingContactPerson.Name = contactPerson.Name;
-                        existingContactPerson.DepartmentID = contactPerson.DepartmentID;    
+                        existingContactPerson.DepartmentID = contactPerson.DepartmentID;
                         existingContactPerson.EmailId = contactPerson.EmailId;
                         existingContactPerson.MobileNo = contactPerson.MobileNo;
                         existingContactPerson.IsWhatsappNo = contactPerson.IsWhatsappNo;
@@ -123,6 +143,67 @@ namespace LIMSApi.Services
                     else
                     {
                         existingCustomer.ContactPersons.Add(contactPerson);
+                    }
+                }
+            }
+            // --- CompanyCategory  ---
+            if (existingCustomer.CustomerCompanyCategories != null)
+            {
+                var categoriesToRemove = existingCustomer.CustomerCompanyCategories
+                    .Where(existing => !model.CustomerCompanyCategories.Any(m => m.CompanyCategoryID == existing.CompanyCategoryID))
+                    .ToList();
+
+                foreach (var category in categoriesToRemove)
+                {
+                    existingCustomer.CustomerCompanyCategories.Remove(category);
+                }
+            }
+
+            if (model.CustomerCompanyCategories != null && model.CustomerCompanyCategories.Any())
+            {
+                foreach (var category in model.CustomerCompanyCategories)
+                {
+                    category.CustomerID = model.ID;
+
+                    var existingCategory = existingCustomer.CustomerCompanyCategories
+                        .FirstOrDefault(c => c.CompanyCategoryID == category.CompanyCategoryID);
+
+                    if (existingCategory == null)
+                    {
+                        existingCustomer.CustomerCompanyCategories.Add(category);
+                    }
+                    else
+                    {
+                        existingCategory.CompanyCategoryID = category.CompanyCategoryID;
+                    }
+                    
+                }
+            }
+
+            if(existingCustomer.CustomerDispatchModes != null)
+            {
+                var dispatchModesToRemove = existingCustomer.CustomerDispatchModes
+                    .Where(existing => !model.CustomerDispatchModes.Any(m => m.DispatchModeID == existing.DispatchModeID))
+                    .ToList();
+                foreach (var dispatchMode in dispatchModesToRemove)
+                {
+                    existingCustomer.CustomerDispatchModes.Remove(dispatchMode);
+                }
+            }
+            if (model.CustomerDispatchModes != null && model.CustomerDispatchModes.Any())
+            {
+                foreach (var dispatchMode in model.CustomerDispatchModes)
+                {
+                    dispatchMode.CustomerID = model.ID;
+                    var existingDispatchMode = existingCustomer.CustomerDispatchModes
+                        .FirstOrDefault(c => c.DispatchModeID == dispatchMode.DispatchModeID);
+                    if (existingDispatchMode == null)
+                    {
+                        existingCustomer.CustomerDispatchModes.Add(dispatchMode);
+                    }
+                    else
+                    {
+                        existingDispatchMode.DispatchModeID = dispatchMode.DispatchModeID;
                     }
                 }
             }

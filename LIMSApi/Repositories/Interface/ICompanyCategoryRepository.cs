@@ -3,12 +3,12 @@ using LIMSApi.Models;
 
 namespace LIMSApi.Repositories.Interface
 {
-    public interface ICustomerTypeRepository
+    public interface ICompanyCategoryRepository
     {
-        Task AddCustomerType(CustomerTypeMaster model);
-        Task UpdateCustomerType(CustomerTypeMaster model);
-        Task DeleteCustomerType(CustomerTypeMaster model);
-        Task<CustomerTypeMaster> GetCustomerTypeById(long id);
+        Task AddCustomerType(CompanyCategoryMaster model);
+        Task UpdateCustomerType(CompanyCategoryMaster model);
+        Task DeleteCustomerType(CompanyCategoryMaster model);
+        Task<CompanyCategoryMaster> GetCustomerTypeById(long id);
         Task<PagedResponse<object>> GetAllCustomerTypes(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetCustomerTypeDropdown(string? searchTerm, int pageNo, int pageSize);

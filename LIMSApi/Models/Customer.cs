@@ -11,8 +11,7 @@ namespace LIMSApi.Models
         [Required, StringLength(100)]
         public required string Name { get; set; }
 
-        [Required, StringLength(100)]
-        public required string LegalName { get; set; }
+        public string? LegalName { get; set; }
 
         [Required, StringLength(500)]
         public required string Address { get; set; }
@@ -25,7 +24,7 @@ namespace LIMSApi.Models
         [StringLength(10)]
         public required string PinCode { get; set; }
         public long CurrencyID { get; set; }
-        public long CustomerTypeID { get; set; }
+        public required string  CustomerType { get; set; }
 
         public bool IsBlock { get; set; }
 
@@ -39,9 +38,8 @@ namespace LIMSApi.Models
         public bool GSTNA { get; set; }
 
         [MaxLength(255)]
-        public string? TallyLedgerName { get; set; }
+        public required string TallyLedgerName { get; set; }
 
-        public string? DispatchModeIDs { get; set; } // Comma-separated list of IDs
 
         public bool SampleReturn { get; set; }
 
@@ -83,6 +81,9 @@ namespace LIMSApi.Models
         public virtual IndustryMaster? Industry { get; set; }
 
         public virtual ICollection<ContactPerson> ContactPersons { get; set; } = new List<ContactPerson>();
+        public virtual ICollection<CustomerCompanyCategory> CustomerCompanyCategories { get; set; } = new List<CustomerCompanyCategory>();
+
+        public virtual ICollection<CustomerDispatchMode> CustomerDispatchModes { get; set; } = new List<CustomerDispatchMode>();
 
     }
 }

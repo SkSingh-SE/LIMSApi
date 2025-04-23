@@ -6,20 +6,20 @@ using LIMSApi.Services.Interface;
 
 namespace LIMSApi.Services
 {
-    public class CustomerTypeService : ICustomerTypeService
+    public class CompanyCategoryService : ICompanyCategoryService
     {
-        private readonly ICustomerTypeRepository _customerTypeRepository;
-        private readonly ILogger<CustomerTypeService> _logger;
+        private readonly ICompanyCategoryRepository _customerTypeRepository;
+        private readonly ILogger<CompanyCategoryService> _logger;
         private LoggedInUserDTO loggedInUser;
 
-        public CustomerTypeService(ICustomerTypeRepository CustomerTypeRepo, ILogger<CustomerTypeService> logger)
+        public CompanyCategoryService(ICompanyCategoryRepository CustomerTypeRepo, ILogger<CompanyCategoryService> logger)
         {
             _customerTypeRepository = CustomerTypeRepo;
             _logger = logger;
             loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
-        public async Task CreateCustomerType(CustomerTypeMaster model)
+        public async Task CreateCustomerType(CompanyCategoryMaster model)
         {
             if (string.IsNullOrWhiteSpace(model.Name))
                 throw new ArgumentException("CustomerType name should not be empty!");
@@ -36,7 +36,7 @@ namespace LIMSApi.Services
             _logger.LogInformation("CustomerType '{CustomerTypeName}' created successfully.", model.Name);
         }
 
-        public async Task ModifyCustomerType(CustomerTypeMaster model)
+        public async Task ModifyCustomerType(CompanyCategoryMaster model)
         {
             if (model.ID == 0)
                 throw new ArgumentException("CustomerType ID should not be empty!");
@@ -73,7 +73,7 @@ namespace LIMSApi.Services
             _logger.LogInformation("CustomerType with ID '{CustomerTypeId}' deleted successfully.", id);
         }
 
-        public async Task<CustomerTypeMaster> GetCustomerTypeDetails(long id)
+        public async Task<CompanyCategoryMaster> GetCustomerTypeDetails(long id)
         {
             var classification = await _customerTypeRepository.GetCustomerTypeById(id);
             if (classification == null)
