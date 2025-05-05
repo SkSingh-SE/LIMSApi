@@ -37,14 +37,22 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> PutDimensionalFactorMaster(DimensionalFactorMaster model)
         {
             await _dimensionalFactorService.ModifyDimensionalFactor(model);
-            return Ok($"DimensionalFactor '{model.Name}' updated successfully.");
+            return Ok(new
+            {
+                status = "success",
+                message = $"DimensionalFactor '{model.Name}' updated successfully."
+            });
         }
 
         [HttpPost("create")]
         public async Task<ActionResult<DimensionalFactorMaster>> PostDimensionalFactorMaster(DimensionalFactorMaster model)
         {
             await _dimensionalFactorService.CreateDimensionalFactor(model);
-            return Ok($"DimensionalFactor '{model.Name}' created successfully");
+            return Ok(new
+            {
+                status = "success",
+                message = $"DimensionalFactor '{model.Name}' created successfully."
+            });
         }
 
         [HttpDelete("delete/{id}")]
@@ -55,7 +63,12 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("DimensionalFactor not found!");
             }
-            return Ok($"DimensionalFactor '{entity.Name}' created successfully");
+            await _dimensionalFactorService.RemoveDimensionalFactor(id);
+            return Ok(new
+            {
+                status = "success",
+                message = $"DimensionalFactor '{entity.Name}' deleted successfully."
+            });
         }
 
         [HttpGet("dropdown")]

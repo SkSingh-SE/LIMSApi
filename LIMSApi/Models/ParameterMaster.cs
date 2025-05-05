@@ -15,13 +15,10 @@ public partial class ParameterMaster : AuditProperty
     public required string Name { get; set; }
 
     public string? AliasName { get; set; }
-
-    public long? UOMID { get; set; }
     public long ParameterUnitID {  get; set; } 
+    public decimal Rate { get; set; }
 
-    public string? Notes { get; set; }
-    [ForeignKey("UOMID")]
-    public virtual UOMMaster? UOM { get; set; }
+    public string? Note { get; set; }
     [ForeignKey("ParameterUnitID")]
     public virtual ParameterUnitMaster? ParameterUnit { get; set; }
 }

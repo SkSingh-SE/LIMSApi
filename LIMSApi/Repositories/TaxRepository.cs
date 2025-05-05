@@ -44,7 +44,7 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllTaxs(PageFilter filter)
         {
-            var _query = from c in _context.TaxMasters where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c;
+            var _query = (from c in _context.TaxMasters where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c).AsQueryable().ApplyFilters(filter.Filter);
 
             if (filter.Filters != null)
             {

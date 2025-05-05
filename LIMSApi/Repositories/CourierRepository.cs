@@ -44,22 +44,8 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllCouriers(PageFilter filter)
         {
-            var _query = from c in _context.CourierMasters where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c;
+            var _query = (from c in _context.CourierMasters where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c).AsQueryable().ApplyFilters(filter.Filter);
 
-            if (filter.Filters != null)
-            {
-                foreach (var filterItem in filter.Filters)
-                {
-                    if (string.IsNullOrWhiteSpace(filterItem.Value))
-                    {
-                        continue;
-                    }
-                    var propertyName = filterItem.Key;
-                    var value = filterItem.Value;
-
-                    _query = _query.Where($"{propertyName}.Contains(@0)", value);
-                }
-            }
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {

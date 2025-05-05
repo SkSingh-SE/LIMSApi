@@ -63,6 +63,7 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<PermissionMaster> PermissionMasters { get; set; }
 
     public virtual DbSet<ProductConditionMaster> ProductConditionMasters { get; set; }
+    public virtual DbSet<ProductSpecification> ProductSpecifications { get; set; }
 
     public virtual DbSet<RoleMaster> RoleMasters { get; set; }
     public virtual DbSet<RemarkMaster> RemarkMasters { get; set; }

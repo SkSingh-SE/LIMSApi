@@ -37,14 +37,14 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> PutTaxMaster(TaxMaster model)
         {
             await _taxService.ModifyTax(model);
-            return Ok($"TaxMaster '{model.Name}' updated successfully.");
+            return Ok(new { message = $"TaxMaster '{model.Name}' updated successfully." });
         }
 
         [HttpPost("create")]
         public async Task<ActionResult<TaxMaster>> PostTaxMaster(TaxMaster model)
         {
             await _taxService.CreateTax(model);
-            return Ok($"TaxMaster '{model.Name}' created successfully");
+            return Ok(new { message = $"TaxMaster '{model.Name}' created successfully" });
         }
 
         [HttpDelete("delete/{id}")]
@@ -55,7 +55,7 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("TaxMaster not found!");
             }
-            return Ok($"TaxMaster '{entity.Name}' created successfully");
+            return Ok(new { message = $"TaxMaster '{entity.Name}' created successfully" });
         }
 
         [HttpGet("dropdown")]

@@ -71,9 +71,13 @@ namespace LIMSApi.Services
             return classification;
         }
 
-        public async Task<PagedResponse<object>> FetchParameterList(PageFilter filter)
+        public async Task<PagedResponse<object>> FetchChemicalParameterList(PageFilter filter)
         {
-            return await _parameterRepository.GetAllParameters(filter);
+            return await _parameterRepository.GetAllChemicalParameters(filter);
+        }
+        public async Task<PagedResponse<object>> FetchMechanicalParameterList(PageFilter filter)
+        {
+            return await _parameterRepository.GetAllMechanicalParameters(filter);
         }
 
         public async Task<List<DropdwonSelector>> GetParameterDropdown(string? searchTerm, int pageNo, int pageSize)

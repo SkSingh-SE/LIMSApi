@@ -37,14 +37,14 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> PutTPIMaster(TPIMaster model)
         {
             await _testMethodService.ModifyTPI(model);
-            return Ok($"TPIMaster '{model.AgencyName}' updated successfully.");
+            return Ok(new { status = "success", message = $"TPIMaster '{model.AgencyName}' updated successfully." });
         }
 
         [HttpPost("create")]
         public async Task<ActionResult<TPIMaster>> PostTPIMaster(TPIMaster model)
         {
             await _testMethodService.CreateTPI(model);
-            return Ok($"TPIMaster '{model.AgencyName}' created successfully");
+            return Ok(new { status = "success", message = $"TPIMaster '{model.AgencyName}' created successfully." });
         }
 
         [HttpDelete("delete/{id}")]
@@ -55,7 +55,7 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("TPIMaster not found!");
             }
-            return Ok($"TPIMaster '{entity.AgencyName}' created successfully");
+            return Ok(new { status = "success", message = $"TPIMaster '{entity.AgencyName}' deleted successfully." });
         }
 
         [HttpGet("dropdown")]

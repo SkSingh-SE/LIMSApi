@@ -134,6 +134,14 @@ builder.Services.AddScoped<IOEMRepository, OEMRepository>();
 builder.Services.AddScoped<ICalibrationAgencyRepository, CalibrationAgencyRepository>();
 builder.Services.AddScoped<ITestMethodRepository, TestMethodRepository>();
 builder.Services.AddScoped<IDepartmentRepository, DepartmentRepository>();
+builder.Services.AddScoped<IDimensionalFactorRepository, DimensionalFactorRepository>();
+builder.Services.AddScoped<IHeatTreatmentRepository, HeatTreatmentRepository>();
+builder.Services.AddScoped<IParameterRepository, ParameterRepository>();
+builder.Services.AddScoped<IProductConditionRepository, ProductConditionRepository>();
+builder.Services.AddScoped<ISpecimenOrientationRepository, SpecimenOrientationRepository>();
+builder.Services.AddScoped<IParameterUnitRepository, ParameterUnitRepository>();
+builder.Services.AddScoped<IProductSpecificationRepository, ProductSpecificationRepository>();
+
 
 
 // Register Services
@@ -170,9 +178,21 @@ builder.Services.AddScoped<IOEMService, OEMService>();
 builder.Services.AddScoped<ICalibrationAgencyService, CalibrationAgencyService>();
 builder.Services.AddScoped<ITestMethodService, TestMethodService>();
 builder.Services.AddScoped<IDepartmentService,DepartmentService>();
+builder.Services.AddScoped<IDimensionalFactorService,DimensionalFactorService>();
+builder.Services.AddScoped<IHeatTreatmentService, HeatTreatmentService>();
+builder.Services.AddScoped<IParameterService, ParameterService>();
+builder.Services.AddScoped<IProductConditionService, ProductConditionService>();
+builder.Services.AddScoped<ISpecimenOrientationService, SpecimenOrientationService>();
+builder.Services.AddScoped<IParameterUnitService, ParameterUnitService>();
+builder.Services.AddScoped<IProductSpecificationService, ProductSpecificationService>();
+
+
+
+// Third party services
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<SMSService>();
 builder.Services.AddScoped<WhatsAppService>();
+
 
 
 var app = builder.Build();

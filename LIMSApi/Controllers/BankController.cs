@@ -37,14 +37,14 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> PutBankMaster(BankMaster model)
         {
             await _remarkService.ModifyBank(model);
-            return Ok($"BankMaster '{model.BankName}' updated successfully.");
+            return Ok(new { status = "success", message = $"BankMaster '{model.BankName}' updated successfully." });
         }
 
         [HttpPost("create")]
         public async Task<ActionResult<BankMaster>> PostBankMaster(BankMaster model)
         {
             await _remarkService.CreateBank(model);
-            return Ok($"BankMaster '{model.BankName}' created successfully");
+            return Ok(new { status = "success", message = $"BankMaster '{model.BankName}' created successfully." });
         }
 
         [HttpDelete("delete/{id}")]
@@ -55,7 +55,7 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("BankMaster not found!");
             }
-            return Ok($"BankMaster '{entity.BankName}' created successfully");
+            return Ok(new { status = "success", message = $"BankMaster '{entity.BankName}' deleted successfully." });
         }
 
         [HttpGet("dropdown")]

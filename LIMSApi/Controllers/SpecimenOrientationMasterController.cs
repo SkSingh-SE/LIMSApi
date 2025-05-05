@@ -37,14 +37,23 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> PutSpecimenOrientationMaster(SpecimenOrientationMaster model)
         {
             await _specimenService.ModifySpecimenOrientation(model);
-            return Ok($"SpecimenOrientation '{model.Name}' updated successfully.");
+            return Ok(new
+            {
+                status = "success",
+                message = $"SpecimenOrientation '{model.Name}' updated successfully."
+            });
+            
         }
 
         [HttpPost("create")]
         public async Task<ActionResult<SpecimenOrientationMaster>> PostSpecimenOrientationMaster(SpecimenOrientationMaster model)
         {
             await _specimenService.CreateSpecimenOrientation(model);
-            return Ok($"SpecimenOrientation '{model.Name}' created successfully");
+            return Ok(new
+            {
+                status = "success",
+                message = $"SpecimenOrientation '{model.Name}' created successfully."
+            });
         }
 
         [HttpDelete("delete/{id}")]
@@ -55,7 +64,12 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("SpecimenOrientation not found!");
             }
-            return Ok($"SpecimenOrientation '{entity.Name}' created successfully");
+            await _specimenService.RemoveSpecimenOrientation(id);
+            return Ok(new
+            {
+                status = "success",
+                message = $"SpecimenOrientation '{entity.Name}' deleted successfully."
+            });
         }
 
         [HttpGet("dropdown")]

@@ -9,7 +9,8 @@ namespace LIMSApi.Repositories.Interface
         Task UpdateParameter(ParameterMaster model);
         Task DeleteParameter(long id);
         Task<ParameterMaster> GetParameterById(long id);
-        Task<PagedResponse<object>> GetAllParameters(PageFilter filter);
+        Task<PagedResponse<object>> GetAllChemicalParameters(PageFilter filter);
+        Task<PagedResponse<object>> GetAllMechanicalParameters(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetParameterDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<bool> ExistsByName(string name);

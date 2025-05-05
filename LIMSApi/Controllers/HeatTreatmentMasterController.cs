@@ -37,14 +37,24 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> PutHeatTreatmentMaster(HeatTreatmentMaster model)
         {
             await _heatTreatmentService.ModifyHeatTreatment(model);
-            return Ok($"HeatTreatment '{model.Name}' updated successfully.");
+            return Ok(new
+            {
+                status = "success",
+                message = $"HeatTreatment '{model.Name}' updated successfully."
+            });
+            
         }
 
         [HttpPost("create")]
         public async Task<ActionResult<HeatTreatmentMaster>> PostHeatTreatmentMaster(HeatTreatmentMaster model)
         {
             await _heatTreatmentService.CreateHeatTreatment(model);
-            return Ok($"HeatTreatment '{model.Name}' created successfully");
+            return Ok(new
+            {
+                status = "success",
+                message = $"HeatTreatment '{model.Name}' created successfully."
+            });
+            
         }
 
         [HttpDelete("delete/{id}")]
@@ -55,7 +65,12 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("HeatTreatment not found!");
             }
-            return Ok($"HeatTreatment '{entity.Name}' created successfully");
+            await _heatTreatmentService.RemoveHeatTreatment(id);
+            return Ok(new
+            {
+                status = "success",
+                message = $"HeatTreatment '{entity.Name}' deleted successfully."
+            });
         }
 
         [HttpGet("dropdown")]

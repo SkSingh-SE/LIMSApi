@@ -9,7 +9,8 @@ namespace LIMSApi.Services.Interface
         Task ModifyParameter(ParameterMaster model);
         Task RemoveParameter(long id);
         Task<ParameterMaster> GetParameterDetails(long id);
-        Task<PagedResponse<object>> FetchParameterList(PageFilter filter);
+        Task<PagedResponse<object>> FetchChemicalParameterList(PageFilter filter);
+        Task<PagedResponse<object>> FetchMechanicalParameterList(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetParameterDropdown(string? searchTerm, int pageNo, int pageSize);
     }

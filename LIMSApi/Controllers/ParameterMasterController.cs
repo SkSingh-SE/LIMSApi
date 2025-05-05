@@ -17,10 +17,15 @@ namespace LIMSApi.Controllers
             _parameterService = parameterService;
         }
 
-        [HttpPost("list")]
-        public async Task<IActionResult> ParameterList(PageFilter filter)
+        [HttpPost("chemical-list")]
+        public async Task<IActionResult> ChemicalParameterList(PageFilter filter)
         {
-            return Ok(await _parameterService.FetchParameterList(filter));
+            return Ok(await _parameterService.FetchChemicalParameterList(filter));
+        }
+        [HttpPost("mechanical-list")]
+        public async Task<IActionResult> MechanicalParameterList(PageFilter filter)
+        {
+            return Ok(await _parameterService.FetchMechanicalParameterList(filter));
         }
 
 
@@ -37,14 +42,22 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> PutParameterMaster(ParameterMaster model)
         {
             await _parameterService.ModifyParameter(model);
-            return Ok($"Parameter '{model.Name}' updated successfully.");
+            return Ok(new
+            {
+                status = "success",
+                message = $"Parameter '{model.Name}' updated successfully."
+            });
         }
 
         [HttpPost("create")]
         public async Task<ActionResult<ParameterMaster>> PostParameterMaster(ParameterMaster model)
         {
             await _parameterService.CreateParameter(model);
-            return Ok($"Parameter '{model.Name}' created successfully");
+            return Ok(new
+            {
+                status = "success",
+                message = $"Parameter '{model.Name}' created successfully."
+            });
         }
 
         [HttpDelete("delete/{id}")]
@@ -55,7 +68,12 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("Parameter not found!");
             }
-            return Ok($"Parameter '{entity.Name}' created successfully");
+            await _parameterService.RemoveParameter(id);
+            return Ok(new
+            {
+                status = "success",
+                message = $"Parameter '{entity.Name}' deleted successfully."
+            });
         }
 
         [HttpGet("dropdown")]

@@ -37,14 +37,23 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> PutProductConditionMaster(ProductConditionMaster model)
         {
             await _productConditionService.ModifyProductCondition(model);
-            return Ok($"ProductCondition '{model.Name}' updated successfully.");
+            return Ok(new
+            {
+                status = "success",
+                message = $"ProductCondition '{model.Name}' updated successfully."
+            });
+           
         }
 
         [HttpPost("create")]
         public async Task<ActionResult<ProductConditionMaster>> PostProductConditionMaster(ProductConditionMaster model)
         {
             await _productConditionService.CreateProductCondition(model);
-            return Ok($"ProductCondition '{model.Name}' created successfully");
+            return Ok(new
+            {
+                status = "success",
+                message = $"ProductCondition '{model.Name}' created successfully."
+            });
         }
 
         [HttpDelete("delete/{id}")]
@@ -55,7 +64,12 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("ProductCondition not found!");
             }
-            return Ok($"ProductCondition '{entity.Name}' created successfully");
+            await _productConditionService.RemoveProductCondition(id);
+            return Ok(new
+            {
+                status = "success",
+                message = $"ProductCondition '{entity.Name}' deleted successfully."
+            });
         }
 
         [HttpGet("dropdown")]

@@ -37,14 +37,14 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> PutCourierMaster(CourierMaster model)
         {
             await _courierService.ModifyCourier(model);
-            return Ok($"CourierMaster '{model.Name}' updated successfully.");
+            return Ok(new { status = "success", message = $"CourierMaster '{model.Name}' updated successfully." });
         }
 
         [HttpPost("create")]
         public async Task<ActionResult<CourierMaster>> PostCourierMaster(CourierMaster model)
         {
             await _courierService.CreateCourier(model);
-            return Ok($"CourierMaster '{model.Name}' created successfully");
+            return Ok(new { status = "success", message = $"CourierMaster '{model.Name}' created successfully." });
         }
 
         [HttpDelete("delete/{id}")]
@@ -55,7 +55,7 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("CourierMaster not found!");
             }
-            return Ok($"CourierMaster '{entity.Name}' created successfully");
+            return Ok(new { status = "success", message = $"CourierMaster '{entity.Name}' deleted successfully." });
         }
 
         [HttpGet("dropdown")]
