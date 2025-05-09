@@ -24,17 +24,16 @@ public partial class SpecificationLine : AuditProperty
 
     public string? Notes { get; set; }
 
-    public long? UOMID { get; set; }
-
+    public long? ParameterUnitID { get; set; }
+    public decimal? MinValueEquation { get; set; }
+    public decimal? MaxValueEquation { get; set; } 
+    public decimal? MinTolerance { get; set; }
+    public decimal? MaxTolerance { get; set; }
     public long? SpecimenOrientationID { get; set; }
 
     public long? DimensionalFactorID { get; set; }
 
-    public string? LowerLimit { get; set; }
-
     public decimal? LowerLimitValue { get; set; }
-
-    public string? UpperLimit { get; set; }
 
     public decimal? UpperLimitValue { get; set; }
 
@@ -44,13 +43,16 @@ public partial class SpecificationLine : AuditProperty
 
     public long? ProductConditionID2 { get; set; }
 
+    public long? LaboratoryTestID1 { get; set; }
+    public long? LaboratoryTestID2 { get; set; }
+
     [ForeignKey("SpecificationHeaderID")]
     public virtual SpecificationHeader? SpecificationHeader { get; set; }
 
     [ForeignKey("ParameterID")]
     public virtual ParameterMaster? Parameter { get; set; }
-    [ForeignKey("UOMID")]
-    public virtual UOMMaster? UOM { get; set; }
+    [ForeignKey("ParameterUnitID")]
+    public virtual ParameterUnitMaster? ParameterUnit { get; set; }
 
     [ForeignKey("SpecimenOrientationID")]
     public virtual SpecimenOrientationMaster? SpecimenOrientation { get; set; }

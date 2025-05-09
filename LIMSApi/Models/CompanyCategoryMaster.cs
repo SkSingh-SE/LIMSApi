@@ -12,7 +12,6 @@ namespace LIMSApi.Models
         [StringLength(250)]
         public string? Description { get; set; }
 
-        public virtual ICollection<CustomerCompanyCategory> CustomerCompanyCategories { get; set; } = new List<CustomerCompanyCategory>();
 
     }
 }

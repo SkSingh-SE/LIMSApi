@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20250506075413_Remove Industry Relation")]
+    partial class RemoveIndustryRelation
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -810,6 +813,9 @@ namespace LIMSApi.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
 
+                    b.Property<long?>("CustomerDispatchModeID")
+                        .HasColumnType("bigint");
+
                     b.Property<long>("CustomerID")
                         .HasColumnType("bigint");
 
@@ -817,6 +823,8 @@ namespace LIMSApi.Migrations
                         .HasColumnType("bigint");
 
                     b.HasKey("ID");
+
+                    b.HasIndex("CustomerDispatchModeID");
 
                     b.HasIndex("CustomerID");
 
@@ -1650,43 +1658,6 @@ namespace LIMSApi.Migrations
                     b.ToTable("MakerMasters");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.MetalClassificationMaster", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<string>("CompanyCode")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<long>("CreatedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<long?>("ModifiedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime?>("ModifiedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.HasKey("ID");
-
-                    b.ToTable("MetalClassificationMasters");
-                });
-
             modelBuilder.Entity("LIMSApi.Models.OEMMaster", b =>
                 {
                     b.Property<long>("ID")
@@ -2270,9 +2241,6 @@ namespace LIMSApi.Migrations
                     b.Property<bool?>("IsUNS")
                         .HasColumnType("bit");
 
-                    b.Property<long?>("MetalCalssificationID")
-                        .HasColumnType("bigint");
-
                     b.Property<long?>("ModifiedBy")
                         .HasColumnType("bigint");
 
@@ -2298,8 +2266,6 @@ namespace LIMSApi.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("ID");
-
-                    b.HasIndex("MetalCalssificationID");
 
                     b.HasIndex("StandardOrganizationID");
 
@@ -2333,11 +2299,8 @@ namespace LIMSApi.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
-                    b.Property<long?>("LaboratoryTestID1")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("LaboratoryTestID2")
-                        .HasColumnType("bigint");
+                    b.Property<string>("LowerLimit")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal?>("LowerLimitValue")
                         .HasColumnType("decimal(18,2)");
@@ -2345,22 +2308,10 @@ namespace LIMSApi.Migrations
                     b.Property<bool?>("ManualSelection")
                         .HasColumnType("bit");
 
-                    b.Property<decimal?>("MaxTolerance")
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<decimal?>("MaxValue")
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<decimal?>("MaxValueEquation")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal?>("MinTolerance")
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<decimal?>("MinValue")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal?>("MinValueEquation")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<long?>("ModifiedBy")
@@ -2373,9 +2324,6 @@ namespace LIMSApi.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<long?>("ParameterID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("ParameterUnitID")
                         .HasColumnType("bigint");
 
                     b.Property<long?>("ProductConditionID1")
@@ -2393,6 +2341,12 @@ namespace LIMSApi.Migrations
                     b.Property<long?>("SpecimenOrientationID")
                         .HasColumnType("bigint");
 
+                    b.Property<long?>("UOMID")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("UpperLimit")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<decimal?>("UpperLimitValue")
                         .HasColumnType("decimal(18,2)");
 
@@ -2404,8 +2358,6 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("ParameterID");
 
-                    b.HasIndex("ParameterUnitID");
-
                     b.HasIndex("ProductConditionID1");
 
                     b.HasIndex("ProductConditionID2");
@@ -2413,6 +2365,8 @@ namespace LIMSApi.Migrations
                     b.HasIndex("SpecificationHeaderID");
 
                     b.HasIndex("SpecimenOrientationID");
+
+                    b.HasIndex("UOMID");
 
                     b.ToTable("SpecificationLines");
                 });
@@ -3544,7 +3498,7 @@ namespace LIMSApi.Migrations
 
             modelBuilder.Entity("LIMSApi.Models.ContactPerson", b =>
                 {
-                    b.HasOne("LIMSApi.Models.Customer", null)
+                    b.HasOne("LIMSApi.Models.Customer", "Customer")
                         .WithMany("ContactPersons")
                         .HasForeignKey("CustomerID")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -3556,13 +3510,15 @@ namespace LIMSApi.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.Navigation("Customer");
+
                     b.Navigation("Department");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.CustomerCompanyCategory", b =>
                 {
                     b.HasOne("LIMSApi.Models.CompanyCategoryMaster", "CompanyCategory")
-                        .WithMany()
+                        .WithMany("CustomerCompanyCategories")
                         .HasForeignKey("CompanyCategoryID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -3580,7 +3536,11 @@ namespace LIMSApi.Migrations
 
             modelBuilder.Entity("LIMSApi.Models.CustomerDispatchMode", b =>
                 {
-                    b.HasOne("LIMSApi.Models.Customer", null)
+                    b.HasOne("LIMSApi.Models.CustomerDispatchMode", null)
+                        .WithMany("CustomerDispatchModes")
+                        .HasForeignKey("CustomerDispatchModeID");
+
+                    b.HasOne("LIMSApi.Models.Customer", "Customer")
                         .WithMany("CustomerDispatchModes")
                         .HasForeignKey("CustomerID")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -3591,6 +3551,8 @@ namespace LIMSApi.Migrations
                         .HasForeignKey("DispatchModeID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Customer");
 
                     b.Navigation("DispatchMode");
                 });
@@ -3697,15 +3659,9 @@ namespace LIMSApi.Migrations
 
             modelBuilder.Entity("LIMSApi.Models.SpecificationHeader", b =>
                 {
-                    b.HasOne("LIMSApi.Models.MetalClassificationMaster", "MetalClassification")
-                        .WithMany()
-                        .HasForeignKey("MetalCalssificationID");
-
                     b.HasOne("LIMSApi.Models.StandardOrganizationMaster", "StandardOrganization")
                         .WithMany()
                         .HasForeignKey("StandardOrganizationID");
-
-                    b.Navigation("MetalClassification");
 
                     b.Navigation("StandardOrganization");
                 });
@@ -3724,10 +3680,6 @@ namespace LIMSApi.Migrations
                         .WithMany()
                         .HasForeignKey("ParameterID");
 
-                    b.HasOne("LIMSApi.Models.ParameterUnitMaster", "ParameterUnit")
-                        .WithMany()
-                        .HasForeignKey("ParameterUnitID");
-
                     b.HasOne("LIMSApi.Models.ProductConditionMaster", "ProductCondition1")
                         .WithMany()
                         .HasForeignKey("ProductConditionID1");
@@ -3737,20 +3689,22 @@ namespace LIMSApi.Migrations
                         .HasForeignKey("ProductConditionID2");
 
                     b.HasOne("LIMSApi.Models.SpecificationHeader", "SpecificationHeader")
-                        .WithMany("SpecificationLines")
+                        .WithMany()
                         .HasForeignKey("SpecificationHeaderID");
 
                     b.HasOne("LIMSApi.Models.SpecimenOrientationMaster", "SpecimenOrientation")
                         .WithMany()
                         .HasForeignKey("SpecimenOrientationID");
 
+                    b.HasOne("LIMSApi.Models.UOMMaster", "UOM")
+                        .WithMany()
+                        .HasForeignKey("UOMID");
+
                     b.Navigation("DimensionalFactor");
 
                     b.Navigation("HeatTreatment");
 
                     b.Navigation("Parameter");
-
-                    b.Navigation("ParameterUnit");
 
                     b.Navigation("ProductCondition1");
 
@@ -3759,6 +3713,8 @@ namespace LIMSApi.Migrations
                     b.Navigation("SpecificationHeader");
 
                     b.Navigation("SpecimenOrientation");
+
+                    b.Navigation("UOM");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.StateMaster", b =>
@@ -3834,6 +3790,11 @@ namespace LIMSApi.Migrations
                     b.Navigation("TestMethod");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.CompanyCategoryMaster", b =>
+                {
+                    b.Navigation("CustomerCompanyCategories");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.Customer", b =>
                 {
                     b.Navigation("ContactPersons");
@@ -3843,16 +3804,16 @@ namespace LIMSApi.Migrations
                     b.Navigation("CustomerDispatchModes");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.CustomerDispatchMode", b =>
+                {
+                    b.Navigation("CustomerDispatchModes");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.EmployeeMaster", b =>
                 {
                     b.Navigation("Documents");
 
                     b.Navigation("Qualifications");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.SpecificationHeader", b =>
-                {
-                    b.Navigation("SpecificationLines");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.TestGroup", b =>

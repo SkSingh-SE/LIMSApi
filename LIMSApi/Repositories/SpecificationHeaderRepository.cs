@@ -36,7 +36,7 @@ namespace LIMSApi.Repositories
 
         public async Task<SpecificationHeader?> GetSpecificationHeaderById(long id)
         {
-            return await _context.SpecificationHeaders.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
+            return await _context.SpecificationHeaders.Include(x=>x.SpecificationLines).FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
         }
 
         public async Task UpdateSpecificationHeader(SpecificationHeader model)

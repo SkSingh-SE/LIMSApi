@@ -42,16 +42,73 @@ namespace LIMSApi.Services
             if (existingSpecificationHeader == null)
                 throw new InvalidOperationException("SpecificationHeader not found!");
 
-            existingSpecificationHeader.AliasName = model.AliasName;
-            existingSpecificationHeader.UNSSteelNumber = model.UNSSteelNumber;
-            existingSpecificationHeader.Standard = model.Standard;
-            existingSpecificationHeader.Part = model.Part;
             existingSpecificationHeader.SpecificationCode = model.SpecificationCode;
             existingSpecificationHeader.StandardOrganizationID = model.StandardOrganizationID;
+            existingSpecificationHeader.Standard = model.Standard;
+            existingSpecificationHeader.Part = model.Part;
             existingSpecificationHeader.StandardYear = model.StandardYear;
+            existingSpecificationHeader.Grade = model.Grade;
             existingSpecificationHeader.IsUNS = model.IsUNS;
-
+            existingSpecificationHeader.AliasName = model.AliasName;
+            existingSpecificationHeader.UNSSteelNumber = model.UNSSteelNumber;
+            existingSpecificationHeader.MetalCalssificationID = model.MetalCalssificationID;
             existingSpecificationHeader.ModifiedOn = DateTime.UtcNow;
+
+
+            if (model.SpecificationLines.Any())
+            {
+                var toRemove = existingSpecificationHeader.SpecificationLines.Where(x => !model.SpecificationLines.Any(y => y.ID == x.ID)).ToList();
+
+                foreach (var item in toRemove)
+                {
+                    existingSpecificationHeader.SpecificationLines.Remove(item);
+                }
+
+                foreach (var line in model.SpecificationLines)
+                {
+                    if (line.ID == 0)
+                    {
+                        // New line
+                        line.SpecificationHeaderID = model.ID;
+                        existingSpecificationHeader.SpecificationLines.Add(line);
+                    }
+                    else
+                    {
+                        // Update existing line
+                        var existingLine = existingSpecificationHeader.SpecificationLines
+                            .FirstOrDefault(x => x.ID == line.ID);
+
+                        if (existingLine != null)
+                        {
+                            existingLine.PropertyType = line.PropertyType;
+                            existingLine.ManualSelection = line.ManualSelection;
+                            existingLine.ParameterID = line.ParameterID;
+                            existingLine.MinValue = line.MinValue;
+                            existingLine.MaxValue = line.MaxValue;
+                            existingLine.Notes = line.Notes;
+                            existingLine.ParameterUnitID = line.ParameterUnitID;
+                            existingLine.MinValueEquation = line.MinValueEquation;
+                            existingLine.MaxValueEquation = line.MaxValueEquation;
+                            existingLine.MinTolerance = line.MinTolerance;
+                            existingLine.MaxTolerance = line.MaxTolerance;
+                            existingLine.SpecimenOrientationID = line.SpecimenOrientationID;
+                            existingLine.DimensionalFactorID = line.DimensionalFactorID;
+                            existingLine.LowerLimitValue = line.LowerLimitValue;
+                            existingLine.UpperLimitValue = line.UpperLimitValue;
+                            existingLine.HeatTreatmentID = line.HeatTreatmentID;
+                            existingLine.ProductConditionID1 = line.ProductConditionID1;
+                            existingLine.ProductConditionID2 = line.ProductConditionID2;
+                            existingLine.LaboratoryTestID1 = line.LaboratoryTestID1;
+                            existingLine.LaboratoryTestID2 = line.LaboratoryTestID2;
+                        }
+                    }
+                }
+
+            }
+            else
+            {
+                existingSpecificationHeader.SpecificationLines.Clear();
+            }
 
             await _uomRepository.UpdateSpecificationHeader(existingSpecificationHeader);
             _logger.LogInformation("SpecificationHeader '{SpecificationHeaderName}' updated successfully.", model.AliasName);

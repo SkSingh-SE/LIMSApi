@@ -32,7 +32,6 @@ namespace LIMSApi.Services
             existingSpecificationLine.SpecificationHeaderID = model.SpecificationHeaderID;
             existingSpecificationLine.HeatTreatmentID = model.HeatTreatmentID;
             existingSpecificationLine.ParameterID  = model.ParameterID;
-            existingSpecificationLine.UOMID  = model.UOMID;
             existingSpecificationLine.DimensionalFactorID  = model.DimensionalFactorID;
             existingSpecificationLine.SpecimenOrientationID  = model.SpecimenOrientationID;
             existingSpecificationLine.ProductConditionID1  = model.ProductConditionID1;
@@ -42,9 +41,7 @@ namespace LIMSApi.Services
             existingSpecificationLine.PropertyType = model.PropertyType;
             existingSpecificationLine.Notes = model.Notes;
             existingSpecificationLine.ManualSelection = model.ManualSelection;
-            existingSpecificationLine.LowerLimit = model.LowerLimit;
             existingSpecificationLine.LowerLimitValue = model.LowerLimitValue;
-            existingSpecificationLine.UpperLimit = model.UpperLimit;
             existingSpecificationLine.UpperLimitValue = model.UpperLimitValue;
 
             existingSpecificationLine.ModifiedOn = DateTime.UtcNow;

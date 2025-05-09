@@ -84,7 +84,6 @@ namespace LIMSApi.Services
             existingCustomer.CustomerType = model.CustomerType;
             existingCustomer.IsBlock = model.IsBlock;
             existingCustomer.BlockReason = model.BlockReason;
-            existingCustomer.IndustryID = model.IndustryID;
             existingCustomer.GSTNo = model.GSTNo;
             existingCustomer.PANNo = model.PANNo;
             existingCustomer.GSTNA = model.GSTNA;

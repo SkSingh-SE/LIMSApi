@@ -31,19 +31,20 @@ namespace LIMSApi.Repositories
             {
                 _context.ContactPersons.RemoveRange(testGroup.ContactPersons);
             }
-            _context.Customers.Update(testGroup); 
+            _context.Customers.Update(testGroup);
             await _context.SaveChangesAsync();
         }
 
         public async Task<Customer?> GetCustomerById(long id)
         {
-            return await _context.Customers
-                .Include(c => c.ContactPersons)
-                .Include(c => c.CustomerCompanyCategories)
-                    .ThenInclude(ccc => ccc.CompanyCategory)
-                    .Include(d => d.CustomerDispatchModes)
-                    .ThenInclude(d => d.DispatchMode)
-                .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            var customer = await _context.Customers.AsNoTracking()
+   .Include(x => x.ContactPersons)
+   .Include(x => x.CustomerDispatchModes)
+   .Include(x => x.CustomerCompanyCategories)
+       .ThenInclude(ccc => ccc.CompanyCategory)
+   .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return customer;
+
         }
 
 
@@ -101,7 +102,7 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x =>  (x.Name != null && x.Name.ToLower().Contains(search)));
+                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
             }
 
             var skip = pageNo * pageSize;

@@ -1,6 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,6 +9,7 @@ namespace LIMSApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class UniversalCodeTypeMasterController : ControllerBase
     {
         private readonly IUniversalCodeTypeService _universalCodeTypeService;
@@ -37,14 +39,22 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> PutUniversalCodeTypeMaster(UniversalCodeTypeMaster model)
         {
             await _universalCodeTypeService.ModifyUniversalCodeType(model);
-            return Ok($"UniversalCodeType '{model.Name}' updated successfully.");
+            return Ok(new
+            {
+                status = "success",
+                message = $"UniversalCodeType '{model.Name}' updated successfully."
+            });
         }
 
         [HttpPost("create")]
         public async Task<ActionResult<UniversalCodeTypeMaster>> PostUniversalCodeTypeMaster(UniversalCodeTypeMaster model)
         {
             await _universalCodeTypeService.CreateUniversalCodeType(model);
-            return Ok($"UniversalCodeType '{model.Name}' created successfully");
+            return Ok(new
+            {
+                status = "success",
+                message = $"UniversalCodeType '{model.Name}' created successfully."
+            });
         }
 
         [HttpDelete("delete/{id}")]
@@ -55,7 +65,12 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("UniversalCodeType not found!");
             }
-            return Ok($"UniversalCodeType '{entity.Name}' created successfully");
+            await _universalCodeTypeService.RemoveUniversalCodeType(id);
+            return Ok(new
+            {
+                status = "success",
+                message = $"UniversalCodeType '{entity.Name}' delted successfully."
+            });
         }
 
         [HttpGet("dropdown")]

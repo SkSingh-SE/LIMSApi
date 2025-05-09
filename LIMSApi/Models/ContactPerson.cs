@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace LIMSApi.Models
 {
@@ -27,7 +28,7 @@ namespace LIMSApi.Models
 
         public bool IsWhatsappNo { get; set; }
 
-        [Phone]
+        
         [MaxLength(15)]
         public string? TelephoneNo { get; set; }
 
@@ -45,9 +46,6 @@ namespace LIMSApi.Models
         // Foreign key relationship with CustomerMaster
        
         public long CustomerID { get; set; }
-
-        [ForeignKey("CustomerID")]
-        public virtual Customer? Customer { get; set; }
         [ForeignKey("DepartmentID")]
         public virtual DepartmentMaster? Department {  get; set; }
 

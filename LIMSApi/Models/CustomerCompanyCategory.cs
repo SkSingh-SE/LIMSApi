@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace LIMSApi.Models
 {
@@ -12,9 +13,10 @@ namespace LIMSApi.Models
         public long CompanyCategoryID { get; set; }
 
         [ForeignKey("CustomerID")]
-        public virtual Customer Customer { get; set; } = null!;
+        [JsonIgnore]
+        public virtual Customer? Customer { get; set; } = null!;
 
         [ForeignKey("CompanyCategoryID")]
-        public virtual CompanyCategoryMaster CompanyCategory { get; set; } = null!;
+        public virtual CompanyCategoryMaster? CompanyCategory { get; set; } = null!;
     }
 }

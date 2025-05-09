@@ -31,7 +31,13 @@ public partial class SpecificationHeader : AuditProperty
 
     public string? AliasName { get; set; }
 
+    public long? MetalCalssificationID { get; set; }
+
+    [ForeignKey("MetalCalssificationID")]
+    public virtual MetalClassificationMaster? MetalClassification { get; set; }
+
     [ForeignKey("StandardOrganizationID")]
     public virtual StandardOrganizationMaster? StandardOrganization { get; set; }
+    public virtual ICollection<SpecificationLine> SpecificationLines { get; set; } = new List<SpecificationLine>();
 
 }

@@ -28,7 +28,6 @@ namespace LIMSApi.Models
 
         public bool IsBlock { get; set; }
 
-        public long IndustryID { get; set; }
 
         [StringLength(50)]
         public required string GSTNo { get; set; }
@@ -76,9 +75,6 @@ namespace LIMSApi.Models
 
         [StringLength(250)]
         public string? BlockReason { get; set; }
-
-        [ForeignKey("IndustryID")]
-        public virtual IndustryMaster? Industry { get; set; }
 
         public virtual ICollection<ContactPerson> ContactPersons { get; set; } = new List<ContactPerson>();
         public virtual ICollection<CustomerCompanyCategory> CustomerCompanyCategories { get; set; } = new List<CustomerCompanyCategory>();

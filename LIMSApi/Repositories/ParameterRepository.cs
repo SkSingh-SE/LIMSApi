@@ -59,6 +59,7 @@ namespace LIMSApi.Repositories
                               c.Rate,
                               UnitName = u.Name,
                               Factor = u.ConversaionFactor,
+                              c.CreatedOn
                           }).AsQueryable().ApplyFilters(filter.Filter);
 
 
@@ -96,6 +97,7 @@ namespace LIMSApi.Repositories
                               c.Rate,
                               UnitName = u.Name,
                               Factor = u.ConversaionFactor,
+                              c.CreatedOn
                           }).AsQueryable().ApplyFilters(filter.Filter);
 
 
@@ -138,7 +140,7 @@ namespace LIMSApi.Repositories
             var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
             {
                 Id = x.ID,
-                Name = x.Name,
+                Name = $"{x.Name} - ({x.ParameterType})",
             })).ToListAsync();
 
             return data;

@@ -21,68 +21,50 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<CalibrationAgencyMaster> CalibrationAgencyMasters { get; set; }
     public virtual DbSet<CityMaster> CityMasters { get; set; }
     public virtual DbSet<ClassificationMaster> ClassificationMasters { get; set; }
+    public virtual DbSet<CompanyCategoryMaster> CompanyCategoryMasters { get; set; }
     public virtual DbSet<CompanyMaster> CompanyMasters { get; set; }
-
+    public virtual DbSet<ContactPerson> ContactPersons { get; set; }
     public virtual DbSet<CountryMaster> CountryMasters { get; set; }
     public virtual DbSet<CourierMaster> CourierMasters { get; set; }
-
     public virtual DbSet<CurrencyMaster> CurrencyMasters { get; set; }
-    public virtual DbSet<CompanyCategoryMaster> CompanyCategoryMasters { get; set; }
+    public virtual DbSet<Customer> Customers { get; set; }
     public virtual DbSet<CustomerCompanyCategory> CustomerCompanyCategories { get; set; }
     public virtual DbSet<CustomerDispatchMode> CustomerDispatchModes { get; set; }
-    public virtual DbSet<Customer> Customers { get; set; }
-    public virtual DbSet<ContactPerson> ContactPersons { get; set; }
-
     public virtual DbSet<DepartmentMaster> DepartmentMasters { get; set; }
-
     public virtual DbSet<DesignationMaster> DesignationMasters { get; set; }
-
     public virtual DbSet<DimensionalFactorMaster> DimensionalFactorMasters { get; set; }
     public virtual DbSet<DisciplineMaster> DisciplineMasters { get; set; }
     public virtual DbSet<DispatchModeMaster> DispatchModeMasters { get; set; }
+    public virtual DbSet<EmployeeDocument> EmployeeDocuments { get; set; }
     public virtual DbSet<EmployeeMaster> EmployeeMasters { get; set; }
     public virtual DbSet<EmployeeQualification> EmployeeQualifications { get; set; }
-    public virtual DbSet<EmployeeDocument> EmployeeDocuments { get; set; }
     public virtual DbSet<EquipmentMaster> EquipmentMasters { get; set; }
-
     public virtual DbSet<EquipmentTypeMaster> EquipmentTypeMasters { get; set; }
-
-    public virtual DbSet<HeatTreatmentMaster> HeatTreatmentMasters { get; set; }
-
-    public virtual DbSet<ItemMaster> ItemMasters { get; set; }
-    public virtual DbSet<IndustryMaster> IndustryMasters { get; set; }
     public virtual DbSet<GroupMaster> GroupMasters { get; set; }
+    public virtual DbSet<HeatTreatmentMaster> HeatTreatmentMasters { get; set; }
+    public virtual DbSet<IndustryMaster> IndustryMasters { get; set; }
+    public virtual DbSet<ItemMaster> ItemMasters { get; set; }
     public virtual DbSet<LabScopeMaster> LabScopeMasters { get; set; }
     public virtual DbSet<MakerMaster> MakerMasters { get; set; }
+    public virtual DbSet<MetalClassificationMaster> MetalClassificationMasters { get; set; }
     public virtual DbSet<OEMMaster> OEMMasters { get; set; }
     public virtual DbSet<OrganisationMaster> OrganisationMasters { get; set; }
     public virtual DbSet<ParameterMaster> ParameterMasters { get; set; }
-
     public virtual DbSet<ParameterUnitMaster> ParameterUnitMasters { get; set; }
-
     public virtual DbSet<PermissionMaster> PermissionMasters { get; set; }
-
     public virtual DbSet<ProductConditionMaster> ProductConditionMasters { get; set; }
     public virtual DbSet<ProductSpecification> ProductSpecifications { get; set; }
-
-    public virtual DbSet<RoleMaster> RoleMasters { get; set; }
     public virtual DbSet<RemarkMaster> RemarkMasters { get; set; }
-
+    public virtual DbSet<RoleMaster> RoleMasters { get; set; }
     public virtual DbSet<SiteActivity> SiteActivities { get; set; }
-
     public virtual DbSet<SiteError> SiteErrors { get; set; }
-
     public virtual DbSet<SpecificationHeader> SpecificationHeaders { get; set; }
-
     public virtual DbSet<SpecificationLine> SpecificationLines { get; set; }
-
     public virtual DbSet<SpecimenOrientationMaster> SpecimenOrientationMasters { get; set; }
     public virtual DbSet<SpecimenTypeMaster> SpecimenTypeMasters { get; set; }
-
     public virtual DbSet<StandardOrganizationMaster> StandardOrganizationMasters { get; set; }
-    public virtual DbSet<SubContractorMaster> SubContractorMasters { get; set; }
-
     public virtual DbSet<StateMaster> StateMasters { get; set; }
+    public virtual DbSet<SubContractorMaster> SubContractorMasters { get; set; }
     public virtual DbSet<SubGroupMaster> SubGroupMasters { get; set; }
     public virtual DbSet<SupplierMaster> SupplierMasters { get; set; }
     public virtual DbSet<TaxMaster> TaxMasters { get; set; }
@@ -90,16 +72,14 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<TestGroupMapping> TestGroupMappings { get; set; }
     public virtual DbSet<TestMaster> TestMasters { get; set; }
     public virtual DbSet<TestMethodMaster> TestMethodMasters { get; set; }
-    public virtual DbSet<TestMethodSubGroup> TestMethodSubGroups { get; set; }
     public virtual DbSet<TestMethodStandard> TestMethodStandards { get; set; }
+    public virtual DbSet<TestMethodSubGroup> TestMethodSubGroups { get; set; }
     public virtual DbSet<TestTypeMaster> TestTypeMasters { get; set; }
     public virtual DbSet<TPIMaster> TPIMasters { get; set; }
-
     public virtual DbSet<UniversalCodeTypeMaster> UniversalCodeTypeMasters { get; set; }
-    public virtual DbSet<UploadFile> UploadFiles { get; set; }
-
-    public virtual DbSet<UserMaster> UserMasters { get; set; }
     public virtual DbSet<UOMMaster> UOMMasters { get; set; }
+    public virtual DbSet<UploadFile> UploadFiles { get; set; }
+    public virtual DbSet<UserMaster> UserMasters { get; set; }
     public virtual DbSet<VendorMaster> VendorMasters { get; set; }
 
     //    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

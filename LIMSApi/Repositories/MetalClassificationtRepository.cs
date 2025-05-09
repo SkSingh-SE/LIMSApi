@@ -8,53 +8,53 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Repositories
 {
-    public class StandardOrganizationRepository : IStandardOrganizationRepository
+    public class MetalClassificationRepository : IMetalClassificationRepository
     {
         private readonly LIMSContext _context;
 
-        public StandardOrganizationRepository(LIMSContext context)
+        public MetalClassificationRepository(LIMSContext context)
         {
             _context = context;
         }
 
-        public async Task AddStandardOrganization(StandardOrganizationMaster model)
+        public async Task AddMetalClassification(MetalClassificationMaster model)
         {
-            await _context.StandardOrganizationMasters.AddAsync(model);
+            await _context.MetalClassificationMasters.AddAsync(model);
             await _context.SaveChangesAsync();
         }
 
-        public async Task DeleteStandardOrganization(long id)
+        public async Task DeleteMetalClassification(long id)
         {
-            var existingStandardOrganization = await _context.StandardOrganizationMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
-            if (existingStandardOrganization != null)
+            var existingMetalClassification = await _context.MetalClassificationMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
+            if (existingMetalClassification != null)
             {
-                existingStandardOrganization.IsActive = false;
-                existingStandardOrganization.ModifiedOn = DateTime.UtcNow;
-                _context.StandardOrganizationMasters.Update(existingStandardOrganization);
+                existingMetalClassification.IsActive = false;
+                existingMetalClassification.ModifiedOn = DateTime.UtcNow;
+                _context.MetalClassificationMasters.Update(existingMetalClassification);
                 await _context.SaveChangesAsync();
             }
         }
 
-        public async Task<StandardOrganizationMaster?> GetStandardOrganizationById(long id)
+        public async Task<MetalClassificationMaster?> GetMetalClassificationById(long id)
         {
-            return await _context.StandardOrganizationMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
+            return await _context.MetalClassificationMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
         }
 
-        public async Task UpdateStandardOrganization(StandardOrganizationMaster model)
+        public async Task UpdateMetalClassification(MetalClassificationMaster model)
         {
-            _context.StandardOrganizationMasters.Update(model);
+            _context.MetalClassificationMasters.Update(model);
             await _context.SaveChangesAsync();
         }
 
-        public async Task<PagedResponse<object>> GetAllStandardOrganizations(PageFilter filter)
+        public async Task<PagedResponse<object>> GetAllMetalClassifications(PageFilter filter)
         {
-            var _query = (from c in _context.StandardOrganizationMasters where c.IsActive select c).AsQueryable().ApplyFilters(filter.Filter);
+            var _query = (from c in _context.MetalClassificationMasters where c.IsActive select c).AsQueryable().ApplyFilters(filter.Filter);
 
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x =>(x.Name != null && x.Name.ToLower().Contains(search)));
+                _query = _query.Where(x =>  (x.Name != null && x.Name.ToLower().Contains(search)));
             }
 
             if (filter.SortByColumn != null)
@@ -74,11 +74,11 @@ namespace LIMSApi.Repositories
             return new PagedResponse<object>(items.Cast<object>().ToList(), totalRecords, filter.PageNumber, filter.PageSize);
         }
 
-        public async Task<List<DropdwonSelector>> GetStandardOrganizationDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> GetMetalClassificationDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.StandardOrganizationMasters where a.IsActive select a;
+            var _query = from a in _context.MetalClassificationMasters where a.IsActive select a;
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
@@ -99,12 +99,12 @@ namespace LIMSApi.Repositories
 
         public async Task<bool> ExistsByName(string name)
         {
-            return await _context.StandardOrganizationMasters.AnyAsync(x => x.Name == name && x.IsActive);
+            return await _context.MetalClassificationMasters.AnyAsync(x => x.Name == name && x.IsActive);
         }
 
         public async Task<bool> ExistsByNameAndNotId(string name, long Id)
         {
-            return await _context.StandardOrganizationMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive);
+            return await _context.MetalClassificationMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive);
         }
     }
 }

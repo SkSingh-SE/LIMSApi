@@ -1,6 +1,7 @@
 ﻿using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using Microsoft.EntityFrameworkCore;
@@ -47,7 +48,7 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllUniversalCodeTypes(PageFilter filter)
         {
-            var _query = from c in _context.UniversalCodeTypeMasters where c.IsActive select c;
+            var _query = (from c in _context.UniversalCodeTypeMasters where c.IsActive select c).AsQueryable().ApplyFilters(filter.Filter);
 
             if (filter.Filters != null)
             {

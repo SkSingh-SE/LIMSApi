@@ -1,6 +1,7 @@
 ﻿using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using Microsoft.EntityFrameworkCore;
@@ -47,7 +48,7 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllSpecificationLines(PageFilter filter)
         {
-            var _query = from c in _context.SpecificationLines
+            var _query = (from c in _context.SpecificationLines
                          where c.IsActive
                          join sh in _context.SpecificationHeaders
                          on c.SpecificationHeaderID equals sh.ID into soGroup
@@ -62,37 +63,30 @@ namespace LIMSApi.Repositories
                              c.MinValue,
                              c.MaxValue,
                              c.Notes,
-                             c.LowerLimit,
+                             c.ParameterUnitID,
+                             c.MinValueEquation,
+                             c.MaxValueEquation,
+                             c.MinTolerance,
+                             c.MaxTolerance,
+                             c.SpecimenOrientationID,
+                             c.DimensionalFactorID,
                              c.LowerLimitValue,
-                             c.UpperLimit,
                              c.UpperLimitValue,
+                             c.HeatTreatmentID,
+                             c.ProductConditionID1,
+                             c.ProductConditionID2,
                              c.SpecificationHeaderID,
                              HeaderName = sh.AliasName,
-                         };
+                         }).AsQueryable().ApplyFilters(filter.Filter);
 
-            if (filter.Filters != null)
-            {
-                foreach (var filterItem in filter.Filters)
-                {
-                    if (string.IsNullOrWhiteSpace(filterItem.Value))
-                    {
-                        continue;
-                    }
-                    var propertyName = filterItem.Key;
-                    var value = filterItem.Value;
-
-                    _query = _query.Where($"{propertyName}.Contains(@0)", value);
-                }
-            }
+            
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
                 _query = _query.Where(x => (x.PropertyType != null && x.PropertyType.ToLower().Contains(search))
                 || (x.Notes != null && x.Notes.ToLower().Contains(search))
-                || (x.LowerLimit != null && x.LowerLimit.ToLower().Contains(search))
                 || (x.LowerLimitValue != null && x.LowerLimitValue.ToString().ToLower().Contains(search))
-                || (x.UpperLimit != null && x.UpperLimit.ToLower().Contains(search))
                 || (x.UpperLimitValue != null && x.UpperLimitValue.ToString().ToLower().Contains(search))
                 || (x.HeaderName != null && x.HeaderName.ToLower().Contains(search))
                 );

@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace LIMSApi.Models
 {
@@ -8,12 +9,9 @@ namespace LIMSApi.Models
         [Key]
         public long ID { get; set; }
         public long CustomerID { get; set; }
-        [ForeignKey("CustomerID")]
-        public Customer Customer { get; set; }
 
         public long DispatchModeID { get; set; }
         [ForeignKey("DispatchModeID")]
-        public DispatchModeMaster DispatchMode { get; set; }
-        public virtual ICollection<CustomerDispatchMode> CustomerDispatchModes { get; set; } = new List<CustomerDispatchMode>();
+        public virtual DispatchModeMaster? DispatchMode { get; set; }
     }
 }

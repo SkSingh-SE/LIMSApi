@@ -1,6 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,6 +9,7 @@ namespace LIMSApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class StandardOrganizationMasterController : ControllerBase
     {
         private readonly IStandardOrganizationService _standardOrganizationService;
@@ -37,14 +39,22 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> PutStandardOrganizationMaster(StandardOrganizationMaster model)
         {
             await _standardOrganizationService.ModifyStandardOrganization(model);
-            return Ok($"StandardOrganization '{model.Name}' updated successfully.");
+            return Ok(new
+            {
+                status = "success",
+                message = $"StandardOrganization '{model.Name}' updated successfully."
+            });
         }
 
         [HttpPost("create")]
         public async Task<ActionResult<StandardOrganizationMaster>> PostStandardOrganizationMaster(StandardOrganizationMaster model)
         {
             await _standardOrganizationService.CreateStandardOrganization(model);
-            return Ok($"StandardOrganization '{model.Name}' created successfully");
+            return Ok(new
+            {
+                status = "success",
+                message = $"StandardOrganization '{model.Name}' created successfully."
+            });
         }
 
         [HttpDelete("delete/{id}")]
@@ -55,7 +65,12 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("StandardOrganization not found!");
             }
-            return Ok($"StandardOrganization '{entity.Name}' created successfully");
+            await _standardOrganizationService.RemoveStandardOrganization(id);
+            return Ok(new
+            {
+                status = "success",
+                message = $"StandardOrganization '{entity.Name}' deleted successfully."
+            });
         }
 
         [HttpGet("dropdown")]

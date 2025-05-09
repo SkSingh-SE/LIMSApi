@@ -141,6 +141,9 @@ builder.Services.AddScoped<IProductConditionRepository, ProductConditionReposito
 builder.Services.AddScoped<ISpecimenOrientationRepository, SpecimenOrientationRepository>();
 builder.Services.AddScoped<IParameterUnitRepository, ParameterUnitRepository>();
 builder.Services.AddScoped<IProductSpecificationRepository, ProductSpecificationRepository>();
+builder.Services.AddScoped<IStandardOrganizationRepository, StandardOrganizationRepository>();
+builder.Services.AddScoped<IUniversalCodeTypeRepository, UniversalCodeTypeRepository>();
+builder.Services.AddScoped<IMetalClassificationRepository, MetalClassificationRepository>();
 
 
 
@@ -185,7 +188,9 @@ builder.Services.AddScoped<IProductConditionService, ProductConditionService>();
 builder.Services.AddScoped<ISpecimenOrientationService, SpecimenOrientationService>();
 builder.Services.AddScoped<IParameterUnitService, ParameterUnitService>();
 builder.Services.AddScoped<IProductSpecificationService, ProductSpecificationService>();
-
+builder.Services.AddScoped<IStandardOrganizationService, StandardOrganizationService>();
+builder.Services.AddScoped<IUniversalCodeTypeService, UniversalCodeTypeService>();
+builder.Services.AddScoped<IMetalClassificationService, MetalClassificationService>();
 
 
 // Third party services
