@@ -10,6 +10,7 @@ namespace LIMSApi.Repositories.Interface
         Task DeleteProductSpecification(long id);
         Task<ProductSpecification> GetProductSpecificationById(long id);
         Task<PagedResponse<object>> GetAllProductSpecifications(PageFilter filter);
+        Task<PagedResponse<object>> GetAllCustomProductSpecifications(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetProductSpecificationDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<bool> ExistsByName(string name);

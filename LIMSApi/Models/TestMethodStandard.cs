@@ -9,7 +9,7 @@ namespace LIMSApi.Models
         public long ID { get; set; }
 
         [MaxLength(255)]
-        public string? Name { get; set; } // Organisation + Test Method Code + Year
+        public string? Name { get; set; } // Organisation + Test Method SpecificationCode + Year
 
         [MaxLength(500)]
         public string? Caption { get; set; }

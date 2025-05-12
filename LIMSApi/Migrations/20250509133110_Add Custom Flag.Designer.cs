@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20250509133110_Add Custom Flag")]
+    partial class AddCustomFlag
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2031,6 +2034,10 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("Code")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<string>("CompanyCode")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -2044,11 +2051,8 @@ namespace LIMSApi.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
-                    b.Property<bool>("IsCustom")
-                        .HasColumnType("bit");
-
-                    b.Property<long>("MateriaSpecificationID")
-                        .HasColumnType("bigint");
+                    b.Property<string>("MaterialSpecification")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<long?>("ModifiedBy")
                         .HasColumnType("bigint");
@@ -2056,18 +2060,12 @@ namespace LIMSApi.Migrations
                     b.Property<DateTime?>("ModifiedOn")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("SpecificationCode")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("SpecificationName")
+                    b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
                     b.HasKey("ID");
-
-                    b.HasIndex("MateriaSpecificationID");
 
                     b.ToTable("ProductSpecifications");
                 });
@@ -3703,17 +3701,6 @@ namespace LIMSApi.Migrations
                         .IsRequired();
 
                     b.Navigation("ParameterUnit");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.ProductSpecification", b =>
-                {
-                    b.HasOne("LIMSApi.Models.SpecificationHeader", "SpecificationHeader")
-                        .WithMany()
-                        .HasForeignKey("MateriaSpecificationID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("SpecificationHeader");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SpecificationHeader", b =>

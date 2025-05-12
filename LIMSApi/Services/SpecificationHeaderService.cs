@@ -18,10 +18,10 @@ namespace LIMSApi.Services
 
         public async Task CreateSpecificationHeader(SpecificationHeader model)
         {
-            if (string.IsNullOrWhiteSpace(model.SpecificationCode))
+            if (string.IsNullOrWhiteSpace(model.AliasName))
                 throw new ArgumentException("SpecificationHeader name should not be empty!");
 
-            bool exists = await _uomRepository.ExistsByName(model.SpecificationCode);
+            bool exists = await _uomRepository.ExistsByName(model.AliasName);
             if (exists)
                 throw new InvalidOperationException("SpecificationHeader already exists!");
 
@@ -52,6 +52,7 @@ namespace LIMSApi.Services
             existingSpecificationHeader.AliasName = model.AliasName;
             existingSpecificationHeader.UNSSteelNumber = model.UNSSteelNumber;
             existingSpecificationHeader.MetalCalssificationID = model.MetalCalssificationID;
+            existingSpecificationHeader.IsCustom = model.IsCustom;
             existingSpecificationHeader.ModifiedOn = DateTime.UtcNow;
 
 
@@ -139,6 +140,11 @@ namespace LIMSApi.Services
         public async Task<PagedResponse<object>> FetchSpecificationHeaderList(PageFilter filter)
         {
             return await _uomRepository.GetAllSpecificationHeaders(filter);
+        }
+
+        public async Task<PagedResponse<object>> FetchCustomSpecificationHeaderList(PageFilter filter)
+        {
+            return await _uomRepository.GetAllCustomSpecificationHeaders(filter);
         }
 
         public async Task<List<DropdwonSelector>> GetSpecificationHeaderDropdown(string? searchTerm, int pageNo, int pageSize)

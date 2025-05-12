@@ -131,7 +131,7 @@ public partial class LIMSContext : DbContext
         //    entity.ToTable("CountryMaster");
 
         //    entity.Property(e => e.ID).HasColumnName("ID");
-        //    entity.Property(e => e.Code).HasMaxLength(10);
+        //    entity.Property(e => e.SpecificationCode).HasMaxLength(10);
         //    entity.Property(e => e.CompanyCode).HasMaxLength(50);
         //    entity.Property(e => e.CreatedBy).HasMaxLength(50);
         //    entity.Property(e => e.CreatedOn)
@@ -154,7 +154,7 @@ public partial class LIMSContext : DbContext
         //    entity.Property(e => e.ID)
         //        .ValueGeneratedNever()
         //        .HasColumnName("ID");
-        //    entity.Property(e => e.Code).HasMaxLength(50);
+        //    entity.Property(e => e.SpecificationCode).HasMaxLength(50);
         //    entity.Property(e => e.CompanyCode).HasMaxLength(50);
         //    entity.Property(e => e.CreatedBy).HasMaxLength(50);
         //    entity.Property(e => e.CreatedOn)
@@ -554,7 +554,7 @@ public partial class LIMSContext : DbContext
         //    entity.ToTable("StateMaster");
 
         //    entity.Property(e => e.ID).HasColumnName("ID");
-        //    entity.Property(e => e.Code).HasMaxLength(50);
+        //    entity.Property(e => e.SpecificationCode).HasMaxLength(50);
         //    entity.Property(e => e.CompanyCode).HasMaxLength(50);
         //    entity.Property(e => e.CountryID)
         //        .HasDefaultValue(0L)

@@ -10,6 +10,7 @@ namespace LIMSApi.Services.Interface
         Task RemoveProductSpecification(long id);
         Task<ProductSpecification> GetProductSpecificationDetails(long id);
         Task<PagedResponse<object>> FetchProductSpecificationList(PageFilter filter);
+        Task<PagedResponse<object>> FetchCustomProductSpecificationList(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetProductSpecificationDropdown(string? searchTerm, int pageNo, int pageSize);
     }

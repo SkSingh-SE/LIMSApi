@@ -23,6 +23,12 @@ namespace LIMSApi.Controllers
             return Ok(await _specificationHeaderService.FetchSpecificationHeaderList(filter));
         }
 
+        [HttpPost("customList")]
+        public async Task<IActionResult> CustomSpecificationHeaderList(PageFilter filter)
+        {
+            return Ok(await _specificationHeaderService.FetchCustomSpecificationHeaderList(filter));
+        }
+
 
         [HttpGet("details/{id}")]
         public async Task<ActionResult<SpecificationHeader>> GetSpecificationHeader(long id)
@@ -37,14 +43,22 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> PutSpecificationHeader(SpecificationHeader model)
         {
             await _specificationHeaderService.ModifySpecificationHeader(model);
-            return Ok($"SpecificationHeader '{model.AliasName}' updated successfully.");
+            return Ok(new
+            {
+                status = "success",
+                message = $"Specification Header '{model.AliasName}' updated successfully."
+            });
         }
 
         [HttpPost("create")]
         public async Task<ActionResult<SpecificationHeader>> PostSpecificationHeader(SpecificationHeader model)
         {
             await _specificationHeaderService.CreateSpecificationHeader(model);
-            return Ok($"SpecificationHeader '{model.AliasName}' created successfully");
+            return Ok(new
+            {
+                status = "success",
+                message = $"Specification Header '{model.AliasName}' created successfully."
+            });
         }
 
         [HttpDelete("delete/{id}")]
@@ -55,7 +69,12 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("SpecificationHeader not found!");
             }
-            return Ok($"SpecificationHeader '{entity.AliasName}' created successfully");
+            await _specificationHeaderService.RemoveSpecificationHeader(id);
+            return Ok(new
+            {
+                status = "success",
+                message = $"Specification Header '{entity.AliasName}' created successfully."
+            });
         }
 
         [HttpGet("dropdown")]

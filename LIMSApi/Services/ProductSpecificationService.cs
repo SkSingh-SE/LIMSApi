@@ -18,15 +18,15 @@ namespace LIMSApi.Services
 
         public async Task CreateProductSpecification(ProductSpecification model)
         {
-            if (string.IsNullOrWhiteSpace(model.Name))
+            if (string.IsNullOrWhiteSpace(model.SpecificationName))
                 throw new ArgumentException("ProductSpecification name should not be empty!");
 
-            bool exists = await _ProductSpecificationRepository.ExistsByName(model.Name);
+            bool exists = await _ProductSpecificationRepository.ExistsByName(model.SpecificationName);
             if (exists)
                 throw new InvalidOperationException("ProductSpecification already exists!");
 
             await _ProductSpecificationRepository.AddProductSpecification(model);
-            _logger.LogInformation("ProductSpecification '{ProductSpecificationName}' created successfully.", model.Name);
+            _logger.LogInformation("ProductSpecification '{ProductSpecificationName}' created successfully.", model.SpecificationName);
         }
 
         public async Task ModifyProductSpecification(ProductSpecification model)
@@ -34,7 +34,7 @@ namespace LIMSApi.Services
             if (model.ID == 0)
                 throw new ArgumentException("ProductSpecification ID should not be empty!");
 
-            bool exists = await _ProductSpecificationRepository.ExistsByNameAndNotId(model.Name, model.ID);
+            bool exists = await _ProductSpecificationRepository.ExistsByNameAndNotId(model.SpecificationName, model.ID);
             if (exists)
                 throw new InvalidOperationException("Same ProductSpecification already exists!");
 
@@ -42,14 +42,15 @@ namespace LIMSApi.Services
             if (existingProductSpecification == null)
                 throw new InvalidOperationException("ProductSpecification not found!");
 
-            existingProductSpecification.Name = model.Name;
+            existingProductSpecification.SpecificationName = model.SpecificationName;
             existingProductSpecification.AliasName = model.AliasName;
-            existingProductSpecification.Code = model.Code;
-            existingProductSpecification.MaterialSpecification = model.MaterialSpecification;
+            existingProductSpecification.SpecificationCode = model.SpecificationCode;
+            existingProductSpecification.MateriaSpecificationID = model.MateriaSpecificationID;
+            existingProductSpecification.IsCustom = model.IsCustom;
             existingProductSpecification.ModifiedOn = DateTime.UtcNow;
 
             await _ProductSpecificationRepository.UpdateProductSpecification(existingProductSpecification);
-            _logger.LogInformation("ProductSpecification '{ProductSpecificationName}' updated successfully.", model.Name);
+            _logger.LogInformation("ProductSpecification '{ProductSpecificationName}' updated successfully.", model.SpecificationName);
         }
 
         public async Task RemoveProductSpecification(long id)
@@ -77,6 +78,10 @@ namespace LIMSApi.Services
         public async Task<PagedResponse<object>> FetchProductSpecificationList(PageFilter filter)
         {
             return await _ProductSpecificationRepository.GetAllProductSpecifications(filter);
+        }
+        public async Task<PagedResponse<object>> FetchCustomProductSpecificationList(PageFilter filter)
+        {
+            return await _ProductSpecificationRepository.GetAllCustomProductSpecifications(filter);
         }
 
         public async Task<List<DropdwonSelector>> GetProductSpecificationDropdown(string? searchTerm, int pageNo, int pageSize)

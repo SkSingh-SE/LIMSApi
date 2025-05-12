@@ -10,6 +10,7 @@ namespace LIMSApi.Repositories.Interface
         Task DeleteSpecificationHeader(long id);
         Task<SpecificationHeader> GetSpecificationHeaderById(long id);
         Task<PagedResponse<object>> GetAllSpecificationHeaders(PageFilter filter);
+        Task<PagedResponse<object>> GetAllCustomSpecificationHeaders(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetSpecificationHeaderDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<bool> ExistsByName(string name);

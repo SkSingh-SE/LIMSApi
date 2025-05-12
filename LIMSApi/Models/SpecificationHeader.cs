@@ -28,10 +28,11 @@ public partial class SpecificationHeader : AuditProperty
     public bool? IsUNS { get; set; }
 
     public string? UNSSteelNumber { get; set; }
-
-    public string? AliasName { get; set; }
+    [StringLength(100)]
+    public required string AliasName { get; set; }
 
     public long? MetalCalssificationID { get; set; }
+    public bool IsCustom { get; set; }
 
     [ForeignKey("MetalCalssificationID")]
     public virtual MetalClassificationMaster? MetalClassification { get; set; }

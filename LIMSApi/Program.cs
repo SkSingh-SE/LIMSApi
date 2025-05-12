@@ -144,6 +144,7 @@ builder.Services.AddScoped<IProductSpecificationRepository, ProductSpecification
 builder.Services.AddScoped<IStandardOrganizationRepository, StandardOrganizationRepository>();
 builder.Services.AddScoped<IUniversalCodeTypeRepository, UniversalCodeTypeRepository>();
 builder.Services.AddScoped<IMetalClassificationRepository, MetalClassificationRepository>();
+builder.Services.AddScoped<ISpecificationHeaderRepository, SpecificationHeaderRepository>();
 
 
 
@@ -191,6 +192,7 @@ builder.Services.AddScoped<IProductSpecificationService, ProductSpecificationSer
 builder.Services.AddScoped<IStandardOrganizationService, StandardOrganizationService>();
 builder.Services.AddScoped<IUniversalCodeTypeService, UniversalCodeTypeService>();
 builder.Services.AddScoped<IMetalClassificationService, MetalClassificationService>();
+builder.Services.AddScoped<ISpecificationHeaderService, SpecificationHeaderService>();
 
 
 // Third party services

@@ -48,13 +48,66 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllProductSpecifications(PageFilter filter)
         {
-            var _query = (from c in _context.ProductSpecifications where c.IsActive select c).AsQueryable().ApplyFilters(filter.Filter);
+            var _query = (from c in _context.ProductSpecifications
+                          join s in _context.SpecificationHeaders on c.MateriaSpecificationID equals s.ID
+                          where c.IsActive && c.IsCustom == false select new
+                          {
+                              c.ID,
+                              c.SpecificationName,
+                              c.AliasName,
+                              c.SpecificationCode,
+                              MaterialSpecification = s.AliasName
+                          }).AsQueryable().ApplyFilters(filter.Filter);
 
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                _query = _query.Where(x => (x.SpecificationName != null && x.SpecificationName.ToLower().Contains(search))
+                || x.AliasName.Contains(search)
+                || x.SpecificationCode.Contains(search)
+                || x.MaterialSpecification.Contains(search)
+                );
+            }
+            if (filter.SortByColumn != null)
+            {
+                _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
+            }
+
+            // Total Records Count
+            int totalRecords = await _query.CountAsync();
+
+            // Apply Pagination
+            var items = await _query
+                .Skip((filter.PageNumber - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .ToListAsync();
+
+            return new PagedResponse<object>(items.Cast<object>().ToList(), totalRecords, filter.PageNumber, filter.PageSize);
+        }
+        public async Task<PagedResponse<object>> GetAllCustomProductSpecifications(PageFilter filter)
+        {
+            var _query = (from c in _context.ProductSpecifications
+                          join s in _context.SpecificationHeaders on c.MateriaSpecificationID equals s.ID
+                          where c.IsActive && c.IsCustom
+                          select new
+                          {
+                              c.ID,
+                              c.SpecificationName,
+                              c.AliasName,
+                              c.SpecificationCode,
+                              MaterialSpecification = s.AliasName
+                          }).AsQueryable().ApplyFilters(filter.Filter);
+
+
+            if (!string.IsNullOrWhiteSpace(filter.searchTerm))
+            {
+                var search = filter.searchTerm.Trim().ToLower();
+                _query = _query.Where(x => (x.SpecificationName != null && x.SpecificationName.ToLower().Contains(search))
+                || x.AliasName.Contains(search)
+                || x.SpecificationCode.Contains(search)
+                || x.MaterialSpecification.Contains(search)
+                );
             }
             if (filter.SortByColumn != null)
             {
@@ -82,7 +135,7 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                _query = _query.Where(x => (x.SpecificationName != null && x.SpecificationName.ToLower().Contains(search)) || x.ID.ToString().Contains(search));
             }
 
             var skip = pageNo * pageSize;
@@ -90,7 +143,7 @@ namespace LIMSApi.Repositories
             var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
             {
                 Id = x.ID,
-                Name = x.Name,
+                Name = x.SpecificationName,
             })).ToListAsync();
 
             return data;
@@ -98,12 +151,12 @@ namespace LIMSApi.Repositories
 
         public async Task<bool> ExistsByName(string name)
         {
-            return await _context.ProductSpecifications.AnyAsync(x => x.Name == name && x.IsActive);
+            return await _context.ProductSpecifications.AnyAsync(x => x.SpecificationName == name && x.IsActive);
         }
 
         public async Task<bool> ExistsByNameAndNotId(string name, long Id)
         {
-            return await _context.ProductSpecifications.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive);
+            return await _context.ProductSpecifications.AnyAsync(x => x.SpecificationName == name && x.ID != Id && x.IsActive);
         }
     }
 }

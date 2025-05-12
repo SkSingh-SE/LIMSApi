@@ -46,9 +46,6 @@ public partial class SpecificationLine : AuditProperty
     public long? LaboratoryTestID1 { get; set; }
     public long? LaboratoryTestID2 { get; set; }
 
-    [ForeignKey("SpecificationHeaderID")]
-    public virtual SpecificationHeader? SpecificationHeader { get; set; }
-
     [ForeignKey("ParameterID")]
     public virtual ParameterMaster? Parameter { get; set; }
     [ForeignKey("ParameterUnitID")]
