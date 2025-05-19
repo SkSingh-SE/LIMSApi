@@ -60,6 +60,9 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<SiteError> SiteErrors { get; set; }
     public virtual DbSet<SpecificationHeader> SpecificationHeaders { get; set; }
     public virtual DbSet<SpecificationLine> SpecificationLines { get; set; }
+    public virtual DbSet<SpecificationLineProductCondition> SpecificationLineProductConditions { get; set; }
+    public virtual DbSet<SpecificationLineLaboratoryTest> SpecificationLineLaboratoryTests { get; set; }
+
     public virtual DbSet<SpecimenOrientationMaster> SpecimenOrientationMasters { get; set; }
     public virtual DbSet<SpecimenTypeMaster> SpecimenTypeMasters { get; set; }
     public virtual DbSet<StandardOrganizationMaster> StandardOrganizationMasters { get; set; }
@@ -88,6 +91,14 @@ public partial class LIMSContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<SpecificationLineLaboratoryTest>()
+      .HasKey(x => new { x.SpecificationLineID, x.LaboratoryTestID });
+        modelBuilder.Entity<SpecificationLineProductCondition>()
+      .HasKey(x => new { x.SpecificationLineID, x.ProductConditionID });
+
+        modelBuilder.Entity<SpecificationHeader>()
+        .Property(e => e.Type)
+        .HasConversion<string>();
         //modelBuilder.Entity<CompanyMaster>(entity =>
         //{
         //    entity.ToTable("CompanyMaster");

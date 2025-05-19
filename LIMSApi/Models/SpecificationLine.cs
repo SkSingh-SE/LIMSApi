@@ -39,12 +39,7 @@ public partial class SpecificationLine : AuditProperty
 
     public long? HeatTreatmentID { get; set; }
 
-    public long? ProductConditionID1 { get; set; }
-
-    public long? ProductConditionID2 { get; set; }
-
-    public long? LaboratoryTestID1 { get; set; }
-    public long? LaboratoryTestID2 { get; set; }
+   
 
     [ForeignKey("ParameterID")]
     public virtual ParameterMaster? Parameter { get; set; }
@@ -58,10 +53,7 @@ public partial class SpecificationLine : AuditProperty
     
     [ForeignKey("HeatTreatmentID")]
     public virtual HeatTreatmentMaster? HeatTreatment { get; set; }
-    
-    [ForeignKey("ProductConditionID1")]
-    public virtual ProductConditionMaster? ProductCondition1 { get; set; }
 
-    [ForeignKey("ProductConditionID2")]
-    public virtual ProductConditionMaster? ProductCondition2 { get; set; }
+    public ICollection<SpecificationLineProductCondition> ProductConditions { get; set; } = new List<SpecificationLineProductCondition>();
+    public ICollection<SpecificationLineLaboratoryTest> LaboratoryTests { get; set; } = new List<SpecificationLineLaboratoryTest>();
 }

@@ -73,8 +73,6 @@ namespace LIMSApi.Repositories
                              c.LowerLimitValue,
                              c.UpperLimitValue,
                              c.HeatTreatmentID,
-                             c.ProductConditionID1,
-                             c.ProductConditionID2,
                              c.SpecificationHeaderID,
                              HeaderName = sh.AliasName,
                          }).AsQueryable().ApplyFilters(filter.Filter);

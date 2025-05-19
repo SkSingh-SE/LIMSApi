@@ -33,6 +33,7 @@ public partial class SpecificationHeader : AuditProperty
 
     public long? MetalCalssificationID { get; set; }
     public bool IsCustom { get; set; }
+    public TestCategory Type { get; set; }
 
     [ForeignKey("MetalCalssificationID")]
     public virtual MetalClassificationMaster? MetalClassification { get; set; }
@@ -41,4 +42,9 @@ public partial class SpecificationHeader : AuditProperty
     public virtual StandardOrganizationMaster? StandardOrganization { get; set; }
     public virtual ICollection<SpecificationLine> SpecificationLines { get; set; } = new List<SpecificationLine>();
 
+}
+public enum TestCategory
+{
+    Chemical,
+    Other
 }

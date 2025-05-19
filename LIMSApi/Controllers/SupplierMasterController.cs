@@ -37,14 +37,22 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> PutSupplierMaster(SupplierMaster model)
         {
             await _supplierService.ModifySupplier(model);
-            return Ok($"Supplier '{model.Name}' updated successfully.");
+            return Ok(new
+            {
+                status = "success",
+                message = $"Supplier '{model.Name}' updated successfully."
+            });
         }
 
         [HttpPost("create")]
         public async Task<ActionResult<SupplierMaster>> PostSupplierMaster(SupplierMaster model)
         {
             await _supplierService.CreateSupplier(model);
-            return Ok($"Supplier '{model.Name}' created successfully");
+            return Ok(new
+            {
+                status = "success",
+                message = $"Supplier '{model.Name}' created successfully."
+            });
         }
 
         [HttpDelete("delete/{id}")]
@@ -55,7 +63,12 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("Supplier not found!");
             }
-            return Ok($"Supplier '{entity.Name}' created successfully");
+            await _supplierService.RemoveSupplier(id);
+            return Ok(new
+            {
+                status = "success",
+                message = $"Supplier '{entity.Name}' deleted successfully."
+            });
         }
 
         [HttpGet("dropdown")]

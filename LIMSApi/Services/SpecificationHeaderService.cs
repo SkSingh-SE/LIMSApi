@@ -25,7 +25,29 @@ namespace LIMSApi.Services
             if (exists)
                 throw new InvalidOperationException("SpecificationHeader already exists!");
 
+            //if (model.SpecificationLines != null && model.SpecificationLines.Any())
+            //{
+            //    foreach(var line in model.SpecificationLines)
+            //    {
+            //        line.SpecificationHeaderID = model.ID;
+            //        if (line.ProductConditions != null && line.ProductConditions.Any())
+            //        {
+            //            foreach (var condition in line.ProductConditions)
+            //            {
+            //                condition.SpecificationLineID = line.ID;
+            //            }
+            //        } 
+            //        if(line.LaboratoryTests != null && line.LaboratoryTests.Any())
+            //        {
+            //            foreach( var test in line.LaboratoryTests)
+            //            {
+            //                test.SpecificationLineID = line.ID;
+            //            }
+            //        }
+            //    }
+            //}
             await _uomRepository.AddSpecificationHeader(model);
+
             _logger.LogInformation("SpecificationHeader '{SpecificationHeaderName}' created successfully.", model.AliasName);
         }
 
@@ -42,78 +64,83 @@ namespace LIMSApi.Services
             if (existingSpecificationHeader == null)
                 throw new InvalidOperationException("SpecificationHeader not found!");
 
+            // Update SpecificationHeader fields
             existingSpecificationHeader.SpecificationCode = model.SpecificationCode;
             existingSpecificationHeader.StandardOrganizationID = model.StandardOrganizationID;
             existingSpecificationHeader.Standard = model.Standard;
             existingSpecificationHeader.Part = model.Part;
             existingSpecificationHeader.StandardYear = model.StandardYear;
-            existingSpecificationHeader.Grade = model.Grade;
             existingSpecificationHeader.IsUNS = model.IsUNS;
             existingSpecificationHeader.AliasName = model.AliasName;
             existingSpecificationHeader.UNSSteelNumber = model.UNSSteelNumber;
             existingSpecificationHeader.MetalCalssificationID = model.MetalCalssificationID;
             existingSpecificationHeader.IsCustom = model.IsCustom;
+            existingSpecificationHeader.Type = model.Type;
             existingSpecificationHeader.ModifiedOn = DateTime.UtcNow;
 
+            // === Handle SpecificationLines ===
+            var toRemoveLines = existingSpecificationHeader.SpecificationLines
+                .Where(x => !model.SpecificationLines.Any(y => y.ID == x.ID)).ToList();
 
-            if (model.SpecificationLines.Any())
+            foreach (var lineToRemove in toRemoveLines)
             {
-                var toRemove = existingSpecificationHeader.SpecificationLines.Where(x => !model.SpecificationLines.Any(y => y.ID == x.ID)).ToList();
-
-                foreach (var item in toRemove)
-                {
-                    existingSpecificationHeader.SpecificationLines.Remove(item);
-                }
-
-                foreach (var line in model.SpecificationLines)
-                {
-                    if (line.ID == 0)
-                    {
-                        // New line
-                        line.SpecificationHeaderID = model.ID;
-                        existingSpecificationHeader.SpecificationLines.Add(line);
-                    }
-                    else
-                    {
-                        // Update existing line
-                        var existingLine = existingSpecificationHeader.SpecificationLines
-                            .FirstOrDefault(x => x.ID == line.ID);
-
-                        if (existingLine != null)
-                        {
-                            existingLine.PropertyType = line.PropertyType;
-                            existingLine.ManualSelection = line.ManualSelection;
-                            existingLine.ParameterID = line.ParameterID;
-                            existingLine.MinValue = line.MinValue;
-                            existingLine.MaxValue = line.MaxValue;
-                            existingLine.Notes = line.Notes;
-                            existingLine.ParameterUnitID = line.ParameterUnitID;
-                            existingLine.MinValueEquation = line.MinValueEquation;
-                            existingLine.MaxValueEquation = line.MaxValueEquation;
-                            existingLine.MinTolerance = line.MinTolerance;
-                            existingLine.MaxTolerance = line.MaxTolerance;
-                            existingLine.SpecimenOrientationID = line.SpecimenOrientationID;
-                            existingLine.DimensionalFactorID = line.DimensionalFactorID;
-                            existingLine.LowerLimitValue = line.LowerLimitValue;
-                            existingLine.UpperLimitValue = line.UpperLimitValue;
-                            existingLine.HeatTreatmentID = line.HeatTreatmentID;
-                            existingLine.ProductConditionID1 = line.ProductConditionID1;
-                            existingLine.ProductConditionID2 = line.ProductConditionID2;
-                            existingLine.LaboratoryTestID1 = line.LaboratoryTestID1;
-                            existingLine.LaboratoryTestID2 = line.LaboratoryTestID2;
-                        }
-                    }
-                }
-
+                existingSpecificationHeader.SpecificationLines.Remove(lineToRemove);
             }
-            else
+
+            foreach (var line in model.SpecificationLines)
             {
-                existingSpecificationHeader.SpecificationLines.Clear();
+                var existingLine = existingSpecificationHeader.SpecificationLines
+                    .FirstOrDefault(l => l.ID == line.ID);
+
+                if (existingLine == null)
+                {
+                    // New Line
+                    line.SpecificationHeaderID = model.ID;
+                    existingSpecificationHeader.SpecificationLines.Add(line);
+                }
+                else
+                {
+                    // Update existing Line
+                    existingLine.PropertyType = line.PropertyType;
+                    existingLine.ManualSelection = line.ManualSelection;
+                    existingLine.ParameterID = line.ParameterID;
+                    existingLine.MinValue = line.MinValue;
+                    existingLine.MaxValue = line.MaxValue;
+                    existingLine.Notes = line.Notes;
+                    existingLine.ParameterUnitID = line.ParameterUnitID;
+                    existingLine.MinValueEquation = line.MinValueEquation;
+                    existingLine.MaxValueEquation = line.MaxValueEquation;
+                    existingLine.MinTolerance = line.MinTolerance;
+                    existingLine.MaxTolerance = line.MaxTolerance;
+                    existingLine.SpecimenOrientationID = line.SpecimenOrientationID;
+                    existingLine.DimensionalFactorID = line.DimensionalFactorID;
+                    existingLine.LowerLimitValue = line.LowerLimitValue;
+                    existingLine.UpperLimitValue = line.UpperLimitValue;
+                    existingLine.HeatTreatmentID = line.HeatTreatmentID;
+
+                    // === Product Conditions ===
+                    existingLine.ProductConditions?.Clear();
+
+                    foreach (var condition in line.ProductConditions)
+                    {
+                        condition.SpecificationLineID = existingLine.ID;
+                        existingLine.ProductConditions?.Add(condition);
+                    }
+
+                    // === Laboratory Tests ===
+                    existingLine.LaboratoryTests?.Clear();
+                    foreach (var test in line.LaboratoryTests)
+                    {
+                        test.SpecificationLineID = existingLine.ID;
+                        existingLine.LaboratoryTests?.Add(test);
+                    }
+                }
             }
 
             await _uomRepository.UpdateSpecificationHeader(existingSpecificationHeader);
             _logger.LogInformation("SpecificationHeader '{SpecificationHeaderName}' updated successfully.", model.AliasName);
         }
+
 
         public async Task RemoveSpecificationHeader(long id)
         {

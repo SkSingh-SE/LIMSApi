@@ -34,8 +34,6 @@ namespace LIMSApi.Services
             existingSpecificationLine.ParameterID  = model.ParameterID;
             existingSpecificationLine.DimensionalFactorID  = model.DimensionalFactorID;
             existingSpecificationLine.SpecimenOrientationID  = model.SpecimenOrientationID;
-            existingSpecificationLine.ProductConditionID1  = model.ProductConditionID1;
-            existingSpecificationLine.ProductConditionID2  = model.ProductConditionID2;
             existingSpecificationLine.MinValue = model.MinValue;
             existingSpecificationLine.MaxValue = model.MaxValue;
             existingSpecificationLine.PropertyType = model.PropertyType;
