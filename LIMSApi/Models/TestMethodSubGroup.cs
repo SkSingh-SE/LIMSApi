@@ -15,13 +15,12 @@ namespace LIMSApi.Models
         public string? InvoiceCase { get; set; }
         [Column(TypeName = "decimal(10,2)")]
         public decimal? TestCharge { get; set; }
-        public int FixedTimeDuration {  get; set; }
-        public string? SampleSize { get; set; }
+        public string? SampleSize { get; set; }// consider in mm
         public long? TestMethodID {  get; set; }
 
         [ForeignKey("TestMethodID")]
         [JsonIgnore]
-        public virtual TestMethodMaster? TestMethod {  get; set; } 
+        public virtual LaboratoryTest? TestMethod {  get; set; } 
 
     }
 }

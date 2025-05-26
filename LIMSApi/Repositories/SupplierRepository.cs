@@ -51,22 +51,21 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllSuppliers(PageFilter filter)
         {
-            var _query = from c in _context.SupplierMasters where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c;
+            var _query = from c in _context.SupplierMasters where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode 
+                         select new
+                         {
+                             c.ID,
+                             c.Name,
+                             c.ProductType,
+                             c.ContactPerson1,
+                             c.ContactNo1,
+                             c.EmailId1,
+                             c.Note,
 
-            if (filter.Filters != null)
-            {
-                foreach (var filterItem in filter.Filters)
-                {
-                    if (string.IsNullOrWhiteSpace(filterItem.Value))
-                    {
-                        continue;
-                    }
-                    var propertyName = filterItem.Key;
-                    var value = filterItem.Value;
+                         };
+            _query = _query.ApplyFilters(filter.Filter);
 
-                    _query = _query.Where($"{propertyName}.Contains(@0)", value);
-                }
-            }
+           
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {

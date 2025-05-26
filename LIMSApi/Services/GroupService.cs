@@ -54,6 +54,7 @@ namespace LIMSApi.Services
             existingGroup.Description = model.Description;
             existingGroup.ModifiedOn = DateTime.UtcNow;
             existingGroup.ModifiedBy = loggedInUser.EmployeeID;
+            existingGroup.DisciplineID = model.DisciplineID;
 
             await _groupRepository.UpdateGroup(existingGroup);
             _logger.LogInformation("Group '{GroupName}' updated successfully.", model.Name);

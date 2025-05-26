@@ -1,6 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,6 +9,7 @@ namespace LIMSApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class SubGroupMasterController : ControllerBase
     {
         private readonly ISubGroupService _subGroupService;
@@ -37,14 +39,22 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> PutSubGroupMaster(SubGroupMaster model)
         {
             await _subGroupService.ModifySubGroup(model);
-            return Ok($"SubGroupMaster '{model.Name}' updated successfully.");
+            return Ok(new
+            {
+                status = "success",
+                message = $"SubGroup Master '{model.Name}' updated successfully."
+            });
         }
 
         [HttpPost("create")]
         public async Task<ActionResult<SubGroupMaster>> PostSubGroupMaster(SubGroupMaster model)
         {
             await _subGroupService.CreateSubGroup(model);
-            return Ok($"SubGroupMaster '{model.Name}' created successfully");
+            return Ok(new
+            {
+                status = "success",
+                message = $"SubGroup Master '{model.Name}' created successfully."
+            });
         }
 
         [HttpDelete("delete/{id}")]
@@ -55,7 +65,12 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("SubGroupMaster not found!");
             }
-            return Ok($"SubGroupMaster '{entity.Name}' created successfully");
+            await _subGroupService.RemoveSubGroup(id);
+            return Ok(new
+            {
+                status = "success",
+                message = $"SubGroup Master '{entity.Name}' deleted successfully."
+            });
         }
 
         [HttpGet("dropdown")]

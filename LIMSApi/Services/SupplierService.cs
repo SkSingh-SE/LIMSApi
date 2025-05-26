@@ -10,10 +10,13 @@ namespace LIMSApi.Services
         private readonly ISupplierRepository _supplierRepository;
         private readonly ILogger<SupplierService> _logger;
 
-        public SupplierService(ISupplierRepository supplierRepo, ILogger<SupplierService> logger)
+        private readonly IFileUploadService _uploadService;
+
+        public SupplierService(ISupplierRepository supplierRepo, ILogger<SupplierService> logger, IFileUploadService fileUploadService)
         {
             _supplierRepository = supplierRepo;
             _logger = logger;
+            _uploadService = fileUploadService;
         }
 
         public async Task CreateSupplier(SupplierMaster model)
@@ -24,6 +27,16 @@ namespace LIMSApi.Services
             bool exists = await _supplierRepository.ExistsByName(model.Name);
             if (exists)
                 throw new InvalidOperationException("Supplier already exists!");
+
+            if(model.file != null)
+            {
+                var fileUploadResponse = await _uploadService.UploadFileAsync(model.file, FileType.Other, null, model.FileName);
+                if (fileUploadResponse == null)
+                    throw new InvalidOperationException("File upload failed!");
+                model.AgreementFilePath = fileUploadResponse.FilePath;
+                model.FileName = fileUploadResponse.OriginalFileName;
+                model.UploadReferenceID = fileUploadResponse.ID;
+            }
             await _supplierRepository.AddSupplier(model);
             _logger.LogInformation("Supplier '{SupplierName}' created successfully.", model.Name);
         }
@@ -53,10 +66,22 @@ namespace LIMSApi.Services
             existingSupplier.EmailId2 = model.EmailId2;
             existingSupplier.EmailId3 = model.EmailId3;
             existingSupplier.ProductType = model.ProductType;
-            existingSupplier.AgreementFilePath = model.AgreementFilePath;
 
             existingSupplier.ModifiedOn = DateTime.UtcNow;
 
+            if(model.file != null)
+            {
+                var fileUploadResponse = await _uploadService.UploadFileAsync(model.file, FileType.Other, null, model.FileName);
+                if (fileUploadResponse == null)
+                    throw new InvalidOperationException("File upload failed!");
+                existingSupplier.AgreementFilePath = fileUploadResponse.FilePath;
+                existingSupplier.FileName = fileUploadResponse.OriginalFileName;
+                existingSupplier.UploadReferenceID = fileUploadResponse.ID;
+            }
+            else if(string.IsNullOrEmpty(model.FileName) && existingSupplier.UploadReferenceID != null)
+            {
+                await _uploadService.RemoveFileAsync((long)existingSupplier.UploadReferenceID);
+            }
             await _supplierRepository.UpdateSupplier(existingSupplier);
             _logger.LogInformation("Supplier '{SupplierName}' updated successfully.", model.Name);
         }

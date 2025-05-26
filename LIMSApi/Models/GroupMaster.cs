@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace LIMSApi.Models
 {
@@ -10,5 +11,9 @@ namespace LIMSApi.Models
         public string Name { get; set; } = string.Empty;
         [StringLength(250)]
         public string? Description { get; set; }
+        public long DisciplineID { get; set; }
+
+        [ForeignKey("DisciplineID")]
+        public virtual DisciplineMaster? Discipline { get; set; }
     }
 }

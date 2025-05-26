@@ -1,6 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,11 +9,12 @@ namespace LIMSApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class TestMethodMasterController : ControllerBase
+    [Authorize]
+    public class LaboratoryTestController : ControllerBase
     {
-        private readonly ITestMethodService _testMethodService;
+        private readonly ILaboratoryTestService _testMethodService;
 
-        public TestMethodMasterController(ITestMethodService testMethodService)
+        public LaboratoryTestController(ILaboratoryTestService testMethodService)
         {
             _testMethodService = testMethodService;
         }
@@ -25,7 +27,7 @@ namespace LIMSApi.Controllers
 
 
         [HttpGet("details/{id}")]
-        public async Task<ActionResult<TestMethodMaster>> GetTestMethodMaster(long id)
+        public async Task<ActionResult<LaboratoryTest>> GetTestMethodMaster(long id)
         {
             var entity = await _testMethodService.GetTestMethodDetails(id);
 
@@ -34,17 +36,25 @@ namespace LIMSApi.Controllers
 
 
         [HttpPut("update")]
-        public async Task<IActionResult> PutTestMethodMaster(TestMethodMaster model)
+        public async Task<IActionResult> PutTestMethodMaster(LaboratoryTest model)
         {
             await _testMethodService.ModifyTestMethod(model);
-            return Ok($"TestMethod '{model.Name}' updated successfully.");
+            return Ok(new
+            {
+                status = "success",
+                message = $"TestMethod '{model.Name}' updated successfully."
+            });
         }
 
         [HttpPost("create")]
-        public async Task<ActionResult<TestMethodMaster>> PostTestMethodMaster(TestMethodMaster model)
+        public async Task<ActionResult<LaboratoryTest>> PostTestMethodMaster(LaboratoryTest model)
         {
             await _testMethodService.CreateTestMethod(model);
-            return Ok($"TestMethod '{model.Name}' created successfully");
+            return Ok(new
+            {
+                status = "success",
+                message = $"TestMethod '{model.Name}' created successfully."
+            });
         }
 
         [HttpDelete("delete/{id}")]
@@ -55,7 +65,12 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("TestMethod not found!");
             }
-            return Ok($"TestMethod '{entity.Name}' created successfully");
+            await _testMethodService.RemoveTestMethod(id);
+            return Ok(new
+            {
+                status = "success",
+                message = $"TestMethod '{entity.Name}' updated successfully."
+            });
         }
 
         [HttpGet("dropdown")]

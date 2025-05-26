@@ -47,8 +47,10 @@ namespace LIMSApi.Models
         [Column(TypeName = "varchar(50)")]
         public SupplierStatus PresentStatus { get; set; }
 
+        public long? UploadReferenceID { get; set; }
         [StringLength(255)]
-        public string? AgreementFilePath { get; set; } // Store document path
+        public string? AgreementFilePath { get; set; } 
+        public string? FileName { get; set; }
 
         [Required]
         public bool SupplierApproved { get; set; }
@@ -59,13 +61,15 @@ namespace LIMSApi.Models
         [StringLength(255)]
         public string? ReasonForBlacklisting { get; set; }
 
-        public long BlacklistedBy { get; set; } 
+        public long? BlacklistedBy { get; set; } 
 
-        public long EvaluatedBy { get; set; } // Evaluation by GM
+        public long? EvaluatedBy { get; set; } // Evaluation by GM
 
-        public long ApprovedBy { get; set; } // Approval by MD / TD
+        public long? ApprovedBy { get; set; } // Approval by MD / TD
 
         public DateTime? EvaluationDate { get; set; }
+        [NotMapped]
+        public IFormFile? file { get; set; }
     }
     public enum SupplierStatus
     {

@@ -8,18 +8,18 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Repositories
 {
-    public class TestMethodRepository : ITestMethodRepository
+    public class LaboratoryTestRepository : ILaboratoryTestRepository
     {
         private readonly LIMSContext _context;
         private LoggedInUserDTO loggedInUser;
 
-        public TestMethodRepository(LIMSContext context)
+        public LaboratoryTestRepository(LIMSContext context)
         {
             _context = context;
             loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
-        public async Task AddTestMethod(TestMethodMaster model)
+        public async Task AddTestMethod(LaboratoryTest model)
         {
             await _context.TestMethodMasters.AddAsync(model);
             await _context.SaveChangesAsync();
@@ -37,12 +37,13 @@ namespace LIMSApi.Repositories
             }
         }
 
-        public async Task<TestMethodMaster?> GetTestMethodById(long id)
+        public async Task<LaboratoryTest?> GetTestMethodById(long id)
         {
-            return await _context.TestMethodMasters.Include(t => t.SubGroups).FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            //return await _context.TestMethodMasters.Include(t => t.SubGroups).FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.TestMethodMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
-        public async Task UpdateTestMethod(TestMethodMaster model)
+        public async Task UpdateTestMethod(LaboratoryTest model)
         {
             _context.TestMethodMasters.Update(model);
             await _context.SaveChangesAsync();
@@ -50,10 +51,26 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllTestMethods(PageFilter filter)
         {
+            //var _query = from c in _context.TestMethodMasters
+            //             where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
+            //             join g in _context.TestMethodSubGroups on c.ID equals g.TestMethodID into g2
+            //             from sg in g2.DefaultIfEmpty()
+            //             join d in _context.DepartmentMasters on c.LabDepartmentID equals d.ID into dsGroup
+            //             from ds in dsGroup.DefaultIfEmpty()
+            //             select new
+            //             {
+            //                 c.ID,
+            //                 c.Name,
+            //                 c.LabDepartmentID,
+            //                 DepartmentName = ds.Name,
+            //                 SubMethodName = sg.Name,
+            //                 InvoiceCase = sg.InvoiceCase ,
+            //                 TestCharge = sg.TestCharge ,
+
+            //             };
+
             var _query = from c in _context.TestMethodMasters
                          where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
-                         join g in _context.TestMethodSubGroups on c.ID equals g.TestMethodID into g2
-                         from sg in g2.DefaultIfEmpty()
                          join d in _context.DepartmentMasters on c.LabDepartmentID equals d.ID into dsGroup
                          from ds in dsGroup.DefaultIfEmpty()
                          select new
@@ -62,28 +79,12 @@ namespace LIMSApi.Repositories
                              c.Name,
                              c.LabDepartmentID,
                              DepartmentName = ds.Name,
-                             SubMethodName = sg.Name,
-                             InvoiceCase = sg.InvoiceCase ,
-                             TestCharge = sg.TestCharge ,
-                             FixedTimeDuration = sg.FixedTimeDuration
-
+                             c.SubGroup,
+                             c.InvoiceCase
                          };
 
 
-            if (filter.Filters != null)
-            {
-                foreach (var filterItem in filter.Filters)
-                {
-                    if (string.IsNullOrWhiteSpace(filterItem.Value))
-                    {
-                        continue;
-                    }
-                    var propertyName = filterItem.Key;
-                    var value = filterItem.Value;
-
-                    _query = _query.Where($"{propertyName}.Contains(@0)", value);
-                }
-            }
+            _query = _query.AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
@@ -117,7 +118,7 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)) || x.ID.ToString().Contains(search));
             }
 
             var skip = pageNo * pageSize;

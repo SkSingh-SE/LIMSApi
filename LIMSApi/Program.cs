@@ -111,7 +111,7 @@ builder.Services.AddScoped<IFileUploadRepository, FileUploadRepository>();
 builder.Services.AddScoped<IEmployeeRepository, EmployeeRepository>();
 builder.Services.AddScoped<ISpecimenTypeRepository, SpecimenTypeRepository>();
 builder.Services.AddScoped<ITestMasterRepository, TestMasterRepository>();
-builder.Services.AddScoped<ITestMethodRepository, TestMethodRepository>();
+builder.Services.AddScoped<ILaboratoryTestRepository, LaboratoryTestRepository>();
 builder.Services.AddScoped<ITestMethodStandardRepository, TestMethodStandardRepository>();
 builder.Services.AddScoped<ITestGroupRepository, TestGroupRepository>();
 builder.Services.AddScoped<ICompanyCategoryRepository, CompanyCategoryRepository>();
@@ -132,7 +132,7 @@ builder.Services.AddScoped<IGroupRepository, GroupRepository>();
 builder.Services.AddScoped<ISubGroupRepository, SubGroupRepository>();
 builder.Services.AddScoped<IOEMRepository, OEMRepository>();
 builder.Services.AddScoped<ICalibrationAgencyRepository, CalibrationAgencyRepository>();
-builder.Services.AddScoped<ITestMethodRepository, TestMethodRepository>();
+builder.Services.AddScoped<ILaboratoryTestRepository, LaboratoryTestRepository>();
 builder.Services.AddScoped<IDepartmentRepository, DepartmentRepository>();
 builder.Services.AddScoped<IDimensionalFactorRepository, DimensionalFactorRepository>();
 builder.Services.AddScoped<IHeatTreatmentRepository, HeatTreatmentRepository>();
@@ -145,6 +145,7 @@ builder.Services.AddScoped<IStandardOrganizationRepository, StandardOrganization
 builder.Services.AddScoped<IUniversalCodeTypeRepository, UniversalCodeTypeRepository>();
 builder.Services.AddScoped<IMetalClassificationRepository, MetalClassificationRepository>();
 builder.Services.AddScoped<ISpecificationHeaderRepository, SpecificationHeaderRepository>();
+builder.Services.AddScoped<ITestMethodSpecificationRepository, TestMethodSpecificationRepository>();
 
 
 
@@ -180,7 +181,7 @@ builder.Services.AddScoped<IGroupService, GroupService>();
 builder.Services.AddScoped<ISubGroupService, SubGroupService>();
 builder.Services.AddScoped<IOEMService, OEMService>();
 builder.Services.AddScoped<ICalibrationAgencyService, CalibrationAgencyService>();
-builder.Services.AddScoped<ITestMethodService, TestMethodService>();
+builder.Services.AddScoped<ILaboratoryTestService, LaboratoryTestService>();
 builder.Services.AddScoped<IDepartmentService,DepartmentService>();
 builder.Services.AddScoped<IDimensionalFactorService,DimensionalFactorService>();
 builder.Services.AddScoped<IHeatTreatmentService, HeatTreatmentService>();
@@ -193,6 +194,7 @@ builder.Services.AddScoped<IStandardOrganizationService, StandardOrganizationSer
 builder.Services.AddScoped<IUniversalCodeTypeService, UniversalCodeTypeService>();
 builder.Services.AddScoped<IMetalClassificationService, MetalClassificationService>();
 builder.Services.AddScoped<ISpecificationHeaderService, SpecificationHeaderService>();
+builder.Services.AddScoped<ITestMethodSpecificationService, TestMethodSpecificationService>();
 
 
 // Third party services

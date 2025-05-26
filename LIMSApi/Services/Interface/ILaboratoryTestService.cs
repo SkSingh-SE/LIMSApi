@@ -3,12 +3,12 @@ using LIMSApi.Models;
 
 namespace LIMSApi.Services.Interface
 {
-    public interface ITestMethodService
+    public interface ILaboratoryTestService
     {
-        Task CreateTestMethod(TestMethodMaster model);
-        Task ModifyTestMethod(TestMethodMaster model);
+        Task CreateTestMethod(LaboratoryTest model);
+        Task ModifyTestMethod(LaboratoryTest model);
         Task RemoveTestMethod(long id);
-        Task<TestMethodMaster> GetTestMethodDetails(long id);
+        Task<LaboratoryTest> GetTestMethodDetails(long id);
         Task<PagedResponse<object>> FetchTestMethodList(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetTestMethodDropdown(string? searchTerm, int pageNo, int pageSize);

@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20250522112816_ISO Master Updated")]
+    partial class ISOMasterUpdated
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3106,96 +3109,6 @@ namespace LIMSApi.Migrations
                     b.ToTable("TestMasters");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.TestMethodSpecification", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<string>("CompanyCode")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<long>("CreatedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsDisabled")
-                        .HasColumnType("bit");
-
-                    b.Property<long?>("ModifiedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime?>("ModifiedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<long>("StandardOrganizationID")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("TestMethodStandard")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.HasKey("ID");
-
-                    b.ToTable("TestMethodSpecifications");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.TestMethodSpecificationVersion", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<bool>("Default")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("StandardFile")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("StandardFilePath")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<long>("TestMethodSpecificationID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("UploadReferenceID")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("Version")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("Year")
-                        .IsRequired()
-                        .HasMaxLength(4)
-                        .HasColumnType("nvarchar(4)");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("TestMethodSpecificationID");
-
-                    b.ToTable("TestMethodSpecificationVersions");
-                });
-
             modelBuilder.Entity("LIMSApi.Models.TestMethodStandard", b =>
                 {
                     b.Property<long>("ID")
@@ -3979,17 +3892,6 @@ namespace LIMSApi.Migrations
                     b.Navigation("TestMethod");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.TestMethodSpecificationVersion", b =>
-                {
-                    b.HasOne("LIMSApi.Models.TestMethodSpecification", "TestMethodSpecification")
-                        .WithMany("Versions")
-                        .HasForeignKey("TestMethodSpecificationID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("TestMethodSpecification");
-                });
-
             modelBuilder.Entity("LIMSApi.Models.TestMethodStandard", b =>
                 {
                     b.HasOne("LIMSApi.Models.EquipmentMaster", "Equipment")
@@ -4049,11 +3951,6 @@ namespace LIMSApi.Migrations
             modelBuilder.Entity("LIMSApi.Models.TestGroup", b =>
                 {
                     b.Navigation("TestGroupMappings");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.TestMethodSpecification", b =>
-                {
-                    b.Navigation("Versions");
                 });
 #pragma warning restore 612, 618
         }

@@ -74,9 +74,11 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<TestGroup> TestGroups { get; set; }
     public virtual DbSet<TestGroupMapping> TestGroupMappings { get; set; }
     public virtual DbSet<TestMaster> TestMasters { get; set; }
-    public virtual DbSet<TestMethodMaster> TestMethodMasters { get; set; }
+    public virtual DbSet<LaboratoryTest> TestMethodMasters { get; set; }
     public virtual DbSet<TestMethodStandard> TestMethodStandards { get; set; }
     public virtual DbSet<TestMethodSubGroup> TestMethodSubGroups { get; set; }
+    public virtual DbSet<TestMethodSpecification> TestMethodSpecifications { get; set; }
+    public virtual DbSet<TestMethodSpecificationVersion> TestMethodSpecificationVersions { get; set; }
     public virtual DbSet<TestTypeMaster> TestTypeMasters { get; set; }
     public virtual DbSet<TPIMaster> TPIMasters { get; set; }
     public virtual DbSet<UniversalCodeTypeMaster> UniversalCodeTypeMasters { get; set; }

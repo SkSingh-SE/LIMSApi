@@ -54,6 +54,7 @@ namespace LIMSApi.Services
             existingSubGroup.Description = model.Description;
             existingSubGroup.ModifiedOn = DateTime.UtcNow;
             existingSubGroup.ModifiedBy = loggedInUser.EmployeeID;
+            existingSubGroup.GroupID = model.GroupID;
 
             await _subGroupRepository.UpdateSubGroup(existingSubGroup);
             _logger.LogInformation("SubGroup '{SubGroupName}' updated successfully.", model.Name);

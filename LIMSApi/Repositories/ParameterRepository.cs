@@ -56,7 +56,7 @@ namespace LIMSApi.Repositories
                               c.ID,
                               c.Name,
                               c.AliasName,
-                              c.Rate,
+                              c.ElementType,
                               UnitName = u.Name,
                               Factor = u.ConversaionFactor,
                               c.CreatedOn
@@ -94,7 +94,7 @@ namespace LIMSApi.Repositories
                               c.ID,
                               c.Name,
                               c.AliasName,
-                              c.Rate,
+                              c.ElementType,
                               UnitName = u.Name,
                               Factor = u.ConversaionFactor,
                               c.CreatedOn

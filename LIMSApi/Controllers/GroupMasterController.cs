@@ -1,6 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,6 +9,7 @@ namespace LIMSApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class GroupMasterController : ControllerBase
     {
         private readonly IGroupService _groupService;
@@ -37,14 +39,22 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> PutGroupMaster(GroupMaster model)
         {
             await _groupService.ModifyGroup(model);
-            return Ok($"GroupMaster '{model.Name}' updated successfully.");
+            return Ok(new
+            {
+                status = "success",
+                message = $"GroupMaster '{model.Name}' updated successfully."
+            });
         }
 
         [HttpPost("create")]
         public async Task<ActionResult<GroupMaster>> PostGroupMaster(GroupMaster model)
         {
             await _groupService.CreateGroup(model);
-            return Ok($"GroupMaster '{model.Name}' created successfully");
+            return Ok(new
+            {
+                status = "success",
+                message = $"GroupMaster '{model.Name}' ctreated successfully."
+            });
         }
 
         [HttpDelete("delete/{id}")]
@@ -55,7 +65,12 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("GroupMaster not found!");
             }
-            return Ok($"GroupMaster '{entity.Name}' created successfully");
+            await _groupService.RemoveGroup(id);
+            return Ok(new
+            {
+                status = "success",
+                message = $"GroupMaster '{entity.Name}' deleted successfully."
+            });
         }
 
         [HttpGet("dropdown")]

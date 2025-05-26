@@ -10,5 +10,6 @@ namespace LIMSApi.Models
         public string Name { get; set; } = string.Empty;
         [StringLength(250)]
         public string? Description { get; set; }
+
     }
 }

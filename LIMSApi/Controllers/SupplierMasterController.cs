@@ -45,7 +45,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("create")]
-        public async Task<ActionResult<SupplierMaster>> PostSupplierMaster(SupplierMaster model)
+        public async Task<ActionResult<SupplierMaster>> PostSupplierMaster([FromForm] SupplierMaster model)
         {
             await _supplierService.CreateSupplier(model);
             return Ok(new

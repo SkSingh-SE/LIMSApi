@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20250526101028_Test Method Specification")]
+    partial class TestMethodSpecification
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3174,9 +3177,6 @@ namespace LIMSApi.Migrations
                         .HasColumnType("nvarchar(500)");
 
                     b.Property<long>("TestMethodSpecificationID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("UploadReferenceID")
                         .HasColumnType("bigint");
 
                     b.Property<string>("Version")

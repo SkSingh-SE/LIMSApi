@@ -26,6 +26,6 @@ namespace LIMSApi.Models
 
 
         [ForeignKey("TestMethodID")]
-        public virtual TestMethodMaster? TestMethod { get; set; }
+        public virtual LaboratoryTest? TestMethod { get; set; }
     }
 }
