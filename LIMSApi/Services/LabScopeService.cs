@@ -18,15 +18,9 @@ namespace LIMSApi.Services
 
         public async Task CreateLabScope(LabScopeMaster model)
         {
-            if (string.IsNullOrWhiteSpace(model.Name))
-                throw new ArgumentException("LabScope name should not be empty!");
-
-            bool exists = await _labScopeRepository.ExistsByName(model.Name);
-            if (exists)
-                throw new InvalidOperationException("LabScope already exists!");
 
             await _labScopeRepository.AddLabScope(model);
-            _logger.LogInformation("LabScope '{LabScopeName}' created successfully.", model.Name);
+            _logger.LogInformation("LabScope '{LabScopeName}' created successfully.", model.LaboratoryTestID);
         }
 
         public async Task ModifyLabScope(LabScopeMaster model)
@@ -34,22 +28,100 @@ namespace LIMSApi.Services
             if (model.ID == 0)
                 throw new ArgumentException("LabScope ID should not be empty!");
 
-            bool exists = await _labScopeRepository.ExistsByNameAndNotId(model.Name, model.ID);
-            if (exists)
-                throw new InvalidOperationException("Same LabScope already exists!");
-
             var existingLabScope = await _labScopeRepository.GetLabScopeById(model.ID);
             if (existingLabScope == null)
                 throw new InvalidOperationException("LabScope not found!");
 
-            existingLabScope.Name = model.Name;;
-            existingLabScope.Description = model.Description;
-            existingLabScope.TestMethodID = model.TestMethodID;
+            existingLabScope.LaboratoryTestID = model.LaboratoryTestID;
             existingLabScope.ModifiedOn = DateTime.UtcNow;
 
+            // --- Remove missing Specifications ---
+            var toRemoveSpec = existingLabScope.Specifications
+                .Where(x => !model.Specifications.Any(y => y.ID == x.ID))
+                .ToList();
+
+            foreach (var spec in toRemoveSpec)
+            {
+                existingLabScope.Specifications.Remove(spec);
+            }
+
+            // --- Add or Update Specifications ---
+            foreach (var incomingSpec in model.Specifications)
+            {
+                var existingSpec = existingLabScope.Specifications
+                    .FirstOrDefault(x => x.ID == incomingSpec.ID);
+
+                if (existingSpec == null)
+                {
+                    // New specification - add
+                    existingLabScope.Specifications.Add(incomingSpec);
+                }
+                else
+                {
+                    // Update existing specification
+                    existingSpec.TestMethodSpecificationID = incomingSpec.TestMethodSpecificationID;
+
+                    // --- Remove missing Parameters ---
+                    var toRemoveParams = existingSpec.Parameters
+                        .Where(p => !incomingSpec.Parameters.Any(ip => ip.ID == p.ID))
+                        .ToList();
+
+                    foreach (var param in toRemoveParams)
+                    {
+                        existingSpec.Parameters.Remove(param);
+                    }
+
+                    // --- Add or Update Parameters ---
+                    foreach (var incomingParam in incomingSpec.Parameters)
+                    {
+                        var existingParam = existingSpec.Parameters
+                            .FirstOrDefault(p => p.ID == incomingParam.ID);
+
+                        if (existingParam == null)
+                        {
+                            existingSpec.Parameters.Add(incomingParam);
+                        }
+                        else
+                        {
+                            // Update parameter properties
+                            existingParam.ParameterID = incomingParam.ParameterID;
+                            existingParam.ParameterUnitID = incomingParam.ParameterUnitID;
+                            existingParam.QualitativeQuantitative = incomingParam.QualitativeQuantitative;
+                            existingParam.IsUnderISO = incomingParam.IsUnderISO;
+                            existingParam.LowerLimit = incomingParam.LowerLimit;
+                            existingParam.UpperLimit = incomingParam.UpperLimit;
+                            existingParam.DisciplineID = incomingParam.DisciplineID;
+                            existingParam.GroupID = incomingParam.GroupID;
+                            existingParam.SubGroupID = incomingParam.SubGroupID;
+
+                            // --- Remove missing Equipments ---
+                            if (existingParam.Equipments == null) existingParam.Equipments = new List<LabScopeSpecificationParameterEquipment>();
+                            var toRemoveEquip = existingParam.Equipments
+                                .Where(e => !incomingParam.Equipments.Any(ie => ie.EquipmentID == e.EquipmentID))
+                                .ToList();
+
+                            foreach (var equip in toRemoveEquip)
+                            {
+                                existingParam.Equipments.Remove(equip);
+                            }
+
+                            // --- Add new Equipments ---
+                            foreach (var incomingEquip in incomingParam.Equipments)
+                            {
+                                if (!existingParam.Equipments.Any(e => e.EquipmentID == incomingEquip.EquipmentID))
+                                {
+                                    existingParam.Equipments.Add(incomingEquip);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             await _labScopeRepository.UpdateLabScope(existingLabScope);
-            _logger.LogInformation("LabScope '{LabScopeName}' updated successfully.", model.Name);
+            _logger.LogInformation("LabScope '{LabScopeName}' updated successfully.", model.LaboratoryTestID);
         }
+
 
         public async Task RemoveLabScope(long id)
         {
@@ -78,9 +150,5 @@ namespace LIMSApi.Services
             return await _labScopeRepository.GetAllLabScopes(filter);
         }
 
-        public async Task<List<DropdwonSelector>> GetLabScopeDropdown(string? searchTerm, int pageNo, int pageSize)
-        {
-            return await _labScopeRepository.GetLabScopeDropdown(searchTerm, pageNo, pageSize);
-        }
     }
 }

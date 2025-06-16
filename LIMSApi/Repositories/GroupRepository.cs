@@ -27,7 +27,7 @@ namespace LIMSApi.Repositories
 
         public async Task DeleteGroup(GroupMaster model)
         {
-           _context.GroupMasters.Update(model);
+            _context.GroupMasters.Update(model);
             await _context.SaveChangesAsync();
         }
 
@@ -84,16 +84,20 @@ namespace LIMSApi.Repositories
             return new PagedResponse<object>(items.Cast<object>().ToList(), totalRecords, filter.PageNumber, filter.PageSize);
         }
 
-        public async Task<List<DropdwonSelector>> GetGroupDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> GetGroupDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20, long? disciplineId = null)
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.GroupMasters where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode select a;
+            var _query = _context.GroupMasters.Where(a => a.IsActive && a.CompanyCode == loggedInUser.CompanyCode);
+
+            if (disciplineId.HasValue)
+                _query = _query.Where(a => a.DisciplineID == disciplineId.Value);
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x =>  (x.Name != null && x.Name.ToLower().Contains(search)));
+                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search))
+                || x.ID.ToString().Contains(search));
             }
 
             var skip = pageNo * pageSize;

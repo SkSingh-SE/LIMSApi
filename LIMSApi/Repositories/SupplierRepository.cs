@@ -60,7 +60,7 @@ namespace LIMSApi.Repositories
                              c.ContactPerson1,
                              c.ContactNo1,
                              c.EmailId1,
-                             c.Note,
+                             c.Address,
 
                          };
             _query = _query.ApplyFilters(filter.Filter);

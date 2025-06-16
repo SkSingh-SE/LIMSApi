@@ -45,7 +45,10 @@ namespace LIMSApi.Services
             existingProductSpecification.SpecificationName = model.SpecificationName;
             existingProductSpecification.AliasName = model.AliasName;
             existingProductSpecification.SpecificationCode = model.SpecificationCode;
-            existingProductSpecification.MateriaSpecificationID = model.MateriaSpecificationID;
+            existingProductSpecification.GradeID = model.GradeID;
+            existingProductSpecification.LaboratoryTestID = model.LaboratoryTestID;
+            existingProductSpecification.MetalClassificationID = model.MetalClassificationID;
+            existingProductSpecification.TestMethodSpecificationID = model.TestMethodSpecificationID;
             existingProductSpecification.IsCustom = model.IsCustom;
             existingProductSpecification.ModifiedOn = DateTime.UtcNow;
 

@@ -11,5 +11,7 @@ public partial class MetalClassificationMaster : AuditProperty
 
     [StringLength(100)]
     public required string Name { get; set; }
+    public virtual ICollection<MetalClassificationParameter> Parameters { get; set; } = new List<MetalClassificationParameter>();
+
 
 }

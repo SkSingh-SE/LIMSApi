@@ -8,6 +8,7 @@ namespace LIMSApi.Dtos
         public long StandardOrganizationID { get; set; }
         public string TestMethodStandard { get; set; } = string.Empty;
         public required string Name { get; set; }
+        public string? Part { get; set; }
         public bool IsDisabled { get; set; } = false;
         public string Versions { get; set; }
     }

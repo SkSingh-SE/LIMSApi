@@ -71,6 +71,7 @@ namespace LIMSApi.Services
 
 
             existingTestMethodSpecification.Name = model.Name;
+            existingTestMethodSpecification.Part = model.Part;
             existingTestMethodSpecification.StandardOrganizationID = model.StandardOrganizationID;
             existingTestMethodSpecification.TestMethodStandard = model.TestMethodStandard;
             existingTestMethodSpecification.IsDisabled = model.IsDisabled;
@@ -103,7 +104,6 @@ namespace LIMSApi.Services
                 if (existingVersion != null)
                 {
                     existingVersion.Version = versionModel.Version;
-                    existingVersion.Year = versionModel.Year;
                     existingVersion.StandardFile = versionModel.StandardFile;
                     existingVersion.StandardFilePath = versionModel.StandardFilePath;
                     existingVersion.Default = versionModel.Default;
@@ -114,7 +114,6 @@ namespace LIMSApi.Services
                     existingTestMethodSpecification.Versions.Add(new TestMethodSpecificationVersion
                     {
                         Version = versionModel.Version,
-                        Year = versionModel.Year,
                         StandardFile = versionModel.StandardFile,
                         StandardFilePath = versionModel.StandardFilePath,
                         Default = versionModel.Default,
@@ -134,6 +133,19 @@ namespace LIMSApi.Services
                 throw new InvalidOperationException("TestMethodSpecification not found!");
 
             existingTestMethodSpecification.IsActive = false;
+            existingTestMethodSpecification.ModifiedOn = DateTime.UtcNow;
+            existingTestMethodSpecification.ModifiedBy = loggedInUser.EmployeeID;
+
+            await _TestMethodSpecificationRepository.UpdateTestMethodSpecification(existingTestMethodSpecification);
+            _logger.LogInformation("TestMethodSpecification with ID '{TestMethodSpecificationId}' deleted successfully.", id);
+        }
+        public async Task EnableDisableTestMethodSpecification(long id)
+        {
+            var existingTestMethodSpecification = await _TestMethodSpecificationRepository.GetTestMethodSpecificationById(id);
+            if (existingTestMethodSpecification == null)
+                throw new InvalidOperationException("TestMethodSpecification not found!");
+
+            existingTestMethodSpecification.IsDisabled = !existingTestMethodSpecification.IsDisabled;
             existingTestMethodSpecification.ModifiedOn = DateTime.UtcNow;
             existingTestMethodSpecification.ModifiedBy = loggedInUser.EmployeeID;
 

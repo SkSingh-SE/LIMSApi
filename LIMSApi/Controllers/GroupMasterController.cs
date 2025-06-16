@@ -74,9 +74,9 @@ namespace LIMSApi.Controllers
         }
 
         [HttpGet("dropdown")]
-        public async Task<IActionResult> GetGroupDropdown(string? searchTerm, int pageNo, int pageSize)
+        public async Task<IActionResult> GetGroupDropdown(string? searchTerm, int pageNo, int pageSize, long? disciplineId = null )
         {
-            var data = await _groupService.GetGroupDropdown(searchTerm, pageNo, pageSize);
+            var data = await _groupService.GetGroupDropdown(searchTerm, pageNo, pageSize,disciplineId);
             return data == null ? NoContent(): Ok(data);
         }
 

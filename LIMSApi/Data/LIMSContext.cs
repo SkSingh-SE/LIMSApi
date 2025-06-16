@@ -45,6 +45,9 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<IndustryMaster> IndustryMasters { get; set; }
     public virtual DbSet<ItemMaster> ItemMasters { get; set; }
     public virtual DbSet<LabScopeMaster> LabScopeMasters { get; set; }
+    public DbSet<LabScopeSpecification> LabScopeSpecifications { get; set; }
+    public DbSet<LabScopeSpecificationParameter> LabScopeSpecificationParameters { get; set; }
+    public DbSet<LabScopeSpecificationParameterEquipment> LabScopeSpecificationParameterEquipments { get; set; }
     public virtual DbSet<MakerMaster> MakerMasters { get; set; }
     public virtual DbSet<MetalClassificationMaster> MetalClassificationMasters { get; set; }
     public virtual DbSet<OEMMaster> OEMMasters { get; set; }
@@ -59,8 +62,8 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<SiteActivity> SiteActivities { get; set; }
     public virtual DbSet<SiteError> SiteErrors { get; set; }
     public virtual DbSet<SpecificationHeader> SpecificationHeaders { get; set; }
+    public virtual DbSet<SpecificationGrade> SpecificationGrades { get; set; }
     public virtual DbSet<SpecificationLine> SpecificationLines { get; set; }
-    public virtual DbSet<SpecificationLineProductCondition> SpecificationLineProductConditions { get; set; }
     public virtual DbSet<SpecificationLineLaboratoryTest> SpecificationLineLaboratoryTests { get; set; }
 
     public virtual DbSet<SpecimenOrientationMaster> SpecimenOrientationMasters { get; set; }
@@ -74,7 +77,7 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<TestGroup> TestGroups { get; set; }
     public virtual DbSet<TestGroupMapping> TestGroupMappings { get; set; }
     public virtual DbSet<TestMaster> TestMasters { get; set; }
-    public virtual DbSet<LaboratoryTest> TestMethodMasters { get; set; }
+    public virtual DbSet<LaboratoryTest> LaboratoryTests { get; set; }
     public virtual DbSet<TestMethodStandard> TestMethodStandards { get; set; }
     public virtual DbSet<TestMethodSubGroup> TestMethodSubGroups { get; set; }
     public virtual DbSet<TestMethodSpecification> TestMethodSpecifications { get; set; }
@@ -95,12 +98,8 @@ public partial class LIMSContext : DbContext
     {
         modelBuilder.Entity<SpecificationLineLaboratoryTest>()
       .HasKey(x => new { x.SpecificationLineID, x.LaboratoryTestID });
-        modelBuilder.Entity<SpecificationLineProductCondition>()
-      .HasKey(x => new { x.SpecificationLineID, x.ProductConditionID });
 
-        modelBuilder.Entity<SpecificationHeader>()
-        .Property(e => e.Type)
-        .HasConversion<string>();
+        modelBuilder.Entity<MetalClassificationParameter>().HasKey(x => new {x.MetalClassificationID,x.ParameterID});
         //modelBuilder.Entity<CompanyMaster>(entity =>
         //{
         //    entity.ToTable("CompanyMaster");
@@ -511,7 +510,7 @@ public partial class LIMSContext : DbContext
         //    entity.Property(e => e.ParameterID).HasColumnName("ParameterID");
         //    entity.Property(e => e.ProductConditionID1).HasColumnName("ProductConditionID1");
         //    entity.Property(e => e.ProductConditionID2).HasColumnName("ProductConditionID2");
-        //    entity.Property(e => e.PropertyType).HasMaxLength(50);
+        //    entity.Property(e => e.Type).HasMaxLength(50);
         //    entity.Property(e => e.SpecificationHeaderID).HasColumnName("SpecificationHeaderID");
         //    entity.Property(e => e.SpecimenOrientationID).HasColumnName("SpecimenOrientationID");
         //    entity.Property(e => e.IsActive)
@@ -678,7 +677,7 @@ public partial class LIMSContext : DbContext
             var action = entry.State.ToString();
 
             var activity = activities.FirstOrDefault(a => a.ModuleName == tableName);
-            if (activity != null && activity.Action.Trim().ToLower() == "added")
+            if (activity != null && activity?.Action?.Trim().ToLower() == "added")
             {
                 activity.TraceId = newPrimaryKey;
 

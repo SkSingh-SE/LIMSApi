@@ -84,6 +84,18 @@ namespace LIMSApi.Controllers
             var data = await _parameterService.GetParameterDropdown(searchTerm, pageNo, pageSize);
             return data == null ? NoContent(): Ok(data);
         }
+        [HttpGet("chemical-dropdown")]
+        public async Task<IActionResult> GetChemicalParameterDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            var data = await _parameterService.GetChemicalParameterDropdown(searchTerm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("mechanical-dropdown")]
+        public async Task<IActionResult> GetMechanicalParameterDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            var data = await _parameterService.GetMechanicalParameterDropdown(searchTerm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
 
     }
 }

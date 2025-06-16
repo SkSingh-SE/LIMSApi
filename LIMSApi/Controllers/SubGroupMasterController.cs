@@ -79,6 +79,12 @@ namespace LIMSApi.Controllers
             var data = await _subGroupService.GetSubGroupDropdown(searchTerm, pageNo, pageSize);
             return data == null ? NoContent(): Ok(data);
         }
+        [HttpGet("dropdownByGroupId")]
+        public async Task<IActionResult> GetDropdownByGroupId(long groupId)
+        {
+            var data = await _subGroupService.GetDropdownByGroupId(groupId);
+            return data == null ? NoContent() : Ok(data);
+        }
 
     }
 }

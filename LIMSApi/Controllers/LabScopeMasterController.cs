@@ -3,6 +3,7 @@ using LIMSApi.Models;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Twilio.TwiML.Voice;
 
 namespace LIMSApi.Controllers
 {
@@ -37,14 +38,22 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> PutLabScopeMaster(LabScopeMaster model)
         {
             await _labScopeService.ModifyLabScope(model);
-            return Ok($"LabScope '{model.Name}' updated successfully.");
+            return Ok(new
+            {
+                status = "success",
+                message = $"LabScope Master updated successfully."
+            });
         }
 
         [HttpPost("create")]
         public async Task<ActionResult<LabScopeMaster>> PostLabScopeMaster(LabScopeMaster model)
         {
             await _labScopeService.CreateLabScope(model);
-            return Ok($"LabScope '{model.Name}' created successfully");
+            return Ok(new
+            {
+                status = "success",
+                message = $"LabScope Master created successfully."
+            });
         }
 
         [HttpDelete("delete/{id}")]
@@ -55,15 +64,12 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("LabScope not found!");
             }
-            return Ok($"LabScope '{entity.Name}' created successfully");
+            await _labScopeService.RemoveLabScope(id);
+            return Ok(new
+            {
+                status = "success",
+                message = $"LabScope Master deleted successfully."
+            });
         }
-
-        [HttpGet("dropdown")]
-        public async Task<IActionResult> GetLabScopeDropdown(string? searchTerm, int pageNo, int pageSize)
-        {
-            var data = await _labScopeService.GetLabScopeDropdown(searchTerm, pageNo, pageSize);
-            return data == null ? NoContent(): Ok(data);
-        }
-
     }
 }

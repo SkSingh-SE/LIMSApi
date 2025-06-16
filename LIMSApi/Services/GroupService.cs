@@ -88,9 +88,9 @@ namespace LIMSApi.Services
             return await _groupRepository.GetAllGroups(filter);
         }
 
-        public async Task<List<DropdwonSelector>> GetGroupDropdown(string? searchTerm, int pageNo, int pageSize)
+        public async Task<List<DropdwonSelector>> GetGroupDropdown(string? searchTerm, int pageNo, int pageSize, long? id = null)
         {
-            return await _groupRepository.GetGroupDropdown(searchTerm, pageNo, pageSize);
+            return await _groupRepository.GetGroupDropdown(searchTerm, pageNo, pageSize,id);
         }
     }
 }

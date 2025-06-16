@@ -48,16 +48,40 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllProductSpecifications(PageFilter filter)
         {
+          
             var _query = (from c in _context.ProductSpecifications
-                          join s in _context.SpecificationHeaders on c.MateriaSpecificationID equals s.ID
-                          where c.IsActive && c.IsCustom == false select new
+
+                          join g in _context.SpecificationGrades on c.GradeID equals g.ID into gradeGroup
+                          from g in gradeGroup.DefaultIfEmpty()
+                          join s in _context.SpecificationHeaders on g.SpecificationHeaderID equals s.ID into specGroup
+                          from s in specGroup.DefaultIfEmpty()
+
+                          join l in _context.LaboratoryTests on c.LaboratoryTestID equals l.ID into labGroup
+                          from l in labGroup.DefaultIfEmpty()
+
+                          join m in _context.MetalClassificationMasters on c.MetalClassificationID equals m.ID into metalGroup
+                          from m in metalGroup.DefaultIfEmpty()
+
+                          join t in _context.TestMethodSpecifications on c.TestMethodSpecificationID equals t.ID into testMethodGroup
+                          from t in testMethodGroup.DefaultIfEmpty()
+
+                          where c.IsActive && c.IsCustom == false
+
+                          select new
                           {
                               c.ID,
                               c.SpecificationName,
                               c.AliasName,
                               c.SpecificationCode,
-                              MaterialSpecification = s.AliasName
-                          }).AsQueryable().ApplyFilters(filter.Filter);
+
+                              MaterialSpecification = s != null ? $"{s.AliasName}-{g.Grade}" : string.Empty,
+                              LaboratoryTestName = l != null ? l.Name : string.Empty,
+                              MetalClassificationName = m != null ? m.Name : string.Empty,
+                              TestMethodSpecificationName = t != null ? t.Name : string.Empty
+                          })
+              .AsQueryable()
+              .ApplyFilters(filter.Filter);
+
 
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
@@ -88,7 +112,7 @@ namespace LIMSApi.Repositories
         public async Task<PagedResponse<object>> GetAllCustomProductSpecifications(PageFilter filter)
         {
             var _query = (from c in _context.ProductSpecifications
-                          join s in _context.SpecificationHeaders on c.MateriaSpecificationID equals s.ID
+                          join s in _context.SpecificationHeaders on c.GradeID equals s.ID
                           where c.IsActive && c.IsCustom
                           select new
                           {

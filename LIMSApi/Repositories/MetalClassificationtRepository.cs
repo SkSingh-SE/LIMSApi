@@ -37,7 +37,7 @@ namespace LIMSApi.Repositories
 
         public async Task<MetalClassificationMaster?> GetMetalClassificationById(long id)
         {
-            return await _context.MetalClassificationMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
+            return await _context.MetalClassificationMasters.Include(p => p.Parameters).FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
         }
 
         public async Task UpdateMetalClassification(MetalClassificationMaster model)

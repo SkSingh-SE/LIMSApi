@@ -1,6 +1,7 @@
 ﻿using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using Microsoft.EntityFrameworkCore;
@@ -10,10 +11,11 @@ namespace LIMSApi.Repositories
     public class EquipmentRepository : IEquipmentRepository
     {
         private readonly LIMSContext _context;
-
+        private LoggedInUserDTO loggedInUser;
         public EquipmentRepository(LIMSContext context)
         {
             _context = context;
+            loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
         public async Task AddEquipment(EquipmentMaster model)
@@ -24,7 +26,7 @@ namespace LIMSApi.Repositories
 
         public async Task DeleteEquipment(long id)
         {
-            var existingEquipment = await _context.EquipmentMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
+            var existingEquipment = await _context.EquipmentMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
             if (existingEquipment != null)
             {
                 existingEquipment.IsActive = false;
@@ -36,7 +38,10 @@ namespace LIMSApi.Repositories
 
         public async Task<EquipmentMaster?> GetEquipmentById(long id)
         {
-            return await _context.EquipmentMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
+            return await _context.EquipmentMasters
+                .Include(c => c.Calibrations)
+                .Include(m => m.Maintenances)
+                .Include(s => s.SOPs).FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
         public async Task UpdateEquipment(EquipmentMaster model)
@@ -47,27 +52,44 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllEquipments(PageFilter filter)
         {
-            var _query = from c in _context.EquipmentMasters where c.IsActive select c;
+            var _query = from c in _context.EquipmentMasters
+                         join d in _context.DepartmentMasters on c.DepartmentID equals d.ID into departmentGroup
+                         from d in departmentGroup.DefaultIfEmpty()
+                         join et in _context.EquipmentTypeMasters on c.EquipmentTypeID equals et.ID into typeGroup
+                         from et in typeGroup.DefaultIfEmpty()
 
-            if (filter.Filters != null)
-            {
-                foreach (var filterItem in filter.Filters)
-                {
-                    if (string.IsNullOrWhiteSpace(filterItem.Value))
-                    {
-                        continue;
-                    }
-                    var propertyName = filterItem.Key;
-                    var value = filterItem.Value;
+                         join o in _context.OEMMasters on c.OEMID equals o.ID into oemGroup
+                         from o in oemGroup.DefaultIfEmpty()
+                         where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
+                         select new
+                         {
+                             c.ID,
+                             c.Name,
+                             c.EquipmentNo,
+                             c.DepartmentID,
+                             DepartmentName = d.Name,
+                             c.EquipmentTypeID,
+                             EquipmentType = et.Name,
+                             c.OEMID,
+                             OEMName = o.Name,
+                             c.NextCalibrationDueDate,
+                             c.NextMaintenanceDueDate
+                         };
+            _query = _query.AsQueryable().ApplyFilters(filter.Filter);
 
-                    _query = _query.Where($"{propertyName}.Contains(@0)", value);
-                }
-            }
+          
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search))
+                || x.EquipmentNo.ToLower().Contains(search)
+                || x.DepartmentName != null && x.DepartmentName.ToLower().Contains(search)
+                || x.EquipmentType != null && x.EquipmentType.ToLower().Contains(search)
+                || x.OEMName != null && x.OEMName.ToLower().Contains(search)
+                || x.NextCalibrationDueDate != null && x.NextCalibrationDueDate.ToString().Contains(search, StringComparison.CurrentCultureIgnoreCase)
+                || x.NextMaintenanceDueDate != null && x.NextMaintenanceDueDate.ToString().ToLower().Contains(search)
+                );
             }
 
             if (filter.SortByColumn != null)

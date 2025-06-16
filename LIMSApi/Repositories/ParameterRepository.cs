@@ -145,6 +145,50 @@ namespace LIMSApi.Repositories
 
             return data;
         }
+        public async Task<List<DropdwonSelector>> GetChemicalParameterDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = from a in _context.ParameterMasters where a.IsActive && a.ParameterType == "Chemical" select a;
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var search = searchTerm.Trim().ToLower();
+                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)) || x.ID.ToString().Contains(search));
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            {
+                Id = x.ID,
+                Name = $"{x.Name} - ({x.ParameterType})",
+            })).ToListAsync();
+
+            return data;
+        }
+        public async Task<List<DropdwonSelector>> GetMechanicalParameterDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = from a in _context.ParameterMasters where a.IsActive && a.ParameterType == "Mechanical" select a;
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var search = searchTerm.Trim().ToLower();
+                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)) || x.ID.ToString().Contains(search));
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            {
+                Id = x.ID,
+                Name = $"{x.Name} - ({x.ParameterType})",
+            })).ToListAsync();
+
+            return data;
+        }
 
         public async Task<bool> ExistsByName(string name)
         {

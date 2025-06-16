@@ -27,7 +27,7 @@ namespace LIMSApi.Services
 
             //bool exists = await _testMethodRepository.ExistsByName(model.Name);
             //if (exists)
-            //    throw new InvalidOperationException("TestMethod already exists!");
+            //    throw new InvalidOperationException("LaboratoryTest already exists!");
 
             model.CreatedOn = DateTime.UtcNow;
             model.CreatedBy = loggedInUser.EmployeeID;
@@ -68,14 +68,14 @@ namespace LIMSApi.Services
             //    // Add or update mappings
             //    foreach (var subGroup in model.SubGroups)
             //    {
-            //        subGroup.TestMethodID = model.ID;
+            //        subGroup.LaboratoryTestID = model.ID;
 
             //        var existingSubGroups = existingTestMethod.SubGroups
             //            .FirstOrDefault(m => m.ID == subGroup.ID);
 
             //        if (existingSubGroups != null)
             //        {
-            //            existingSubGroups.TestMethodID = model.ID;
+            //            existingSubGroups.LaboratoryTestID = model.ID;
             //            existingSubGroups.Name = subGroup.Name;
             //            existingSubGroups.InvoiceCase = subGroup.InvoiceCase;
             //            existingSubGroups.SampleSize = subGroup.SampleSize;

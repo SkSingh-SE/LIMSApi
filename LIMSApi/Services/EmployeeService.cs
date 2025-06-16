@@ -35,8 +35,9 @@ namespace LIMSApi.Services
             UserMaster newUser = new UserMaster
             {
                 EmployeeID = createdEmployee.ID,
-                UserName = model.EmailId,
+                UserName = model.Name,
                 Password = $"{model.ID}_{model.EmailId}_{model.ID}",
+                EmailId = model.EmailId,
                 RoleID = 1,
                 RoleName = "User",
                 IsActive = true,

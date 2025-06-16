@@ -38,10 +38,8 @@ namespace LIMSApi.Repositories
         public async Task<SpecificationHeader?> GetSpecificationHeaderById(long id)
         {
             return await _context.SpecificationHeaders
-                 .Include(x => x.SpecificationLines)
-                     .ThenInclude(sl => sl.LaboratoryTests)
-                 .Include(x => x.SpecificationLines)
-                     .ThenInclude(sl => sl.ProductConditions)
+                 .Include(x => x.Grades)
+                     .ThenInclude(sl => sl.SpecificationLines).ThenInclude(t => t.LaboratoryTests)
                  .FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
         }
 
@@ -54,22 +52,22 @@ namespace LIMSApi.Repositories
         public async Task<PagedResponse<object>> GetAllSpecificationHeaders(PageFilter filter)
         {
             var _query = (from c in _context.SpecificationHeaders
-                          where c.IsActive && c.IsCustom == false
+                          join g in _context.SpecificationGrades on c.ID equals g.SpecificationHeaderID
                           join so in _context.StandardOrganizationMasters
                           on c.StandardOrganizationID equals so.ID into soGroup
+                          where c.IsActive && c.IsCustom == false
                           from so in soGroup.DefaultIfEmpty()
 
                           select new
                           {
                               c.ID,
-                              c.SpecificationCode,
                               c.Standard,
                               c.Part,
                               c.StandardOrganizationID,
                               StandardOrganizationName = so.Name,
-                              c.UNSSteelNumber,
+                              g.UNSSteelNumber,
                               c.AliasName,
-                              c.Grade,
+                              g.Grade,
                               c.StandardYear
                           }).AsQueryable().ApplyFilters(filter.Filter);
 
@@ -77,8 +75,7 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.SpecificationCode != null && x.SpecificationCode.ToLower().Contains(search))
-                || (x.Standard != null && x.Standard.ToLower().Contains(search))
+                _query = _query.Where(x => (x.Standard != null && x.Standard.ToLower().Contains(search))
                 || (x.Part != null && x.Part.ToLower().Contains(search))
                 || (x.StandardYear != null && x.StandardYear.ToLower().Contains(search))
                 || (x.UNSSteelNumber != null && x.UNSSteelNumber.ToLower().Contains(search))
@@ -107,22 +104,22 @@ namespace LIMSApi.Repositories
         public async Task<PagedResponse<object>> GetAllCustomSpecificationHeaders(PageFilter filter)
         {
             var _query = (from c in _context.SpecificationHeaders
-                          where c.IsActive && c.IsCustom == true
+                          join g in _context.SpecificationGrades on c.ID equals g.SpecificationHeaderID
                           join so in _context.StandardOrganizationMasters
                           on c.StandardOrganizationID equals so.ID into soGroup
+                          where c.IsActive && c.IsCustom == true
                           from so in soGroup.DefaultIfEmpty()
 
                           select new
                           {
                               c.ID,
-                              c.SpecificationCode,
                               c.Standard,
                               c.Part,
                               c.StandardOrganizationID,
                               StandardOrganizationName = so.Name,
-                              c.UNSSteelNumber,
+                              g.UNSSteelNumber,
                               c.AliasName,
-                              c.Grade,
+                              g.Grade,
                               c.StandardYear
                           }).AsQueryable().ApplyFilters(filter.Filter);
 
@@ -130,8 +127,7 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.SpecificationCode != null && x.SpecificationCode.ToLower().Contains(search))
-                || (x.Standard != null && x.Standard.ToLower().Contains(search))
+                _query = _query.Where(x => (x.Standard != null && x.Standard.ToLower().Contains(search))
                 || (x.Part != null && x.Part.ToLower().Contains(search))
                 || (x.StandardYear != null && x.StandardYear.ToLower().Contains(search))
                 || (x.UNSSteelNumber != null && x.UNSSteelNumber.ToLower().Contains(search))
@@ -162,7 +158,11 @@ namespace LIMSApi.Repositories
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.SpecificationHeaders where a.IsActive select a;
+            var _query = from a in _context.SpecificationHeaders where a.IsActive select new
+                         {
+                             a.ID,
+                             a.AliasName
+                         };
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
@@ -175,7 +175,37 @@ namespace LIMSApi.Repositories
             var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
             {
                 Id = x.ID,
-                Name = x.AliasName != null ? x.AliasName : x.SpecificationCode,
+                Name = x.AliasName,
+            })).ToListAsync();
+
+            return data;
+        }
+
+        public async Task<List<DropdwonSelector>> GetGradeDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = from a in _context.SpecificationHeaders
+                         join g in _context.SpecificationGrades on a.ID equals g.SpecificationHeaderID
+                         where a.IsActive
+                         select new
+                         {
+                             g.ID,
+                             AliasName = $"{a.AliasName}-{g.Grade}",
+                         };
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var search = searchTerm.Trim().ToLower();
+                _query = _query.Where(x => (x.AliasName != null && x.AliasName.ToLower().Contains(search)) || x.ID.ToString().Contains(search));
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            {
+                Id = x.ID,
+                Name = x.AliasName,
             })).ToListAsync();
 
             return data;
@@ -183,12 +213,12 @@ namespace LIMSApi.Repositories
 
         public async Task<bool> ExistsByName(string name)
         {
-            return await _context.SpecificationHeaders.AnyAsync(x => x.SpecificationCode == name && x.IsActive);
+            return await _context.SpecificationHeaders.AnyAsync(x => x.AliasName == name && x.IsActive);
         }
 
         public async Task<bool> ExistsByNameAndNotId(string name, long Id)
         {
-            return await _context.SpecificationHeaders.AnyAsync(x => x.SpecificationCode == name && x.ID != Id && x.IsActive);
+            return await _context.SpecificationHeaders.AnyAsync(x => x.AliasName == name && x.ID != Id && x.IsActive);
         }
     }
 }

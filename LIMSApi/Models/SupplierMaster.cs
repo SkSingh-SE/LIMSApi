@@ -41,7 +41,7 @@ namespace LIMSApi.Models
         public string? EmailId3 { get; set; }
 
         [StringLength(100)]
-        public string? Note {  get; set; }
+        public string? Address {  get; set; }
         [Required]
         [EnumDataType(typeof(SupplierStatus))]
         [Column(TypeName = "varchar(50)")]

@@ -93,7 +93,8 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x =>  (x.Name != null && x.Name.ToLower().Contains(search)));
+                _query = _query.Where(x =>  (x.Name != null && x.Name.ToLower().Contains(search))
+                || x.ID.ToString().Contains(search));
             }
 
             var skip = pageNo * pageSize;
@@ -103,6 +104,18 @@ namespace LIMSApi.Repositories
                 Id = x.ID,
                 Name = x.Name,
             })).ToListAsync();
+
+            return data;
+        }
+         public async Task<List<DropdwonSelector>> GetDropdownByGroupId(long groupId)
+        {
+            var query =  _context.SubGroupMasters.Where(x => x.IsActive && x.CompanyCode == loggedInUser.CompanyCode && x.GroupID == groupId);
+
+            var data = await query.Select(x => new DropdwonSelector
+            {
+                Id = x.ID,
+                Name = x.Name,
+            }).ToListAsync();
 
             return data;
         }

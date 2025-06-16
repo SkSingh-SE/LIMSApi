@@ -21,39 +21,39 @@ namespace LIMSApi.Repositories
 
         public async Task AddTestMethod(LaboratoryTest model)
         {
-            await _context.TestMethodMasters.AddAsync(model);
+            await _context.LaboratoryTests.AddAsync(model);
             await _context.SaveChangesAsync();
         }
 
         public async Task DeleteTestMethod(long id)
         {
-            var existingTestMethod = await _context.TestMethodMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            var existingTestMethod = await _context.LaboratoryTests.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
             if (existingTestMethod != null)
             {
                 existingTestMethod.IsActive = false;
                 existingTestMethod.ModifiedOn = DateTime.UtcNow;
-                _context.TestMethodMasters.Update(existingTestMethod);
+                _context.LaboratoryTests.Update(existingTestMethod);
                 await _context.SaveChangesAsync();
             }
         }
 
         public async Task<LaboratoryTest?> GetTestMethodById(long id)
         {
-            //return await _context.TestMethodMasters.Include(t => t.SubGroups).FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
-            return await _context.TestMethodMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            //return await _context.LaboratoryTests.Include(t => t.SubGroups).FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.LaboratoryTests.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
         public async Task UpdateTestMethod(LaboratoryTest model)
         {
-            _context.TestMethodMasters.Update(model);
+            _context.LaboratoryTests.Update(model);
             await _context.SaveChangesAsync();
         }
 
         public async Task<PagedResponse<object>> GetAllTestMethods(PageFilter filter)
         {
-            //var _query = from c in _context.TestMethodMasters
+            //var _query = from c in _context.LaboratoryTests
             //             where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
-            //             join g in _context.TestMethodSubGroups on c.ID equals g.TestMethodID into g2
+            //             join g in _context.TestMethodSubGroups on c.ID equals g.LaboratoryTestID into g2
             //             from sg in g2.DefaultIfEmpty()
             //             join d in _context.DepartmentMasters on c.LabDepartmentID equals d.ID into dsGroup
             //             from ds in dsGroup.DefaultIfEmpty()
@@ -69,7 +69,7 @@ namespace LIMSApi.Repositories
 
             //             };
 
-            var _query = from c in _context.TestMethodMasters
+            var _query = from c in _context.LaboratoryTests
                          where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
                          join d in _context.DepartmentMasters on c.LabDepartmentID equals d.ID into dsGroup
                          from ds in dsGroup.DefaultIfEmpty()
@@ -113,7 +113,7 @@ namespace LIMSApi.Repositories
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.TestMethodMasters where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode select a;
+            var _query = from a in _context.LaboratoryTests where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode select a;
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
@@ -134,12 +134,12 @@ namespace LIMSApi.Repositories
 
         public async Task<bool> ExistsByName(string name)
         {
-            return await _context.TestMethodMasters.AnyAsync(x => x.Name == name && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.LaboratoryTests.AnyAsync(x => x.Name == name && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
         public async Task<bool> ExistsByNameAndNotId(string name, long Id)
         {
-            return await _context.TestMethodMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.LaboratoryTests.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
     }
 }

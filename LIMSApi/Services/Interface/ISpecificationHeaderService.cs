@@ -13,5 +13,6 @@ namespace LIMSApi.Services.Interface
         Task<PagedResponse<object>> FetchCustomSpecificationHeaderList(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetSpecificationHeaderDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<DropdwonSelector>> GetGradeDropdown(string? searchTerm, int pageNo, int pageSize);
     }
 }

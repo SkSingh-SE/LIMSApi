@@ -40,7 +40,7 @@ namespace LIMSApi.Services
 
                 string originalFileName = Path.GetFileName(file.FileName);
                 string originalFileExtension = Path.GetExtension(file.FileName);
-                string newFileName = $"{Guid.NewGuid()}_{fileType}{(string.IsNullOrWhiteSpace(identifier) ? "" : $"_{identifier}")}{originalFileExtension}";
+                string newFileName = $"{Guid.NewGuid()}_{fileType}{(string.IsNullOrWhiteSpace(identifier) ? "" : $"_{identifier}")}";
 
                 string relativeDirectory = getFileTypePath(fileType, year);
                 string uploadDirectory = Path.Combine(_env.WebRootPath, relativeDirectory);

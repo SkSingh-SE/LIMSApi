@@ -39,7 +39,7 @@ namespace LIMSApi.Repositories
 
         public async Task<TestMethodSpecification?> GetTestMethodSpecificationById(long id)
         {
-            return await _context.TestMethodSpecifications.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.TestMethodSpecifications.Include(x => x.Versions).FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
         public async Task UpdateTestMethodSpecification(TestMethodSpecification model)

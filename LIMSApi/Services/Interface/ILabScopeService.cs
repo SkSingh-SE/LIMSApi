@@ -11,6 +11,5 @@ namespace LIMSApi.Services.Interface
         Task<LabScopeMaster> GetLabScopeDetails(long id);
         Task<PagedResponse<object>> FetchLabScopeList(PageFilter filter);
 
-        Task<List<DropdwonSelector>> GetLabScopeDropdown(string? searchTerm, int pageNo, int pageSize);
     }
 }

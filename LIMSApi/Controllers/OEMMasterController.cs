@@ -37,14 +37,22 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> PutOEMMaster(OEMMaster model)
         {
             await _oemService.ModifyOEM(model);
-            return Ok($"OEM '{model.Name}' updated successfully.");
+            return Ok(new
+            {
+                status = "success",
+                message = $"OEM '{model.Name}' updated successfully."
+            });
         }
 
         [HttpPost("create")]
         public async Task<ActionResult<OEMMaster>> PostOEMMaster(OEMMaster model)
         {
             await _oemService.CreateOEM(model);
-            return Ok($"OEM '{model.Name}' created successfully");
+            return Ok(new
+            {
+                status = "success",
+                message = $"OEM '{model.Name}' created successfully."
+            });
         }
 
         [HttpDelete("delete/{id}")]
@@ -55,7 +63,12 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("OEM not found!");
             }
-            return Ok($"OEM '{entity.Name}' created successfully");
+            await _oemService.RemoveOEM(id);
+            return Ok(new
+            {
+                status = "success",
+                message = $"OEM '{entity.Name}' updated successfully."
+            });
         }
 
         [HttpGet("dropdown")]

@@ -37,9 +37,36 @@ namespace LIMSApi.Controllers
 
 
         [HttpPut("update")]
-        public async Task<IActionResult> PutTestMethodSpecificationMaster([FromForm] TestMethodSpecification model)
+        public async Task<IActionResult> PutTestMethodSpecificationMaster([FromForm] TestMethodSpecificationDto model)
         {
-            await _testMethodService.ModifyTestMethodSpecification(model);
+
+            var versions = JsonConvert.DeserializeObject<List<VersionDto>>(model.Versions);
+            var uploadedFiles = Request.Form.Files;
+            TestMethodSpecification testMethodSpecification = new TestMethodSpecification
+            {
+                ID = model.ID,
+                Name = model.Name,
+                Part = model.Part,
+                StandardOrganizationID = model.StandardOrganizationID,
+                TestMethodStandard = model.TestMethodStandard,
+                IsDisabled = model.IsDisabled,
+
+            };
+            if (versions != null && versions.Any())
+            {
+                testMethodSpecification.Versions = versions.Select(v => new TestMethodSpecificationVersion
+                {
+                    ID = v.ID,
+                    Version = v.Version,
+                    StandardFile = v.StandardFile,
+                    StandardFilePath = v.StandardFilePath,
+                    Default = v.Default,
+                    UploadReferenceID = v.UploadReferenceID,
+                    file = uploadedFiles.FirstOrDefault(f => f.FileName == v.StandardFile)
+                }).ToList();
+            }
+
+            await _testMethodService.ModifyTestMethodSpecification(testMethodSpecification);
             return Ok(new
             {
                 status = "success",
@@ -56,7 +83,9 @@ namespace LIMSApi.Controllers
             {
                 ID = model.ID,
                 Name = model.Name,
+                Part = model.Part,
                 StandardOrganizationID = model.StandardOrganizationID,
+                TestMethodStandard = model.TestMethodStandard,
                 IsDisabled = model.IsDisabled,
 
             };
@@ -66,7 +95,6 @@ namespace LIMSApi.Controllers
                 {
                     ID = v.ID,
                     Version = v.Version,
-                    Year = v.Year,
                     StandardFile = v.StandardFile,
                     StandardFilePath = v.StandardFilePath,
                     Default = v.Default,
@@ -96,6 +124,23 @@ namespace LIMSApi.Controllers
             {
                 status = "success",
                 message = $"TestMethodSpecification '{entity.Name}' deleted successfully."
+            });
+        }
+
+
+        [HttpDelete("enable-disable/{id}")]
+        public async Task<IActionResult> EnableDisableTestMethodSpecificationMaster(long id)
+        {
+            var entity = await _testMethodService.GetTestMethodSpecificationDetails(id);
+            if (entity == null)
+            {
+                throw new InvalidOperationException("TestMethodSpecification not found!");
+            }
+            await _testMethodService.EnableDisableTestMethodSpecification(id);
+            return Ok(new
+            {
+                status = "success",
+                message = $"TestMethodSpecification '{entity.Name}' {(entity.IsDisabled ? "enabled" : "disabled")} successfully."
             });
         }
 

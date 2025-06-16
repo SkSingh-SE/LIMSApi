@@ -40,15 +40,7 @@ namespace LIMSApi.Services
         public async Task<object> Authenticate(LoginDTO login)
         {
             var date1 = DateTime.UtcNow;
-            var date2 = DateTime.Now;
-            var date3 = DateTimeOffset.Now;
-            var date4 = DateTimeOffset.UtcNow;
-
-            Console.WriteLine(date1);
-            Console.WriteLine(date2);
-            Console.WriteLine(date3);
-            Console.WriteLine(date4);
-
+           
             DateTimeOffset localTime = ConvertToTimeZone(date1, "India Standard Time");
             Console.WriteLine(localTime);
 

@@ -36,11 +36,12 @@ namespace LIMSApi.Models
         [EmailAddress]
         public string? EmailId3 { get; set; }
         [StringLength (100)]
-        public string? Note {  get; set; }
+        public string? Address {  get; set; }
 
+        public long? UploadReferenceID { get; set; }
         [StringLength(255)]
-        public string? AgreementFilePath { get; set; } // Store document path
-
+        public string? AgreementFilePath { get; set; }
+        public string? FileName { get; set; }
         [Required]
         public bool SupplierApproved { get; set; }
 
@@ -57,5 +58,7 @@ namespace LIMSApi.Models
         public long ApprovedBy { get; set; } // Approval by MD / TD
 
         public DateTime? EvaluationDate { get; set; }
+        [NotMapped]
+        public IFormFile? file { get; set; }
     }
 }

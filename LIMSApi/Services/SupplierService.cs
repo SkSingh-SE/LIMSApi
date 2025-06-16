@@ -66,6 +66,7 @@ namespace LIMSApi.Services
             existingSupplier.EmailId2 = model.EmailId2;
             existingSupplier.EmailId3 = model.EmailId3;
             existingSupplier.ProductType = model.ProductType;
+            existingSupplier.Address = model.Address;
 
             existingSupplier.ModifiedOn = DateTime.UtcNow;
 
@@ -95,6 +96,13 @@ namespace LIMSApi.Services
             existingSupplier.IsActive = false;
             existingSupplier.ModifiedOn = DateTime.UtcNow;
 
+            if (existingSupplier.UploadReferenceID != null)
+            {
+                await _uploadService.RemoveFileAsync((long)existingSupplier.UploadReferenceID);
+                existingSupplier.AgreementFilePath = null;
+                existingSupplier.FileName = null;
+                existingSupplier.UploadReferenceID = null;
+            }
             await _supplierRepository.UpdateSupplier(existingSupplier);
             _logger.LogInformation("Supplier with ID '{SupplierId}' deleted successfully.", id);
         }

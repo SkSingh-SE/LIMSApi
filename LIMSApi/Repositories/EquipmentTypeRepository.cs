@@ -98,7 +98,8 @@ namespace LIMSApi.Repositories
             {
                 var search = searchTerm.Trim().ToLower();
                 _query = _query.Where(x => (x.Description != null && x.Description.ToLower().Contains(search))
-                                      || (x.Name != null && x.Name.ToLower().Contains(search)));
+                                      || (x.Name != null && x.Name.ToLower().Contains(search))
+                                      || x.ID.ToString().Contains(search));
             }
 
             var skip = pageNo * pageSize;

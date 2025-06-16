@@ -5,14 +5,12 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace LIMSApi.Models;
 
-public partial class SpecificationLine : AuditProperty
+public partial class SpecificationLine
 {
     [Key]
     public long ID { get; set; }
 
-    public long? SpecificationHeaderID { get; set; }
-
-    public string? PropertyType { get; set; }
+    public long? GradeID { get; set; }
 
     public bool? ManualSelection { get; set; }
 
@@ -23,6 +21,7 @@ public partial class SpecificationLine : AuditProperty
     public decimal? MaxValue { get; set; }
 
     public string? Notes { get; set; }
+    public string? Equation { get; set; }
 
     public long? ParameterUnitID { get; set; }
     public decimal? MinValueEquation { get; set; }
@@ -33,13 +32,15 @@ public partial class SpecificationLine : AuditProperty
 
     public long? DimensionalFactorID { get; set; }
 
-    public decimal? LowerLimitValue { get; set; }
+    public string? LowerLimitValue { get; set; }
 
-    public decimal? UpperLimitValue { get; set; }
+    public string? UpperLimitValue { get; set; }
 
     public long? HeatTreatmentID { get; set; }
+    public long? ProductConditionID1 { get; set; }
+    public long? ProductConditionID2 { get; set; }
+    public string Type { get; set; } = "chemical"; // 'chemical' | 'mechanical' | 'other'
 
-   
 
     [ForeignKey("ParameterID")]
     public virtual ParameterMaster? Parameter { get; set; }
@@ -54,6 +55,5 @@ public partial class SpecificationLine : AuditProperty
     [ForeignKey("HeatTreatmentID")]
     public virtual HeatTreatmentMaster? HeatTreatment { get; set; }
 
-    public ICollection<SpecificationLineProductCondition> ProductConditions { get; set; } = new List<SpecificationLineProductCondition>();
     public ICollection<SpecificationLineLaboratoryTest> LaboratoryTests { get; set; } = new List<SpecificationLineLaboratoryTest>();
 }

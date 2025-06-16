@@ -13,6 +13,7 @@ namespace LIMSApi.Models
         [MaxLength(500)]
         [Required]
         public required string Name { get; set; }
+        public string? Part { get; set; }
         public bool IsDisabled { get; set; } = false;
         public ICollection<TestMethodSpecificationVersion> Versions { get; set; } = new List<TestMethodSpecificationVersion>();
 

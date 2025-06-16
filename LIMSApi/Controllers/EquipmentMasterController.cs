@@ -37,14 +37,53 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> PutEquipmentMaster(EquipmentMaster model)
         {
             await _equipmentTypeService.ModifyEquipment(model);
-            return Ok($"Equipment '{model.Name}' updated successfully.");
+            return Ok(new
+            {
+                status = "success",
+                message = $"Equipment '{model.Name}' updated successfully."
+            });
         }
 
         [HttpPost("create")]
         public async Task<ActionResult<EquipmentMaster>> PostEquipmentMaster(EquipmentMaster model)
         {
             await _equipmentTypeService.CreateEquipment(model);
-            return Ok($"Equipment '{model.Name}' created successfully");
+            return Ok(new
+            {
+                status = "success",
+                message = $"Equipment '{model.Name}' created successfully."
+            });
+        }
+        [HttpPost("add-calibration")]
+        public async Task<IActionResult> AddCalibration([FromForm] EquipmentCalibration model)
+        {
+            await _equipmentTypeService.AddEquipmentCalibration(model);
+            return Ok(new
+            {
+                status = "success",
+                message = $"Calibration added successfully."
+            });
+        }
+        [HttpPost("add-maintenance")]
+        public async Task<IActionResult> AddMaintenance([FromForm] EquipmentMaintenance model)
+        {
+            await _equipmentTypeService.AddEquipmentMaintenance(model);
+            return Ok(new
+            {
+                status = "success",
+                message = $"Maintenance added successfully."
+            });
+        }
+        
+        [HttpPost("add-sop")]
+        public async Task<IActionResult> AddSOP([FromForm] EquipmentSOP model)
+        {
+            await _equipmentTypeService.AddEquipmentSOP(model);
+            return Ok(new
+            {
+                status = "success",
+                message = $"Calibration added successfully."
+            });
         }
 
         [HttpDelete("delete/{id}")]
@@ -55,7 +94,23 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("Equipment not found!");
             }
-            return Ok($"Equipment '{entity.Name}' created successfully");
+            await _equipmentTypeService.RemoveEquipment(id);
+            return Ok(new
+            {
+                status = "success",
+                message = $"Equipment {entity.Name} deleted successfully."
+            });
+        }
+
+        [HttpPost("delete-sop")]
+        public async Task<IActionResult> DeleteEquipmentSOP(EquipmentSOP model)
+        {
+            await _equipmentTypeService.RemoveEquipmentSOP(model);
+            return Ok(new
+            {
+                status = "success",
+                message = $"SOP deleted successfully."
+            });
         }
 
         [HttpGet("dropdown")]

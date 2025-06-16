@@ -14,10 +14,6 @@ namespace LIMSApi.Models
         [MaxLength(50)]
         public string Version { get; set; } = string.Empty;
 
-        [Required]
-        [MaxLength(4)]
-        public string Year { get; set; } = string.Empty;
-
         [MaxLength(255)]
         public string? StandardFile { get; set; }
 
@@ -27,9 +23,6 @@ namespace LIMSApi.Models
         public bool Default { get; set; }
         public long? UploadReferenceID { get; set; }
 
-        // Navigation Property
-        [ForeignKey("TestMethodSpecificationID")]
-        public virtual TestMethodSpecification? TestMethodSpecification { get; set; }
         [NotMapped]
         public IFormFile? file { get; set; } 
     }

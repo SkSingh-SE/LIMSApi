@@ -10,12 +10,24 @@ namespace LIMSApi.Models
         [StringLength(100),Required]
         public required string SpecificationName { get; set; }
         [StringLength(100)]
-        public string? AliasName { get; set; }
+        public string AliasName { get; set; } = string.Empty;
+        public string? Size { get; set; }
         [StringLength(100)]
-        public string? SpecificationCode { get; set; }
-        public long MateriaSpecificationID { get; set; }
+        public string SpecificationCode { get; set; } = string.Empty;
+        public long GradeID { get; set; }
+        public long LaboratoryTestID { get; set; }
+        public long MetalClassificationID { get; set; }
+        public long TestMethodSpecificationID { get; set; }
+
         public bool IsCustom { get; set; }
-        [ForeignKey("MateriaSpecificationID")]
-        public virtual SpecificationHeader? SpecificationHeader { get; set; }
+        [ForeignKey("GradeID")]
+        public virtual SpecificationGrade? SpecificationGrade { get; set; }
+
+        [ForeignKey("LaboratoryTestID")]
+        public virtual LaboratoryTest? LaboratoryTest { get; set; }
+        [ForeignKey("MetalClassificationID")]
+        public virtual MetalClassificationMaster? MetalClassification { get; set; }
+        [ForeignKey("TestMethodSpecificationID")]
+        public virtual TestMethodSpecification? TestMethodSpecification { get; set; }
     }
 }

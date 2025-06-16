@@ -84,5 +84,13 @@ namespace LIMSApi.Services
         {
             return await _parameterRepository.GetParameterDropdown(searchTerm, pageNo, pageSize);
         }
+        public async Task<List<DropdwonSelector>> GetChemicalParameterDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _parameterRepository.GetChemicalParameterDropdown(searchTerm, pageNo, pageSize);
+        } 
+        public async Task<List<DropdwonSelector>> GetMechanicalParameterDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _parameterRepository.GetMechanicalParameterDropdown(searchTerm, pageNo, pageSize);
+        }
     }
 }

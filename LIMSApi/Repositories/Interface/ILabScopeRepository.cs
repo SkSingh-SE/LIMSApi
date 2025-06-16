@@ -11,8 +11,5 @@ namespace LIMSApi.Repositories.Interface
         Task<LabScopeMaster> GetLabScopeById(long id);
         Task<PagedResponse<object>> GetAllLabScopes(PageFilter filter);
 
-        Task<List<DropdwonSelector>> GetLabScopeDropdown(string? searchTerm, int pageNo, int pageSize);
-        Task<bool> ExistsByName(string name);
-        Task<bool> ExistsByNameAndNotId(string name, long Id);
     }
 }

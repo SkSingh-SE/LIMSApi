@@ -8,6 +8,7 @@ namespace LIMSApi.Services.Interface
         Task CreateTestMethodSpecification(TestMethodSpecification model);
         Task ModifyTestMethodSpecification(TestMethodSpecification model);
         Task RemoveTestMethodSpecification(long id);
+        Task EnableDisableTestMethodSpecification(long id);
         Task<TestMethodSpecification> GetTestMethodSpecificationDetails(long id);
         Task<PagedResponse<object>> FetchTestMethodSpecificationList(PageFilter filter);
 

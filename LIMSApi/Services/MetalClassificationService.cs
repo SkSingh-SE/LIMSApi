@@ -45,6 +45,9 @@ namespace LIMSApi.Services
             existingMetalClassification.Name = model.Name;
             existingMetalClassification.ModifiedOn = DateTime.UtcNow;
 
+            existingMetalClassification?.Parameters?.Clear();
+            existingMetalClassification.Parameters = model.Parameters;
+
             await _MetalClassificationRepository.UpdateMetalClassification(existingMetalClassification);
             _logger.LogInformation("MetalClassification '{MetalClassificationName}' updated successfully.", model.Name);
         }

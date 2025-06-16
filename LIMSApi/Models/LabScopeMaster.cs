@@ -7,16 +7,11 @@ namespace LIMSApi.Models
     {
         [Key]
         public long ID { get; set; }
-        [Required]
-        [StringLength(100)]
-        public string Name { get; set; } = string.Empty;
+        public long LaboratoryTestID { get; set; }
 
-        [StringLength(250)]
-        public string? Description {  get; set; }
-        
-        public long TestMethodID { get; set; }
-
-        [ForeignKey("TestMethodID")]
-        public virtual LaboratoryTest? TestMethod { get; set; }
+        [ForeignKey("LaboratoryTestID")]
+        public virtual LaboratoryTest? LaboratoryTest { get; set; }
+        public ICollection<LabScopeSpecification> Specifications { get; set; } = new List<LabScopeSpecification>();
     }
+   
 }

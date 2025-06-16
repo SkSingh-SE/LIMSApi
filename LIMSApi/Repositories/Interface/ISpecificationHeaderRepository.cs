@@ -13,6 +13,7 @@ namespace LIMSApi.Repositories.Interface
         Task<PagedResponse<object>> GetAllCustomSpecificationHeaders(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetSpecificationHeaderDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<DropdwonSelector>> GetGradeDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<bool> ExistsByName(string name);
         Task<bool> ExistsByNameAndNotId(string name, long id);
     }

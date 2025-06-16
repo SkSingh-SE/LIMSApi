@@ -9,11 +9,12 @@ namespace LIMSApi.Services
     {
         private readonly IOEMRepository _oemRepository;
         private readonly ILogger<OEMService> _logger;
-
-        public OEMService(IOEMRepository oemRepo, ILogger<OEMService> logger)
+        private readonly IFileUploadService _uploadService;
+        public OEMService(IOEMRepository oemRepo, ILogger<OEMService> logger, IFileUploadService fileUploadService)
         {
             _oemRepository = oemRepo;
             _logger = logger;
+            _uploadService = fileUploadService;
         }
 
         public async Task CreateOEM(OEMMaster model)
@@ -24,6 +25,17 @@ namespace LIMSApi.Services
             bool exists = await _oemRepository.ExistsByName(model.Name);
             if (exists)
                 throw new InvalidOperationException("OEM already exists!");
+
+            if (model.file != null)
+            {
+                var fileUploadResponse = await _uploadService.UploadFileAsync(model.file, FileType.Other, null, model.FileName);
+                if (fileUploadResponse == null)
+                    throw new InvalidOperationException("File upload failed!");
+                model.AgreementFilePath = fileUploadResponse.FilePath;
+                model.FileName = fileUploadResponse.OriginalFileName;
+                model.UploadReferenceID = fileUploadResponse.ID;
+            }
+
             await _oemRepository.AddOEM(model);
             _logger.LogInformation("OEM '{OEMName}' created successfully.", model.Name);
         }
@@ -51,10 +63,21 @@ namespace LIMSApi.Services
             existingOEM.EmailId1 = model.EmailId1;
             existingOEM.EmailId2 = model.EmailId2;
             existingOEM.EmailId3 = model.EmailId3;
-            existingOEM.AgreementFilePath = model.AgreementFilePath;
-
+            existingOEM.Address = model.Address;
             existingOEM.ModifiedOn = DateTime.UtcNow;
-
+            if (model.file != null)
+            {
+                var fileUploadResponse = await _uploadService.UploadFileAsync(model.file, FileType.Other, null, model.FileName);
+                if (fileUploadResponse == null)
+                    throw new InvalidOperationException("File upload failed!");
+                existingOEM.AgreementFilePath = fileUploadResponse.FilePath;
+                existingOEM.FileName = fileUploadResponse.OriginalFileName;
+                existingOEM.UploadReferenceID = fileUploadResponse.ID;
+            }
+            else if (string.IsNullOrEmpty(model.FileName) && existingOEM.UploadReferenceID != null)
+            {
+                await _uploadService.RemoveFileAsync((long)existingOEM.UploadReferenceID);
+            }
             await _oemRepository.UpdateOEM(existingOEM);
             _logger.LogInformation("OEM '{OEMName}' updated successfully.", model.Name);
         }
@@ -67,7 +90,13 @@ namespace LIMSApi.Services
 
             existingOEM.IsActive = false;
             existingOEM.ModifiedOn = DateTime.UtcNow;
-
+            if (existingOEM.UploadReferenceID != null)
+            {
+                await _uploadService.RemoveFileAsync((long)existingOEM.UploadReferenceID);
+                existingOEM.AgreementFilePath = null;
+                existingOEM.FileName = null;
+                existingOEM.UploadReferenceID = null;
+            }
             await _oemRepository.UpdateOEM(existingOEM);
             _logger.LogInformation("OEM with ID '{OEMId}' deleted successfully.", id);
         }

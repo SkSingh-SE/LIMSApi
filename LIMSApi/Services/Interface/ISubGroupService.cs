@@ -12,5 +12,6 @@ namespace LIMSApi.Services.Interface
         Task<PagedResponse<object>> FetchSubGroupList(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetSubGroupDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<DropdwonSelector>> GetDropdownByGroupId(long id);
     }
 }

@@ -40,7 +40,11 @@ namespace LIMSApi.Repositories
 
         public async Task<LabScopeMaster?> GetLabScopeById(long id)
         {
-            return await _context.LabScopeMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.LabScopeMasters
+            .Include(x => x.Specifications)
+                .ThenInclude(s => s.Parameters)
+                    .ThenInclude(p => p.Equipments)
+            .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
         public async Task UpdateLabScope(LabScopeMaster model)
@@ -51,27 +55,36 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllLabScopes(PageFilter filter)
         {
-            var _query = from c in _context.LabScopeMasters where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c;
+            var _query =
+                    from labScope in _context.LabScopeMasters
+                    join testMethod in _context.LaboratoryTests on labScope.LaboratoryTestID equals testMethod.ID
+                    join labSpec in _context.LabScopeSpecifications on labScope.ID equals labSpec.LabScopeID
+                    join testMS in _context.TestMethodSpecifications on labSpec.TestMethodSpecificationID equals testMS.ID
+                    join labPara in _context.LabScopeSpecificationParameters on labSpec.ID equals labPara.LabScopeSpecificationID
+                    join p in _context.ParameterMasters on labPara.ParameterID equals p.ID
+                    join pu in _context.ParameterUnitMasters on labPara.ParameterUnitID equals pu.ID
+                    where labScope.IsActive && labScope.CompanyCode == loggedInUser.CompanyCode
+               select new
+               {
+                   labScope.ID,
+                   labScope.LaboratoryTestID,
+                   LaboratoryTestName = testMethod.Name,
+                   labSpec.TestMethodSpecificationID,
+                   TestMethodSpecificationName = testMS.Name,
+                   ParameterName = p.Name,
+                   ParameterUnit = pu.Name,
+                   labPara.QualitativeQuantitative,
+                   labPara.IsUnderISO,
+                   labPara.LowerLimit,
+                   labPara.UpperLimit
+               };
 
-            if (filter.Filters != null)
-            {
-                foreach (var filterItem in filter.Filters)
-                {
-                    if (string.IsNullOrWhiteSpace(filterItem.Value))
-                    {
-                        continue;
-                    }
-                    var propertyName = filterItem.Key;
-                    var value = filterItem.Value;
-
-                    _query = _query.Where($"{propertyName}.Contains(@0)", value);
-                }
-            }
+            _query = _query.AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                _query = _query.Where(x => (x.LaboratoryTestName != null && x.LaboratoryTestName.ToLower().Contains(search)));
             }
 
             if (filter.SortByColumn != null)
@@ -91,37 +104,8 @@ namespace LIMSApi.Repositories
             return new PagedResponse<object>(items.Cast<object>().ToList(), totalRecords, filter.PageNumber, filter.PageSize);
         }
 
-        public async Task<List<DropdwonSelector>> GetLabScopeDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
-        {
-            if (pageNo < 0) pageNo = 0;
+       
 
-            var _query = from a in _context.LabScopeMasters where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode select a;
-
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x =>  (x.Name != null && x.Name.ToLower().Contains(search)));
-            }
-
-            var skip = pageNo * pageSize;
-
-            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
-            {
-                Id = x.ID,
-                Name = x.Name,
-            })).ToListAsync();
-
-            return data;
-        }
-
-        public async Task<bool> ExistsByName(string name)
-        {
-            return await _context.LabScopeMasters.AnyAsync(x => x.Name == name && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
-        }
-
-        public async Task<bool> ExistsByNameAndNotId(string name, long Id)
-        {
-            return await _context.LabScopeMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
-        }
+     
     }
 }

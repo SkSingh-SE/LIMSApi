@@ -91,6 +91,10 @@ namespace LIMSApi.Services
         public async Task<List<DropdwonSelector>> GetSubGroupDropdown(string? searchTerm, int pageNo, int pageSize)
         {
             return await _subGroupRepository.GetSubGroupDropdown(searchTerm, pageNo, pageSize);
+        } 
+        public async Task<List<DropdwonSelector>> GetDropdownByGroupId(long id)
+        {
+            return await _subGroupRepository.GetDropdownByGroupId(id);
         }
     }
 }

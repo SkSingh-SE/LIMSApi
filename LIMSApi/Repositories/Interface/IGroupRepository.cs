@@ -11,7 +11,7 @@ namespace LIMSApi.Repositories.Interface
         Task<GroupMaster> GetGroupById(long id);
         Task<PagedResponse<object>> GetAllGroups(PageFilter filter);
 
-        Task<List<DropdwonSelector>> GetGroupDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<DropdwonSelector>> GetGroupDropdown(string? searchTerm, int pageNo, int pageSize, long? id = null);
         Task<bool> ExistsByName(string name);
         Task<bool> ExistsByNameAndNotId(string name, long Id);
     }
