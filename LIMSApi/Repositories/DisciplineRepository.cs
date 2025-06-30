@@ -46,20 +46,7 @@ namespace LIMSApi.Repositories
         {
             var _query = from c in _context.DisciplineMasters where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c;
 
-            if (filter.Filters != null)
-            {
-                foreach (var filterDiscipline in filter.Filters)
-                {
-                    if (string.IsNullOrWhiteSpace(filterDiscipline.Value))
-                    {
-                        continue;
-                    }
-                    var propertyName = filterDiscipline.Key;
-                    var value = filterDiscipline.Value;
-
-                    _query = _query.Where($"{propertyName}.Contains(@0)", value);
-                }
-            }
+            _query = _query.AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {

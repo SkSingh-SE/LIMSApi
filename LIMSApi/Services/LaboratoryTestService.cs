@@ -25,16 +25,16 @@ namespace LIMSApi.Services
             if (string.IsNullOrWhiteSpace(model.Name))
                 throw new ArgumentException("TestMethod name should not be empty!");
 
-            //bool exists = await _testMethodRepository.ExistsByName(model.Name);
-            //if (exists)
-            //    throw new InvalidOperationException("LaboratoryTest already exists!");
+            bool exists = await _testMethodRepository.ExistsByName(model.SubGroup);
+            if (exists)
+                throw new InvalidOperationException($"SubGroup {model.SubGroup} already exists!");
 
             model.CreatedOn = DateTime.UtcNow;
             model.CreatedBy = loggedInUser.EmployeeID;
             model.CompanyCode = loggedInUser.CompanyCode;
 
             await _testMethodRepository.AddTestMethod(model);
-            _logger.LogInformation("TestMethod '{TestMethodName}' created successfully.", model.Name);
+            _logger.LogInformation("SubGroup '{SubGroup}' created successfully.", model.SubGroup);
         }
 
         public async Task ModifyTestMethod(LaboratoryTest model)
@@ -42,76 +42,51 @@ namespace LIMSApi.Services
             if (model.ID == 0)
                 throw new ArgumentException("TestMethod ID should not be empty!");
 
+            if (await _testMethodRepository.ExistsByNameAndNotId(model.SubGroup, model.ID))
+                throw new InvalidOperationException($"Same Group {model.SubGroup} already exists!");
+
             var existingTestMethod = await _testMethodRepository.GetTestMethodById(model.ID);
             if (existingTestMethod == null)
-                throw new InvalidOperationException("TestMethod not found!");
+                throw new InvalidOperationException("Laboratory Test not found!");
 
             existingTestMethod.Name = model.Name;
             existingTestMethod.LabDepartmentID = model.LabDepartmentID;
             existingTestMethod.SubGroup = model.SubGroup;
-            existingTestMethod.InvoiceCase = model.InvoiceCase;
+            existingTestMethod.Equation = model.Equation;
+            existingTestMethod.MetalClassificationID = model.MetalClassificationID;
             existingTestMethod.ModifiedOn = DateTime.UtcNow;
             existingTestMethod.ModifiedBy = loggedInUser.EmployeeID;
 
-            //// remove unwanted mappings
-            //if (existingTestMethod.SubGroups.Any())
-            //{
-            //    var subGroupToRemove = existingTestMethod.SubGroups.Where(sub => !model.SubGroups.Any(m => m.ID == sub.ID)).ToList();
-            //    foreach (var subGroup in subGroupToRemove)
-            //    {
-            //        existingTestMethod.SubGroups.Remove(subGroup);
-            //    }
-            //}
-
-            //if (model.SubGroups != null && model.SubGroups.Any())
-            //{
-            //    // Add or update mappings
-            //    foreach (var subGroup in model.SubGroups)
-            //    {
-            //        subGroup.LaboratoryTestID = model.ID;
-
-            //        var existingSubGroups = existingTestMethod.SubGroups
-            //            .FirstOrDefault(m => m.ID == subGroup.ID);
-
-            //        if (existingSubGroups != null)
-            //        {
-            //            existingSubGroups.LaboratoryTestID = model.ID;
-            //            existingSubGroups.Name = subGroup.Name;
-            //            existingSubGroups.InvoiceCase = subGroup.InvoiceCase;
-            //            existingSubGroups.SampleSize = subGroup.SampleSize;
-            //            existingSubGroups.TestCharge = subGroup.TestCharge;
-
-            //        }
-            //        else
-            //        {
-            //            existingTestMethod.SubGroups.Add(subGroup);
-            //        }
-            //    }
-            //}
+            existingTestMethod.InvoiceCases.Clear();
+            foreach (var invoiceCase in model.InvoiceCases)
+            {
+                invoiceCase.LabTestID = model.ID;
+                existingTestMethod.InvoiceCases.Add(invoiceCase);
+            }
 
             await _testMethodRepository.UpdateTestMethod(existingTestMethod);
-            _logger.LogInformation("TestMethod '{TestMethodName}' updated successfully.", model.Name);
+            _logger.LogInformation("SubGroup '{SubGroup}' updated successfully.", model.SubGroup);
         }
 
         public async Task RemoveTestMethod(long id)
         {
             var existingTestMethod = await _testMethodRepository.GetTestMethodById(id);
             if (existingTestMethod == null)
-                throw new InvalidOperationException("TestMethod not found!");
+                throw new InvalidOperationException("Laboratory Test not found!");
 
             existingTestMethod.IsActive = false;
             existingTestMethod.ModifiedOn = DateTime.UtcNow;
             existingTestMethod.ModifiedBy = loggedInUser.EmployeeID;
 
             await _testMethodRepository.UpdateTestMethod(existingTestMethod);
-            _logger.LogInformation("TestMethod with ID '{TestMethodId}' deleted successfully.", id);
+            _logger.LogInformation("Laboratory Test with ID '{TestMethodId}' deleted successfully.", id);
         }
 
         public async Task<LaboratoryTest> GetTestMethodDetails(long id)
         {
             var existingTestMethod = await _testMethodRepository.GetTestMethodById(id);
             if (existingTestMethod == null)
-                throw new InvalidOperationException("TestMethod not found!");
+                throw new InvalidOperationException("Laboratory Test not found!");
 
             return existingTestMethod;
         }

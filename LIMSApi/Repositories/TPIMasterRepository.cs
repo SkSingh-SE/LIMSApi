@@ -46,20 +46,7 @@ namespace LIMSApi.Repositories
         {
             var _query = (from c in _context.TPIMasters where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c).AsQueryable().ApplyFilters(filter.Filter);
 
-            if (filter.Filters != null)
-            {
-                foreach (var filterTPI in filter.Filters)
-                {
-                    if (string.IsNullOrWhiteSpace(filterTPI.Value))
-                    {
-                        continue;
-                    }
-                    var propertyName = filterTPI.Key;
-                    var value = filterTPI.Value;
-
-                    _query = _query.Where($"{propertyName}.Contains(@0)", value);
-                }
-            }
+            _query = _query.AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {

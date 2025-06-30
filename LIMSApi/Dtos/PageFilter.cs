@@ -8,7 +8,6 @@
         public string? SortByColumn { get; set; } = "ID";
         public string? SortOrder { get; set; } = "asc";
         public Dictionary<string, bool>? SortBy { get; set; } 
-        public Dictionary<string, string>? Filters { get; set; }
         public List<Filter>? Filter { get; set; }
     }
     public class Filter

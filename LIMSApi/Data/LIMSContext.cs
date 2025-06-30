@@ -43,6 +43,10 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<GroupMaster> GroupMasters { get; set; }
     public virtual DbSet<HeatTreatmentMaster> HeatTreatmentMasters { get; set; }
     public virtual DbSet<IndustryMaster> IndustryMasters { get; set; }
+    public virtual DbSet<InvoiceCaseConfiguration> InvoiceCaseConfigurations { get; set; }
+    public virtual DbSet<InvoiceCaseAliasName> InvoiceCaseAliasNames { get; set; }
+    public virtual DbSet<InvoiceCase> InvoiceCases { get; set; }
+    public virtual DbSet<InvoiceCasePrice> InvoiceCasePrices { get; set; }
     public virtual DbSet<ItemMaster> ItemMasters { get; set; }
     public virtual DbSet<LabScopeMaster> LabScopeMasters { get; set; }
     public DbSet<LabScopeSpecification> LabScopeSpecifications { get; set; }

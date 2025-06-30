@@ -9,11 +9,13 @@ namespace LIMSApi.Services
     {
         private readonly ICalibrationAgencyRepository _oemRepository;
         private readonly ILogger<CalibrationAgencyService> _logger;
+        private readonly IFileUploadService _uploadService;
 
-        public CalibrationAgencyService(ICalibrationAgencyRepository oemRepo, ILogger<CalibrationAgencyService> logger)
+        public CalibrationAgencyService(ICalibrationAgencyRepository oemRepo, ILogger<CalibrationAgencyService> logger, IFileUploadService fileUploadService)
         {
             _oemRepository = oemRepo;
             _logger = logger;
+            _uploadService = fileUploadService;
         }
 
         public async Task CreateCalibrationAgency(CalibrationAgencyMaster model)
@@ -24,6 +26,17 @@ namespace LIMSApi.Services
             bool exists = await _oemRepository.ExistsByName(model.Name);
             if (exists)
                 throw new InvalidOperationException("CalibrationAgency already exists!");
+
+            if (model.file != null)
+            {
+                var fileUploadResponse = await _uploadService.UploadFileAsync(model.file, FileType.Other, null, model.FileName);
+                if (fileUploadResponse == null)
+                    throw new InvalidOperationException("File upload failed!");
+                model.AgreementFilePath = fileUploadResponse.FilePath;
+                model.FileName = fileUploadResponse.OriginalFileName;
+                model.UploadReferenceID = fileUploadResponse.ID;
+            }
+
             await _oemRepository.AddCalibrationAgency(model);
             _logger.LogInformation("CalibrationAgency '{CalibrationAgencyName}' created successfully.", model.Name);
         }
@@ -51,9 +64,23 @@ namespace LIMSApi.Services
             existingCalibrationAgency.EmailId1 = model.EmailId1;
             existingCalibrationAgency.EmailId2 = model.EmailId2;
             existingCalibrationAgency.EmailId3 = model.EmailId3;
-            existingCalibrationAgency.AgreementFilePath = model.AgreementFilePath;
+            existingCalibrationAgency.Address = model.Address;
 
             existingCalibrationAgency.ModifiedOn = DateTime.UtcNow;
+
+            if (model.file != null)
+            {
+                var fileUploadResponse = await _uploadService.UploadFileAsync(model.file, FileType.Other, null, model.FileName);
+                if (fileUploadResponse == null)
+                    throw new InvalidOperationException("File upload failed!");
+                existingCalibrationAgency.AgreementFilePath = fileUploadResponse.FilePath;
+                existingCalibrationAgency.FileName = fileUploadResponse.OriginalFileName;
+                existingCalibrationAgency.UploadReferenceID = fileUploadResponse.ID;
+            }
+            else if (string.IsNullOrEmpty(model.FileName) && existingCalibrationAgency.UploadReferenceID != null)
+            {
+                await _uploadService.RemoveFileAsync((long)existingCalibrationAgency.UploadReferenceID);
+            }
 
             await _oemRepository.UpdateCalibrationAgency(existingCalibrationAgency);
             _logger.LogInformation("CalibrationAgency '{CalibrationAgencyName}' updated successfully.", model.Name);
@@ -67,7 +94,13 @@ namespace LIMSApi.Services
 
             existingCalibrationAgency.IsActive = false;
             existingCalibrationAgency.ModifiedOn = DateTime.UtcNow;
-
+            if (existingCalibrationAgency.UploadReferenceID != null)
+            {
+                await _uploadService.RemoveFileAsync((long)existingCalibrationAgency.UploadReferenceID);
+                existingCalibrationAgency.AgreementFilePath = null;
+                existingCalibrationAgency.FileName = null;
+                existingCalibrationAgency.UploadReferenceID = null;
+            }
             await _oemRepository.UpdateCalibrationAgency(existingCalibrationAgency);
             _logger.LogInformation("CalibrationAgency with ID '{CalibrationAgencyId}' deleted successfully.", id);
         }

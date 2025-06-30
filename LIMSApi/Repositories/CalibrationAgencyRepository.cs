@@ -53,20 +53,6 @@ namespace LIMSApi.Repositories
         {
             var _query = (from c in _context.CalibrationAgencyMasters where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c).AsQueryable().ApplyFilters(filter.Filter);
 
-            if (filter.Filters != null)
-            {
-                foreach (var filterItem in filter.Filters)
-                {
-                    if (string.IsNullOrWhiteSpace(filterItem.Value))
-                    {
-                        continue;
-                    }
-                    var propertyName = filterItem.Key;
-                    var value = filterItem.Value;
-
-                    _query = _query.Where($"{propertyName}.Contains(@0)", value);
-                }
-            }
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
@@ -100,7 +86,8 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x =>  (x.Name != null && x.Name.ToLower().Contains(search)));
+                _query = _query.Where(x =>  (x.Name != null && x.Name.ToLower().Contains(search))
+                || x.ID.ToString().Contains(search));
             }
 
             var skip = pageNo * pageSize;

@@ -40,7 +40,8 @@ namespace LIMSApi.Repositories
         public async Task<LaboratoryTest?> GetTestMethodById(long id)
         {
             //return await _context.LaboratoryTests.Include(t => t.SubGroups).FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
-            return await _context.LaboratoryTests.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.LaboratoryTests.Include(y=> y.InvoiceCases)
+                .ThenInclude(z => z.InvoiceCaseConfiguration).FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
         public async Task UpdateTestMethod(LaboratoryTest model)
@@ -51,28 +52,13 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllTestMethods(PageFilter filter)
         {
-            //var _query = from c in _context.LaboratoryTests
-            //             where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
-            //             join g in _context.TestMethodSubGroups on c.ID equals g.LaboratoryTestID into g2
-            //             from sg in g2.DefaultIfEmpty()
-            //             join d in _context.DepartmentMasters on c.LabDepartmentID equals d.ID into dsGroup
-            //             from ds in dsGroup.DefaultIfEmpty()
-            //             select new
-            //             {
-            //                 c.ID,
-            //                 c.Name,
-            //                 c.LabDepartmentID,
-            //                 DepartmentName = ds.Name,
-            //                 SubMethodName = sg.Name,
-            //                 InvoiceCase = sg.InvoiceCase ,
-            //                 TestCharge = sg.TestCharge ,
-
-            //             };
 
             var _query = from c in _context.LaboratoryTests
                          where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
                          join d in _context.DepartmentMasters on c.LabDepartmentID equals d.ID into dsGroup
                          from ds in dsGroup.DefaultIfEmpty()
+                         join m in _context.MetalClassificationMasters on c.MetalClassificationID equals m.ID into mcGroup
+                         from mc in mcGroup.DefaultIfEmpty()
                          select new
                          {
                              c.ID,
@@ -80,7 +66,7 @@ namespace LIMSApi.Repositories
                              c.LabDepartmentID,
                              DepartmentName = ds.Name,
                              c.SubGroup,
-                             c.InvoiceCase
+                             MetalClassification = mc.Name
                          };
 
 
@@ -89,7 +75,12 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                _query = _query.Where(x =>
+                                    (!string.IsNullOrEmpty(x.Name) && x.Name.ToLower().Contains(search)) ||
+                                    (!string.IsNullOrEmpty(x.DepartmentName) && x.DepartmentName.ToLower().Contains(search)) ||
+                                    (!string.IsNullOrEmpty(x.SubGroup) && x.SubGroup.ToLower().Contains(search)) ||
+                                    (!string.IsNullOrEmpty(x.MetalClassification) && x.MetalClassification.ToLower().Contains(search))
+                                    );
             }
 
             if (filter.SortByColumn != null)
@@ -118,7 +109,7 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)) || x.ID.ToString().Contains(search));
+                _query = _query.Where(x => (x.SubGroup != null && x.SubGroup.ToLower().Contains(search)) || x.ID.ToString().Contains(search));
             }
 
             var skip = pageNo * pageSize;
@@ -126,7 +117,7 @@ namespace LIMSApi.Repositories
             var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
             {
                 Id = x.ID,
-                Name = x.Name,
+                Name = x.SubGroup,
             })).ToListAsync();
 
             return data;

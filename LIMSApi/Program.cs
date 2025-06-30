@@ -148,6 +148,8 @@ builder.Services.AddScoped<ITestMethodStandardRepository, TestMethodStandardRepo
 builder.Services.AddScoped<ITPIMasterRepository, TPIMasterRepository>();
 builder.Services.AddScoped<IUniversalCodeTypeRepository, UniversalCodeTypeRepository>();
 builder.Services.AddScoped<IVendorRepository, VendorRepository>();
+builder.Services.AddScoped<IInvoiceCaseConfigurationRepository, InvoiceCaseConfigurationRepository>();
+builder.Services.AddScoped<IInvoiceCaseRepository, InvoiceCaseRepository>();
 
 
 
@@ -199,6 +201,8 @@ builder.Services.AddScoped<ITestMethodSpecificationService, TestMethodSpecificat
 builder.Services.AddScoped<ITPIMasterService, TPIMasterService>();
 builder.Services.AddScoped<IUniversalCodeTypeService, UniversalCodeTypeService>();
 builder.Services.AddScoped<IVendorService, VendorService>();
+builder.Services.AddScoped<IInvoiceCaseConfigurationService, InvoiceCaseConfigurationService>();
+builder.Services.AddScoped<IInvoiceCaseService, InvoiceCaseService>();
 
 
 // Third party services

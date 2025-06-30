@@ -53,20 +53,7 @@ namespace LIMSApi.Repositories
         {
             var _query = from s in _context.StateMasters where s.IsActive select s;
 
-            if (filter.Filters != null)
-            {
-                foreach (var filterItem in filter.Filters)
-                {
-                    if (string.IsNullOrWhiteSpace(filterItem.Value))
-                    {
-                        continue;
-                    }
-                    var propertyName = filterItem.Key;
-                    var value = filterItem.Value;
-
-                    _query = _query.Where($"{propertyName}.Contains(@0)", value);
-                }
-            }
+            _query = _query.AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {

@@ -46,20 +46,7 @@ namespace LIMSApi.Repositories
         {
             var _query = (from c in _context.TaxMasters where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c).AsQueryable().ApplyFilters(filter.Filter);
 
-            if (filter.Filters != null)
-            {
-                foreach (var filterTax in filter.Filters)
-                {
-                    if (string.IsNullOrWhiteSpace(filterTax.Value))
-                    {
-                        continue;
-                    }
-                    var propertyName = filterTax.Key;
-                    var value = filterTax.Value;
-
-                    _query = _query.Where($"{propertyName}.Contains(@0)", value);
-                }
-            }
+            _query = _query.AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
