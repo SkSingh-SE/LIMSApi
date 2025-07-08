@@ -42,7 +42,11 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> UpdateUser(UserMaster user)
         {
             await _userService.UpdateUser(user);
-            return Ok("User has been updated successfully.");
+            return Ok(new
+            {
+                status = "success",
+                message = $"User '{user.UserName}' updated successfully."
+            });
         }
 
 
@@ -55,7 +59,11 @@ namespace LIMSApi.Controllers
                 return NotFound($"User nit found {email}");
             }
             await _userService.DeleteUser(email);
-            return Ok("User has been deleted successfully.");
+            return Ok(new
+            {
+                status = "success",
+                message = $"User '{user.UserName}' updated successfully."
+            });
 
         }
     }

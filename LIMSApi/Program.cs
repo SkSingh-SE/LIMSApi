@@ -150,6 +150,7 @@ builder.Services.AddScoped<IUniversalCodeTypeRepository, UniversalCodeTypeReposi
 builder.Services.AddScoped<IVendorRepository, VendorRepository>();
 builder.Services.AddScoped<IInvoiceCaseConfigurationRepository, InvoiceCaseConfigurationRepository>();
 builder.Services.AddScoped<IInvoiceCaseRepository, InvoiceCaseRepository>();
+builder.Services.AddScoped<ICuttingPriceMasterRepository,CuttingPriceMasterRepository>();
 
 
 
@@ -203,6 +204,7 @@ builder.Services.AddScoped<IUniversalCodeTypeService, UniversalCodeTypeService>(
 builder.Services.AddScoped<IVendorService, VendorService>();
 builder.Services.AddScoped<IInvoiceCaseConfigurationService, InvoiceCaseConfigurationService>();
 builder.Services.AddScoped<IInvoiceCaseService, InvoiceCaseService>();
+builder.Services.AddScoped<ICuttingPriceMasterService, CuttingPriceMasterService>();
 
 
 // Third party services

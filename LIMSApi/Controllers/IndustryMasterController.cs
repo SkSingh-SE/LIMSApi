@@ -11,24 +11,24 @@ namespace LIMSApi.Controllers
     public class IndustryMasterController : ControllerBase
     {
 
-        private readonly IIndustryMasterService _testMethodService;
+        private readonly IIndustryMasterService _industryService;
 
-        public IndustryMasterController(IIndustryMasterService testMethodService)
+        public IndustryMasterController(IIndustryMasterService industryService)
         {
-            _testMethodService = testMethodService;
+            _industryService = industryService;
         }
 
         [HttpPost("list")]
         public async Task<IActionResult> IndustryMasterList(PageFilter filter)
         {
-            return Ok(await _testMethodService.FetchIndustryList(filter));
+            return Ok(await _industryService.FetchIndustryList(filter));
         }
 
 
         [HttpGet("details/{id}")]
         public async Task<ActionResult<IndustryMaster>> GetIndustryMaster(long id)
         {
-            var entity = await _testMethodService.GetIndustryDetails(id);
+            var entity = await _industryService.GetIndustryDetails(id);
 
             return entity == null ? NoContent() : Ok(entity);
         }
@@ -37,32 +37,45 @@ namespace LIMSApi.Controllers
         [HttpPut("update")]
         public async Task<IActionResult> PutIndustryMaster(IndustryMaster model)
         {
-            await _testMethodService.ModifyIndustry(model);
-            return Ok($"IndustryMaster '{model.Name}' updated successfully.");
+            await _industryService.ModifyIndustry(model);
+            return Ok(new
+            {
+                status = "success",
+                message = $"IndustryMaster '{model.Name}' updated successfully."
+            });
         }
 
         [HttpPost("create")]
         public async Task<ActionResult<IndustryMaster>> PostIndustryMaster(IndustryMaster model)
         {
-            await _testMethodService.CreateIndustry(model);
-            return Ok($"IndustryMaster '{model.Name}' created successfully");
+            await _industryService.CreateIndustry(model);
+            return Ok(new
+            {
+                status = "success",
+                message = $"IndustryMaster '{model.Name}' ctreated successfully."
+            });
         }
 
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteIndustryMaster(long id)
         {
-            var entity = await _testMethodService.GetIndustryDetails(id);
+            var entity = await _industryService.GetIndustryDetails(id);
             if (entity == null)
             {
                 throw new InvalidOperationException("IndustryMaster not found!");
             }
-            return Ok($"IndustryMaster '{entity.Name}' created successfully");
+            await _industryService.RemoveIndustry(id);
+            return Ok(new
+            {
+                status = "success",
+                message = $"IndustryMaster '{entity.Name}' ctreated successfully."
+            });
         }
 
         [HttpGet("dropdown")]
         public async Task<IActionResult> GetIndustryMasterDropdown(string? searchTerm, int pageNo, int pageSize)
         {
-            var data = await _testMethodService.GetIndustryDropdown(searchTerm, pageNo, pageSize);
+            var data = await _industryService.GetIndustryDropdown(searchTerm, pageNo, pageSize);
             return data == null ? NoContent(): Ok(data);
         }
 

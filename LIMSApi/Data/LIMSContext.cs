@@ -30,6 +30,8 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<Customer> Customers { get; set; }
     public virtual DbSet<CustomerCompanyCategory> CustomerCompanyCategories { get; set; }
     public virtual DbSet<CustomerDispatchMode> CustomerDispatchModes { get; set; }
+    public virtual DbSet<CuttingPriceMaster> CuttingPriceMasters { get; set; }
+    public virtual DbSet<Configuration> Configurations { get; set; }
     public virtual DbSet<DepartmentMaster> DepartmentMasters { get; set; }
     public virtual DbSet<DesignationMaster> DesignationMasters { get; set; }
     public virtual DbSet<DimensionalFactorMaster> DimensionalFactorMasters { get; set; }
