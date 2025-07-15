@@ -1,4 +1,5 @@
-﻿using LIMSApi.Data;
+﻿using System.Linq.Dynamic.Core;
+using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
@@ -33,7 +34,43 @@ namespace LIMSApi.Repositories
             context.Update(Configuration);
             await context.SaveChangesAsync();
         }
+        public async Task<PagedResponse<object>> GetAllConfigurations(PageFilter filter)
+        {
+            var _query = from c in context.Configurations where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c;
 
-       
+            _query = _query.AsQueryable().ApplyFilters(filter.Filter);
+
+            if (!string.IsNullOrWhiteSpace(filter.searchTerm))
+            {
+                var search = filter.searchTerm.Trim().ToLower();
+                _query = _query.Where(x => (x.KeyName != null && x.KeyName.ToLower().Contains(search)));
+            }
+
+            if (filter.SortByColumn != null)
+            {
+                _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
+            }
+
+            // Total Records Count
+            int totalRecords = await _query.CountAsync();
+
+            // Apply Pagination
+            var items = await _query
+                .Skip((filter.PageNumber - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .ToListAsync();
+
+            return new PagedResponse<object>(items.Cast<object>().ToList(), totalRecords, filter.PageNumber, filter.PageSize);
+        }
+
+        public async Task<bool> IsExistKeyName(string key)
+        {
+            return await context.Configurations.AnyAsync(x => x.KeyName == key && x.CompanyCode == loggedInUser.CompanyCode && x.IsActive);
+        }
+
+        public async Task<bool> IsExistKeyAndId(string key, int Id)
+        {
+            return await context.Configurations.AnyAsync(x => x.KeyName == key && x.ID != Id && x.CompanyCode == loggedInUser.CompanyCode && x.IsActive);
+        }
     }
 }

@@ -1,4 +1,5 @@
 ﻿using System.Security.Claims;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Repositories;
 using LIMSApi.Repositories.Interface;
@@ -19,8 +20,8 @@ namespace LIMSApi.Services
 
         public async Task CreateConfiguration(Configuration Configuration)
         {
-            var existing = await _ConfigurationRepository.GetConfigurationByKey(Configuration.KeyName);
-            if (existing != null)
+            var existing = await _ConfigurationRepository.IsExistKeyName(Configuration.KeyName);
+            if (existing)
             {
                 throw new InvalidOperationException("Key Already Exists");
             }
@@ -30,6 +31,11 @@ namespace LIMSApi.Services
 
         public async Task UpdateConfiguration(Configuration Configuration)
         {
+            var existingKey = await _ConfigurationRepository.IsExistKeyAndId(Configuration.KeyName,Configuration.ID);
+            if (existingKey)
+            {
+                throw new InvalidOperationException("Key Already Exists");
+            }
             var existing = await _ConfigurationRepository.GetConfigurationByKey(Configuration.KeyName);
             if (existing == null)
             {
@@ -58,5 +64,10 @@ namespace LIMSApi.Services
             return Configuration;
         }
 
+        public async Task<PagedResponse<object>> FetchConfigurationList(PageFilter filter)
+        {
+            var configurations = await _ConfigurationRepository.GetAllConfigurations(filter);
+            return configurations;
+        }
     }
 }

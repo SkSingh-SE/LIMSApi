@@ -55,6 +55,7 @@ public partial class LIMSContext : DbContext
     public DbSet<LabScopeSpecificationParameter> LabScopeSpecificationParameters { get; set; }
     public DbSet<LabScopeSpecificationParameterEquipment> LabScopeSpecificationParameterEquipments { get; set; }
     public virtual DbSet<MakerMaster> MakerMasters { get; set; }
+    public virtual DbSet<MenuMaster> MenuMasters { get; set; }
     public virtual DbSet<MetalClassificationMaster> MetalClassificationMasters { get; set; }
     public virtual DbSet<OEMMaster> OEMMasters { get; set; }
     public virtual DbSet<OrganisationMaster> OrganisationMasters { get; set; }

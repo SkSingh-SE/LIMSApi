@@ -9,6 +9,8 @@ using LIMSApi.Data;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
+using LIMSApi.Dtos;
+using LIMSApi.Services;
 
 namespace LIMSApi.Controllers
 {
@@ -24,6 +26,12 @@ namespace LIMSApi.Controllers
         {
             _ConfigurationService = ConfigurationService;
             _logger = logger;
+        }
+
+        [HttpPost("list")]
+        public async Task<IActionResult> DisciplineList(PageFilter filter)
+        {
+            return Ok(await _ConfigurationService.FetchConfigurationList(filter));
         }
 
         [HttpPost("create")]

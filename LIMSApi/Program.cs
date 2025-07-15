@@ -151,6 +151,8 @@ builder.Services.AddScoped<IVendorRepository, VendorRepository>();
 builder.Services.AddScoped<IInvoiceCaseConfigurationRepository, InvoiceCaseConfigurationRepository>();
 builder.Services.AddScoped<IInvoiceCaseRepository, InvoiceCaseRepository>();
 builder.Services.AddScoped<ICuttingPriceMasterRepository,CuttingPriceMasterRepository>();
+builder.Services.AddScoped<IConfigurationRepository,ConfigurationRepository>();
+builder.Services.AddScoped<IMenuRepository,MenuRepository>();
 
 
 
@@ -205,6 +207,8 @@ builder.Services.AddScoped<IVendorService, VendorService>();
 builder.Services.AddScoped<IInvoiceCaseConfigurationService, InvoiceCaseConfigurationService>();
 builder.Services.AddScoped<IInvoiceCaseService, InvoiceCaseService>();
 builder.Services.AddScoped<ICuttingPriceMasterService, CuttingPriceMasterService>();
+builder.Services.AddScoped<IConfigurationService, ConfigurationService>();
+builder.Services.AddScoped<IMenuService, MenuService>();
 
 
 // Third party services

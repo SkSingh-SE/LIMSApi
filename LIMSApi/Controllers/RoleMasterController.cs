@@ -37,14 +37,22 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> PutRoleMaster(RoleMaster model)
         {
             await _roleService.ModifyRole(model);
-            return Ok($"Role '{model.Name}' updated successfully.");
+            return Ok(new
+            {
+                status = "success",
+                message = $"Role '{model.Name}' updated successfully."
+            });
         }
 
         [HttpPost("create")]
         public async Task<ActionResult<RoleMaster>> PostRoleMaster(RoleMaster model)
         {
             await _roleService.CreateRole(model);
-            return Ok($"Role '{model.Name}' created successfully");
+            return Ok(new
+            {
+                status = "success",
+                message = $"Role '{model.Name}' created successfully."
+            });
         }
 
         [HttpDelete("delete/{id}")]
@@ -55,7 +63,12 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("Role not found!");
             }
-            return Ok($"Role '{entity.Name}' created successfully");
+            await _roleService.RemoveRole(id);
+            return Ok(new
+            {
+                status = "success",
+                message = $"Role '{entity.Name}' deleted successfully."
+            });
         }
 
         [HttpGet("dropdown")]
