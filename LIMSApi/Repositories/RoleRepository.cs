@@ -37,7 +37,7 @@ namespace LIMSApi.Repositories
 
         public async Task<RoleMaster?> GetRoleById(long id)
         {
-            return await _context.RoleMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
+            return await _context.RoleMasters.Include(y=>y.MenuItems).FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
         }
 
         public async Task UpdateRole(RoleMaster model)

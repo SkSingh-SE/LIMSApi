@@ -68,7 +68,7 @@ namespace LIMSApi.Repositories
             return await context.Configurations.AnyAsync(x => x.KeyName == key && x.CompanyCode == loggedInUser.CompanyCode && x.IsActive);
         }
 
-        public async Task<bool> IsExistKeyAndId(string key, int Id)
+        public async Task<bool> IsExistKeyAndId(string key, long Id)
         {
             return await context.Configurations.AnyAsync(x => x.KeyName == key && x.ID != Id && x.CompanyCode == loggedInUser.CompanyCode && x.IsActive);
         }

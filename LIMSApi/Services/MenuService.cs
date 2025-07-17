@@ -84,7 +84,7 @@ namespace LIMSApi.Services
             return await _MenuRepository.GetAllMenus(filter);
         }
 
-        public async Task<List<DropdwonSelector>> GetMenuDropdown(string? searchTerm, int pageNo, int pageSize)
+        public async Task<List<CustomDropdown>> GetMenuDropdown(string? searchTerm, int pageNo, int pageSize)
         {
             return await _MenuRepository.GetMenuDropdown(searchTerm, pageNo, pageSize);
         }
@@ -101,7 +101,7 @@ namespace LIMSApi.Services
                 ParentID = parentId
             };
 
-            await _MenuRepository.AddMenu(entity);
+            entity = await _MenuRepository.AddMenu(entity);
 
             foreach (var child in dto.SubMenu)
             {

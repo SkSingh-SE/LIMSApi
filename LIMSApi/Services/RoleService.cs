@@ -46,6 +46,18 @@ namespace LIMSApi.Services
             existingRole.Description = model.Description;
             existingRole.ModifiedOn = DateTime.UtcNow;
 
+            // Clear and update role-menu mappings
+            existingRole.MenuItems.Clear();
+
+            foreach (var item in model.MenuItems)
+            {
+                existingRole.MenuItems.Add(new RoleMenuMapping
+                {
+                    RoleID = model.ID,
+                    MenuID = item.MenuID
+                });
+            }
+
             await _roleRepository.UpdateRole(existingRole);
             _logger.LogInformation("Role '{RoleName}' updated successfully.", model.Name);
         }

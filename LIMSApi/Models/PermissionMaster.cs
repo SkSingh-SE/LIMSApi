@@ -1,25 +1,21 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using Org.BouncyCastle.Bcpg.OpenPgp;
 
-namespace LIMSApi.Models;
-
-public partial class PermissionMaster : AuditProperty
+namespace LIMSApi.Models
 {
-    [Key]
-    public long ID { get; set; }
+    public class PermissionMaster
+    {
+        [Key]
+        public long ID { get; set; }
+        [Required, StringLength(100)]
+        public string Name { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+        public long? MenuID { get; set; }
+        public string Type { get; set; } = string.Empty; // "Action", "Read" "View", etc.
+        public string? Description { get; set; }
 
-    public long? RoleID { get; set; }
-
-    public long? MenuID { get; set; }
-
-    public bool? Viewp { get; set; }
-
-    public bool? Addp { get; set; }
-
-    public bool? Editp { get; set; }
-
-    public bool? Deletep { get; set; }
-
-    public bool? ExportP { get; set; }
+        [ForeignKey("MenuID")]
+        public virtual MenuMaster? Menu { get; set; }
+    }
 }

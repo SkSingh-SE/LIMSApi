@@ -5,7 +5,7 @@ namespace LIMSApi.Models
     public class Configuration : AuditProperty
     {
         [Key]
-        public int ID { get; set; }
+        public long ID { get; set; }
         public string KeyName { get; set; } = string.Empty;
         public string GroupName { get; set; } = string.Empty;
         public string Value { get; set; } = string.Empty;

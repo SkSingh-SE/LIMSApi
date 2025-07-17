@@ -153,6 +153,8 @@ builder.Services.AddScoped<IInvoiceCaseRepository, InvoiceCaseRepository>();
 builder.Services.AddScoped<ICuttingPriceMasterRepository,CuttingPriceMasterRepository>();
 builder.Services.AddScoped<IConfigurationRepository,ConfigurationRepository>();
 builder.Services.AddScoped<IMenuRepository,MenuRepository>();
+builder.Services.AddScoped<IRoleRepository,RoleRepository>();
+builder.Services.AddScoped<IUserPermissionRepository,UserPermissionRepository>();
 
 
 
@@ -209,6 +211,8 @@ builder.Services.AddScoped<IInvoiceCaseService, InvoiceCaseService>();
 builder.Services.AddScoped<ICuttingPriceMasterService, CuttingPriceMasterService>();
 builder.Services.AddScoped<IConfigurationService, ConfigurationService>();
 builder.Services.AddScoped<IMenuService, MenuService>();
+builder.Services.AddScoped<IRoleService, RoleService>();
+builder.Services.AddScoped<IUserPermissionService, UserPermissionService>();
 
 
 // Third party services

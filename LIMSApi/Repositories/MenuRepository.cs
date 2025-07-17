@@ -17,10 +17,11 @@ namespace LIMSApi.Repositories
             _context = context;
         }
 
-        public async Task AddMenu(MenuMaster model)
+        public async Task<MenuMaster> AddMenu(MenuMaster model)
         {
             await _context.MenuMasters.AddAsync(model);
             await _context.SaveChangesAsync();
+            return model;
         }
 
         public async Task DeleteMenu(long id)
@@ -48,13 +49,33 @@ namespace LIMSApi.Repositories
 
         public async Task<MenuMaster?> GetMenuById(long id)
         {
-            return await _context.MenuMasters.FirstOrDefaultAsync(x => x.ID == id);
+            var rootMenu = await _context.MenuMasters
+         .FirstOrDefaultAsync(m => m.ID == id);
+
+            if (rootMenu != null)
+            {
+                await LoadChildrenRecursive(rootMenu);
+            }
+
+            return rootMenu;
+        }
+        private async Task LoadChildrenRecursive(MenuMaster parent)
+        {
+            parent.SubMenu = await _context.MenuMasters
+                .Where(m => m.ParentID == parent.ID)
+                .ToListAsync();
+
+            foreach (var child in parent.SubMenu)
+            {
+                await LoadChildrenRecursive(child);
+            }
         }
 
-        public async Task UpdateMenu(MenuMaster model)
+        public async Task<MenuMaster> UpdateMenu(MenuMaster model)
         {
             _context.MenuMasters.Update(model);
             await _context.SaveChangesAsync();
+            return model;
         }
 
         public async Task<PagedResponse<object>> GetAllMenus(PageFilter filter)
@@ -86,7 +107,7 @@ namespace LIMSApi.Repositories
             return new PagedResponse<object>(items.Cast<object>().ToList(), totalRecords, filter.PageNumber, filter.PageSize);
         }
 
-        public async Task<List<DropdwonSelector>> GetMenuDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<CustomDropdown>> GetMenuDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
         {
             if (pageNo < 0) pageNo = 0;
 
@@ -100,10 +121,11 @@ namespace LIMSApi.Repositories
 
             var skip = pageNo * pageSize;
 
-            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new CustomDropdown
             {
                 Id = x.ID,
                 Name = x.Title,
+                ParentId = x.ParentID,
             })).ToListAsync();
 
             return data;

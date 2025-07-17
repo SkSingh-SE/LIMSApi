@@ -10,7 +10,7 @@ namespace LIMSApi.Repositories.Interface
         Task AddConfiguration(Configuration Configuration);
         Task UpdateConfiguration(Configuration Configuration);
         Task<bool> IsExistKeyName(string key);
-        Task<bool> IsExistKeyAndId(string key, int Id);
+        Task<bool> IsExistKeyAndId(string key, long Id);
 
     }
 }

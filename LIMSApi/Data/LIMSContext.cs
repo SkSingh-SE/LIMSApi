@@ -61,11 +61,11 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<OrganisationMaster> OrganisationMasters { get; set; }
     public virtual DbSet<ParameterMaster> ParameterMasters { get; set; }
     public virtual DbSet<ParameterUnitMaster> ParameterUnitMasters { get; set; }
-    public virtual DbSet<PermissionMaster> PermissionMasters { get; set; }
     public virtual DbSet<ProductConditionMaster> ProductConditionMasters { get; set; }
     public virtual DbSet<ProductSpecification> ProductSpecifications { get; set; }
     public virtual DbSet<RemarkMaster> RemarkMasters { get; set; }
     public virtual DbSet<RoleMaster> RoleMasters { get; set; }
+    public virtual DbSet<RoleMenuMapping> RoleMenuMappings { get; set; }
     public virtual DbSet<SiteActivity> SiteActivities { get; set; }
     public virtual DbSet<SiteError> SiteErrors { get; set; }
     public virtual DbSet<SpecificationHeader> SpecificationHeaders { get; set; }
@@ -96,6 +96,8 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<UploadFile> UploadFiles { get; set; }
     public virtual DbSet<UserMaster> UserMasters { get; set; }
     public virtual DbSet<VendorMaster> VendorMasters { get; set; }
+    public virtual DbSet<PermissionMaster> PermissionMasters { get; set; }
+    public virtual DbSet<UserPermission> UserPermissions { get; set; }
 
     //    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     //#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the BankName= syntax to read it from _configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.

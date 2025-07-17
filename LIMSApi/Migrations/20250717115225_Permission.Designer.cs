@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    [Migration("20250714085445_Update-Configuration")]
-    partial class UpdateConfiguration
+    [Migration("20250717115225_Permission")]
+    partial class Permission
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -2234,6 +2234,41 @@ namespace LIMSApi.Migrations
                     b.ToTable("MakerMasters");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.MenuMaster", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<string>("Color")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Icon")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsExpanded")
+                        .HasColumnType("bit");
+
+                    b.Property<long?>("ParentID")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Route")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("ParentID");
+
+                    b.ToTable("MenuMasters");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.MetalClassificationMaster", b =>
                 {
                     b.Property<long>("ID")
@@ -2534,6 +2569,40 @@ namespace LIMSApi.Migrations
                     b.ToTable("ParameterUnitMasters");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.Permission", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long?>("MenuID")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("MenuID");
+
+                    b.ToTable("Permissions");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.PermissionMaster", b =>
                 {
                     b.Property<long>("ID")
@@ -2756,9 +2825,6 @@ namespace LIMSApi.Migrations
                     b.Property<DateTime>("CreatedOn")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("Dashboard")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 
@@ -2779,6 +2845,29 @@ namespace LIMSApi.Migrations
                     b.HasKey("ID");
 
                     b.ToTable("RoleMasters");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.RoleMenuMapping", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<long>("MenuID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("RoleID")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("MenuID");
+
+                    b.HasIndex("RoleID");
+
+                    b.ToTable("RoleMenuMappings");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SiteActivity", b =>
@@ -4107,7 +4196,56 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
+                    b.HasIndex("EmployeeID");
+
+                    b.HasIndex("RoleID");
+
                     b.ToTable("UserMasters");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.UserPermission", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsGranted")
+                        .HasColumnType("bit");
+
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("PermissionID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("UserID")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("PermissionID");
+
+                    b.HasIndex("UserID");
+
+                    b.ToTable("UserPermissions");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.VendorMaster", b =>
@@ -4500,6 +4638,15 @@ namespace LIMSApi.Migrations
                     b.Navigation("InvoiceCaseConfiguration");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.MenuMaster", b =>
+                {
+                    b.HasOne("LIMSApi.Models.MenuMaster", "Parent")
+                        .WithMany("SubMenu")
+                        .HasForeignKey("ParentID");
+
+                    b.Navigation("Parent");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.MetalClassificationParameter", b =>
                 {
                     b.HasOne("LIMSApi.Models.MetalClassificationMaster", "MetalClassification")
@@ -4528,6 +4675,15 @@ namespace LIMSApi.Migrations
                         .IsRequired();
 
                     b.Navigation("ParameterUnit");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.Permission", b =>
+                {
+                    b.HasOne("LIMSApi.Models.MenuMaster", "Menu")
+                        .WithMany()
+                        .HasForeignKey("MenuID");
+
+                    b.Navigation("Menu");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ProductSpecification", b =>
@@ -4563,6 +4719,25 @@ namespace LIMSApi.Migrations
                     b.Navigation("SpecificationGrade");
 
                     b.Navigation("TestMethodSpecification");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.RoleMenuMapping", b =>
+                {
+                    b.HasOne("LIMSApi.Models.MenuMaster", "Menu")
+                        .WithMany()
+                        .HasForeignKey("MenuID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LIMSApi.Models.RoleMaster", "Role")
+                        .WithMany("MenuItems")
+                        .HasForeignKey("RoleID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Menu");
+
+                    b.Navigation("Role");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SpecificationGrade", b =>
@@ -4721,6 +4896,40 @@ namespace LIMSApi.Migrations
                     b.Navigation("TestMethod");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.UserMaster", b =>
+                {
+                    b.HasOne("LIMSApi.Models.EmployeeMaster", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeID");
+
+                    b.HasOne("LIMSApi.Models.RoleMaster", "Role")
+                        .WithMany()
+                        .HasForeignKey("RoleID");
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("Role");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.UserPermission", b =>
+                {
+                    b.HasOne("LIMSApi.Models.Permission", "Permission")
+                        .WithMany()
+                        .HasForeignKey("PermissionID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LIMSApi.Models.UserMaster", "User")
+                        .WithMany()
+                        .HasForeignKey("UserID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Permission");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.Customer", b =>
                 {
                     b.Navigation("ContactPersons");
@@ -4776,9 +4985,19 @@ namespace LIMSApi.Migrations
                     b.Navigation("InvoiceCases");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.MenuMaster", b =>
+                {
+                    b.Navigation("SubMenu");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.MetalClassificationMaster", b =>
                 {
                     b.Navigation("Parameters");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.RoleMaster", b =>
+                {
+                    b.Navigation("MenuItems");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SpecificationGrade", b =>

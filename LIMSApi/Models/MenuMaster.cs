@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace LIMSApi.Models
 {
@@ -14,7 +15,8 @@ namespace LIMSApi.Models
         public string? Color { get; set; }
 
         public long? ParentID { get; set; }
-        public MenuMaster? Parent { get; set; }
+        [JsonIgnore]
+        public virtual MenuMaster? Parent { get; set; }
         public ICollection<MenuMaster> SubMenu { get; set; } = new List<MenuMaster>();
     }
 }

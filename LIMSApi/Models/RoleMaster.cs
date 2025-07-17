@@ -14,6 +14,5 @@ public partial class RoleMaster : AuditProperty
     public required string Name { get; set; }
 
     public string? Description { get; set; }
-
-    public string? Dashboard { get; set; }
+    public ICollection<RoleMenuMapping> MenuItems { get; set; } = new List<RoleMenuMapping>();
 }

@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20250716090509_Add-Configuration-Changes")]
+    partial class AddConfigurationChanges
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2574,28 +2577,47 @@ namespace LIMSApi.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
 
-                    b.Property<string>("Description")
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<bool?>("Addp")
+                        .HasColumnType("bit");
 
-                    b.Property<string>("DisplayName")
+                    b.Property<string>("CompanyCode")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool?>("Deletep")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("Editp")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("ExportP")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
 
                     b.Property<long?>("MenuID")
                         .HasColumnType("bigint");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint");
 
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("RoleID")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool?>("Viewp")
+                        .HasColumnType("bit");
 
                     b.HasKey("ID");
-
-                    b.HasIndex("MenuID");
 
                     b.ToTable("PermissionMasters");
                 });
@@ -4140,56 +4162,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.HasIndex("EmployeeID");
-
-                    b.HasIndex("RoleID");
-
                     b.ToTable("UserMasters");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.UserPermission", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<string>("CompanyCode")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<long>("CreatedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsGranted")
-                        .HasColumnType("bit");
-
-                    b.Property<long?>("ModifiedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime?>("ModifiedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<long>("PermissionID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("UserID")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("PermissionID");
-
-                    b.HasIndex("UserID");
-
-                    b.ToTable("UserPermissions");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.VendorMaster", b =>
@@ -4621,15 +4594,6 @@ namespace LIMSApi.Migrations
                     b.Navigation("ParameterUnit");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.PermissionMaster", b =>
-                {
-                    b.HasOne("LIMSApi.Models.MenuMaster", "Menu")
-                        .WithMany()
-                        .HasForeignKey("MenuID");
-
-                    b.Navigation("Menu");
-                });
-
             modelBuilder.Entity("LIMSApi.Models.ProductSpecification", b =>
                 {
                     b.HasOne("LIMSApi.Models.SpecificationGrade", "SpecificationGrade")
@@ -4838,40 +4802,6 @@ namespace LIMSApi.Migrations
                         .HasForeignKey("TestMethodID");
 
                     b.Navigation("TestMethod");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.UserMaster", b =>
-                {
-                    b.HasOne("LIMSApi.Models.EmployeeMaster", "Employee")
-                        .WithMany()
-                        .HasForeignKey("EmployeeID");
-
-                    b.HasOne("LIMSApi.Models.RoleMaster", "Role")
-                        .WithMany()
-                        .HasForeignKey("RoleID");
-
-                    b.Navigation("Employee");
-
-                    b.Navigation("Role");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.UserPermission", b =>
-                {
-                    b.HasOne("LIMSApi.Models.PermissionMaster", "Permission")
-                        .WithMany()
-                        .HasForeignKey("PermissionID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("LIMSApi.Models.UserMaster", "User")
-                        .WithMany()
-                        .HasForeignKey("UserID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Permission");
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.Customer", b =>

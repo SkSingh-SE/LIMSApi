@@ -11,6 +11,6 @@ namespace LIMSApi.Services.Interface
         Task<MenuMaster> GetMenuDetails(long id);
         Task<PagedResponse<object>> FetchMenuList(PageFilter filter);
 
-        Task<List<DropdwonSelector>> GetMenuDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<CustomDropdown>> GetMenuDropdown(string? searchTerm, int pageNo, int pageSize);
     }
 }
