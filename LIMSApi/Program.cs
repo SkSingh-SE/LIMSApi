@@ -225,11 +225,16 @@ builder.Services.AddScoped<WhatsAppService>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "My API V1");
+        c.RoutePrefix = ""; // ? Make Swagger the root (http://lims.com/)
+    });
 }
+
 app.UseCors("AllowAll");
 
 app.UseMiddleware<GeneralizedExceptionHandlingMiddleware>();

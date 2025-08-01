@@ -66,5 +66,18 @@ namespace LIMSApi.Controllers
             });
 
         }
+
+        [HttpGet("getUserDropdown")]
+        public async Task<IActionResult> GetUserDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+            if (pageSize <= 0) pageSize = 20;
+            var users = await _userService.GetUserDropdown(searchTerm, pageNo, pageSize);
+            if (users == null || users.Count == 0)
+            {
+                return NotFound("No users found for the provided search term.");
+            }
+            return Ok(users);
+        }
     }
 }

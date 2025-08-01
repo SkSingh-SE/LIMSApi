@@ -8,5 +8,6 @@ namespace LIMSApi.Services.Interface
         Task SaveUserPermissions(long userId, List<UserPermissionUpdateDto> updatedPermissions);
 
         Task<List<MenuPermissionGroupDto>> GetUserPermissions(long userId);
+        Task<List<MenuPermissionGroupDto>> GetAllPermissions();
     }
 }

@@ -25,17 +25,23 @@ namespace LIMSApi.Controllers
             await _UserPermissionService.SaveUserPermissions(userId, updatedPermissions);
             return Ok(new
             {
-                status = "success",
+                status = "success", 
                 message = $"UserPermission updated successfully."
             });
         }
 
-        [HttpGet("user-permission")]
-        public async Task<IActionResult> GetUserPermission(long Id)
+        [HttpGet("user-permission/{userId}")]
+        public async Task<IActionResult> GetUserPermission(long userId)
         {
-            var data = await _UserPermissionService.GetUserPermissions(Id);
+            var data = await _UserPermissionService.GetUserPermissions(userId);
             return data == null ? NoContent(): Ok(data);
         }
 
+        [HttpGet("all-permission")]
+        public async Task<IActionResult> GetAllPermissions()
+        {
+            var data = await _UserPermissionService.GetAllPermissions();
+            return data == null ? NoContent() : Ok(data);
+        }
     }
 }

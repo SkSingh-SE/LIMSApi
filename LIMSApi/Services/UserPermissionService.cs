@@ -27,5 +27,9 @@ namespace LIMSApi.Services
         {
             return await _UserPermissionRepository.GetUserPermissions(userId);
         }
+        public async Task<List<MenuPermissionGroupDto>> GetAllPermissions()
+        {
+            return await _UserPermissionRepository.GetAllPermissions();
+        }
     }
 }

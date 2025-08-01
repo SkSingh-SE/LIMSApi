@@ -1,5 +1,6 @@
 ﻿using LIMSApi.Data;
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using Microsoft.EntityFrameworkCore;
@@ -9,9 +10,11 @@ namespace LIMSApi.Repositories
     public class UserRepository : IUserRepository
     {
         private readonly LIMSContext context;
+        private LoggedInUserDTO loggedInUser;
         public UserRepository(LIMSContext _context)
         {
             this.context = _context;
+            this.loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
         public async Task AddUser(UserMaster user)
@@ -49,6 +52,30 @@ namespace LIMSApi.Repositories
                 return true;
             }
             return false;
+        }
+
+        public async Task<List<DropdwonSelector>> GetUserDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = from a in context.UserMasters where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode select a;
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var search = searchTerm.Trim().ToLower();
+                _query = _query.Where(x => (x.UserName != null && x.UserName.ToLower().Contains(search))
+                || x.ID.ToString().Contains(search));
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            {
+                Id = x.ID,
+                Name = x.UserName,
+            })).ToListAsync();
+
+            return data;
         }
     }
 }

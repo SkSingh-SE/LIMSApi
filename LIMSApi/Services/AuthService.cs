@@ -40,7 +40,7 @@ namespace LIMSApi.Services
         public async Task<object> Authenticate(LoginDTO login)
         {
             var date1 = DateTime.UtcNow;
-           
+
             DateTimeOffset localTime = ConvertToTimeZone(date1, "India Standard Time");
             Console.WriteLine(localTime);
 
@@ -66,6 +66,7 @@ namespace LIMSApi.Services
             var responseObject = new
             {
                 token = token,
+                userId = user.ID,
                 name = user.UserName,
                 email = user.EmailId,
                 role = user.RoleName,
@@ -102,7 +103,7 @@ namespace LIMSApi.Services
                     name = user.UserName,
                     email = user.EmailId,
                     role = user.RoleName,
-                    expiresInSecond = expireHours  * 60 * 60,
+                    expiresInSecond = expireHours * 60 * 60,
                     employeeId = user.EmployeeID
                 };
                 return responseObject;
@@ -171,5 +172,9 @@ namespace LIMSApi.Services
             return expiry < DateTime.UtcNow;
         }
 
+        public string GetHashedPassword(string password)
+        {
+            return _passwordHasher.HashPassword(null, password); 
+        }
     }
 }

@@ -1,4 +1,5 @@
 ﻿using System.Security.Claims;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Repositories;
 using LIMSApi.Repositories.Interface;
@@ -48,5 +49,16 @@ namespace LIMSApi.Services
             return user;
         }
 
+        public async Task<List<DropdwonSelector>> GetUserDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+           var users = await _userRepository.GetUserDropdown(searchTerm, pageNo, pageSize);
+            if (users == null || users.Count == 0)
+            {
+                _logger.LogWarning("No users found for search term: {SearchTerm}", searchTerm);
+                return new List<DropdwonSelector>();
+            }
+            _logger.LogInformation("{Count} users found for search term: {SearchTerm}", users.Count, searchTerm);
+            return users;
+        }
     }
 }

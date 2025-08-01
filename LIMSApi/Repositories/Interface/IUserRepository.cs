@@ -9,6 +9,7 @@ namespace LIMSApi.Repositories.Interface
         Task AddUser(UserMaster user);
         Task UpdateUser(UserMaster user);
         Task<bool> DeleteUser(string email);
+        Task<List<DropdwonSelector>> GetUserDropdown(string? searchTerm, int pageNo, int pageSize);
 
     }
 }

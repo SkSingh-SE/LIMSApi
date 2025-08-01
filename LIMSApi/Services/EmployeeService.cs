@@ -11,13 +11,15 @@ namespace LIMSApi.Services
         private readonly ILogger<EmployeeService> _logger;
         private readonly IFileUploadService _uploadService;
         private readonly IAuthService _authService;
+        private readonly IUserRepository _userRepository;
 
-        public EmployeeService(IEmployeeRepository employeeRepo, ILogger<EmployeeService> logger, IFileUploadService uploadService, IAuthService authService)
+        public EmployeeService(IEmployeeRepository employeeRepo, ILogger<EmployeeService> logger, IFileUploadService uploadService, IAuthService authService, IUserRepository userRepository)
         {
             _employeeRepository = employeeRepo;
             _logger = logger;
             _uploadService = uploadService;
             _authService = authService;
+            _userRepository = userRepository;
         }
 
         public async Task CreateEmployee(EmployeeMaster model)
@@ -36,9 +38,9 @@ namespace LIMSApi.Services
             {
                 EmployeeID = createdEmployee.ID,
                 UserName = model.Name,
-                Password = $"{model.ID}_{model.EmailId}_{model.ID}",
+                Password = _authService.GetHashedPassword(model.Password),
                 EmailId = model.EmailId,
-                RoleID = 1,
+                RoleID = model.RoleID,
                 RoleName = "User",
                 IsActive = true,
                 CreatedOn = DateTime.UtcNow,
@@ -93,11 +95,29 @@ namespace LIMSApi.Services
             existingEmployee.AccountNumber = model.AccountNumber;
             existingEmployee.IFSCCode = model.IFSCCode;
             existingEmployee.AccountHolderName = model.AccountHolderName;
+            existingEmployee.EmailId = model.EmailId;
+            existingEmployee.Password = model.Password;
+            existingEmployee.RoleID = model.RoleID;
 
             existingEmployee.ModifiedOn = DateTime.UtcNow;
 
             await _employeeRepository.UpdateEmployee(existingEmployee);
             _logger.LogInformation("Employee '{EmployeeName}' updated successfully.", model.Name);
+
+            var hashedPassword = _authService.GetHashedPassword(model.Password);
+            // Update user details if UserID is provided
+            var user = await _userRepository.GetUserByEmail(model.EmailId);
+            if (user != null)
+            {
+                user.UserName = model.Name;
+                user.EmailId = model.EmailId;
+                user.RoleID = model.RoleID;
+                user.Password = hashedPassword == user.Password ? user.Password : hashedPassword;
+                user.ModifiedOn = DateTime.UtcNow;
+                await _userRepository.UpdateUser(user);
+                _logger.LogInformation("User '{UserName}' updated successfully.", user.UserName);
+            }
+
         }
 
         public async Task RemoveEmployee(long id)
@@ -179,27 +199,27 @@ namespace LIMSApi.Services
 
         public async Task CreateDocuments(List<EmployeeDocument> model)
         {
-           foreach(var document in model)
+            foreach (var document in model)
             {
                 if (document.file != null)
                 {
-                    var fileUploadResponse = await _uploadService.UploadFileAsync(document.file,FileType.Employee,null,document.FileName);
+                    var fileUploadResponse = await _uploadService.UploadFileAsync(document.file, FileType.Employee, null, document.FileName);
                     if (fileUploadResponse == null)
                         throw new InvalidOperationException("File upload failed!");
                     document.FilePath = fileUploadResponse.FilePath;
                     document.FileName = fileUploadResponse.OriginalFileName;
                     document.UploadReferenceID = fileUploadResponse.ID;
-                    document.UploadedOn = DateTime.UtcNow;  
+                    document.UploadedOn = DateTime.UtcNow;
 
                     await _employeeRepository.AddEmployeeDocument(document);
                 }
             }
-            _logger.LogInformation("Documents created successfully.");  
+            _logger.LogInformation("Documents created successfully.");
         }
 
         public async Task CreateQualifications(List<EmployeeQualification> model)
         {
-            foreach(var qualification in model)
+            foreach (var qualification in model)
             {
                 await _employeeRepository.AddEmployeeQualification(qualification);
             }
@@ -240,7 +260,8 @@ namespace LIMSApi.Services
                             existingDoc.FileName = fileUploadResponse.OriginalFileName;
                             existingDoc.UploadReferenceID = fileUploadResponse.ID;
                             existingDoc.UploadedOn = DateTime.UtcNow;
-                        }else
+                        }
+                        else
                         {
                             existingDoc.FileName = document.FileName;
                             existingDoc.FilePath = document.FilePath;

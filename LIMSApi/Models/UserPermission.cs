@@ -10,6 +10,8 @@ namespace LIMSApi.Models
         public long UserID { get; set; }
         public long PermissionID { get; set; }
         public bool IsGranted { get; set; } = false;
+        public bool IsOverride { get; set; } = false;
+
 
         [ForeignKey("UserID")]
         public virtual UserMaster? User { get; set; }

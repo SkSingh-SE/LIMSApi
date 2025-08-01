@@ -75,7 +75,49 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> GetMenuDropdown(string? searchTerm, int pageNo, int pageSize)
         {
             var data = await _MenuService.GetMenuDropdown(searchTerm, pageNo, pageSize);
-            return data == null ? NoContent(): Ok(data);
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("submenu-dropdown")]
+        public async Task<IActionResult> GetSubMenuDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            var data = await _MenuService.GetSubMenuDropdown(searchTerm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+
+        [HttpPost("update-permission")]
+        public async Task<IActionResult> UpdateMenuPermission(long menuId, List<PermissionMaster> updatedPermissions)
+        {
+            var result = await _MenuService.UpdateMenuPermission(menuId, updatedPermissions);
+            if (result)
+            {
+                return Ok(new
+                {
+                    status = "success",
+                    message = $"Menu permissions updated successfully."
+                });
+            }
+            return BadRequest(new
+            {
+                status = "error",
+                message = $"Failed to update menu permissions."
+            });
+        }
+
+        [HttpGet("get-permission/{menuId}")]
+        public async Task<IActionResult> GetMenuPermission(long menuId)
+        {
+            var data = await _MenuService.GetMenuPermissions(menuId);
+            if (data == null)
+            {
+                return NoContent();
+            }
+            return Ok(data);
+        }
+
+        [HttpPost("submenu-list")]
+        public async Task<IActionResult> SubMenuList(PageFilter filter)
+        {
+            return Ok(await _MenuService.FetchSubMenuList(filter));
         }
 
     }

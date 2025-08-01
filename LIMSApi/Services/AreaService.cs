@@ -128,12 +128,12 @@ namespace LIMSApi.Services
                                     existingState = await stateService.CreateState(state);
                                 }
 
-                                var existingCity = await cityService.GetCityByName(item.Block);
+                                var existingCity = await cityService.GetCityByName(item.District);
                                 if (existingCity == null)
                                 {
                                     var city = new CityMaster
                                     {
-                                        Name = item.Block,
+                                        Name = item.District,
                                         StateID = existingState.ID,
                                         IsActive = true,
                                         CreatedOn = DateTime.UtcNow
