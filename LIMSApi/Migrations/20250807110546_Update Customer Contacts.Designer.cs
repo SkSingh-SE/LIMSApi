@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20250807110546_Update Customer Contacts")]
+    partial class UpdateCustomerContacts
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -525,13 +528,11 @@ namespace LIMSApi.Migrations
                     b.Property<long>("AreaID")
                         .HasColumnType("bigint");
 
-                    b.Property<string>("City")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<long>("City")
+                        .HasColumnType("bigint");
 
-                    b.Property<string>("Country")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<long>("Country")
+                        .HasColumnType("bigint");
 
                     b.Property<long>("CustomerID")
                         .HasColumnType("bigint");
@@ -570,9 +571,8 @@ namespace LIMSApi.Migrations
                     b.Property<bool>("SendReport")
                         .HasColumnType("bit");
 
-                    b.Property<string>("State")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<long>("State")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("TelephoneNo")
                         .HasMaxLength(15)

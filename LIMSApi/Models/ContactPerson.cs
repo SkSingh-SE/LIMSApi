@@ -38,7 +38,15 @@ namespace LIMSApi.Models
         public bool SendReport { get; set; }
 
         [MaxLength(255)]
-        public string? BillReportDeliveryAddress { get; set; }
+        public string Address { get; set; } = string.Empty;
+
+        public string Country { get; set; } = string.Empty;
+        public string State { get; set; } = string.Empty;
+        public string City { get; set; } = string.Empty;
+
+        public long AreaID { get; set; }
+        [StringLength(10)]
+        public required string PinCode { get; set; }
 
         [Required,StringLength(50)]
         public required string Type { get; set; }

@@ -136,7 +136,13 @@ namespace LIMSApi.Services
                         existingContactPerson.TelephoneNo = contactPerson.TelephoneNo;
                         existingContactPerson.SendBill = contactPerson.SendBill;
                         existingContactPerson.SendReport = contactPerson.SendReport;
-                        existingContactPerson.BillReportDeliveryAddress = contactPerson.BillReportDeliveryAddress;
+                        existingContactPerson.Address = contactPerson.Address;
+                        existingContactPerson.AreaID = contactPerson.AreaID;
+                        existingContactPerson.City = contactPerson.City;
+                        existingContactPerson.State = contactPerson.State;
+                        existingContactPerson.Country = contactPerson.Country;
+                        existingContactPerson.PinCode = contactPerson.PinCode;
+
                         existingContactPerson.Type = contactPerson.Type;
                     }
                     else
