@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20250825093647_Inward Changes Sample Details ID")]
+    partial class InwardChangesSampleDetailsID
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2983,7 +2986,10 @@ namespace LIMSApi.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<long>("SampleID")
+                    b.Property<long>("SampleDetailID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("SampleInwardID")
                         .HasColumnType("bigint");
 
                     b.Property<string>("SampleNo")
@@ -2996,7 +3002,9 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.HasIndex("SampleID");
+                    b.HasIndex("SampleDetailID");
+
+                    b.HasIndex("SampleInwardID");
 
                     b.ToTable("SampleAdditionalDetails");
                 });
@@ -3008,10 +3016,6 @@ namespace LIMSApi.Migrations
                         .HasColumnType("bigint");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Details")
                         .IsRequired()
@@ -3253,9 +3257,6 @@ namespace LIMSApi.Migrations
                         .HasColumnType("bigint");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<long>("ContactID")
-                        .HasColumnType("bigint");
 
                     b.Property<string>("EmailId")
                         .IsRequired()
@@ -5211,13 +5212,17 @@ namespace LIMSApi.Migrations
 
             modelBuilder.Entity("LIMSApi.Models.SampleAdditionalDetail", b =>
                 {
-                    b.HasOne("LIMSApi.Models.SampleDetail", "SampleDetail")
-                        .WithMany("AdditionalDetails")
-                        .HasForeignKey("SampleID")
+                    b.HasOne("LIMSApi.Models.SampleDetail", "Sample")
+                        .WithMany()
+                        .HasForeignKey("SampleDetailID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("SampleDetail");
+                    b.HasOne("LIMSApi.Models.SampleInward", null)
+                        .WithMany("SampleAdditionalDetails")
+                        .HasForeignKey("SampleInwardID");
+
+                    b.Navigation("Sample");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SampleDetail", b =>
@@ -5534,11 +5539,6 @@ namespace LIMSApi.Migrations
                     b.Navigation("MenuItems");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.SampleDetail", b =>
-                {
-                    b.Navigation("AdditionalDetails");
-                });
-
             modelBuilder.Entity("LIMSApi.Models.SampleInward", b =>
                 {
                     b.Navigation("Addresses");
@@ -5546,6 +5546,8 @@ namespace LIMSApi.Migrations
                     b.Navigation("Contacts");
 
                     b.Navigation("DispatchModes");
+
+                    b.Navigation("SampleAdditionalDetails");
 
                     b.Navigation("SampleDetails");
                 });

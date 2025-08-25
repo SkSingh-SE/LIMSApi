@@ -11,7 +11,7 @@ namespace LIMSApi.Repositories.Interface
         Task<SampleInward> GetSampleInwardById(long id);
         Task<PagedResponse<object>> GetAllSampleInwards(PageFilter filter);
         Task<List<DropdwonSelector>> GetSampleInwardDropdown(string? searchTerm, int pageNo, int pageSize);
-        Task<bool> ExistsByName(string name);
-        Task<bool> ExistsByNameAndNotId(string name, long Id);
+
+        Task<object> GetCaseNoAndSampleNo();
     }
 }

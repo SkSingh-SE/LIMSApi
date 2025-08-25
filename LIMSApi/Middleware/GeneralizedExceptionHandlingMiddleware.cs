@@ -6,6 +6,7 @@ using LIMSApi.Models;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Middleware
 {
@@ -76,6 +77,12 @@ namespace LIMSApi.Middleware
                     errorResponse.Message = ex.Message;
                 }
                 else if (ex is SqlException)
+                {
+                    message = $"Error in controller: {controllerName}, action: {actionName} from: database";
+                    httpContext.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                    errorResponse.Message = "An error occurred while processing your request.";
+                }
+                else if (ex is DbUpdateException)
                 {
                     message = $"Error in controller: {controllerName}, action: {actionName} from: database";
                     httpContext.Response.StatusCode = (int)HttpStatusCode.InternalServerError;

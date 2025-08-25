@@ -155,6 +155,7 @@ builder.Services.AddScoped<IConfigurationRepository,ConfigurationRepository>();
 builder.Services.AddScoped<IMenuRepository,MenuRepository>();
 builder.Services.AddScoped<IRoleRepository,RoleRepository>();
 builder.Services.AddScoped<IUserPermissionRepository,UserPermissionRepository>();
+builder.Services.AddScoped<ISampleInwardRepository, SampleInwardRepository>();
 
 
 
@@ -213,6 +214,7 @@ builder.Services.AddScoped<IConfigurationService, ConfigurationService>();
 builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<IUserPermissionService, UserPermissionService>();
+builder.Services.AddScoped<ISampleInwardService, SampleInwardService>();
 
 
 // Third party services
@@ -223,6 +225,7 @@ builder.Services.AddScoped<WhatsAppService>();
 
 
 var app = builder.Build();
+app.UseMiddleware<GeneralizedExceptionHandlingMiddleware>();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
@@ -237,7 +240,6 @@ if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
 
 app.UseCors("AllowAll");
 
-app.UseMiddleware<GeneralizedExceptionHandlingMiddleware>();
 
 app.UseStaticFiles();
 app.UseHttpsRedirection();

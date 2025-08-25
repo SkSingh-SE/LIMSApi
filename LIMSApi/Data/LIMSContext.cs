@@ -80,6 +80,13 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<SubContractorMaster> SubContractorMasters { get; set; }
     public virtual DbSet<SubGroupMaster> SubGroupMasters { get; set; }
     public virtual DbSet<SupplierMaster> SupplierMasters { get; set; }
+    public virtual DbSet<SampleInward> SampleInwards { get; set; }
+    public virtual DbSet<SampleDispatchMode> SampleDispatchModes { get; set; }
+    public virtual DbSet<SampleInwardContactPerson> InwardContacts { get; set; }
+    public virtual DbSet<SampleInwardAddressInfo> InwardAddresses { get; set; }
+    public virtual DbSet<SampleDetail> SampleDetails { get; set; }
+    public virtual DbSet<SampleAdditionalDetail> SampleAdditionalDetails { get; set; }
+    public virtual DbSet<SampleTestPlan> TestPlans { get; set; }
     public virtual DbSet<TaxMaster> TaxMasters { get; set; }
     public virtual DbSet<TestGroup> TestGroups { get; set; }
     public virtual DbSet<TestGroupMapping> TestGroupMappings { get; set; }

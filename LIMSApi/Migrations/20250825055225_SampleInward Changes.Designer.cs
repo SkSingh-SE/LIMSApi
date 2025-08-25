@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20250825055225_SampleInward Changes")]
+    partial class SampleInwardChanges
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2986,6 +2989,9 @@ namespace LIMSApi.Migrations
                     b.Property<long>("SampleID")
                         .HasColumnType("bigint");
 
+                    b.Property<long?>("SampleInwardID")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("SampleNo")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -2996,7 +3002,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.HasIndex("SampleID");
+                    b.HasIndex("SampleInwardID");
 
                     b.ToTable("SampleAdditionalDetails");
                 });
@@ -3009,10 +3015,6 @@ namespace LIMSApi.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
 
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("Details")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -3022,9 +3024,6 @@ namespace LIMSApi.Migrations
 
                     b.Property<string>("FileName")
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<long>("InwardID")
-                        .HasColumnType("bigint");
 
                     b.Property<string>("Nature")
                         .IsRequired()
@@ -3041,6 +3040,12 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
 
+                    b.Property<long>("SampleID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("SampleInwardID")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("SampleNo")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -3050,7 +3055,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.HasIndex("InwardID");
+                    b.HasIndex("SampleInwardID");
 
                     b.ToTable("SampleDetails");
                 });
@@ -3066,12 +3071,15 @@ namespace LIMSApi.Migrations
                     b.Property<long>("DispatchModeID")
                         .HasColumnType("bigint");
 
-                    b.Property<long>("InwardID")
+                    b.Property<long>("SampleID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("SampleInwardID")
                         .HasColumnType("bigint");
 
                     b.HasKey("ID");
 
-                    b.HasIndex("InwardID");
+                    b.HasIndex("SampleInwardID");
 
                     b.ToTable("SampleDispatchModes");
                 });
@@ -3224,12 +3232,12 @@ namespace LIMSApi.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<long>("InwardID")
-                        .HasColumnType("bigint");
-
                     b.Property<string>("PinCode")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("SampleID")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("State")
                         .IsRequired()
@@ -3241,7 +3249,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.HasIndex("InwardID");
+                    b.HasIndex("SampleID");
 
                     b.ToTable("InwardAddresses");
                 });
@@ -3254,15 +3262,9 @@ namespace LIMSApi.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
 
-                    b.Property<long>("ContactID")
-                        .HasColumnType("bigint");
-
                     b.Property<string>("EmailId")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<long>("InwardID")
-                        .HasColumnType("bigint");
 
                     b.Property<string>("MobileNo")
                         .IsRequired()
@@ -3271,6 +3273,12 @@ namespace LIMSApi.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("SampleID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("SampleInwardID")
+                        .HasColumnType("bigint");
 
                     b.Property<bool>("Selected")
                         .HasColumnType("bit");
@@ -3283,7 +3291,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.HasIndex("InwardID");
+                    b.HasIndex("SampleInwardID");
 
                     b.ToTable("InwardContacts");
                 });
@@ -5211,42 +5219,30 @@ namespace LIMSApi.Migrations
 
             modelBuilder.Entity("LIMSApi.Models.SampleAdditionalDetail", b =>
                 {
-                    b.HasOne("LIMSApi.Models.SampleDetail", "SampleDetail")
-                        .WithMany("AdditionalDetails")
-                        .HasForeignKey("SampleID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("SampleDetail");
+                    b.HasOne("LIMSApi.Models.SampleInward", null)
+                        .WithMany("SampleAdditionalDetails")
+                        .HasForeignKey("SampleInwardID");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SampleDetail", b =>
                 {
-                    b.HasOne("LIMSApi.Models.SampleInward", "SampleInward")
+                    b.HasOne("LIMSApi.Models.SampleInward", null)
                         .WithMany("SampleDetails")
-                        .HasForeignKey("InwardID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("SampleInward");
+                        .HasForeignKey("SampleInwardID");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SampleDispatchMode", b =>
                 {
-                    b.HasOne("LIMSApi.Models.SampleInward", "SampleInward")
+                    b.HasOne("LIMSApi.Models.SampleInward", null)
                         .WithMany("DispatchModes")
-                        .HasForeignKey("InwardID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("SampleInward");
+                        .HasForeignKey("SampleInwardID");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SampleInwardAddressInfo", b =>
                 {
                     b.HasOne("LIMSApi.Models.SampleInward", "SampleInward")
                         .WithMany("Addresses")
-                        .HasForeignKey("InwardID")
+                        .HasForeignKey("SampleID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -5255,13 +5251,9 @@ namespace LIMSApi.Migrations
 
             modelBuilder.Entity("LIMSApi.Models.SampleInwardContactPerson", b =>
                 {
-                    b.HasOne("LIMSApi.Models.SampleInward", "SampleInward")
+                    b.HasOne("LIMSApi.Models.SampleInward", null)
                         .WithMany("Contacts")
-                        .HasForeignKey("InwardID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("SampleInward");
+                        .HasForeignKey("SampleInwardID");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SpecificationGrade", b =>
@@ -5534,11 +5526,6 @@ namespace LIMSApi.Migrations
                     b.Navigation("MenuItems");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.SampleDetail", b =>
-                {
-                    b.Navigation("AdditionalDetails");
-                });
-
             modelBuilder.Entity("LIMSApi.Models.SampleInward", b =>
                 {
                     b.Navigation("Addresses");
@@ -5546,6 +5533,8 @@ namespace LIMSApi.Migrations
                     b.Navigation("Contacts");
 
                     b.Navigation("DispatchModes");
+
+                    b.Navigation("SampleAdditionalDetails");
 
                     b.Navigation("SampleDetails");
                 });

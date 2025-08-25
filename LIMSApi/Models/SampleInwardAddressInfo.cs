@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace LIMSApi.Models
 {
@@ -14,5 +15,9 @@ namespace LIMSApi.Models
         public string City { get; set; }
         public string State { get; set; }
         public string Country { get; set; }
+        public string Type { get; set; }
+        public long InwardID { get; set; }
+        [ForeignKey("InwardID")]
+        public virtual SampleInward? SampleInward { get; set; } = null!;
     }
 }
