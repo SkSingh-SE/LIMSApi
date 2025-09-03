@@ -6,10 +6,10 @@ namespace LIMSApi.Services.Interface
 {
     public interface ISampleInwardService
     {
-        Task CreateSampleInward([FromForm] SampleInward model);
-        Task ModifySampleInward(SampleInward model);
+        Task CreateSampleInward(SampleInwardDto model);
+        Task ModifySampleInward(SampleInwardDto model);
         Task RemoveSampleInward(long id);
-        Task<SampleInward> GetSampleInwardDetails(long id);
+        Task<SampleInwardDto> GetSampleInwardDetails(long id);
         Task<PagedResponse<object>> FetchSampleInwardList(PageFilter filter);
         Task<object> GetCaseNoAndSampleNo();
 

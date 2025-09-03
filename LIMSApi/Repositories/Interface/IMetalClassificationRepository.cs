@@ -12,6 +12,7 @@ namespace LIMSApi.Repositories.Interface
         Task<PagedResponse<object>> GetAllMetalClassifications(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetMetalClassificationDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<ParameterMaster>> GetParameterByMetalId(long id);
         Task<bool> ExistsByName(string name);
         Task<bool> ExistsByNameAndNotId(string name, long Id);
     }

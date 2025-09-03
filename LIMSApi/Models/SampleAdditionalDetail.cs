@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace LIMSApi.Models
 {
@@ -11,7 +12,7 @@ namespace LIMSApi.Models
         public string Label { get; set; }
         public string Value { get; set; }
         public long SampleID { get; set; }
-        [ForeignKey("SampleID")]
+        [ForeignKey("SampleID"), JsonIgnore]
         public virtual SampleDetail? SampleDetail { get; set; }
     }
 }

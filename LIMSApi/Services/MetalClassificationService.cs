@@ -83,5 +83,9 @@ namespace LIMSApi.Services
         {
             return await _MetalClassificationRepository.GetMetalClassificationDropdown(searchTerm, pageNo, pageSize);
         }
+        public async Task<List<ParameterMaster>> GetParameterByMetalId(long id)
+        {
+            return await _MetalClassificationRepository.GetParameterByMetalId(id);
+        }
     }
 }

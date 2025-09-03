@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace LIMSApi.Models
 {
@@ -17,7 +18,7 @@ namespace LIMSApi.Models
         public string Country { get; set; }
         public string Type { get; set; }
         public long InwardID { get; set; }
-        [ForeignKey("InwardID")]
+        [ForeignKey("InwardID"), JsonIgnore]
         public virtual SampleInward? SampleInward { get; set; } = null!;
     }
 }

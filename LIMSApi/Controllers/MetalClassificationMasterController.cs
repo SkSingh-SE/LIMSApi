@@ -81,6 +81,13 @@ namespace LIMSApi.Controllers
             var data = await _MetalClassificationService.GetMetalClassificationDropdown(searchTerm, pageNo, pageSize);
             return data == null ? NoContent(): Ok(data);
         }
+        
+        [HttpGet("metal-parameters/{Id}")]
+        public async Task<IActionResult> GeMetalParameters(long Id)
+        {
+            var data = await _MetalClassificationService.GetParameterByMetalId(Id);
+            return data == null ? NoContent(): Ok(data);
+        }
 
     }
 }

@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace LIMSApi.Models
 {
@@ -20,7 +21,7 @@ namespace LIMSApi.Models
         public string? SampleFilePath { get; set; }
         public string? FileName { get; set; }
         public long InwardID { get; set; }
-        [ForeignKey("InwardID")]
+        [ForeignKey("InwardID"), JsonIgnore]
         public virtual SampleInward? SampleInward { get; set; } = null!;
 
         public virtual ICollection<SampleAdditionalDetail> AdditionalDetails { get; set; } = new List<SampleAdditionalDetail>();

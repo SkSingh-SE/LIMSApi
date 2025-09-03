@@ -40,7 +40,14 @@ namespace LIMSApi.Repositories
 
         public async Task<SampleInward?> GetSampleInwardById(long id)
         {
-            return await _context.SampleInwards.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            var sampleInward = await _context.SampleInwards
+                                .Include(x => x.DispatchModes)
+                                .Include(x => x.Contacts)
+                                .Include(x => x.Addresses)
+                                .Include(x => x.SampleDetails)
+                                    .ThenInclude(sd => sd.AdditionalDetails)
+                                .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return sampleInward;
         }
 
         public async Task UpdateSampleInward(SampleInward model)
@@ -51,7 +58,26 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllSampleInwards(PageFilter filter)
         {
-            var _query = from c in _context.SampleInwards where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c;
+            var _query = _context.SampleInwards
+                         .Where(c => c.IsActive && c.CompanyCode == loggedInUser.CompanyCode)
+                         .Select(c => new
+                         {
+                             c.ID,
+                             c.CaseNo,
+                             c.CustomerID,
+                             CustomerName = c.Customer != null ? c.Customer.Name : string.Empty,
+                             ContactPersonName = c.Contacts.OrderBy(x => x.ID).Select(x => x.Name).FirstOrDefault(),
+                             ContactEmail = c.Contacts.OrderBy(x => x.ID).Select(x => x.EmailId).FirstOrDefault(),
+                             ContactPhone = c.Contacts.OrderBy(x => x.ID).Select(x => x.MobileNo).FirstOrDefault(),
+                             c.CollectionTime,
+                             c.ModifiedOn,
+                             ModifiedBy = _context.EmployeeMasters
+                                          .Where(e => e.ID == c.ModifiedBy)
+                                          .Select(e => e.Name)
+                                          .FirstOrDefault()
+                         });
+
+
 
             _query = _query.AsQueryable().ApplyFilters(filter.Filter);
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
@@ -107,20 +133,22 @@ namespace LIMSApi.Repositories
                 .Select(s => s.CaseNo)
                 .FirstOrDefaultAsync();
 
-            var lastSampleNo = await _context.SampleDetails.OrderByDescending(s => s.ID)
+            var lastSampleNo = await _context.SampleDetails
+                .OrderByDescending(s => s.ID)
                 .Select(s => s.SampleNo)
                 .FirstOrDefaultAsync();
 
-            long lastNumber = 0;
+            long lastCaseNumber = 0;
             long lastSampleNumber = 0;
 
             if (!string.IsNullOrEmpty(lastCase))
             {
                 if (long.TryParse(lastCase.Split('-')[1], out long parsed))
                 {
-                    lastNumber = parsed;
+                    lastCaseNumber = parsed;
                 }
             }
+
             if (!string.IsNullOrEmpty(lastSampleNo))
             {
                 if (long.TryParse(lastSampleNo.Split('-')[1], out long parsed))
@@ -129,17 +157,20 @@ namespace LIMSApi.Repositories
                 }
             }
 
-            long nextNumber = lastNumber + 1;
+            long nextCaseNumber = lastCaseNumber + 1;
             long nextSampleNumber = lastSampleNumber + 1;
-            var year = DateTime.UtcNow.Year.ToString().Substring(2,2);
-            var res = new 
+            var year = DateTime.UtcNow.Year.ToString().Substring(2, 2);
+
+            var res = new
             {
-                caseNo = $"DMSPL-{nextNumber.ToString("D6")}",
-                sampleNo = $"{year}-{nextSampleNumber.ToString("D6")}"
+                caseNo = $"DMSPL-{nextCaseNumber:D6}",  
+                sampleNo = $"{year}-{nextSampleNumber:D6}", 
+                nextSampleCounter = nextSampleNumber     
             };
 
             return res;
         }
+
 
     }
 }

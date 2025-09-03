@@ -12,5 +12,6 @@ namespace LIMSApi.Services.Interface
         Task<PagedResponse<object>> FetchMetalClassificationList(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetMetalClassificationDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<ParameterMaster>> GetParameterByMetalId(long id);
     }
 }

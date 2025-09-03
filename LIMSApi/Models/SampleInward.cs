@@ -59,6 +59,8 @@ namespace LIMSApi.Models
         public long? UploadReferenceID { get; set; } = null;
         public string Status { get; set; } = "Inward Initiated";
 
+        public DateTime CollectionTime { get; set; } = DateTime.UtcNow;
+
         // Navigation Properties
         public virtual ICollection<SampleDispatchMode> DispatchModes { get; set; } = new List<SampleDispatchMode>();
         public virtual ICollection<SampleInwardContactPerson> Contacts { get; set; } = new List<SampleInwardContactPerson>();
@@ -66,6 +68,9 @@ namespace LIMSApi.Models
         = new List<SampleInwardAddressInfo>();
         public virtual ICollection<SampleDetail> SampleDetails { get; set; } = new List<SampleDetail>();
         //public virtual ICollection<SampleTestPlan> SampleTestPlans { get; set; } = new List<SampleTestPlan>();
+
+        [ForeignKey("CustomerID")]
+        public virtual Customer? Customer { get; set; } = null!;
 
         [NotMapped]
        public IFormFile File { get; set; } = null!;
