@@ -122,5 +122,6 @@ namespace LIMSApi.Repositories
         {
             return await _context.TestMethodSpecifications.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
+       
     }
 }

@@ -9,6 +9,7 @@ namespace LIMSApi.Repositories.Interface
         Task UpdateSampleInward(SampleInward model);
         Task DeleteSampleInward(long id);
         Task<SampleInward> GetSampleInwardById(long id);
+        Task<SampleInward> GetSampleInwardWithPlans(long id);
         Task<PagedResponse<object>> GetAllSampleInwards(PageFilter filter);
         Task<List<DropdwonSelector>> GetSampleInwardDropdown(string? searchTerm, int pageNo, int pageSize);
 

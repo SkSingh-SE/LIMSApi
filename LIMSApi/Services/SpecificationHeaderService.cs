@@ -90,7 +90,7 @@ namespace LIMSApi.Services
 
                     if (existingLine == null)
                     {
-                        line.GradeID = existingGrade.ID;
+                        line.SpecificationGradeID = existingGrade.ID;
                         existingGrade.SpecificationLines.Add(line);
                     }
                     else
@@ -173,6 +173,14 @@ namespace LIMSApi.Services
         public async Task<List<DropdwonSelector>> GetGradeDropdown(string? searchTerm, int pageNo, int pageSize)
         {
             return await _specificationRepo.GetGradeDropdown(searchTerm, pageNo, pageSize);
+        }
+        public async Task<List<DropdwonSelector>> GetDefaultStandardForSpecification(long gradeId)
+        {
+            return await _specificationRepo.GetDefaultStandardForSpecification(gradeId);
+        }
+        public async Task<List<DropdwonSelector>> GetTestMethodsForSpecifications(long gradeId1, long gradeId2 = 0)
+        {
+            return await _specificationRepo.GetTestMethodsForSpecifications(gradeId1,gradeId2);
         }
     }
 }

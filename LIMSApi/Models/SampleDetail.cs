@@ -6,7 +6,7 @@ namespace LIMSApi.Models
 {
     public class SampleDetail
     {
-        [Key]
+        
         public long ID { get; set; }
         public string SampleNo { get; set; }
         public string Details { get; set; }
@@ -15,6 +15,13 @@ namespace LIMSApi.Models
         public string Remarks { get; set; }
         public int Quantity { get; set; }
         public bool Disabled { get; set; }
+
+        public bool CuttingRequired { get; set; }
+        public bool MachiningRequired { get; set; }
+        public decimal MachiningAmount { get; set; }
+        public bool OtherPreparation { get; set; }
+        public decimal OtherPreparationCharge { get; set; }
+        public bool TpiRequired { get; set; }
 
         public long? UploadReferenceID { get; set; }
         [StringLength(255)]
@@ -25,6 +32,8 @@ namespace LIMSApi.Models
         public virtual SampleInward? SampleInward { get; set; } = null!;
 
         public virtual ICollection<SampleAdditionalDetail> AdditionalDetails { get; set; } = new List<SampleAdditionalDetail>();
+        public virtual ICollection<SampleTestPlan> TestPlans { get; set; } = new List<SampleTestPlan>();
+
 
         [NotMapped]
         public IFormFile File { get; set; } = null!;

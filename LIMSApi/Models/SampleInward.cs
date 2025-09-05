@@ -49,6 +49,8 @@ namespace LIMSApi.Models
 
         [StringLength(500)]
         public string? SampleReceiptNote { get; set; }
+        public string? StatementOfConformity { get; set; }
+        public string? DecisionRule { get; set; }
 
         [StringLength(300)]
         public string? RequestFilePath { get; set; }

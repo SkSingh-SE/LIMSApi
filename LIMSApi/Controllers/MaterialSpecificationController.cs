@@ -91,5 +91,19 @@ namespace LIMSApi.Controllers
             return data == null ? NoContent() : Ok(data);
         }
 
+        [HttpGet("default-standard/{gradeId}")]
+        public async Task<IActionResult> GetDefaultStandardForSpecification(long gradeId)
+        {
+            var data = await _specificationHeaderService.GetDefaultStandardForSpecification(gradeId);
+            return data == null ? NoContent() : Ok(data);
+        }
+
+        [HttpGet("test-methods")]
+        public async Task<IActionResult> GetDefaultStandardForSpecification(long gradeId1 , long gradeId2)
+        {
+            var data = await _specificationHeaderService.GetTestMethodsForSpecifications(gradeId1,gradeId2);
+            return data == null ? NoContent() : Ok(data);
+        }
+
     }
 }

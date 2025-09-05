@@ -16,5 +16,7 @@ namespace LIMSApi.Repositories.Interface
         Task<List<DropdwonSelector>> GetGradeDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<bool> ExistsByName(string name);
         Task<bool> ExistsByNameAndNotId(string name, long id);
+        Task<List<DropdwonSelector>> GetDefaultStandardForSpecification(long gradeId);
+        Task<List<DropdwonSelector>> GetTestMethodsForSpecifications(long gradeId1, long gradeId2 = 0);
     }
 }

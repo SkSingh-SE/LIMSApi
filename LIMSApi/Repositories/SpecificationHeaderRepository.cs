@@ -11,10 +11,11 @@ namespace LIMSApi.Repositories
     public class SpecificationHeaderRepository : ISpecificationHeaderRepository
     {
         private readonly LIMSContext _context;
-
+        private LoggedInUserDTO loggedInUser;
         public SpecificationHeaderRepository(LIMSContext context)
         {
             _context = context;
+            loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
         public async Task AddSpecificationHeader(SpecificationHeader model)
@@ -219,6 +220,56 @@ namespace LIMSApi.Repositories
         public async Task<bool> ExistsByNameAndNotId(string name, long Id)
         {
             return await _context.SpecificationHeaders.AnyAsync(x => x.AliasName == name && x.ID != Id && x.IsActive);
+        }
+
+        public async Task<List<DropdwonSelector>> GetDefaultStandardForSpecification(long gradeId)
+        {
+            var query = from grade in _context.SpecificationGrades
+                        join spec in _context.SpecificationHeaders
+                            on grade.SpecificationHeaderID equals spec.ID
+                        join std in _context.StandardOrganizationMasters
+                            on spec.StandardOrganizationID equals std.ID
+                        where grade.ID == gradeId
+                              && spec.IsActive
+                              && spec.CompanyCode == loggedInUser.CompanyCode
+                        select new DropdwonSelector
+                        {
+                            Id = std.ID,   
+                            Name = std.Name  
+                        };
+
+            return await query.ToListAsync();
+
+        }
+        public async Task<List<DropdwonSelector>> GetTestMethodsForSpecifications(long gradeId1, long gradeId2 = 0)
+        {
+            var gradeIds = new List<long> { gradeId1 };
+            if (gradeId2 != 0)
+            {
+                gradeIds.Add(gradeId2);
+            }
+
+            var query = from spec in _context.SpecificationHeaders
+                        join grade in _context.SpecificationGrades
+                            on spec.ID equals grade.SpecificationHeaderID
+                        join line in _context.SpecificationLines
+                            on grade.ID equals line.SpecificationGradeID
+                        join specLineLabTest in _context.SpecificationLineLaboratoryTests
+                            on line.ID equals specLineLabTest.SpecificationLineID
+                        join test in _context.LaboratoryTests
+                            on specLineLabTest.LaboratoryTestID equals test.ID
+                        where gradeIds.Contains(grade.ID)   
+                              && spec.IsActive
+                              && spec.CompanyCode == loggedInUser.CompanyCode
+                        select new DropdwonSelector
+                        {
+                            Id = test.ID,
+                            Name = test.Name
+                        };
+
+            var data = await query.ToListAsync();
+            return data.DistinctBy(x => x.Id).ToList();
+
         }
     }
 }

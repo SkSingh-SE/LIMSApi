@@ -50,6 +50,32 @@ namespace LIMSApi.Repositories
             return sampleInward;
         }
 
+        public async Task<SampleInward?> GetSampleInwardWithPlans(long id)
+        {
+            var sampleInward = await _context.SampleInwards
+                .Include(x => x.DispatchModes)
+                .Include(x => x.Contacts)
+                .Include(x => x.Addresses)
+                .Include(x => x.SampleDetails)
+                    .ThenInclude(sd => sd.AdditionalDetails)
+                .Include(x => x.SampleDetails)
+                    .ThenInclude(sd => sd.TestPlans)
+                        .ThenInclude(tp => tp.GeneralTests)
+                            .ThenInclude(gt => gt.Methods)
+                .Include(x => x.SampleDetails)
+                    .ThenInclude(sd => sd.TestPlans)
+                        .ThenInclude(tp => tp.ChemicalTests)
+                            .ThenInclude(ct => ct.Elements)
+                .FirstOrDefaultAsync(x =>
+                    x.ID == id &&
+                    x.IsActive &&
+                    x.CompanyCode == loggedInUser.CompanyCode);
+
+            return sampleInward;
+        }
+
+
+
         public async Task UpdateSampleInward(SampleInward model)
         {
             _context.SampleInwards.Update(model);

@@ -6,37 +6,22 @@ namespace LIMSApi.Dtos
 {
     public class SampleInwardDto
     {
-       
+
         public long ID { get; set; }
-       
         public string CaseNo { get; set; } = string.Empty;
 
-       
+        // Customer + Address
         public long CustomerID { get; set; }
-
-       
         public string Address { get; set; } = string.Empty;
-
-       
         public string Area { get; set; } = string.Empty;
-
-        
         public string State { get; set; } = string.Empty;
-
-        
         public string City { get; set; } = string.Empty;
-
-       
         public string PinCode { get; set; } = string.Empty;
-
         public string Country { get; set; } = string.Empty;
-
-        
         public string GstNo { get; set; } = string.Empty;
 
-        [Column(TypeName = "decimal(18,2)")]
+        // Flags
         public decimal AdvancePayment { get; set; }
-
         public bool BillRequired { get; set; }
         public bool AdvancePIRequired { get; set; }
         public bool HoldTesting { get; set; }
@@ -45,15 +30,12 @@ namespace LIMSApi.Dtos
         public bool ReturnSample { get; set; }
         public bool NotDestroyed { get; set; }
 
-       
         public string? SampleReceiptNote { get; set; }
+        public string? StatementOfConformity { get; set; } = "Not Applicable";
+        public string? DecisionRule { get; set; } = "Not Applicable";
 
-        
         public string? RequestFilePath { get; set; }
-
-       
         public string? RequestFileName { get; set; }
-
         public long? UploadReferenceID { get; set; } = null;
         public string Status { get; set; } = "Inward Initiated";
         public DateTime CollectionTime { get; set; } = DateTime.Now;
@@ -63,8 +45,8 @@ namespace LIMSApi.Dtos
         public virtual ICollection<ContactDto> Contacts { get; set; } = new List<ContactDto>();
         //public virtual ICollection<SampleInwardAddressInfo> Addresses { get; set; }
         //= new List<SampleInwardAddressInfo>();
-        public required PartyAddressDto ReportingTo { get; set; }
-        public required PartyAddressDto BillingTo { get; set; }
+        public PartyAddressDto? ReportingTo { get; set; }
+        public PartyAddressDto? BillingTo { get; set; }
         public virtual ICollection<SampleDetailDto> SampleDetails { get; set; } = new List<SampleDetailDto>();
         public virtual ICollection<SampleAdditionalDetailDto> SampleAdditionalDetails { get; set; } = new List<SampleAdditionalDetailDto>();
         public ICollection<SampleTestPlanDto> SampleTestPlans { get; set; } = new List<SampleTestPlanDto>();
@@ -120,12 +102,23 @@ namespace LIMSApi.Dtos
         public int Quantity { get; set; }
         public bool Disabled { get; set; }
 
+        // Prep flags
+        public bool CuttingRequired { get; set; }
+        public bool MachiningRequired { get; set; }
+        public decimal MachiningAmount { get; set; }
+        public bool OtherPreparation { get; set; }
+        public decimal OtherPreparationCharge { get; set; }
+        public bool TpiRequired { get; set; }
+
+        // File
         public long? UploadReferenceID { get; set; }
         public string? SampleFilePath { get; set; }
         public string? FileName { get; set; }
+        public IFormFile? File { get; set; }
         public long InwardID { get; set; }
 
-        public IFormFile? File { get; set; }
+        public ICollection<SampleAdditionalDetailDto> AdditionalDetails { get; set; } = new List<SampleAdditionalDetailDto>();
+        public ICollection<SampleTestPlanDto> TestPlans { get; set; } = new List<SampleTestPlanDto>();
     }
 
     public class SampleAdditionalDetailDto
@@ -147,13 +140,13 @@ namespace LIMSApi.Dtos
     public class GeneralTestDto
     {
         public string? SampleNo { get; set; }
-        public string? Specification1 { get; set; }
-        public string? Specification2 { get; set; }
+        public long Specification1 { get; set; }
+        public long? Specification2 { get; set; }
         public string? Parameter { get; set; }
-        public List<TestMethodDto> Methods { get; set; } = new();
+        public List<GeneralTestMethodDto> Methods { get; set; } = new();
     }
 
-    public class TestMethodDto
+    public class GeneralTestMethodDto
     {
         public long? TestMethodID { get; set; }
         public long? StandardID { get; set; }
@@ -166,14 +159,19 @@ namespace LIMSApi.Dtos
     public class ChemicalTestDto
     {
         public string? SampleNo { get; set; }
-        public string? ReportNo { get; set; }
-        public string? UrlNo { get; set; }
-        public List<ElementDto> Elements { get; set; } = new();
+        public string? ReportNo { get; set; } = "Auto Generate";
+        public string? UlrNo { get; set; } = "Auto Generate";
+        public Dictionary<string, bool> TestTypes { get; set; } = new();
+        public long MetalClassificationID { get; set; }
+        public long Specification1 { get; set; }
+        public long? Specification2 { get; set; }
+        public long TestMethod { get; set; }
+        public List<ChemicalTestElementDto> Elements { get; set; } = new();
     }
 
-    public class ElementDto
+    public class ChemicalTestElementDto
     {
-        public long? ElementID { get; set; }
+        public long ParameterID { get; set; }
         public string? ElementName { get; set; }
         public int Quantity { get; set; }
     }

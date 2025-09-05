@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace LIMSApi.Models;
 
@@ -10,7 +11,7 @@ public partial class SpecificationLine
     [Key]
     public long ID { get; set; }
 
-    public long? GradeID { get; set; }
+    public long? SpecificationGradeID { get; set; }
 
     public bool? ManualSelection { get; set; }
 
@@ -54,6 +55,9 @@ public partial class SpecificationLine
     
     [ForeignKey("HeatTreatmentID")]
     public virtual HeatTreatmentMaster? HeatTreatment { get; set; }
+
+    [ForeignKey("SpecificationGradeID"),JsonIgnore]
+    public virtual SpecificationGrade? SpecificationGrade { get; set; }
 
     public ICollection<SpecificationLineLaboratoryTest> LaboratoryTests { get; set; } = new List<SpecificationLineLaboratoryTest>();
 }
