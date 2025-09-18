@@ -22,7 +22,8 @@ namespace LIMSApi.Models
         public bool OtherPreparation { get; set; }
         public decimal OtherPreparationCharge { get; set; }
         public bool TpiRequired { get; set; }
-
+        public string? Specimen { get; set; }
+        public string? TestInstructions { get; set; }
         public long? UploadReferenceID { get; set; }
         [StringLength(255)]
         public string? SampleFilePath { get; set; }

@@ -1,9 +1,12 @@
 ﻿using System.Xml.Linq;
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
+using LIMSApi.Migrations;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.DotNet.Scaffolding.Shared.CodeModifier.CodeChange;
 
 namespace LIMSApi.Services
 {
@@ -12,12 +15,14 @@ namespace LIMSApi.Services
         private readonly ISampleInwardRepository _SampleInwardRepository;
         private readonly ILogger<SampleInwardService> _logger;
         private readonly IFileUploadService _uploadService;
+        private LoggedInUserDTO loggedInUser;
 
         public SampleInwardService(ISampleInwardRepository SampleInwardRepo, ILogger<SampleInwardService> logger, IFileUploadService uploadService)
         {
             _SampleInwardRepository = SampleInwardRepo;
             _logger = logger;
             _uploadService = uploadService;
+            loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
         public async Task CreateSampleInward(SampleInwardDto model)
@@ -281,6 +286,8 @@ namespace LIMSApi.Services
                     existingSample.Category = s.Category;
                     existingSample.Remarks = s.Remarks;
                     existingSample.Quantity = s.Quantity;
+                    existingSample.Specimen = s.Specimen;
+                    existingSample.TestInstructions = s.TestInstructions;
 
                     // handle file update
                     if (s.File != null)
@@ -324,8 +331,7 @@ namespace LIMSApi.Services
                                 var general = new GeneralTest
                                 {
                                     Specification1 = g.g.Specification1,
-                                    Specification2 = g.g.Specification2,
-                                    Parameter = g.g.Parameter
+                                    Specification2 = g.g.Specification2
                                 };
 
                                 foreach (var m in g.g.Methods)
@@ -425,8 +431,7 @@ namespace LIMSApi.Services
                                 var general = new GeneralTest
                                 {
                                     Specification1 = g.g.Specification1,
-                                    Specification2 = g.g.Specification2,
-                                    Parameter = g.g.Parameter
+                                    Specification2 = g.g.Specification2
                                 };
 
                                 foreach (var m in g.g.Methods)
@@ -483,14 +488,18 @@ namespace LIMSApi.Services
 
 
 
-        public async Task ModifySamplePlan(SampleInwardDto model)
+        public async Task ModifySamplePlan(PlanDto model)
         {
             var entity = await _SampleInwardRepository.GetSampleInwardWithPlans(model.ID);
             if (entity == null)
                 throw new Exception("Sample Inward not found");
 
+            // update review info
             entity.StatementOfConformity = model.StatementOfConformity;
             entity.DecisionRule = model.DecisionRule;
+            entity.ReviewStatus = model.ReviewStatus ?? "Reviewed";
+            entity.ReviewedBy = loggedInUser.EmployeeID;
+            entity.ReviewedOn = DateTime.UtcNow;
 
             string tcPrefix = "TC5098";
             string labLocation = "0";
@@ -502,91 +511,142 @@ namespace LIMSApi.Services
                 if (sample == null)
                     throw new Exception($"Sample '{sampleDto.SampleNo}' not found in inward {model.ID}");
 
-                // update sample preparation fields
+                // update prep fields
                 sample.CuttingRequired = sampleDto.CuttingRequired;
                 sample.MachiningRequired = sampleDto.MachiningRequired;
-                sample.MachiningAmount = sampleDto.MachiningAmount;
+                sample.MachiningAmount = sampleDto.MachiningAmount ?? 0;
                 sample.OtherPreparation = sampleDto.OtherPreparation;
-                sample.OtherPreparationCharge = sampleDto.OtherPreparationCharge;
+                sample.OtherPreparationCharge = sampleDto.OtherPreparationCharge ?? 0;
                 sample.TpiRequired = sampleDto.TpiRequired;
 
-                // find or create test plan
+                // ensure plan
                 var existingPlan = sample.TestPlans.FirstOrDefault();
                 if (existingPlan == null)
                 {
                     existingPlan = new SampleTestPlan { SampleNo = sampleDto.SampleNo };
                     sample.TestPlans.Add(existingPlan);
                 }
-                else
-                {
-                    // clear existing plan
-                    existingPlan.GeneralTests.Clear();
-                    existingPlan.ChemicalTests.Clear();
-                }
 
                 int ulrCounter = 1;
 
-                // add new general tests
-                foreach (var g in sampleDto.TestPlans.SelectMany(p => p.GeneralTests).Select((g, idx) => new { g, idx }))
+                //  Sync General Tests
+                var dtoGeneralTests = sampleDto.TestPlans.SelectMany(p => p.GeneralTests).ToList();
+
+                // remove missing general tests
+                var toRemoveGeneral = existingPlan.GeneralTests
+                    .Where(gt => !dtoGeneralTests.Any(d => d.ID == gt.ID))
+                    .ToList();
+                foreach (var rem in toRemoveGeneral)
+                    existingPlan.GeneralTests.Remove(rem);
+
+                // add / update general tests
+                foreach (var g in dtoGeneralTests.Select((g, idx) => new { g, idx }))
                 {
-                    var generalTest = new GeneralTest
+                    var existingGeneral = existingPlan.GeneralTests
+                        .FirstOrDefault(x => x.ID == g.g.ID);
+
+                    if (existingGeneral == null)
                     {
-                        Specification1 = g.g.Specification1,
-                        Specification2 = g.g.Specification2
-                    };
+                        existingGeneral = new GeneralTest
+                        {
+                            Specification1 = g.g.Specification1,
+                            Specification2 = g.g.Specification2,
+                            Methods = new List<GeneralTestMethod>()
+                        };
+                        existingPlan.GeneralTests.Add(existingGeneral);
+                    }
+                    else
+                    {
+                        // update fields
+                        existingGeneral.Specification1 = g.g.Specification1;
+                        existingGeneral.Specification2 = g.g.Specification2;
+                        existingGeneral.Methods.Clear(); // re-sync methods
+                    }
 
                     foreach (var m in g.g.Methods)
                     {
-                        generalTest.Methods.Add(new GeneralTestMethod
+                        var newMethod = new GeneralTestMethod
                         {
                             TestMethodID = m.TestMethodID ?? 0,
                             StandardID = m.StandardID ?? 0,
                             Quantity = m.Quantity,
                             ReportNo = string.IsNullOrEmpty(m.ReportNo)
-                                        ? $"{sample.SampleNo}-{g.idx}"
+                                        ? existingGeneral.Methods.FirstOrDefault(x => x.TestMethodID == m.TestMethodID)?.ReportNo
+                                          ?? $"{sample.SampleNo}-{g.idx}"
                                         : m.ReportNo,
                             UlrNo = string.IsNullOrEmpty(m.UlrNo)
-                                        ? $"{tcPrefix}{year}{labLocation}{sample.SampleNo.Split('-')[1].PadLeft(8, '0')}{ulrCounter++}F"
+                                        ? existingGeneral.Methods.FirstOrDefault(x => x.TestMethodID == m.TestMethodID)?.UlrNo
+                                          ?? $"{tcPrefix}{year}{labLocation}{sample.SampleNo.Split('-')[1].PadLeft(8, '0')}{ulrCounter++}F"
                                         : m.UlrNo,
                             Cancel = m.Cancel
-                        });
-                    }
+                        };
 
-                    existingPlan.GeneralTests.Add(generalTest);
+                        existingGeneral.Methods.Add(newMethod);
+                    }
                 }
 
-                // add new chemical tests
-                foreach (var c in sampleDto.TestPlans.SelectMany(p => p.ChemicalTests).Select((c, idx) => new { c, idx }))
-                {
-                    var chemicalTest = new ChemicalTest
-                    {
-                        ReportNo = string.IsNullOrEmpty(c.c.ReportNo)
-                                    ? $"{sample.SampleNo}-{c.idx}"
-                                    : c.c.ReportNo,
-                        UlrNo = string.IsNullOrEmpty(c.c.UlrNo)
-                                    ? $"{tcPrefix}{year}{labLocation}{sample.SampleNo.Split('-')[1].PadLeft(8, '0')}{ulrCounter++}F"
-                                    : c.c.UlrNo,
-                        MetalClassificationID = c.c.MetalClassificationID,
-                        Specification1 = c.c.Specification1,
-                        Specification2 = c.c.Specification2,
-                        TestMethod = c.c.TestMethod
-                    };
+                //  Sync Chemical Tests
+                var dtoChemicalTests = sampleDto.TestPlans.SelectMany(p => p.ChemicalTests).ToList();
 
+                // remove missing chemical tests
+                var toRemoveChem = existingPlan.ChemicalTests
+                    .Where(ct => !dtoChemicalTests.Any(d => d.ID == ct.ID))
+                    .ToList();
+                foreach (var rem in toRemoveChem)
+                    existingPlan.ChemicalTests.Remove(rem);
+
+                // add / update chemical tests
+                foreach (var c in dtoChemicalTests.Select((c, idx) => new { c, idx }))
+                {
+                    var existingChem = existingPlan.ChemicalTests
+                        .FirstOrDefault(x => x.ID == c.c.ID);
+
+                    if (existingChem == null)
+                    {
+                        existingChem = new ChemicalTest();
+                        existingPlan.ChemicalTests.Add(existingChem);
+                    }
+
+                    // update fields
+                    existingChem.ReportNo = string.IsNullOrEmpty(c.c.ReportNo)
+                        ? existingChem.ReportNo ?? $"{sample.SampleNo}-{c.idx}"
+                        : c.c.ReportNo;
+
+                    existingChem.UlrNo = string.IsNullOrEmpty(c.c.UlrNo)
+                        ? existingChem.UlrNo ?? $"{tcPrefix}{year}{labLocation}{sample.SampleNo.Split('-')[1].PadLeft(8, '0')}{ulrCounter++}F"
+                        : c.c.UlrNo;
+
+                    existingChem.MetalClassificationID = c.c.MetalClassificationID;
+                    existingChem.Specification1 = c.c.Specification1;
+                    existingChem.Specification2 = c.c.Specification2;
+                    existingChem.TestMethod = c.c.TestMethod;
+
+                    // sync elements
+                    existingChem.Elements.Clear();
                     foreach (var e in c.c.Elements)
                     {
-                        chemicalTest.Elements.Add(new ChemicalTestElement
+                        existingChem.Elements.Add(new ChemicalTestElement
                         {
                             ParameterID = e.ParameterID
                         });
                     }
 
-                    existingPlan.ChemicalTests.Add(chemicalTest);
+                    existingChem.TestTypes.Clear();
+                    foreach (var kvp in c.c.TestTypes)
+                    {
+                        existingChem.TestTypes.Add(new ChemicalTestType
+                        {
+                            Name = kvp.Key,
+                            IsSelected = kvp.Value
+                        });
+                    }
                 }
             }
 
             await _SampleInwardRepository.UpdateSampleInward(entity);
             _logger.LogInformation("Plans and sample prep updated for Inward '{InwardID}'", model.ID);
         }
+
 
 
 
@@ -718,7 +778,7 @@ namespace LIMSApi.Services
                         Value = a.Value
                     }).ToList(),
 
-                // 🔹 NEW: Sample Test Plans
+                //  NEW: Sample Test Plans
                 SampleTestPlans = sampleInward.SampleDetails
                     .Where(s => s.TestPlans.Any())
                     .SelectMany(s => s.TestPlans.Select(tp => new SampleTestPlanDto
@@ -728,7 +788,6 @@ namespace LIMSApi.Services
                         {
                             Specification1 = gt.Specification1,
                             Specification2 = gt.Specification2,
-                            Parameter = gt.Parameter,
                             Methods = gt.Methods.Select(m => new GeneralTestMethodDto
                             {
                                 TestMethodID = m.TestMethodID,
@@ -749,6 +808,185 @@ namespace LIMSApi.Services
                             TestMethod = ct.TestMethod,
                             Elements = ct.Elements.Select(e => new ChemicalTestElementDto
                             {
+                                ParameterID = e.ParameterID
+                            }).ToList()
+                        }).ToList()
+                    }))
+                    .ToList()
+            };
+
+            return dto;
+        }
+        public async Task<SampleInwardDto> GetSampleInwardWithPlans(long id)
+        {
+            var sampleInward = await _SampleInwardRepository.GetSampleInwardWithPlans(id);
+            if (sampleInward == null)
+                throw new InvalidOperationException("SampleInward not found!");
+
+            var dto = new SampleInwardDto
+            {
+                ID = sampleInward.ID,
+                CaseNo = sampleInward.CaseNo,
+                CustomerID = sampleInward.CustomerID,
+                Address = sampleInward.Address,
+                Area = sampleInward.Area,
+                State = sampleInward.State,
+                City = sampleInward.City,
+                PinCode = sampleInward.PinCode,
+                Country = sampleInward.Country,
+                GstNo = sampleInward.GstNo,
+                AdvancePayment = sampleInward.AdvancePayment,
+                BillRequired = sampleInward.BillRequired,
+                AdvancePIRequired = sampleInward.AdvancePIRequired,
+                HoldTesting = sampleInward.HoldTesting,
+                HoldTestingUntilPIApproved = sampleInward.HoldTestingUntilPIApproved,
+                Urgent = sampleInward.Urgent,
+                ReturnSample = sampleInward.ReturnSample,
+                NotDestroyed = sampleInward.NotDestroyed,
+                SampleReceiptNote = sampleInward.SampleReceiptNote,
+                RequestFilePath = sampleInward.RequestFilePath,
+                RequestFileName = sampleInward.RequestFileName,
+                UploadReferenceID = sampleInward.UploadReferenceID,
+                Status = sampleInward.Status,
+                CollectionTime = sampleInward.CollectionTime,
+                StatementOfConformity = sampleInward.StatementOfConformity,
+                DecisionRule = sampleInward.DecisionRule,
+                ReviewStatus = sampleInward.ReviewStatus,
+                ReviewedBy = sampleInward.ReviewedBy,
+                ReviewedOn = sampleInward.ReviewedOn,
+
+                DispatchModes = sampleInward.DispatchModes
+                    .Select(d => new DispatchModeDto
+                    {
+                        ID = d.ID,
+                        InwardID = d.InwardID,
+                        DispatchModeID = d.DispatchModeID
+                    }).ToList(),
+
+                Contacts = sampleInward.Contacts
+                    .Select(c => new ContactDto
+                    {
+                        ID= c.ID,
+                        InwardID = c.InwardID,
+                        ContactID = c.ContactID,
+                        Name = c.Name,
+                        MobileNo = c.MobileNo,
+                        EmailId = c.EmailId,
+                        SendBill = c.SendBill,
+                        SendReport = c.SendReport,
+                        Selected = c.Selected
+                    }).ToList(),
+
+                ReportingTo = sampleInward.Addresses
+                    .Where(a => a.Type == "reporting")
+                    .Select(a => new PartyAddressDto
+                    {
+                        ID = a.ID,
+                        InwardID = a.InwardID,
+                        ContactPersonName = a.ContactPersonName,
+                        ContactPersonID = a.ContactPersonID,
+                        Address = a.Address,
+                        PinCode = a.PinCode,
+                        Area = a.Area,
+                        City = a.City,
+                        State = a.State,
+                        Country = a.Country,
+                        Type = a.Type
+                    })
+                    .FirstOrDefault(),
+
+                BillingTo = sampleInward.Addresses
+                    .Where(a => a.Type == "billing")
+                    .Select(a => new PartyAddressDto
+                    {
+                        ID = a.ID,
+                        InwardID = a.InwardID,
+                        ContactPersonName = a.ContactPersonName,
+                        ContactPersonID = a.ContactPersonID,
+                        Address = a.Address,
+                        PinCode = a.PinCode,
+                        Area = a.Area,
+                        City = a.City,
+                        State = a.State,
+                        Country = a.Country,
+                        Type = a.Type
+                    })
+                    .FirstOrDefault(),
+
+                SampleDetails = sampleInward.SampleDetails
+                    .Select(s => new SampleDetailDto
+                    {
+                        ID = s.ID,
+                        InwardID = s.InwardID,
+                        SampleNo = s.SampleNo,
+                        Details = s.Details,
+                        Nature = s.Nature,
+                        Category = s.Category,
+                        Remarks = s.Remarks,
+                        Quantity = s.Quantity,
+                        UploadReferenceID = s.UploadReferenceID,
+                        SampleFilePath = s.SampleFilePath,
+                        FileName = s.FileName,
+                        CuttingRequired = s.CuttingRequired,
+                        MachiningRequired = s.MachiningRequired,
+                        MachiningAmount = s.MachiningAmount,
+                        OtherPreparation = s.OtherPreparation,
+                        OtherPreparationCharge = s.OtherPreparationCharge,
+                        TpiRequired = s.TpiRequired
+                    }).ToList(),
+
+                SampleAdditionalDetails = sampleInward.SampleDetails
+                    .SelectMany(s => s.AdditionalDetails)
+                    .Select(a => new SampleAdditionalDetailDto
+                    {
+                        ID = a.ID,
+                        SampleID = a.SampleID,
+                        SampleNo = a.SampleNo,
+                        Label = a.Label,
+                        Value = a.Value
+                    }).ToList(),
+
+                //  NEW: Sample Test Plans
+                SampleTestPlans = sampleInward.SampleDetails
+                    .Where(s => s.TestPlans.Any())
+                    .SelectMany(s => s.TestPlans.Select(tp => new SampleTestPlanDto
+                    {
+                        ID = tp.ID,
+                        SampleNo = tp.SampleNo,
+                        SampleID = tp.SampleID,
+                        GeneralTests = tp.GeneralTests.Select(gt => new GeneralTestDto
+                        {
+                            ID = gt.ID,
+                            SampleTestPlanID = gt.SampleTestPlanID,
+                            Specification1 = gt.Specification1,
+                            Specification2 = gt.Specification2,
+                            Methods = gt.Methods.Select(m => new GeneralTestMethodDto
+                            {
+                                ID = m.ID,
+                                GeneralTestID = m.GeneralTestID,
+                                TestMethodID = m.TestMethodID,
+                                StandardID = m.StandardID,
+                                Quantity = m.Quantity,
+                                ReportNo = m.ReportNo,
+                                UlrNo = m.UlrNo,
+                                Cancel = m.Cancel
+                            }).ToList()
+                        }).ToList(),
+                        ChemicalTests = tp.ChemicalTests.Select(ct => new ChemicalTestDto
+                        {
+                            ID = ct.ID,
+                            SampleTestPlanID = ct.SampleTestPlanID,
+                            ReportNo = ct.ReportNo,
+                            UlrNo = ct.UlrNo,
+                            MetalClassificationID = ct.MetalClassificationID,
+                            Specification1 = ct.Specification1,
+                            Specification2 = ct.Specification2,
+                            TestMethod = ct.TestMethod,
+                            TestTypes = ct.TestTypes.ToDictionary(tt => tt.Name, tt => tt.IsSelected),
+                            Elements = ct.Elements.Select(e => new ChemicalTestElementDto
+                            {
+                                ID = e.ID,
+                                ChemicalTestID = e.ChemicalTestID,
                                 ParameterID = e.ParameterID
                             }).ToList()
                         }).ToList()

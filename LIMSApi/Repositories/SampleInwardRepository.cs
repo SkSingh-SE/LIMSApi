@@ -66,6 +66,10 @@ namespace LIMSApi.Repositories
                     .ThenInclude(sd => sd.TestPlans)
                         .ThenInclude(tp => tp.ChemicalTests)
                             .ThenInclude(ct => ct.Elements)
+                .Include(x => x.SampleDetails)
+                    .ThenInclude(sd => sd.TestPlans)
+                        .ThenInclude(tp => tp.ChemicalTests)
+                            .ThenInclude(ct => ct.TestTypes)
                 .FirstOrDefaultAsync(x =>
                     x.ID == id &&
                     x.IsActive &&

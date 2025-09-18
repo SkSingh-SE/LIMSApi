@@ -29,7 +29,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("list")]
-        public async Task<IActionResult> DisciplineList(PageFilter filter)
+        public async Task<IActionResult> ConfigurationList(PageFilter filter)
         {
             return Ok(await _ConfigurationService.FetchConfigurationList(filter));
         }
@@ -45,8 +45,20 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [HttpGet("details/{id}")]
+        public async Task<IActionResult> GetConfigurationById(long Id)
+        {
+            var Configuration = await _ConfigurationService.GetConfigurationById(Id);
+
+            if (Configuration == null)
+            {
+                return NotFound($"Configuration not found : {Id}");
+            }
+
+            return Ok(Configuration);
+        }
         [HttpGet("get/{key}")]
-        public async Task<IActionResult> GetConfigurationByEmail(string key)
+        public async Task<IActionResult> GetConfigurationByKey(string key)
         {
             var Configuration = await _ConfigurationService.GetConfigurationByKey(key);
 
@@ -69,5 +81,17 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [HttpGet("get-value/{key}")]
+        public async Task<IActionResult> GetConfigurationValueByKey(string key)
+        {
+            var configValue = await _ConfigurationService.GetConfigurationValueByKey(key);
+
+            if (configValue == null)
+            {
+                return NotFound($"No Value added for that key : {key}");
+            }
+
+            return Ok(configValue);
+        }
     }
 }

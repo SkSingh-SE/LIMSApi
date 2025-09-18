@@ -52,9 +52,31 @@ namespace LIMSApi.Services
             _logger.LogInformation("Configuration {KeyName} updated successfully", Configuration.KeyName);
         }
 
+        public async Task<Configuration> GetConfigurationById(long Id)
+        {
+            var Configuration = await _ConfigurationRepository.GetConfigurationById(Id);
+
+            if (Configuration == null)
+            {
+                _logger.LogWarning("Configuration not found : {id}", Id);
+                throw new KeyNotFoundException($"Configuration with Id '{Id}' not found.");
+            }
+            return Configuration;
+        }
         public async Task<Configuration> GetConfigurationByKey(string key)
         {
             var Configuration = await _ConfigurationRepository.GetConfigurationByKey(key);
+
+            if (Configuration == null)
+            {
+                _logger.LogWarning("Configuration not found : {KeyName}", key);
+                throw new KeyNotFoundException($"Configuration with key '{key}' not found.");
+            }
+            return Configuration;
+        }
+        public async Task<List<string>> GetConfigurationValueByKey(string key)
+        {
+            var Configuration = await _ConfigurationRepository.GetConfigurationValueByKey(key);
 
             if (Configuration == null)
             {

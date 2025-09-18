@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20250908131858_Update TestPlan")]
+    partial class UpdateTestPlan
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -253,10 +256,7 @@ namespace LIMSApi.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<long?>("SamplePlanID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("SampleTestPlanID")
+                    b.Property<long>("SamplePlanID")
                         .HasColumnType("bigint");
 
                     b.Property<long>("Specification1")
@@ -303,31 +303,6 @@ namespace LIMSApi.Migrations
                     b.HasIndex("ParameterID");
 
                     b.ToTable("ChemicalTestElement");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.ChemicalTestType", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<long>("ChemicalTestID")
-                        .HasColumnType("bigint");
-
-                    b.Property<bool>("IsSelected")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("ChemicalTestID");
-
-                    b.ToTable("ChemicalTestType");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.CityMaster", b =>
@@ -3085,12 +3060,6 @@ namespace LIMSApi.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("Specimen")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("TestInstructions")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<bool>("TpiRequired")
                         .HasColumnType("bit");
 
@@ -4831,218 +4800,6 @@ namespace LIMSApi.Migrations
                     b.ToTable("VendorMasters");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.Workflow", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<string>("CompanyCode")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<long>("CreatedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("EntityType")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<long?>("ModifiedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime?>("ModifiedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.HasKey("ID");
-
-                    b.ToTable("Workflows");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.WorkflowActionLog", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("Comments")
-                        .IsRequired()
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<long>("EmployeeID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("InstanceID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("StepID")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("Timestamp")
-                        .HasColumnType("datetime2");
-
-                    b.Property<long>("WorkflowID")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("EmployeeID");
-
-                    b.HasIndex("StepID");
-
-                    b.HasIndex("WorkflowID");
-
-                    b.ToTable("WorkflowActionLogs");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.WorkflowInstance", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<string>("CompanyCode")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<long>("CreatedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<long>("CurrentStepID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("EntityID")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("EntityType")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<long?>("ModifiedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime?>("ModifiedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<long>("WorkflowID")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("CurrentStepID");
-
-                    b.HasIndex("WorkflowID");
-
-                    b.ToTable("WorkflowInstances");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.WorkflowStep", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<string>("AssignedToType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("AssignedToValue")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<int>("OrderNo")
-                        .HasColumnType("int");
-
-                    b.Property<long>("WorkflowID")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("WorkflowID");
-
-                    b.ToTable("WorkflowSteps");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.WorkflowTransition", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("Alias")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<long>("StepID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("ToStepID")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("StepID");
-
-                    b.ToTable("WorkflowTransitions");
-                });
-
             modelBuilder.Entity("LIMSApi.Models.AreaMaster", b =>
                 {
                     b.HasOne("LIMSApi.Models.CityMaster", "City")
@@ -5058,7 +4815,9 @@ namespace LIMSApi.Migrations
                 {
                     b.HasOne("LIMSApi.Models.SampleTestPlan", "SampleTestPlan")
                         .WithMany("ChemicalTests")
-                        .HasForeignKey("SamplePlanID");
+                        .HasForeignKey("SamplePlanID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("SampleTestPlan");
                 });
@@ -5080,17 +4839,6 @@ namespace LIMSApi.Migrations
                     b.Navigation("ChemicalTest");
 
                     b.Navigation("Parameter");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.ChemicalTestType", b =>
-                {
-                    b.HasOne("LIMSApi.Models.ChemicalTest", "ChemicalTest")
-                        .WithMany("TestTypes")
-                        .HasForeignKey("ChemicalTestID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ChemicalTest");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.CityMaster", b =>
@@ -5792,79 +5540,9 @@ namespace LIMSApi.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.WorkflowActionLog", b =>
-                {
-                    b.HasOne("LIMSApi.Models.EmployeeMaster", "Employee")
-                        .WithMany()
-                        .HasForeignKey("EmployeeID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("LIMSApi.Models.WorkflowStep", "WorkflowStep")
-                        .WithMany()
-                        .HasForeignKey("StepID")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("LIMSApi.Models.Workflow", "Workflow")
-                        .WithMany()
-                        .HasForeignKey("WorkflowID")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.Navigation("Employee");
-
-                    b.Navigation("Workflow");
-
-                    b.Navigation("WorkflowStep");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.WorkflowInstance", b =>
-                {
-                    b.HasOne("LIMSApi.Models.WorkflowStep", "CurrentStep")
-                        .WithMany()
-                        .HasForeignKey("CurrentStepID")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("LIMSApi.Models.Workflow", "Workflow")
-                        .WithMany()
-                        .HasForeignKey("WorkflowID")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.Navigation("CurrentStep");
-
-                    b.Navigation("Workflow");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.WorkflowStep", b =>
-                {
-                    b.HasOne("LIMSApi.Models.Workflow", "Workflow")
-                        .WithMany("Steps")
-                        .HasForeignKey("WorkflowID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Workflow");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.WorkflowTransition", b =>
-                {
-                    b.HasOne("LIMSApi.Models.WorkflowStep", "WorkflowStep")
-                        .WithMany("Transitions")
-                        .HasForeignKey("StepID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("WorkflowStep");
-                });
-
             modelBuilder.Entity("LIMSApi.Models.ChemicalTest", b =>
                 {
                     b.Navigation("Elements");
-
-                    b.Navigation("TestTypes");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.Customer", b =>
@@ -5990,16 +5668,6 @@ namespace LIMSApi.Migrations
             modelBuilder.Entity("LIMSApi.Models.TestMethodSpecification", b =>
                 {
                     b.Navigation("Versions");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.Workflow", b =>
-                {
-                    b.Navigation("Steps");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.WorkflowStep", b =>
-                {
-                    b.Navigation("Transitions");
                 });
 #pragma warning restore 612, 618
         }

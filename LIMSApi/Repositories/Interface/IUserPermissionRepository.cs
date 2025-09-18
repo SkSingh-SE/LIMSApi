@@ -9,5 +9,6 @@ namespace LIMSApi.Repositories.Interface
 
         Task<List<MenuPermissionGroupDto>> GetUserPermissions(long userId);
         Task<List<MenuPermissionGroupDto>> GetAllPermissions();
+        Task<List<DropdwonSelector>> GetPermissionDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20);
     }
 }

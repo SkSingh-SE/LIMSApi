@@ -37,9 +37,11 @@ namespace LIMSApi.Dtos
         public string? RequestFilePath { get; set; }
         public string? RequestFileName { get; set; }
         public long? UploadReferenceID { get; set; } = null;
-        public string Status { get; set; } = "Inward Initiated";
+        public string Status { get; set; } = "Sample Received";
         public DateTime CollectionTime { get; set; } = DateTime.Now;
-
+        public string ReviewStatus { get; set; } = "Pending";
+        public long? ReviewedBy { get; set; }
+        public DateTime? ReviewedOn { get; set; }
         // Navigation Properties
         public virtual ICollection<DispatchModeDto> DispatchModes { get; set; } = new List<DispatchModeDto>();
         public virtual ICollection<ContactDto> Contacts { get; set; } = new List<ContactDto>();
@@ -105,10 +107,12 @@ namespace LIMSApi.Dtos
         // Prep flags
         public bool CuttingRequired { get; set; }
         public bool MachiningRequired { get; set; }
-        public decimal MachiningAmount { get; set; }
+        public decimal? MachiningAmount { get; set; }
         public bool OtherPreparation { get; set; }
-        public decimal OtherPreparationCharge { get; set; }
+        public decimal? OtherPreparationCharge { get; set; }
         public bool TpiRequired { get; set; }
+        public string? Specimen { get; set; }
+        public string? TestInstructions { get; set; }
 
         // File
         public long? UploadReferenceID { get; set; }
@@ -132,13 +136,17 @@ namespace LIMSApi.Dtos
 
     public class SampleTestPlanDto
     {
-        public string? SampleNo { get; set; }
+        public long ID { get; set; }
+        public string SampleNo { get; set; }
+        public long SampleID { get; set; }
         public List<GeneralTestDto> GeneralTests { get; set; } = new();
         public List<ChemicalTestDto> ChemicalTests { get; set; } = new();
     }
 
     public class GeneralTestDto
     {
+        public long ID { get; set; }
+        public long SampleTestPlanID { get; set; }
         public string? SampleNo { get; set; }
         public long Specification1 { get; set; }
         public long? Specification2 { get; set; }
@@ -148,6 +156,8 @@ namespace LIMSApi.Dtos
 
     public class GeneralTestMethodDto
     {
+        public long ID { get; set; }
+        public long GeneralTestID { get; set; }
         public long? TestMethodID { get; set; }
         public long? StandardID { get; set; }
         public int Quantity { get; set; }
@@ -158,9 +168,11 @@ namespace LIMSApi.Dtos
 
     public class ChemicalTestDto
     {
+        public long ID { get; set; }
+        public long SampleTestPlanID { get; set; }
         public string? SampleNo { get; set; }
-        public string? ReportNo { get; set; } = "Auto Generate";
-        public string? UlrNo { get; set; } = "Auto Generate";
+        public string? ReportNo { get; set; } = "";
+        public string? UlrNo { get; set; } = "";
         public Dictionary<string, bool> TestTypes { get; set; } = new();
         public long MetalClassificationID { get; set; }
         public long Specification1 { get; set; }
@@ -171,8 +183,9 @@ namespace LIMSApi.Dtos
 
     public class ChemicalTestElementDto
     {
+        public long ID { get; set; }
+        public long ChemicalTestID { get; set; }
         public long ParameterID { get; set; }
-        public string? ElementName { get; set; }
         public int Quantity { get; set; }
     }
 }

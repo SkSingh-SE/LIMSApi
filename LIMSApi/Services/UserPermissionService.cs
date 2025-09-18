@@ -31,5 +31,9 @@ namespace LIMSApi.Services
         {
             return await _UserPermissionRepository.GetAllPermissions();
         }
+        public async Task<List<DropdwonSelector>> GetPermissionDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _UserPermissionRepository.GetPermissionDropdown(searchTerm, pageNo, pageSize);
+        }
     }
 }

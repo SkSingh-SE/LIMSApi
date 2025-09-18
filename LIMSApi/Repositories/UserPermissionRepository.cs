@@ -99,7 +99,7 @@ namespace LIMSApi.Repositories
                                 : true // role-based ones are granted by default
                 })
                 .ToListAsync();
-           await GetUserMenusWithPermissions(userId);
+            await GetUserMenusWithPermissions(userId);
 
             // Group by menu
             return permissions
@@ -328,6 +328,29 @@ namespace LIMSApi.Repositories
             await _context.SaveChangesAsync();
         }
 
+        public async Task<List<DropdwonSelector>> GetPermissionDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
 
+            var _query = from a in _context.PermissionMasters select a;
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var search = searchTerm.Trim().ToLower();
+                _query = _query.Where(x => (x.DisplayName != null && x.DisplayName.ToLower().Contains(search))
+                                      || (x.Name != null && x.Name.ToLower().Contains(search))
+                                      || x.ID.ToString().Contains(search));
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            {
+                Id = x.ID,
+                Name = x.DisplayName,
+            })).ToListAsync();
+
+            return data;
+        }
     }
 }

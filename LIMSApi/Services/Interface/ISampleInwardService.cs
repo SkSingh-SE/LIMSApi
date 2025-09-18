@@ -8,8 +8,10 @@ namespace LIMSApi.Services.Interface
     {
         Task CreateSampleInward(SampleInwardDto model);
         Task ModifySampleInward(SampleInwardDto model);
+        Task ModifySamplePlan(PlanDto model);
         Task RemoveSampleInward(long id);
         Task<SampleInwardDto> GetSampleInwardDetails(long id);
+        Task<SampleInwardDto> GetSampleInwardWithPlans(long id);
         Task<PagedResponse<object>> FetchSampleInwardList(PageFilter filter);
         Task<object> GetCaseNoAndSampleNo();
 

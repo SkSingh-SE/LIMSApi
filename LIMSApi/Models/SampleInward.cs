@@ -59,9 +59,12 @@ namespace LIMSApi.Models
         public string? RequestFileName { get; set; }
 
         public long? UploadReferenceID { get; set; } = null;
-        public string Status { get; set; } = "Inward Initiated";
+        public string Status { get; set; } = "Sample Received";
 
         public DateTime CollectionTime { get; set; } = DateTime.UtcNow;
+        public string ReviewStatus { get; set; } = "Pending";
+        public long? ReviewedBy { get; set; }     
+        public DateTime? ReviewedOn { get; set; }
 
         // Navigation Properties
         public virtual ICollection<SampleDispatchMode> DispatchModes { get; set; } = new List<SampleDispatchMode>();

@@ -35,6 +35,14 @@ namespace LIMSApi.Controllers
             return entity == null ? NoContent() : Ok(entity);
         }
 
+        [HttpGet("details-with-plan/{id}")]
+        public async Task<IActionResult> GetSampleInwardWithPlans(long id)
+        {
+            var entity = await _SampleInwardService.GetSampleInwardWithPlans(id);
+
+            return entity == null ? NoContent() : Ok(entity);
+        }
+
 
         [HttpPut("update")]
         public async Task<IActionResult> PutSampleInward([FromForm] SampleInwardDto model)
@@ -44,6 +52,17 @@ namespace LIMSApi.Controllers
             {
                 status = "success",
                 message = $"SampleInward updated successfully."
+            });
+        }
+
+        [HttpPut("plan")]
+        public async Task<IActionResult> ModifySamplePlan(PlanDto model)
+        {
+            await _SampleInwardService.ModifySamplePlan(model);
+            return Ok(new
+            {
+                status = "success",
+                message = $"Plan has been updated successfully."
             });
         }
 

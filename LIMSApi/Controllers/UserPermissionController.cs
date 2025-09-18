@@ -1,5 +1,6 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
+using LIMSApi.Services;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -41,6 +42,13 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> GetAllPermissions()
         {
             var data = await _UserPermissionService.GetAllPermissions();
+            return data == null ? NoContent() : Ok(data);
+        }
+
+        [HttpGet("dropdown")]
+        public async Task<IActionResult> GetPermissionDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            var data = await _UserPermissionService.GetPermissionDropdown(searchTerm, pageNo, pageSize);
             return data == null ? NoContent() : Ok(data);
         }
     }

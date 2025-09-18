@@ -29,6 +29,11 @@ namespace LIMSApi.Repositories
             var Configuration = await context.Configurations.FirstOrDefaultAsync(x => x.KeyName == key && x.CompanyCode == loggedInUser.CompanyCode);
             return Configuration;
         }
+        public async Task<Configuration> GetConfigurationById(long Id)
+        {
+            var Configuration = await context.Configurations.FirstOrDefaultAsync(x => x.ID == Id && x.CompanyCode == loggedInUser.CompanyCode);
+            return Configuration;
+        }
         public async Task UpdateConfiguration(Configuration Configuration)
         {
             context.Update(Configuration);
@@ -71,6 +76,25 @@ namespace LIMSApi.Repositories
         public async Task<bool> IsExistKeyAndId(string key, long Id)
         {
             return await context.Configurations.AnyAsync(x => x.KeyName == key && x.ID != Id && x.CompanyCode == loggedInUser.CompanyCode && x.IsActive);
+        }
+        public async Task<List<string>> GetConfigurationValueByKey(string Key)
+        {
+            var config = await context.Configurations.FirstOrDefaultAsync(x => x.KeyName == Key);
+            if(config == null)
+            {
+                throw new InvalidOperationException($"Data not found related to {Key} key");
+            }
+            if(config?.GroupName == "dropdown")
+            {
+                var ddata = config.Value.Split("|").ToList();
+                return ddata;
+            }
+            else
+            {
+                var data = new List<string>();
+                data.Add(config.Value);
+                return data;
+            }
         }
     }
 }
