@@ -15,13 +15,15 @@ namespace LIMSApi.Services
         private readonly ISampleInwardRepository _SampleInwardRepository;
         private readonly ILogger<SampleInwardService> _logger;
         private readonly IFileUploadService _uploadService;
+        private readonly IWorkflowService _workflowService;
         private LoggedInUserDTO loggedInUser;
 
-        public SampleInwardService(ISampleInwardRepository SampleInwardRepo, ILogger<SampleInwardService> logger, IFileUploadService uploadService)
+        public SampleInwardService(ISampleInwardRepository SampleInwardRepo, ILogger<SampleInwardService> logger, IFileUploadService uploadService,IWorkflowService workflowService)
         {
             _SampleInwardRepository = SampleInwardRepo;
             _logger = logger;
             _uploadService = uploadService;
+            _workflowService = workflowService;
             loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
@@ -645,6 +647,7 @@ namespace LIMSApi.Services
 
             await _SampleInwardRepository.UpdateSampleInward(entity);
             _logger.LogInformation("Plans and sample prep updated for Inward '{InwardID}'", model.ID);
+            await _workflowService.StartWorkflow(entity.ID, "Request of Review");
         }
 
 

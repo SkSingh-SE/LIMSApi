@@ -10,6 +10,7 @@ namespace LIMSApi.Models
         public long ID { get; set; }
         public long StepID { get; set; }
         public long? ToStepID { get; set; }
+        public string? ToStepName { get; set; }
 
         [Required, MaxLength(100)]
         public string Action { get; set; } = string.Empty; // Next, Back, Cancel

@@ -1,4 +1,5 @@
-﻿using LIMSApi.Data;
+﻿using System.Linq.Dynamic.Core;
+using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
@@ -21,13 +22,55 @@ namespace LIMSApi.Repositories
         await _context.Workflows
             .Include(w => w.Steps)
             .ThenInclude(s => s.Transitions)
-            .FirstOrDefaultAsync(w => w.ID == id);
+            .FirstOrDefaultAsync(w => w.ID == id && w.IsActive);
+        public async Task<Workflow?> GetWorkflowByEntityNameAsync(string entityName) =>
+        await _context.Workflows
+            .Include(w => w.Steps)
+            .ThenInclude(s => s.Transitions)
+            .FirstOrDefaultAsync(w => w.EntityType == entityName && w.IsActive);
 
-        public async Task<List<Workflow>> GetAllWorkflowsAsync() =>
-            await _context.Workflows
-                .Include(w => w.Steps)
-                .ThenInclude(s => s.Transitions)
+        public async Task<PagedResponse<object>> GetAllWorkflowsAsync(PageFilter filter)
+        {
+            var _query = from c in _context.Workflows
+                         where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
+                         join e in _context.EmployeeMasters on c.CreatedBy equals e.ID into emp
+                         from e in emp.DefaultIfEmpty()
+                         select new
+                         {
+                             c.ID,
+                             c.Name,
+                             c.EntityType,
+                             c.CreatedOn,
+                             CreatedBy = e.Name,
+                         };
+
+            _query = _query.AsQueryable().ApplyFilters(filter.Filter);
+
+            if (!string.IsNullOrWhiteSpace(filter.searchTerm))
+            {
+                var search = filter.searchTerm.Trim().ToLower();
+                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search))
+                || x.EntityType.ToLower().Contains(search)
+                || x.CreatedBy.ToLower().Contains(search)
+                || x.CreatedOn.ToString().Contains(search));
+            }
+
+            if (filter.SortByColumn != null)
+            {
+                _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
+            }
+
+            // Total Records Count
+            int totalRecords = await _query.CountAsync();
+
+            // Apply Pagination
+            var items = await _query
+                .Skip((filter.PageNumber - 1) * filter.PageSize)
+                .Take(filter.PageSize)
                 .ToListAsync();
+
+            return new PagedResponse<object>(items.Cast<object>().ToList(), totalRecords, filter.PageNumber, filter.PageSize);
+        }
 
         public async Task<Workflow> AddWorkflowAsync(Workflow workflow)
         {
@@ -40,7 +83,7 @@ namespace LIMSApi.Repositories
             return workflow;
         }
 
-        public  async Task<Workflow> UpdateWorkflowAsync(Workflow workflow)
+        public async Task<Workflow> UpdateWorkflowAsync(Workflow workflow)
         {
             workflow.ModifiedBy = loggedInUser.EmployeeID;
             workflow.ModifiedOn = DateTime.UtcNow;

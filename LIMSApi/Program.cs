@@ -19,10 +19,13 @@ string jwtSecret = builder.Configuration["Jwt:Secret"];
 // Add CORS Policy
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll",
-        policy => policy.AllowAnyOrigin()
-                        .AllowAnyMethod()
-                        .AllowAnyHeader());
+    options.AddPolicy("AllowAngular", policy =>
+    {
+        policy.WithOrigins("http://localhost:4200") // exact Angular dev origin
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials(); // allow cookies/signalr creds
+    });
 });
 
 // Add services to the container.
@@ -157,6 +160,7 @@ builder.Services.AddScoped<IRoleRepository,RoleRepository>();
 builder.Services.AddScoped<IUserPermissionRepository,UserPermissionRepository>();
 builder.Services.AddScoped<ISampleInwardRepository, SampleInwardRepository>();
 builder.Services.AddScoped<IWorkflowRepository, WorkflowRepository>();
+builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 
 
 
@@ -217,6 +221,8 @@ builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<IUserPermissionService, UserPermissionService>();
 builder.Services.AddScoped<ISampleInwardService, SampleInwardService>();
 builder.Services.AddScoped<IWorkflowService, WorkflowService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IPushNotificationService, PushNotificationService>();
 
 
 // Third party services
@@ -224,7 +230,7 @@ builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<SMSService>();
 builder.Services.AddScoped<WhatsAppService>();
 
-
+builder.Services.AddSignalR();
 
 var app = builder.Build();
 app.UseMiddleware<GeneralizedExceptionHandlingMiddleware>();
@@ -239,8 +245,9 @@ if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
         c.RoutePrefix = ""; // ? Make Swagger the root (http://lims.com/)
     });
 }
+app.UseCors("AllowAngular");
+app.MapHub<NotificationHub>("/hubs/notifications");
 
-app.UseCors("AllowAll");
 
 
 app.UseStaticFiles();

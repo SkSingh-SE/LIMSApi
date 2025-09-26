@@ -25,10 +25,10 @@ namespace LIMSApi.Controllers
             return workflow == null ? NotFound() : Ok(workflow);
         }
 
-        [HttpGet]
-        public async Task<IActionResult> GetAllWorkflows()
+        [HttpPost("list")]
+        public async Task<IActionResult> GetAllWorkflows(PageFilter filter)
         {
-            var workflows = await _service.GetAllWorkflows();
+            var workflows = await _service.GetAllWorkflows(filter);
             return Ok(workflows);
         }
 
@@ -42,7 +42,7 @@ namespace LIMSApi.Controllers
                 message = $"Workflow '{workflow.Name}' created successfully."
             });
         }
-        [HttpPost("update")]
+        [HttpPut("update")]
         public async Task<IActionResult> UpdateWorkflow(WorkflowDto workflow)
         {
             await _service.UpdateWorkflow(workflow);
@@ -54,9 +54,9 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("start")]
-        public async Task<IActionResult> StartWorkflow(long workflowId, long entityId, string entityType)
+        public async Task<IActionResult> StartWorkflow(long entityId, string entityType)
         {
-            await _service.StartWorkflow(workflowId, entityId, entityType);
+            await _service.StartWorkflow(entityId, entityType);
             return Ok(new
             {
                 status = "success",
