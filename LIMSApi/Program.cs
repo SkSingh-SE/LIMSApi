@@ -1,7 +1,9 @@
 using System.Security.Cryptography;
 using System.Text;
+using Hangfire;
 using LIMSApi.Data;
 using LIMSApi.Helpers;
+using LIMSApi.Jobs;
 using LIMSApi.Middleware;
 using LIMSApi.Repositories;
 using LIMSApi.Repositories.Interface;
@@ -28,10 +30,11 @@ builder.Services.AddCors(options =>
     });
 });
 
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 // Add services to the container.
 
 builder.Services.AddControllers();
-builder.Services.AddDbContext<LIMSContext>(opt => opt.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddDbContext<LIMSContext>(opt => opt.UseSqlServer(connectionString));
 
 // Add Logging (Optional)
 builder.Logging.AddConsole();
@@ -232,9 +235,20 @@ builder.Services.AddScoped<WhatsAppService>();
 
 builder.Services.AddSignalR();
 
-var app = builder.Build();
-app.UseMiddleware<GeneralizedExceptionHandlingMiddleware>();
+// Hangfire
+builder.Services.AddHangfire(config =>
+{
+    config.UseSqlServerStorage(connectionString);
+});
+builder.Services.AddHangfireServer();
 
+var app = builder.Build();
+
+app.UseHangfireDashboard("/hangfire");
+// Schedule jobs directly
+RecurringJob.AddOrUpdate<ReminderJob>("ReminderJob", x => x.Execute(), "0 0 9 * * *");
+
+app.UseMiddleware<GeneralizedExceptionHandlingMiddleware>();
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
 {
@@ -252,6 +266,7 @@ app.MapHub<NotificationHub>("/hubs/notifications");
 
 app.UseStaticFiles();
 app.UseHttpsRedirection();
+
 
 app.UseAuthorization();
 

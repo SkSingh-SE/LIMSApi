@@ -2,10 +2,11 @@
 using Lib.Net.Http.WebPush;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
+using System;
 
 namespace LIMSApi.Services
 {
-    public class PushNotificationService: IPushNotificationService
+    public class PushNotificationService : IPushNotificationService
     {
         private readonly INotificationRepository _repository;
         private readonly PushServiceClient _pushClient;
@@ -25,7 +26,7 @@ namespace LIMSApi.Services
             _pushClient = new PushServiceClient
             {
                 DefaultAuthentication = vapidDetails
-            };  
+            };
         }
 
         public Task<string> GetPublicKey()
@@ -35,7 +36,7 @@ namespace LIMSApi.Services
                 : Task.FromResult<string>(null);
         }
 
-        public async Task SendPushNotificationAsync(long userId, string title, string message)
+        public async Task SendPushNotificationAsync(long userId, string title, string message, string entityType, long entityId)
         {
             var subscriptions = await _repository.GetUserSubscriptionsAsync(userId);
 
@@ -45,7 +46,8 @@ namespace LIMSApi.Services
             {
                 title,
                 message,
-                timestamp = DateTime.UtcNow
+                timestamp = DateTime.UtcNow,
+                url = GenerateEntityUrl(entityType, entityId)
             });
 
             foreach (var sub in subscriptions)
@@ -56,10 +58,10 @@ namespace LIMSApi.Services
                     {
                         Endpoint = sub.Endpoint,
                         Keys = new Dictionary<string, string>
-                    {
-                        { "p256dh", sub.P256DH },
-                        { "auth", sub.Auth }
-                    }
+                        {
+                            { "p256dh", sub.P256DH },
+                            { "auth", sub.Auth }
+                        }
                     };
 
                     await _pushClient.RequestPushMessageDeliveryAsync(pushSubscription, new PushMessage(payload));
@@ -72,7 +74,15 @@ namespace LIMSApi.Services
                 }
             }
         }
+        public string GenerateEntityUrl(string entityType, long entityId)
+        {
+            return entityType.ToLower() switch
+            {
+                "request of review" => "/sample/review",
+                _ => "/"
+            };
+        }
 
-       
+
     }
 }

@@ -51,7 +51,9 @@ namespace LIMSApi.Services
                 await _pushNotificationService.SendPushNotificationAsync(
                     notification.UserID.Value,
                     notification.Title,
-                    notification.Message
+                    notification.Message,
+                    notification.EntityType,
+                    notification.EntityID ?? 0
                 );
             }
         }
