@@ -70,6 +70,7 @@ namespace LIMSApi.Services
                 name = user.UserName,
                 email = user.EmailId,
                 role = user.RoleName,
+                isAdmin = user.IsAdmin,
                 expiresInSecond = expireHours * 60 * 60,
                 employeeId = user.EmployeeID
             };

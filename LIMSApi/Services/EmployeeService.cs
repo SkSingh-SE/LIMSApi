@@ -12,14 +12,16 @@ namespace LIMSApi.Services
         private readonly IFileUploadService _uploadService;
         private readonly IAuthService _authService;
         private readonly IUserRepository _userRepository;
+        private readonly IRoleService _roleService;
 
-        public EmployeeService(IEmployeeRepository employeeRepo, ILogger<EmployeeService> logger, IFileUploadService uploadService, IAuthService authService, IUserRepository userRepository)
+        public EmployeeService(IEmployeeRepository employeeRepo, ILogger<EmployeeService> logger, IFileUploadService uploadService, IAuthService authService, IUserRepository userRepository, IRoleService roleService)
         {
             _employeeRepository = employeeRepo;
             _logger = logger;
             _uploadService = uploadService;
             _authService = authService;
             _userRepository = userRepository;
+            _roleService = roleService;
         }
 
         public async Task CreateEmployee(EmployeeMaster model)
@@ -34,6 +36,8 @@ namespace LIMSApi.Services
             var createdEmployee = await _employeeRepository.AddEmployee(model);
             _logger.LogInformation("Employee '{EmployeeName}' created successfully.", model.Name);
 
+            var role = await _roleService.GetRoleDetails(createdEmployee.RoleID);
+
             UserMaster newUser = new UserMaster
             {
                 EmployeeID = createdEmployee.ID,
@@ -41,7 +45,8 @@ namespace LIMSApi.Services
                 Password = _authService.GetHashedPassword(model.Password),
                 EmailId = model.EmailId,
                 RoleID = model.RoleID,
-                RoleName = "User",
+                RoleName = role?.Name,
+                IsAdmin = role?.IsAdmin ?? false,
                 IsActive = true,
                 CreatedOn = DateTime.UtcNow,
                 CreatedBy = model.CreatedBy,
@@ -105,6 +110,8 @@ namespace LIMSApi.Services
             _logger.LogInformation("Employee '{EmployeeName}' updated successfully.", model.Name);
 
             var hashedPassword = _authService.GetHashedPassword(model.Password);
+
+            var role = await _roleService.GetRoleDetails(model.RoleID);
             // Update user details if UserID is provided
             var user = await _userRepository.GetUserByEmail(model.EmailId);
             if (user != null)
@@ -112,6 +119,8 @@ namespace LIMSApi.Services
                 user.UserName = model.Name;
                 user.EmailId = model.EmailId;
                 user.RoleID = model.RoleID;
+                user.RoleName = role?.Name;
+                user.IsAdmin = role?.IsAdmin ?? false;
                 user.Password = hashedPassword == user.Password ? user.Password : hashedPassword;
                 user.ModifiedOn = DateTime.UtcNow;
                 await _userRepository.UpdateUser(user);

@@ -36,6 +36,10 @@ namespace LIMSApi.Services
             await _userRepository.UpdateUser(user);
             _logger.LogInformation("User {Username} updated successfully", user.UserName);
         }
+        public async Task UpdateUsers(List<UserMaster> users)
+        {
+            await _userRepository.UpdateUsers(users);
+        }
 
         public async Task<UserMaster> GetUserByEmail(string email)
         {
@@ -47,6 +51,11 @@ namespace LIMSApi.Services
                 return null;
             }
             return user;
+        }
+
+        public async Task<List<UserMaster>> GetAllUserByRoleId(long Id)
+        {
+            return await _userRepository.GetAllUserByRoleId(Id);
         }
 
         public async Task<List<DropdwonSelector>> GetUserDropdown(string? searchTerm, int pageNo, int pageSize)

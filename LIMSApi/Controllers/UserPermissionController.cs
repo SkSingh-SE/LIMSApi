@@ -37,6 +37,12 @@ namespace LIMSApi.Controllers
             var data = await _UserPermissionService.GetUserPermissions(userId);
             return data == null ? NoContent(): Ok(data);
         }
+        [HttpGet("user-menu/{userId}")]
+        public async Task<IActionResult> GetUserMenuWithPermission(long userId)
+        {
+            var data = await _UserPermissionService.GetUserMenusWithPermissions(userId);
+            return data == null ? NoContent(): Ok(data);
+        }
 
         [HttpGet("all-permission")]
         public async Task<IActionResult> GetAllPermissions()

@@ -28,6 +28,11 @@ namespace LIMSApi.Repositories
             var user = await context.UserMasters.FirstOrDefaultAsync(x => x.EmailId == email);
             return user;
         }
+
+        public async Task<List<UserMaster>> GetAllUserByRoleId(long Id)
+        {
+            return await context.UserMasters.Where(x => x.RoleID == Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode).ToListAsync();
+        }
         public async Task UpdateUser(UserMaster user)
         {
             var userToUpdate = await context.UserMasters.FirstOrDefaultAsync(x => x.EmailId == user.EmailId);
@@ -40,6 +45,22 @@ namespace LIMSApi.Repositories
             {
                 throw new InvalidOperationException("User not found");
             }
+        }
+
+        public async Task UpdateUsers(List<UserMaster> users)
+        {
+            foreach (var user in users)
+            {
+                var userToUpdate = await context.UserMasters.FirstOrDefaultAsync(x => x.EmailId == user.EmailId);
+                if (userToUpdate != null)
+                {
+                    userToUpdate.UserName = user.UserName;
+                    userToUpdate.RoleID = user.RoleID;
+                    userToUpdate.RoleName = user.RoleName;
+                    userToUpdate.IsAdmin = user.IsAdmin;
+                }
+            }
+            await context.SaveChangesAsync();
         }
 
         public async Task<bool> DeleteUser(string email)

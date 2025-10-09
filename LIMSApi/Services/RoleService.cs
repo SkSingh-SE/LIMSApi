@@ -9,11 +9,13 @@ namespace LIMSApi.Services
     {
         private readonly IRoleRepository _roleRepository;
         private readonly ILogger<RoleService> _logger;
+        private readonly IUserService userService;
 
-        public RoleService(IRoleRepository roleRepo, ILogger<RoleService> logger)
+        public RoleService(IRoleRepository roleRepo, ILogger<RoleService> logger, IUserService userService)
         {
             _roleRepository = roleRepo;
             _logger = logger;
+            this.userService = userService;
         }
 
         public async Task CreateRole(RoleMaster model)
@@ -42,8 +44,18 @@ namespace LIMSApi.Services
             if (existingRole == null)
                 throw new InvalidOperationException("Role not found!");
 
+            var users = await userService.GetAllUserByRoleId(model.ID);
+            if (existingRole.IsAdmin != model.IsAdmin)
+            {
+                foreach (var user in users)
+                {
+                    user.IsAdmin = model.IsAdmin;
+                }
+            }
+
             existingRole.Name = model.Name;
             existingRole.Description = model.Description;
+            existingRole.IsAdmin = model.IsAdmin;
             existingRole.ModifiedOn = DateTime.UtcNow;
 
             // Clear and update role-menu mappings
@@ -59,6 +71,7 @@ namespace LIMSApi.Services
             }
 
             await _roleRepository.UpdateRole(existingRole);
+            await userService.UpdateUsers(users);
             _logger.LogInformation("Role '{RoleName}' updated successfully.", model.Name);
         }
 

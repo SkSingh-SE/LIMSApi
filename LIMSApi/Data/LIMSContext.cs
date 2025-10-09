@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using LIMSApi.Models;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 
@@ -165,11 +166,12 @@ public partial class LIMSContext : DbContext
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
+        var httpContext = _httpContextAccessor?.HttpContext;
         var activities = new List<SiteActivity>();
-        var user = _httpContextAccessor.HttpContext?.User?.Identity?.Name ?? "System";
-        var ipAddress = _httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString();
-        var browser = _httpContextAccessor.HttpContext?.Request.Headers["User-Agent"].ToString();
-        var url = _httpContextAccessor.HttpContext?.Request?.Path;
+        var user = httpContext?.User?.Identity?.Name ?? "System";
+        var ipAddress = httpContext?.Connection?.RemoteIpAddress?.ToString();
+        var browser = httpContext?.Request.Headers["User-Agent"].ToString();
+        var url = httpContext?.Request?.Path;
 
         var entries = ChangeTracker.Entries()
             .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified || e.State == EntityState.Deleted)
@@ -212,13 +214,10 @@ public partial class LIMSContext : DbContext
         }
 
         // Store in HttpContext.Items temporarily
-        if (activities.Any(a => a.ModuleName != "SiteActivity" && a.ModuleName != "SiteError"))
+        // Save activity logs only if in a real HTTP request
+        if (httpContext != null && activities.Any(a => a.ModuleName != "SiteActivity" && a.ModuleName != "SiteError"))
         {
-            _httpContextAccessor.HttpContext.Items["ActivityLog"] = activities;
-        }
-        else
-        {
-            _httpContextAccessor.HttpContext.Items.Remove("ActivityLog");
+            httpContext.Items["ActivityLog"] = activities;
         }
 
         return result;

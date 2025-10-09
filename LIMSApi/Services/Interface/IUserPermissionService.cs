@@ -10,5 +10,6 @@ namespace LIMSApi.Services.Interface
         Task<List<MenuPermissionGroupDto>> GetUserPermissions(long userId);
         Task<List<MenuPermissionGroupDto>> GetAllPermissions();
         Task<List<DropdwonSelector>> GetPermissionDropdown(string? searchTerm, int pageNo, int pageSize );
+        Task<List<UserMenuDTO>> GetUserMenusWithPermissions(long userId);
     }
 }

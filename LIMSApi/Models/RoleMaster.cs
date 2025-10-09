@@ -14,5 +14,6 @@ public partial class RoleMaster : AuditProperty
     public required string Name { get; set; }
 
     public string? Description { get; set; }
+    public bool IsAdmin { get; set; } = false;
     public ICollection<RoleMenuMapping> MenuItems { get; set; } = new List<RoleMenuMapping>();
 }

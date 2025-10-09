@@ -7,6 +7,6 @@
         public string Status { get; set; }
         public DateTime StartTime { get; set; }
         public DateTime EndTime { get; set; }
-        public string ErrorMessage { get; set; }
+        public string ErrorMessage { get; set; } = string.Empty;
     }
 }

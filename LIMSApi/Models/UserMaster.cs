@@ -22,6 +22,7 @@ public partial class UserMaster : AuditProperty
 
     public long? RoleID { get; set; }
     public string? RoleName { get; set; }
+    public bool IsAdmin { get; set; } = false;
 
     public bool? RemotLogin { get; set; }
 

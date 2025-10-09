@@ -99,7 +99,7 @@ namespace LIMSApi.Repositories
                                 : true // role-based ones are granted by default
                 })
                 .ToListAsync();
-            await GetUserMenusWithPermissions(userId);
+            var userMenus =  await GetUserMenusWithPermissions(userId);
 
             // Group by menu
             return permissions
@@ -120,21 +120,150 @@ namespace LIMSApi.Repositories
                 }).ToList();
         }
 
+        //public async Task<List<UserMenuDTO>> GetUserMenusWithPermissions(long userId)
+        //{
+        //    var user = await _context.UserMasters.Include(u => u.Role).FirstOrDefaultAsync(u => u.ID == userId);
+        //    if (user == null) throw new Exception("User not found!");
+
+        //    // 1. Get SubMenu IDs assigned to User's Role
+        //    var roleSubMenuIds = await _context.RoleMenuMappings
+        //        .Where(rm => rm.RoleID == user.RoleID)
+        //        .Select(rm => rm.MenuID)
+        //        .Distinct()
+        //        .ToListAsync();
+
+        //    var userSpecialMenuIds = await _context.UserPermissions
+        //        .Include(up => up.Permission)
+        //        .ThenInclude(p => p.Menu)
+        //        .Where(up => up.UserID == userId)
+        //        .Select(up => (long)up.Permission.MenuID)
+        //        .Distinct()
+        //        .ToListAsync();
+
+        //    // Combine both
+        //    var effectiveMenuIds = roleSubMenuIds
+        //        .Union(userSpecialMenuIds)
+        //        .Distinct()
+        //        .ToList();
+
+
+        //    // 2. Fetch SubMenus with their Parent Menu Info
+        //    var subMenus = await _context.MenuMasters
+        //        .Where(m => roleSubMenuIds.Contains(m.ID))
+        //        .Select(m => new
+        //        {
+        //            Menu = m,
+        //            ParentMenu = m.ParentID != null ? m.Parent : null
+        //        })
+        //        .ToListAsync();
+
+        //    // 3. Collect all unique Menu IDs (SubMenus + Parent Menus)
+        //    var allMenuIds = subMenus
+        //        .Select(m => m.Menu.ID)
+        //        .Union(subMenus.Where(m => m.ParentMenu != null).Select(m => m.ParentMenu.ID))
+        //        .Distinct()
+        //        .ToList();
+
+        //    // 4. Fetch Permissions from PermissionMaster for SubMenus
+        //    var roleMenuPermissions = await _context.PermissionMasters
+        //        .Include(pm => pm.Menu)
+        //        .Where(pm => roleSubMenuIds.Contains((long)pm.MenuID))
+        //        .Select(pm => new
+        //        {
+        //            Menu = pm.Menu,
+        //            PermissionName = pm.Name
+        //        })
+        //        .ToListAsync();
+
+        //    // 5. Get User-specific Menu Permissions (Special Permissions)
+        //    var userSpecialPermissions = await _context.UserPermissions
+        //        .Include(up => up.Permission)
+        //        .ThenInclude(p => p.Menu)
+        //        .Where(up => up.UserID == userId)
+        //        .Select(up => new
+        //        {
+        //            Menu = up.Permission.Menu,
+        //            PermissionName = up.Permission.Name
+        //        })
+        //        .ToListAsync();
+
+        //    // 6. Combine Role & User Permissions
+        //    var combinedPermissions = roleMenuPermissions.Concat(userSpecialPermissions)
+        //        .GroupBy(x => x.Menu.ID)
+        //        .Select(g => new
+        //        {
+        //            Menu = g.First().Menu,
+        //            Permissions = g.Select(x => x.PermissionName).Distinct().ToList()
+        //        })
+        //        .ToList();
+
+        //    // 7. Build Menu Dictionary for Hierarchy
+        //    var menuMasters = await _context.MenuMasters
+        //        .Where(m => allMenuIds.Contains(m.ID))
+        //        .ToListAsync();
+
+        //    var menuDict = new Dictionary<long, UserMenuDTO>();
+
+        //    foreach (var menu in menuMasters)
+        //    {
+        //        menuDict[menu.ID] = new UserMenuDTO
+        //        {
+        //            ID = menu.ID,
+        //            Title = menu.Title,
+        //            Route = menu.Route,
+        //            ParentMenuID = menu.ParentID,
+        //            Permissions = combinedPermissions.FirstOrDefault(x => x.Menu.ID == menu.ID)?.Permissions ?? new List<string>()
+        //        };
+        //    }
+
+        //    // 8. Build Parent-Child Structure
+        //    foreach (var menu in menuDict.Values)
+        //    {
+        //        if (menu.ParentMenuID != null && menuDict.ContainsKey(menu.ParentMenuID.Value))
+        //        {
+        //            menuDict[menu.ParentMenuID.Value].Children.Add(menu);
+        //        }
+        //    }
+
+        //    // 9. Return Only Root Menus
+        //    var rootMenus = menuDict.Values.Where(m => m.ParentMenuID == null).ToList();
+
+        //    return rootMenus;
+        //}
         public async Task<List<UserMenuDTO>> GetUserMenusWithPermissions(long userId)
         {
-            var user = await _context.UserMasters.Include(u => u.Role).FirstOrDefaultAsync(u => u.ID == userId);
-            if (user == null) throw new Exception("User not found!");
+            var user = await _context.UserMasters
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.ID == userId);
 
-            // 1. Get SubMenu IDs assigned to User's Role
+            if (user == null)
+                throw new Exception("User not found!");
+
+            // 1️ Get SubMenu IDs assigned to User's Role
             var roleSubMenuIds = await _context.RoleMenuMappings
                 .Where(rm => rm.RoleID == user.RoleID)
                 .Select(rm => rm.MenuID)
                 .Distinct()
                 .ToListAsync();
 
-            // 2. Fetch SubMenus with their Parent Menu Info
+            // 2️ Get additional Menu IDs from User Special Permissions (even if not in role)
+            var userSpecialMenuIds = await _context.UserPermissions
+                .Include(up => up.Permission)
+                .ThenInclude(p => p.Menu)
+                .Where(up => up.UserID == userId)
+                .Select(up => (long)up.Permission.MenuID)
+                .Distinct()
+                .ToListAsync();
+
+            // Combine both
+            var effectiveMenuIds = roleSubMenuIds
+                .Union(userSpecialMenuIds)
+                .Distinct()
+                .ToList();
+
+            // 3️ Fetch SubMenus with their Parent Menu Info
             var subMenus = await _context.MenuMasters
-                .Where(m => roleSubMenuIds.Contains(m.ID))
+                .Where(m => effectiveMenuIds.Contains(m.ID))
                 .Select(m => new
                 {
                     Menu = m,
@@ -142,17 +271,17 @@ namespace LIMSApi.Repositories
                 })
                 .ToListAsync();
 
-            // 3. Collect all unique Menu IDs (SubMenus + Parent Menus)
+            // 4️ Collect all unique Menu IDs (SubMenus + Parent Menus)
             var allMenuIds = subMenus
                 .Select(m => m.Menu.ID)
                 .Union(subMenus.Where(m => m.ParentMenu != null).Select(m => m.ParentMenu.ID))
                 .Distinct()
                 .ToList();
 
-            // 4. Fetch Permissions from PermissionMaster for SubMenus
+            // 5️ Fetch Permissions from PermissionMaster for effective menus
             var roleMenuPermissions = await _context.PermissionMasters
                 .Include(pm => pm.Menu)
-                .Where(pm => roleSubMenuIds.Contains((long)pm.MenuID))
+                .Where(pm => effectiveMenuIds.Contains((long)pm.MenuID))
                 .Select(pm => new
                 {
                     Menu = pm.Menu,
@@ -160,7 +289,7 @@ namespace LIMSApi.Repositories
                 })
                 .ToListAsync();
 
-            // 5. Get User-specific Menu Permissions (Special Permissions)
+            // 6️ Get User-specific Menu Permissions (Special Permissions)
             var userSpecialPermissions = await _context.UserPermissions
                 .Include(up => up.Permission)
                 .ThenInclude(p => p.Menu)
@@ -172,7 +301,7 @@ namespace LIMSApi.Repositories
                 })
                 .ToListAsync();
 
-            // 6. Combine Role & User Permissions
+            // 7️ Combine Role & User Permissions
             var combinedPermissions = roleMenuPermissions.Concat(userSpecialPermissions)
                 .GroupBy(x => x.Menu.ID)
                 .Select(g => new
@@ -182,7 +311,7 @@ namespace LIMSApi.Repositories
                 })
                 .ToList();
 
-            // 7. Build Menu Dictionary for Hierarchy
+            // 8️ Build Menu Dictionary for Hierarchy
             var menuMasters = await _context.MenuMasters
                 .Where(m => allMenuIds.Contains(m.ID))
                 .ToListAsync();
@@ -197,11 +326,13 @@ namespace LIMSApi.Repositories
                     Title = menu.Title,
                     Route = menu.Route,
                     ParentMenuID = menu.ParentID,
-                    Permissions = combinedPermissions.FirstOrDefault(x => x.Menu.ID == menu.ID)?.Permissions ?? new List<string>()
+                    Permissions = combinedPermissions
+                        .FirstOrDefault(x => x.Menu.ID == menu.ID)?.Permissions
+                        ?? new List<string>()
                 };
             }
 
-            // 8. Build Parent-Child Structure
+            // 9️ Build Parent-Child Structure
             foreach (var menu in menuDict.Values)
             {
                 if (menu.ParentMenuID != null && menuDict.ContainsKey(menu.ParentMenuID.Value))
@@ -210,8 +341,11 @@ namespace LIMSApi.Repositories
                 }
             }
 
-            // 9. Return Only Root Menus
-            var rootMenus = menuDict.Values.Where(m => m.ParentMenuID == null).ToList();
+            // 10 Return Only Root Menus
+            var rootMenus = menuDict.Values
+                .Where(m => m.ParentMenuID == null)
+                .OrderBy(m => m.Title)
+                .ToList();
 
             return rootMenus;
         }

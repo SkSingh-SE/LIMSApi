@@ -6,8 +6,11 @@ namespace LIMSApi.Services.Interface
     public interface IUserService
     {
         Task UpdateUser(UserMaster user);
+        Task UpdateUsers(List<UserMaster> users);
         Task<bool> DeleteUser(string email);
         Task<UserMaster> GetUserByEmail(string email);
+        Task<List<UserMaster>> GetAllUserByRoleId(long Id);
+
         Task<List<DropdwonSelector>> GetUserDropdown(string? searchTerm, int pageNo, int pageSize);
 
     }

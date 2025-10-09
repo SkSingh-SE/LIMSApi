@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20251006061742_Update Role")]
+    partial class UpdateRole
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -4771,9 +4774,6 @@ namespace LIMSApi.Migrations
                         .HasColumnType("bigint");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsAdmin")
                         .HasColumnType("bit");
 
                     b.Property<long?>("ModifiedBy")

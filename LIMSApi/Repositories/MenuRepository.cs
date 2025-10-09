@@ -191,7 +191,7 @@ namespace LIMSApi.Repositories
                     permission.MenuID = menuId;
 
                     var existingPermission = await _context.PermissionMasters
-                        .FirstOrDefaultAsync(x => x.MenuID == menuId && x.Name == permission.Name);
+                        .FirstOrDefaultAsync(x => x.MenuID == menuId && x.Type == permission.Type);
 
                     if (existingPermission != null)
                     {
