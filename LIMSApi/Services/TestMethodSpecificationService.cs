@@ -172,5 +172,10 @@ namespace LIMSApi.Services
             return await _TestMethodSpecificationRepository.GetTestMethodSpecificationDropdown(searchTerm, pageNo, pageSize);
         }
 
+        public async Task<List<DropdwonSelector>> GetTestMethodsByStandard(long standardId)
+        {
+            return await _TestMethodSpecificationRepository.GetTestMethodSpecificationsByStandard(standardId);
+        }
+
     }
 }

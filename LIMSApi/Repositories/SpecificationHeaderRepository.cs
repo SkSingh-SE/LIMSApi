@@ -54,10 +54,11 @@ namespace LIMSApi.Repositories
         {
             var _query = (from c in _context.SpecificationHeaders
                           join g in _context.SpecificationGrades on c.ID equals g.SpecificationHeaderID
+
                           join so in _context.StandardOrganizationMasters
                           on c.StandardOrganizationID equals so.ID into soGroup
-                          where c.IsActive && c.IsCustom == false
                           from so in soGroup.DefaultIfEmpty()
+                          where c.IsActive && c.IsCustom == false
 
                           select new
                           {
@@ -108,9 +109,8 @@ namespace LIMSApi.Repositories
                           join g in _context.SpecificationGrades on c.ID equals g.SpecificationHeaderID
                           join so in _context.StandardOrganizationMasters
                           on c.StandardOrganizationID equals so.ID into soGroup
-                          where c.IsActive && c.IsCustom == true
                           from so in soGroup.DefaultIfEmpty()
-
+                          where c.IsActive && c.IsCustom == true
                           select new
                           {
                               c.ID,
@@ -186,28 +186,81 @@ namespace LIMSApi.Repositories
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.SpecificationHeaders
-                         join g in _context.SpecificationGrades on a.ID equals g.SpecificationHeaderID
-                         where a.IsActive
-                         select new
-                         {
-                             g.ID,
-                             AliasName = a.AliasName + "-" + g.Grade
-                         };
+            var query =
+                from a in _context.SpecificationHeaders
+                join g in _context.SpecificationGrades on a.ID equals g.SpecificationHeaderID
+                join tc in _context.TestMethodSpecifications on g.TestMethodSpecificationID equals tc.ID into tcGroup
+                from tc in tcGroup.DefaultIfEmpty()
+                where a.IsActive
+                select new
+                {
+                    g.ID,
+                    AliasName = a.AliasName + "-" + g.Grade + (tc != null ? ("-" + tc.Name) : "")
+                };
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.AliasName != null && x.AliasName.ToLower().Contains(search)) || x.ID.ToString().Contains(search));
+                query = query.Where(x =>
+                    (x.AliasName != null && x.AliasName.ToLower().Contains(search))
+                    || x.ID.ToString().Contains(search));
             }
 
             var skip = pageNo * pageSize;
 
-            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            var data = await query
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = x.AliasName
+                })
+                .ToListAsync();
+
+            return data;
+        }
+        public async Task<List<DropdwonSelector>> GetGradeDropdownMetalWise(string? searchTerm, int pageNo = 0, int pageSize = 20, long metalId = 0)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var query =
+                from a in _context.SpecificationHeaders
+                join g in _context.SpecificationGrades on a.ID equals g.SpecificationHeaderID
+                join tc in _context.TestMethodSpecifications on g.TestMethodSpecificationID equals tc.ID into tcGroup
+                from tc in tcGroup.DefaultIfEmpty()
+                where a.IsActive && g.MetalClassificationID == metalId
+                select new
+                {
+                    g.ID,
+                    g.MetalClassificationID,
+                    AliasName = a.AliasName + "-" + g.Grade + (tc != null ? ("-" + tc.Name) : "")
+                };
+
+            if (metalId > 0)
             {
-                Id = x.ID,
-                Name = x.AliasName,
-            })).ToListAsync();
+                query = query.Where(x => x.MetalClassificationID == metalId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var search = searchTerm.Trim().ToLower();
+                query = query.Where(x =>
+                    (x.AliasName != null && x.AliasName.ToLower().Contains(search))
+                    || x.ID.ToString().Contains(search));
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await query
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = x.AliasName
+                })
+                .ToListAsync();
 
             return data;
         }

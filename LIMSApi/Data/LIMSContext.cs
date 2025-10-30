@@ -114,6 +114,7 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<Notification> Notifications { get; set; }
     public virtual DbSet<UserPushSubscription> UserPushSubscriptions { get; set; }
     public virtual DbSet<JobExecutionLog> JobExecutionLogs { get; set; }
+    public virtual DbSet<MaterialTestMapping> MaterialTestMappings { get; set; }
 
     //    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     //#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the BankName= syntax to read it from _configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.

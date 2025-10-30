@@ -10,30 +10,30 @@ namespace LIMSApi.Controllers
     [ApiController]
     public class MaterialSpecificationController : ControllerBase
     {
-        private readonly ISpecificationHeaderService _specificationHeaderService;
+        private readonly ISpecificationHeaderService _service;
 
         public MaterialSpecificationController(ISpecificationHeaderService specificationHeaderService)
         {
-            _specificationHeaderService = specificationHeaderService;
+            _service = specificationHeaderService;
         }
 
         [HttpPost("list")]
         public async Task<IActionResult> SpecificationHeaderList(PageFilter filter)
         {
-            return Ok(await _specificationHeaderService.FetchSpecificationHeaderList(filter));
+            return Ok(await _service.FetchSpecificationHeaderList(filter));
         }
 
         [HttpPost("customList")]
         public async Task<IActionResult> CustomSpecificationHeaderList(PageFilter filter)
         {
-            return Ok(await _specificationHeaderService.FetchCustomSpecificationHeaderList(filter));
+            return Ok(await _service.FetchCustomSpecificationHeaderList(filter));
         }
 
 
         [HttpGet("details/{id}")]
         public async Task<ActionResult<SpecificationHeader>> GetSpecificationHeader(long id)
         {
-            var entity = await _specificationHeaderService.GetSpecificationHeaderDetails(id);
+            var entity = await _service.GetSpecificationHeaderDetails(id);
 
             return entity == null ? NoContent() : Ok(entity);
         }
@@ -42,7 +42,7 @@ namespace LIMSApi.Controllers
         [HttpPut("update")]
         public async Task<IActionResult> PutSpecificationHeader(SpecificationHeader model)
         {
-            await _specificationHeaderService.ModifySpecificationHeader(model);
+            await _service.ModifySpecificationHeader(model);
             return Ok(new
             {
                 status = "success",
@@ -53,7 +53,7 @@ namespace LIMSApi.Controllers
         [HttpPost("create")]
         public async Task<ActionResult<SpecificationHeader>> PostSpecificationHeader(SpecificationHeader model)
         {
-            await _specificationHeaderService.CreateSpecificationHeader(model);
+            await _service.CreateSpecificationHeader(model);
             return Ok(new
             {
                 status = "success",
@@ -64,12 +64,12 @@ namespace LIMSApi.Controllers
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteSpecificationHeader(long id)
         {
-            var entity = await _specificationHeaderService.GetSpecificationHeaderDetails(id);
+            var entity = await _service.GetSpecificationHeaderDetails(id);
             if (entity == null)
             {
                 throw new InvalidOperationException("SpecificationHeader not found!");
             }
-            await _specificationHeaderService.RemoveSpecificationHeader(id);
+            await _service.RemoveSpecificationHeader(id);
             return Ok(new
             {
                 status = "success",
@@ -80,28 +80,34 @@ namespace LIMSApi.Controllers
         [HttpGet("dropdown")]
         public async Task<IActionResult> GetSpecificationHeaderDropdown(string? searchTerm, int pageNo, int pageSize)
         {
-            var data = await _specificationHeaderService.GetSpecificationHeaderDropdown(searchTerm, pageNo, pageSize);
+            var data = await _service.GetSpecificationHeaderDropdown(searchTerm, pageNo, pageSize);
             return data == null ? NoContent(): Ok(data);
         }
 
         [HttpGet("grade-dropdown")]
         public async Task<IActionResult> GetGradeDropdown(string? searchTerm, int pageNo, int pageSize)
         {
-            var data = await _specificationHeaderService.GetGradeDropdown(searchTerm, pageNo, pageSize);
+            var data = await _service.GetGradeDropdown(searchTerm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("grade-dropdown-metal-wise")]
+        public async Task<IActionResult> GetGradeDropdownMetalWise( string? searchTerm, int pageNo, int pageSize, long metalId)
+        {
+            var data = await _service.GetGradeDropdownMetalWise(searchTerm, pageNo, pageSize,metalId);
             return data == null ? NoContent() : Ok(data);
         }
 
         [HttpGet("default-standard/{gradeId}")]
         public async Task<IActionResult> GetDefaultStandardForSpecification(long gradeId)
         {
-            var data = await _specificationHeaderService.GetDefaultStandardForSpecification(gradeId);
+            var data = await _service.GetDefaultStandardForSpecification(gradeId);
             return data == null ? NoContent() : Ok(data);
         }
 
         [HttpGet("test-methods")]
         public async Task<IActionResult> GetDefaultStandardForSpecification(long gradeId1 , long gradeId2)
         {
-            var data = await _specificationHeaderService.GetTestMethodsForSpecifications(gradeId1,gradeId2);
+            var data = await _service.GetTestMethodsForSpecifications(gradeId1,gradeId2);
             return data == null ? NoContent() : Ok(data);
         }
 

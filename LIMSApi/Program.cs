@@ -164,6 +164,7 @@ builder.Services.AddScoped<IUserPermissionRepository,UserPermissionRepository>()
 builder.Services.AddScoped<ISampleInwardRepository, SampleInwardRepository>();
 builder.Services.AddScoped<IWorkflowRepository, WorkflowRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
+builder.Services.AddScoped<IMaterialTestMappingRepository, MaterialTestMappingRepository>();
 
 
 
@@ -226,6 +227,7 @@ builder.Services.AddScoped<ISampleInwardService, SampleInwardService>();
 builder.Services.AddScoped<IWorkflowService, WorkflowService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IPushNotificationService, PushNotificationService>();
+builder.Services.AddScoped<IMaterialTestMappingService, MaterialTestMappingService>();
 
 
 // Third party services

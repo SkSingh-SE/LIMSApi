@@ -122,8 +122,8 @@ namespace LIMSApi.Services
                 {
                     SampleNo = $"{year}-{(nextSampleNumber + index):D6}",
                     Details = s.Details,
-                    Nature = s.Nature,
-                    Category = s.Category,
+                    MetalClassificationID = s.MetalClassificationID,
+                    ProductConditionID = s.ProductConditionID,
                     Remarks = s.Remarks,
                     Quantity = s.Quantity,
                     UploadReferenceID = s.UploadReferenceID,
@@ -173,320 +173,205 @@ namespace LIMSApi.Services
 
         public async Task ModifySampleInward(SampleInwardDto model)
         {
-            if (model.ID == 0)
-                throw new ArgumentException("SampleInward ID should not be empty!");
-
-            var entity = await _SampleInwardRepository.GetSampleInwardWithPlans(model.ID);
-            if (entity == null)
-                throw new Exception("Sample Inward not found");
-
-            //  Update scalar properties
-            entity.CustomerID = model.CustomerID;
-            entity.Address = model.Address;
-            entity.Area = model.Area;
-            entity.State = model.State;
-            entity.City = model.City;
-            entity.PinCode = model.PinCode;
-            entity.Country = model.Country;
-            entity.GstNo = model.GstNo;
-            entity.AdvancePayment = model.AdvancePayment;
-            entity.BillRequired = model.BillRequired;
-            entity.AdvancePIRequired = model.AdvancePIRequired;
-            entity.HoldTesting = model.HoldTesting;
-            entity.HoldTestingUntilPIApproved = model.HoldTestingUntilPIApproved;
-            entity.Urgent = model.Urgent;
-            entity.ReturnSample = model.ReturnSample;
-            entity.NotDestroyed = model.NotDestroyed;
-            entity.SampleReceiptNote = model.SampleReceiptNote;
-            entity.Status = model.Status;
-
-            //  Handle request file update
-            if (model.File != null)
+            try
             {
-                var fileUploadResponse = await _uploadService.UploadFileAsync(model.File, FileType.Other, null, model.RequestFileName);
-                if (fileUploadResponse == null)
-                    throw new InvalidOperationException("File upload failed!");
+                if (model.ID == 0)
+                    throw new ArgumentException("SampleInward ID should not be empty!");
 
-                entity.RequestFilePath = fileUploadResponse.FilePath;
-                entity.RequestFileName = fileUploadResponse.OriginalFileName;
-                entity.UploadReferenceID = fileUploadResponse.ID;
-            }
+                var entity = await _SampleInwardRepository.GetSampleInwardWithPlans(model.ID);
+                if (entity == null)
+                    throw new Exception("Sample Inward not found");
 
-            //  Sync DispatchModes
-            entity.DispatchModes.Clear();
-            foreach (var d in model.DispatchModes)
-            {
-                entity.DispatchModes.Add(new SampleDispatchMode
+                // Update scalar fields
+                entity.CustomerID = model.CustomerID;
+                entity.Address = model.Address;
+                entity.Area = model.Area;
+                entity.State = model.State;
+                entity.City = model.City;
+                entity.PinCode = model.PinCode;
+                entity.Country = model.Country;
+                entity.GstNo = model.GstNo;
+                entity.AdvancePayment = model.AdvancePayment;
+                entity.BillRequired = model.BillRequired;
+                entity.AdvancePIRequired = model.AdvancePIRequired;
+                entity.HoldTesting = model.HoldTesting;
+                entity.HoldTestingUntilPIApproved = model.HoldTestingUntilPIApproved;
+                entity.Urgent = model.Urgent;
+                entity.ReturnSample = model.ReturnSample;
+                entity.NotDestroyed = model.NotDestroyed;
+                entity.SampleReceiptNote = model.SampleReceiptNote;
+                entity.Status = model.Status;
+
+                // Handle request file update
+                if (model.File != null)
+                {
+                    var fileUploadResponse = await _uploadService.UploadFileAsync(model.File, FileType.Other, null, model.RequestFileName);
+                    if (fileUploadResponse == null)
+                        throw new InvalidOperationException("File upload failed!");
+
+                    entity.RequestFilePath = fileUploadResponse.FilePath;
+                    entity.RequestFileName = fileUploadResponse.OriginalFileName;
+                    entity.UploadReferenceID = fileUploadResponse.ID;
+                }
+
+                // Sync DispatchModes
+                entity.DispatchModes.Clear();
+                foreach (var d in model.DispatchModes)
+                {
+                    entity.DispatchModes.Add(new SampleDispatchMode
+                    {
+                        InwardID = entity.ID,
+                        DispatchModeID = d.DispatchModeID
+                    });
+                }
+
+                // Sync Contacts
+                entity.Contacts.Clear();
+                foreach (var c in model.Contacts)
+                {
+                    entity.Contacts.Add(new SampleInwardContactPerson
+                    {
+                        InwardID = entity.ID,
+                        ContactID = c.ContactID,
+                        Name = c.Name,
+                        MobileNo = c.MobileNo,
+                        EmailId = c.EmailId,
+                        SendBill = c.SendBill,
+                        SendReport = c.SendReport,
+                        Selected = c.Selected
+                    });
+                }
+
+                // Sync Addresses
+                entity.Addresses.Clear();
+                entity.Addresses.Add(new SampleInwardAddressInfo
                 {
                     InwardID = entity.ID,
-                    DispatchModeID = d.DispatchModeID
+                    ContactPersonName = model.ReportingTo.ContactPersonName,
+                    ContactPersonID = model.ReportingTo.ContactPersonID,
+                    Address = model.ReportingTo.Address,
+                    PinCode = model.ReportingTo.PinCode,
+                    Area = model.ReportingTo.Area,
+                    City = model.ReportingTo.City,
+                    State = model.ReportingTo.State,
+                    Country = model.ReportingTo.Country,
+                    Type = model.ReportingTo.Type
                 });
-            }
-
-            //  Sync Contacts
-            entity.Contacts.Clear();
-            foreach (var c in model.Contacts)
-            {
-                entity.Contacts.Add(new SampleInwardContactPerson
+                entity.Addresses.Add(new SampleInwardAddressInfo
                 {
                     InwardID = entity.ID,
-                    ContactID = c.ContactID,
-                    Name = c.Name,
-                    MobileNo = c.MobileNo,
-                    EmailId = c.EmailId,
-                    SendBill = c.SendBill,
-                    SendReport = c.SendReport,
-                    Selected = c.Selected
+                    ContactPersonName = model.BillingTo.ContactPersonName,
+                    ContactPersonID = model.BillingTo.ContactPersonID,
+                    Address = model.BillingTo.Address,
+                    PinCode = model.BillingTo.PinCode,
+                    Area = model.BillingTo.Area,
+                    City = model.BillingTo.City,
+                    State = model.BillingTo.State,
+                    Country = model.BillingTo.Country,
+                    Type = model.BillingTo.Type
                 });
-            }
 
-            //  Sync Addresses
-            entity.Addresses.Clear();
-            entity.Addresses.Add(new SampleInwardAddressInfo
-            {
-                InwardID = entity.ID,
-                ContactPersonName = model.ReportingTo.ContactPersonName,
-                ContactPersonID = model.ReportingTo.ContactPersonID,
-                Address = model.ReportingTo.Address,
-                PinCode = model.ReportingTo.PinCode,
-                Area = model.ReportingTo.Area,
-                City = model.ReportingTo.City,
-                State = model.ReportingTo.State,
-                Country = model.ReportingTo.Country,
-                Type = model.ReportingTo.Type
-            });
-            entity.Addresses.Add(new SampleInwardAddressInfo
-            {
-                InwardID = entity.ID,
-                ContactPersonName = model.BillingTo.ContactPersonName,
-                ContactPersonID = model.BillingTo.ContactPersonID,
-                Address = model.BillingTo.Address,
-                PinCode = model.BillingTo.PinCode,
-                Area = model.BillingTo.Area,
-                City = model.BillingTo.City,
-                State = model.BillingTo.State,
-                Country = model.BillingTo.Country,
-                Type = model.BillingTo.Type
-            });
+                // ✅ Only fetch next sample number if a new sample will be added
+                int nextSampleNumber = 0;
+                var year = DateTime.UtcNow.Year.ToString().Substring(2, 2);
 
-            //  Prepare SampleNo generator
-            dynamic caseAndSample = await _SampleInwardRepository.GetCaseNoAndSampleNo();
-            int nextSampleNumber = caseAndSample.nextSampleCounter;
-            var year = DateTime.UtcNow.Year.ToString().Substring(2, 2);
+                // Check if any new sample (SampleNo is empty or not found in DB)
+                var newSamples = model.SampleDetails
+                    .Where(s => string.IsNullOrEmpty(s.SampleNo) || !entity.SampleDetails.Any(e => e.SampleNo == s.SampleNo))
+                    .ToList();
 
-            //  Sync SampleDetails
-            foreach (var s in model.SampleDetails)
-            {
-                // find existing sample
-                var existingSample = entity.SampleDetails.FirstOrDefault(x => x.SampleNo == s.SampleNo);
-
-                if (existingSample != null)
+                if (newSamples.Any())
                 {
-                    // update existing sample
-                    existingSample.Details = s.Details;
-                    existingSample.Nature = s.Nature;
-                    existingSample.Category = s.Category;
-                    existingSample.Remarks = s.Remarks;
-                    existingSample.Quantity = s.Quantity;
-                    existingSample.Specimen = s.Specimen;
-                    existingSample.TestInstructions = s.TestInstructions;
+                    dynamic caseAndSample = await _SampleInwardRepository.GetCaseNoAndSampleNo();
+                    nextSampleNumber = caseAndSample.nextSampleCounter;
+                }
 
-                    // handle file update
-                    if (s.File != null)
+                foreach (var s in model.SampleDetails)
+                {
+                    var existingSample = entity.SampleDetails.FirstOrDefault(x => x.SampleNo == s.SampleNo);
+
+                    if (existingSample != null)
                     {
-                        var fileUploadResponse = await _uploadService.UploadFileAsync(s.File, FileType.Other, null, s.FileName);
-                        if (fileUploadResponse == null)
-                            throw new InvalidOperationException($"File upload failed for sample {existingSample.SampleNo}");
+                        // ✅ Update existing sample, keep original SampleNo
+                        existingSample.Details = s.Details;
+                        existingSample.MetalClassificationID = s.MetalClassificationID;
+                        existingSample.ProductConditionID = s.ProductConditionID;
+                        existingSample.Remarks = s.Remarks;
+                        existingSample.Quantity = s.Quantity;
+                        existingSample.Specimen = s.Specimen;
+                        existingSample.TestInstructions = s.TestInstructions;
 
-                        existingSample.SampleFilePath = fileUploadResponse.FilePath;
-                        existingSample.FileName = fileUploadResponse.OriginalFileName;
-                        existingSample.UploadReferenceID = fileUploadResponse.ID;
-                    }
-
-                    // update additional details
-                    existingSample.AdditionalDetails.Clear();
-                    foreach (var a in model.SampleAdditionalDetails.Where(a => a.SampleNo == s.SampleNo))
-                    {
-                        existingSample.AdditionalDetails.Add(new SampleAdditionalDetail
+                        if (s.File != null)
                         {
-                            SampleNo = existingSample.SampleNo,
-                            Label = a.Label,
-                            Value = a.Value
-                        });
-                    }
+                            var fileUploadResponse = await _uploadService.UploadFileAsync(s.File, FileType.Other, null, s.FileName);
+                            if (fileUploadResponse == null)
+                                throw new InvalidOperationException($"File upload failed for sample {existingSample.SampleNo}");
 
-                    //  Update Test Plans if provided
-                    if (model.SampleTestPlans.Any(tp => tp.SampleNo == s.SampleNo))
-                    {
-                        existingSample.TestPlans.Clear();
-                        string tcPrefix = "TC5098";
-                        string labLocation = "0";
-                        int ulrCounter = 1;
+                            existingSample.SampleFilePath = fileUploadResponse.FilePath;
+                            existingSample.FileName = fileUploadResponse.OriginalFileName;
+                            existingSample.UploadReferenceID = fileUploadResponse.ID;
+                        }
 
-                        foreach (var tp in model.SampleTestPlans.Where(tp => tp.SampleNo == s.SampleNo))
+                        existingSample.AdditionalDetails.Clear();
+                        foreach (var a in model.SampleAdditionalDetails.Where(a => a.SampleNo == s.SampleNo))
                         {
-                            var plan = new SampleTestPlan { SampleNo = tp.SampleNo };
-
-                            // general tests
-                            foreach (var g in tp.GeneralTests.Select((g, idx) => new { g, idx }))
+                            existingSample.AdditionalDetails.Add(new SampleAdditionalDetail
                             {
-                                var general = new GeneralTest
-                                {
-                                    Specification1 = g.g.Specification1,
-                                    Specification2 = g.g.Specification2
-                                };
-
-                                foreach (var m in g.g.Methods)
-                                {
-                                    general.Methods.Add(new GeneralTestMethod
-                                    {
-                                        TestMethodID = m.TestMethodID ?? 0,
-                                        StandardID = m.StandardID ?? 0,
-                                        Quantity = m.Quantity,
-                                        ReportNo = $"{tp.SampleNo}-{g.idx}",
-                                        UlrNo = $"{tcPrefix}{year}{labLocation}{tp.SampleNo.Split('-')[1].PadLeft(8, '0')}{ulrCounter++}F",
-                                        Cancel = m.Cancel
-                                    });
-                                }
-
-                                plan.GeneralTests.Add(general);
-                            }
-
-                            // chemical tests
-                            foreach (var c in tp.ChemicalTests.Select((c, idx) => new { c, idx }))
-                            {
-                                var chemical = new ChemicalTest
-                                {
-                                    ReportNo = $"{tp.SampleNo}-{c.idx}",
-                                    UlrNo = $"{tcPrefix}{year}{labLocation}{tp.SampleNo.Split('-')[1].PadLeft(8, '0')}{ulrCounter++}F",
-                                    MetalClassificationID = c.c.MetalClassificationID,
-                                    Specification1 = c.c.Specification1,
-                                    Specification2 = c.c.Specification2,
-                                    TestMethod = Convert.ToInt64(c.c.TestMethod)
-                                };
-
-                                foreach (var e in c.c.Elements)
-                                {
-                                    chemical.Elements.Add(new ChemicalTestElement
-                                    {
-                                        ParameterID = e.ParameterID
-                                    });
-                                }
-
-                                plan.ChemicalTests.Add(chemical);
-                            }
-
-                            existingSample.TestPlans.Add(plan);
+                                SampleNo = existingSample.SampleNo,
+                                Label = a.Label,
+                                Value = a.Value
+                            });
                         }
                     }
-                }
-                else
-                {
-                    // add new sample
-                    var newSample = new SampleDetail
+                    else
                     {
-                        SampleNo = string.IsNullOrEmpty(s.SampleNo)
-                                    ? $"{year}-{nextSampleNumber++:D6}"
-                                    : s.SampleNo,
-                        Details = s.Details,
-                        Nature = s.Nature,
-                        Category = s.Category,
-                        Remarks = s.Remarks,
-                        Quantity = s.Quantity
-                    };
-
-                    if (s.File != null)
-                    {
-                        var fileUploadResponse = await _uploadService.UploadFileAsync(s.File, FileType.Other, null, s.FileName);
-                        if (fileUploadResponse == null)
-                            throw new InvalidOperationException($"File upload failed for sample {newSample.SampleNo}");
-
-                        newSample.SampleFilePath = fileUploadResponse.FilePath;
-                        newSample.FileName = fileUploadResponse.OriginalFileName;
-                        newSample.UploadReferenceID = fileUploadResponse.ID;
-                    }
-
-                    foreach (var a in model.SampleAdditionalDetails.Where(a => a.SampleNo == s.SampleNo))
-                    {
-                        newSample.AdditionalDetails.Add(new SampleAdditionalDetail
+                        // ✅ Add new sample with new SampleNo only for new entries
+                        var newSampleNo = $"{year}-{nextSampleNumber++:D6}";
+                        var newSample = new SampleDetail
                         {
-                            SampleNo = newSample.SampleNo,
-                            Label = a.Label,
-                            Value = a.Value
-                        });
-                    }
+                            SampleNo = newSampleNo,
+                            Details = s.Details,
+                            MetalClassificationID = s.MetalClassificationID,
+                            ProductConditionID = s.ProductConditionID,
+                            Remarks = s.Remarks,
+                            Quantity = s.Quantity
+                        };
 
-                    //  Add Test Plans if provided
-                    if (model.SampleTestPlans.Any(tp => tp.SampleNo == newSample.SampleNo))
-                    {
-                        string tcPrefix = "TC5098";
-                        string labLocation = "0";
-                        int ulrCounter = 1;
-
-                        foreach (var tp in model.SampleTestPlans.Where(tp => tp.SampleNo == newSample.SampleNo))
+                        if (s.File != null)
                         {
-                            var plan = new SampleTestPlan { SampleNo = tp.SampleNo };
+                            var fileUploadResponse = await _uploadService.UploadFileAsync(s.File, FileType.Other, null, s.FileName);
+                            if (fileUploadResponse == null)
+                                throw new InvalidOperationException($"File upload failed for sample {newSample.SampleNo}");
 
-                            // general tests
-                            foreach (var g in tp.GeneralTests.Select((g, idx) => new { g, idx }))
-                            {
-                                var general = new GeneralTest
-                                {
-                                    Specification1 = g.g.Specification1,
-                                    Specification2 = g.g.Specification2
-                                };
-
-                                foreach (var m in g.g.Methods)
-                                {
-                                    general.Methods.Add(new GeneralTestMethod
-                                    {
-                                        TestMethodID = m.TestMethodID ?? 0,
-                                        StandardID = m.StandardID ?? 0,
-                                        Quantity = m.Quantity,
-                                        ReportNo = $"{tp.SampleNo}-{g.idx}",
-                                        UlrNo = $"{tcPrefix}{year}{labLocation}{tp.SampleNo.Split('-')[1].PadLeft(8, '0')}{ulrCounter++}F",
-                                        Cancel = m.Cancel
-                                    });
-                                }
-
-                                plan.GeneralTests.Add(general);
-                            }
-
-                            // chemical tests
-                            foreach (var c in tp.ChemicalTests.Select((c, idx) => new { c, idx }))
-                            {
-                                var chemical = new ChemicalTest
-                                {
-                                    ReportNo = $"{tp.SampleNo}-{c.idx}",
-                                    UlrNo = $"{tcPrefix}{year}{labLocation}{tp.SampleNo.Split('-')[1].PadLeft(8, '0')}{ulrCounter++}F",
-                                    MetalClassificationID = c.c.MetalClassificationID,
-                                    Specification1 = c.c.Specification1,
-                                    Specification2 = c.c.Specification2,
-                                    TestMethod = Convert.ToInt64(c.c.TestMethod)
-                                };
-
-                                foreach (var e in c.c.Elements)
-                                {
-                                    chemical.Elements.Add(new ChemicalTestElement
-                                    {
-                                        ParameterID = e.ParameterID
-                                    });
-                                }
-
-                                plan.ChemicalTests.Add(chemical);
-                            }
-
-                            newSample.TestPlans.Add(plan);
+                            newSample.SampleFilePath = fileUploadResponse.FilePath;
+                            newSample.FileName = fileUploadResponse.OriginalFileName;
+                            newSample.UploadReferenceID = fileUploadResponse.ID;
                         }
+
+                        foreach (var a in model.SampleAdditionalDetails.Where(a => a.SampleNo == s.SampleNo))
+                        {
+                            newSample.AdditionalDetails.Add(new SampleAdditionalDetail
+                            {
+                                SampleNo = newSampleNo,
+                                Label = a.Label,
+                                Value = a.Value
+                            });
+                        }
+
+                        entity.SampleDetails.Add(newSample);
                     }
-
-                    entity.SampleDetails.Add(newSample);
                 }
-            }
 
-            await _SampleInwardRepository.UpdateSampleInward(entity);
-            _logger.LogInformation("SampleInward '{Case}' updated successfully with samples & plans.", entity.CaseNo);
+                await _SampleInwardRepository.UpdateSampleInward(entity);
+                _logger.LogInformation("SampleInward '{Case}' updated successfully.", entity.CaseNo);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating SampleInward ID {ID}", model.ID);
+                throw;
+            }
         }
+
 
 
 
@@ -761,8 +646,8 @@ namespace LIMSApi.Services
                         ID = s.ID,
                         SampleNo = s.SampleNo,
                         Details = s.Details,
-                        Nature = s.Nature,
-                        Category = s.Category,
+                        MetalClassificationID = s.MetalClassificationID,
+                        ProductConditionID = s.ProductConditionID,
                         Remarks = s.Remarks,
                         Quantity = s.Quantity,
                         UploadReferenceID = s.UploadReferenceID,
@@ -923,8 +808,8 @@ namespace LIMSApi.Services
                         InwardID = s.InwardID,
                         SampleNo = s.SampleNo,
                         Details = s.Details,
-                        Nature = s.Nature,
-                        Category = s.Category,
+                        MetalClassificationID = s.MetalClassificationID,
+                        ProductConditionID = s.ProductConditionID,
                         Remarks = s.Remarks,
                         Quantity = s.Quantity,
                         UploadReferenceID = s.UploadReferenceID,

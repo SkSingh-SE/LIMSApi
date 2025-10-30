@@ -99,7 +99,7 @@ namespace LIMSApi.Repositories
                                 : true // role-based ones are granted by default
                 })
                 .ToListAsync();
-            var userMenus =  await GetUserMenusWithPermissions(userId);
+            //var userMenus =  await GetUserMenusWithPermissions(userId);
 
             // Group by menu
             return permissions
@@ -250,7 +250,7 @@ namespace LIMSApi.Repositories
             var userSpecialMenuIds = await _context.UserPermissions
                 .Include(up => up.Permission)
                 .ThenInclude(p => p.Menu)
-                .Where(up => up.UserID == userId)
+                .Where(up => up.UserID == userId && up.IsGranted == true)
                 .Select(up => (long)up.Permission.MenuID)
                 .Distinct()
                 .ToListAsync();
@@ -281,7 +281,7 @@ namespace LIMSApi.Repositories
             // 5️ Fetch Permissions from PermissionMaster for effective menus
             var roleMenuPermissions = await _context.PermissionMasters
                 .Include(pm => pm.Menu)
-                .Where(pm => effectiveMenuIds.Contains((long)pm.MenuID))
+                 .Where(pm => effectiveMenuIds.Contains((long)pm.MenuID) && !userSpecialMenuIds.Contains((long)pm.MenuID))
                 .Select(pm => new
                 {
                     Menu = pm.Menu,
@@ -320,6 +320,7 @@ namespace LIMSApi.Repositories
 
             foreach (var menu in menuMasters)
             {
+                bool isFromRole = roleSubMenuIds.Contains(menu.ID);
                 menuDict[menu.ID] = new UserMenuDTO
                 {
                     ID = menu.ID,
@@ -328,7 +329,8 @@ namespace LIMSApi.Repositories
                     ParentMenuID = menu.ParentID,
                     Permissions = combinedPermissions
                         .FirstOrDefault(x => x.Menu.ID == menu.ID)?.Permissions
-                        ?? new List<string>()
+                        ?? new List<string>(),
+                    IsFromRole = isFromRole
                 };
             }
 
@@ -337,7 +339,13 @@ namespace LIMSApi.Repositories
             {
                 if (menu.ParentMenuID != null && menuDict.ContainsKey(menu.ParentMenuID.Value))
                 {
-                    menuDict[menu.ParentMenuID.Value].Children.Add(menu);
+                   // menuDict[menu.ParentMenuID.Value].Children.Add(menu);
+                    var parent = menuDict[menu.ParentMenuID.Value];
+                    parent.Children.Add(menu);
+
+                    // If all children are role-based, mark parent as from role too
+                    if (menu.IsFromRole && !parent.IsFromRole)
+                        parent.IsFromRole = true;
                 }
             }
 

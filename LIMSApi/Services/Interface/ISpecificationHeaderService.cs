@@ -14,6 +14,7 @@ namespace LIMSApi.Services.Interface
 
         Task<List<DropdwonSelector>> GetSpecificationHeaderDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<List<DropdwonSelector>> GetGradeDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<DropdwonSelector>> GetGradeDropdownMetalWise(string? searchTerm, int pageNo, int pageSize, long metalId);
         Task<List<DropdwonSelector>> GetDefaultStandardForSpecification(long gradeId);
         Task<List<DropdwonSelector>> GetTestMethodsForSpecifications(long gradeId1, long gradeId2 = 0);
     }

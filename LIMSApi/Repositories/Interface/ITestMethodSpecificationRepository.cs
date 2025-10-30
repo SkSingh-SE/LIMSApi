@@ -14,6 +14,7 @@ namespace LIMSApi.Repositories.Interface
         Task<List<DropdwonSelector>> GetTestMethodSpecificationDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<bool> ExistsByName(string name);
         Task<bool> ExistsByNameAndNotId(string name, long Id);
+        Task<List<DropdwonSelector>> GetTestMethodSpecificationsByStandard(long standardId);
 
     }
 }

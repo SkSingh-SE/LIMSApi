@@ -18,8 +18,12 @@ public partial class SpecificationGrade
 
     public long? MetalClassificationID { get; set; }
 
+    public long? TestMethodSpecificationID { get; set; }
+
     [ForeignKey("MetalCalssificationID")]
     public virtual MetalClassificationMaster? MetalClassification { get; set; }
+    [ForeignKey("TestMethodSpecificationID")]
+    public virtual TestMethodSpecification? TestMethodSpecification { get; set; }
 
     public virtual ICollection<SpecificationLine> SpecificationLines { get; set; } = new List<SpecificationLine>();
 

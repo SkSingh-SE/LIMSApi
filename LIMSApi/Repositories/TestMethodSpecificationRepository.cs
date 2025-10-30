@@ -122,6 +122,17 @@ namespace LIMSApi.Repositories
         {
             return await _context.TestMethodSpecifications.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
-       
+
+        public Task<List<DropdwonSelector>> GetTestMethodSpecificationsByStandard(long standardId)
+        {
+            var _query = from a in _context.TestMethodSpecifications
+                         where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode && a.StandardOrganizationID == standardId
+                         select new DropdwonSelector
+                         {
+                             Id = a.ID,
+                             Name = a.Name,
+                         };
+            return _query.ToListAsync();
+        }
     }
 }

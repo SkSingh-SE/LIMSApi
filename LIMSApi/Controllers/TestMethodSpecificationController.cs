@@ -150,7 +150,14 @@ namespace LIMSApi.Controllers
             var data = await _testMethodService.GetTestMethodSpecificationDropdown(searchTerm, pageNo, pageSize);
             return data == null ? NoContent() : Ok(data);
         }
-        
+
+        [HttpGet("test-method-standard-wise/{standardId}")]
+        public async Task<IActionResult> GetTestMethodsByStandard(long standardId)
+        {
+            var data = await _testMethodService.GetTestMethodsByStandard(standardId);
+            return data == null ? NoContent() : Ok(data);
+        }
+
 
     }
 }

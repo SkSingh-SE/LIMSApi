@@ -10,8 +10,8 @@ namespace LIMSApi.Models
         public long ID { get; set; }
         public string SampleNo { get; set; }
         public string Details { get; set; }
-        public string Nature { get; set; }
-        public string Category { get; set; }
+        public long? MetalClassificationID { get; set; }
+        public long? ProductConditionID { get; set; }
         public string Remarks { get; set; }
         public int Quantity { get; set; }
         public bool Disabled { get; set; }

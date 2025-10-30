@@ -14,6 +14,7 @@ namespace LIMSApi.Repositories.Interface
 
         Task<List<DropdwonSelector>> GetSpecificationHeaderDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<List<DropdwonSelector>> GetGradeDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<DropdwonSelector>> GetGradeDropdownMetalWise(string? searchTerm, int pageNo, int pageSize, long metalId);
         Task<bool> ExistsByName(string name);
         Task<bool> ExistsByNameAndNotId(string name, long id);
         Task<List<DropdwonSelector>> GetDefaultStandardForSpecification(long gradeId);

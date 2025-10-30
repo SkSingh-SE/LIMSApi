@@ -73,6 +73,7 @@ namespace LIMSApi.Services
                 existingGrade.MetalClassificationID = grade.MetalClassificationID;
                 existingGrade.IsUNS = grade.IsUNS;
                 existingGrade.UNSSteelNumber = grade.UNSSteelNumber;
+                existingGrade.TestMethodSpecificationID = grade.TestMethodSpecificationID;
 
                 // Remove missing lines
                 var linesToRemove = existingGrade.SpecificationLines
@@ -173,6 +174,10 @@ namespace LIMSApi.Services
         public async Task<List<DropdwonSelector>> GetGradeDropdown(string? searchTerm, int pageNo, int pageSize)
         {
             return await _specificationRepo.GetGradeDropdown(searchTerm, pageNo, pageSize);
+        }
+        public async Task<List<DropdwonSelector>> GetGradeDropdownMetalWise(string? searchTerm, int pageNo, int pageSize, long metalId)
+        {
+            return await _specificationRepo.GetGradeDropdownMetalWise(searchTerm, pageNo, pageSize, metalId);
         }
         public async Task<List<DropdwonSelector>> GetDefaultStandardForSpecification(long gradeId)
         {

@@ -14,7 +14,8 @@ public partial class SpecificationHeader : AuditProperty
 
     public long? StandardOrganizationID { get; set; }
 
-    public string? Standard { get; set; }
+
+    public string? Standard { get; set; } // Not in use 
 
     public string? Part { get; set; }
 
@@ -24,6 +25,9 @@ public partial class SpecificationHeader : AuditProperty
 
     [ForeignKey("StandardOrganizationID")]
     public virtual StandardOrganizationMaster? StandardOrganization { get; set; }
+
+    [ForeignKey("TestMethodSpecificationID")]
+    public virtual TestMethodSpecification? TestMethodSpecification { get; set; }  
     public virtual ICollection<SpecificationGrade> Grades { get; set; } = new List<SpecificationGrade>();
 
 }

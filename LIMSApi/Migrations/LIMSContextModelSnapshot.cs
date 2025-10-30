@@ -2444,6 +2444,59 @@ namespace LIMSApi.Migrations
                     b.ToTable("MakerMasters");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.MaterialTestMapping", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("GradeID")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<long>("LaboratoryTestID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("MetalClassificationID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("ProductConditionID")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("GradeID");
+
+                    b.HasIndex("MetalClassificationID");
+
+                    b.HasIndex("ProductConditionID");
+
+                    b.ToTable("MaterialTestMappings");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.MenuMaster", b =>
                 {
                     b.Property<long>("ID")
@@ -3135,10 +3188,6 @@ namespace LIMSApi.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
 
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<bool>("CuttingRequired")
                         .HasColumnType("bit");
 
@@ -3161,15 +3210,17 @@ namespace LIMSApi.Migrations
                     b.Property<bool>("MachiningRequired")
                         .HasColumnType("bit");
 
-                    b.Property<string>("Nature")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<long?>("MetalClassificationID")
+                        .HasColumnType("bigint");
 
                     b.Property<bool>("OtherPreparation")
                         .HasColumnType("bit");
 
                     b.Property<decimal>("OtherPreparationCharge")
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<long?>("ProductConditionID")
+                        .HasColumnType("bigint");
 
                     b.Property<int>("Quantity")
                         .HasColumnType("int");
@@ -3595,6 +3646,9 @@ namespace LIMSApi.Migrations
                     b.Property<long>("SpecificationHeaderID")
                         .HasColumnType("bigint");
 
+                    b.Property<long?>("TestMethodSpecificationID")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("UNSSteelNumber")
                         .HasColumnType("nvarchar(max)");
 
@@ -3603,6 +3657,8 @@ namespace LIMSApi.Migrations
                     b.HasIndex("MetalCalssificationID");
 
                     b.HasIndex("SpecificationHeaderID");
+
+                    b.HasIndex("TestMethodSpecificationID");
 
                     b.ToTable("SpecificationGrades");
                 });
@@ -3654,9 +3710,14 @@ namespace LIMSApi.Migrations
                     b.Property<string>("StandardYear")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<long?>("TestMethodSpecificationID")
+                        .HasColumnType("bigint");
+
                     b.HasKey("ID");
 
                     b.HasIndex("StandardOrganizationID");
+
+                    b.HasIndex("TestMethodSpecificationID");
 
                     b.ToTable("SpecificationHeaders");
                 });
@@ -5556,6 +5617,27 @@ namespace LIMSApi.Migrations
                     b.Navigation("InvoiceCaseConfiguration");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.MaterialTestMapping", b =>
+                {
+                    b.HasOne("LIMSApi.Models.SpecificationGrade", "Grade")
+                        .WithMany()
+                        .HasForeignKey("GradeID");
+
+                    b.HasOne("LIMSApi.Models.MetalClassificationMaster", "MetalClassification")
+                        .WithMany()
+                        .HasForeignKey("MetalClassificationID");
+
+                    b.HasOne("LIMSApi.Models.ProductConditionMaster", "ProductCondition")
+                        .WithMany()
+                        .HasForeignKey("ProductConditionID");
+
+                    b.Navigation("Grade");
+
+                    b.Navigation("MetalClassification");
+
+                    b.Navigation("ProductCondition");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.MenuMaster", b =>
                 {
                     b.HasOne("LIMSApi.Models.MenuMaster", "Parent")
@@ -5747,7 +5829,13 @@ namespace LIMSApi.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("LIMSApi.Models.TestMethodSpecification", "TestMethodSpecification")
+                        .WithMany()
+                        .HasForeignKey("TestMethodSpecificationID");
+
                     b.Navigation("MetalClassification");
+
+                    b.Navigation("TestMethodSpecification");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SpecificationHeader", b =>
@@ -5756,7 +5844,13 @@ namespace LIMSApi.Migrations
                         .WithMany()
                         .HasForeignKey("StandardOrganizationID");
 
+                    b.HasOne("LIMSApi.Models.TestMethodSpecification", "TestMethodSpecification")
+                        .WithMany()
+                        .HasForeignKey("TestMethodSpecificationID");
+
                     b.Navigation("StandardOrganization");
+
+                    b.Navigation("TestMethodSpecification");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SpecificationLine", b =>
