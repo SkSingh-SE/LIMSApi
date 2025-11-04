@@ -58,6 +58,9 @@ namespace LIMSApi.Services
             _logger.LogInformation("MaterialTestMapping updated: {@Mapping}", mapping);
         }
 
-      
+        public async Task<List<DropdwonSelector>> GetSuggestedTestsAsync(TestSuggestionRequest request)
+        {
+            return await _repository.GetSuggestedTestsAsync(request);
+        }
     }
 }

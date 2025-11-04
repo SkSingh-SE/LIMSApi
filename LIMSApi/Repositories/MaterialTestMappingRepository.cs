@@ -135,5 +135,54 @@ namespace LIMSApi.Repositories
 
             return await query.AnyAsync();
         }
+
+        public async Task<List<DropdwonSelector>> GetSuggestedTestsAsync(TestSuggestionRequest request)
+        {
+            //  Handle multiple grade IDs (comma-separated)
+            var gradeIds = new List<string>();
+
+            if (!string.IsNullOrWhiteSpace(request.GradeIDs))
+                gradeIds = request.GradeIDs.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                           .Select(g => g.Trim().ToLower())
+                                           .ToList();
+
+            //  Build base query
+            var query = from m in _context.MaterialTestMappings
+                        join lt in _context.LaboratoryTests on m.LaboratoryTestID equals lt.ID
+                        where m.IsActive
+                        select new
+                        {
+                            m.GradeID,
+                            m.MetalClassificationID,
+                            m.ProductConditionID,
+                            m.LaboratoryTestID,
+                            LaboratoryTestSubGroup = lt.SubGroup
+                        };
+
+            // Filter by MetalClassificationID (if provided)
+            if (request.MetalClassificationID.HasValue)
+                query = query.Where(x => x.MetalClassificationID == request.MetalClassificationID);
+
+            // Filter by ProductConditionID (if provided)
+            if (request.ProductConditionID.HasValue)
+                query = query.Where(x => x.ProductConditionID == request.ProductConditionID);
+
+            // Filter by Grade(s)
+            if (gradeIds.Any())
+                query = query.Where(x => gradeIds.Contains(x.GradeID.ToString().ToLower()));
+
+            // Get distinct tests
+            var results = await query
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.LaboratoryTestID,
+                    Name = x.LaboratoryTestSubGroup
+                })
+                .Distinct()
+                .ToListAsync();
+
+            return results;
+        }
+
     }
 }

@@ -57,7 +57,16 @@ namespace LIMSApi.Controllers
                 message = $"Material Test Mapping created successfully."
             });
         }
+        [HttpGet("AutoSuggest")]
+        public async Task<IActionResult> AutoSuggestTestMethods([FromQuery] TestSuggestionRequest request)
+        {
+            var suggestions = await _service.GetSuggestedTestsAsync(request);
 
+            if (suggestions == null || !suggestions.Any())
+                return NoContent();
+
+            return Ok(suggestions);
+        }
 
     }
 }

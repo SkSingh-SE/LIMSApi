@@ -13,5 +13,6 @@
         public virtual MetalClassificationMaster? MetalClassification { get; set; }
         public virtual ProductConditionMaster? ProductCondition { get; set; }
         public virtual SpecificationGrade? Grade { get; set; }
+        public virtual LaboratoryTest? LaboratoryTest { get; set; }
     }
 }

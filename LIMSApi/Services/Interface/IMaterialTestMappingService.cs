@@ -9,5 +9,6 @@ namespace LIMSApi.Services.Interface
         Task<MaterialTestMapping?> GetMapping(long id);
         Task CreateMapping(MaterialTestMapping dto);
         Task UpdateMapping(MaterialTestMapping dto);
+        Task<List<DropdwonSelector>> GetSuggestedTestsAsync(TestSuggestionRequest request);
     }
 }

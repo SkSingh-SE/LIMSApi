@@ -201,10 +201,17 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var search = searchTerm.Trim().ToLower();
-                query = query.Where(x =>
-                    (x.AliasName != null && x.AliasName.ToLower().Contains(search))
-                    || x.ID.ToString().Contains(search));
+
+                if (int.TryParse(search, out int id))
+                {
+                    query = query.Where(x => x.ID == id);
+                }
+                else
+                {
+                    query = query.Where(x => x.AliasName != null && x.AliasName.ToLower().Contains(search));
+                }
             }
+
 
             var skip = pageNo * pageSize;
 

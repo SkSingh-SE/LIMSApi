@@ -12,6 +12,7 @@ namespace LIMSApi.Repositories.Interface
         Task AddAsync(MaterialTestMapping entity);
         Task UpdateAsync(MaterialTestMapping entity);
         Task<bool> ExistsAsync(long? metalClassificationId, long? productConditionId, long? gradeId);
+        Task<List<DropdwonSelector>> GetSuggestedTestsAsync(TestSuggestionRequest request);
 
     }
 }

@@ -377,162 +377,171 @@ namespace LIMSApi.Services
 
         public async Task ModifySamplePlan(PlanDto model)
         {
-            var entity = await _SampleInwardRepository.GetSampleInwardWithPlans(model.ID);
-            if (entity == null)
-                throw new Exception("Sample Inward not found");
-
-            // update review info
-            entity.StatementOfConformity = model.StatementOfConformity;
-            entity.DecisionRule = model.DecisionRule;
-            entity.ReviewStatus = model.ReviewStatus ?? "Reviewed";
-            entity.ReviewedBy = loggedInUser.EmployeeID;
-            entity.ReviewedOn = DateTime.UtcNow;
-
-            string tcPrefix = "TC5098";
-            string labLocation = "0";
-            string year = DateTime.UtcNow.Year.ToString().Substring(2, 2);
-
-            foreach (var sampleDto in model.SampleDetails)
+            try
             {
-                var sample = entity.SampleDetails.FirstOrDefault(s => s.SampleNo == sampleDto.SampleNo);
-                if (sample == null)
-                    throw new Exception($"Sample '{sampleDto.SampleNo}' not found in inward {model.ID}");
 
-                // update prep fields
-                sample.CuttingRequired = sampleDto.CuttingRequired;
-                sample.MachiningRequired = sampleDto.MachiningRequired;
-                sample.MachiningAmount = sampleDto.MachiningAmount ?? 0;
-                sample.OtherPreparation = sampleDto.OtherPreparation;
-                sample.OtherPreparationCharge = sampleDto.OtherPreparationCharge ?? 0;
-                sample.TpiRequired = sampleDto.TpiRequired;
+                var entity = await _SampleInwardRepository.GetSampleInwardWithPlans(model.ID);
+                if (entity == null)
+                    throw new Exception("Sample Inward not found");
 
-                // ensure plan
-                var existingPlan = sample.TestPlans.FirstOrDefault();
-                if (existingPlan == null)
+                // update review info
+                entity.StatementOfConformity = model.StatementOfConformity;
+                entity.DecisionRule = model.DecisionRule;
+                entity.ReviewStatus = model.ReviewStatus ?? "Reviewed";
+                entity.ReviewedBy = loggedInUser.EmployeeID;
+                entity.ReviewedOn = DateTime.UtcNow;
+
+                string tcPrefix = "TC5098";
+                string labLocation = "0";
+                string year = DateTime.UtcNow.Year.ToString().Substring(2, 2);
+
+                foreach (var sampleDto in model.SampleDetails)
                 {
-                    existingPlan = new SampleTestPlan { SampleNo = sampleDto.SampleNo };
-                    sample.TestPlans.Add(existingPlan);
-                }
+                    var sample = entity.SampleDetails.FirstOrDefault(s => s.SampleNo == sampleDto.SampleNo);
+                    if (sample == null)
+                        throw new Exception($"Sample '{sampleDto.SampleNo}' not found in inward {model.ID}");
 
-                int ulrCounter = 1;
+                    // update prep fields
+                    sample.CuttingRequired = sampleDto.CuttingRequired;
+                    sample.MachiningRequired = sampleDto.MachiningRequired;
+                    sample.MachiningAmount = sampleDto.MachiningAmount ?? 0;
+                    sample.OtherPreparation = sampleDto.OtherPreparation;
+                    sample.OtherPreparationCharge = sampleDto.OtherPreparationCharge ?? 0;
+                    sample.TpiRequired = sampleDto.TpiRequired;
 
-                //  Sync General Tests
-                var dtoGeneralTests = sampleDto.TestPlans.SelectMany(p => p.GeneralTests).ToList();
-
-                // remove missing general tests
-                var toRemoveGeneral = existingPlan.GeneralTests
-                    .Where(gt => !dtoGeneralTests.Any(d => d.ID == gt.ID))
-                    .ToList();
-                foreach (var rem in toRemoveGeneral)
-                    existingPlan.GeneralTests.Remove(rem);
-
-                // add / update general tests
-                foreach (var g in dtoGeneralTests.Select((g, idx) => new { g, idx }))
-                {
-                    var existingGeneral = existingPlan.GeneralTests
-                        .FirstOrDefault(x => x.ID == g.g.ID);
-
-                    if (existingGeneral == null)
+                    // ensure plan
+                    var existingPlan = sample.TestPlans.FirstOrDefault();
+                    if (existingPlan == null)
                     {
-                        existingGeneral = new GeneralTest
-                        {
-                            Specification1 = g.g.Specification1,
-                            Specification2 = g.g.Specification2,
-                            Methods = new List<GeneralTestMethod>()
-                        };
-                        existingPlan.GeneralTests.Add(existingGeneral);
+                        existingPlan = new SampleTestPlan { SampleNo = sampleDto.SampleNo };
+                        sample.TestPlans.Add(existingPlan);
                     }
-                    else
+
+                    int ulrCounter = 1;
+
+                    //  Sync General Tests
+                    var dtoGeneralTests = sampleDto.TestPlans.SelectMany(p => p.GeneralTests).ToList();
+
+                    // remove missing general tests
+                    var toRemoveGeneral = existingPlan.GeneralTests
+                        .Where(gt => !dtoGeneralTests.Any(d => d.ID == gt.ID))
+                        .ToList();
+                    foreach (var rem in toRemoveGeneral)
+                        existingPlan.GeneralTests.Remove(rem);
+
+                    // add / update general tests
+                    foreach (var g in dtoGeneralTests.Select((g, idx) => new { g, idx }))
                     {
+                        var existingGeneral = existingPlan.GeneralTests
+                            .FirstOrDefault(x => x.ID == g.g.ID);
+
+                        if (existingGeneral == null)
+                        {
+                            existingGeneral = new GeneralTest
+                            {
+                                Specification1 = g.g.Specification1,
+                                Specification2 = g.g.Specification2,
+                                Methods = new List<GeneralTestMethod>()
+                            };
+                            existingPlan.GeneralTests.Add(existingGeneral);
+                        }
+                        else
+                        {
+                            // update fields
+                            existingGeneral.Specification1 = g.g.Specification1;
+                            existingGeneral.Specification2 = g.g.Specification2;
+                            existingGeneral.Methods.Clear(); // re-sync methods
+                        }
+
+                        foreach (var m in g.g.Methods)
+                        {
+                            var newMethod = new GeneralTestMethod
+                            {
+                                TestMethodID = m.TestMethodID ?? 0,
+                                StandardID = m.StandardID ?? 0,
+                                Quantity = m.Quantity,
+                                ReportNo = string.IsNullOrEmpty(m.ReportNo)
+                                            ? existingGeneral.Methods.FirstOrDefault(x => x.TestMethodID == m.TestMethodID)?.ReportNo
+                                              ?? $"{sample.SampleNo}-{g.idx}"
+                                            : m.ReportNo,
+                                UlrNo = string.IsNullOrEmpty(m.UlrNo)
+                                            ? existingGeneral.Methods.FirstOrDefault(x => x.TestMethodID == m.TestMethodID)?.UlrNo
+                                              ?? $"{tcPrefix}{year}{labLocation}{sample.SampleNo.Split('-')[1].PadLeft(8, '0')}{ulrCounter++}F"
+                                            : m.UlrNo,
+                                Cancel = m.Cancel
+                            };
+
+                            existingGeneral.Methods.Add(newMethod);
+                        }
+                    }
+
+                    //  Sync Chemical Tests
+                    var dtoChemicalTests = sampleDto.TestPlans.SelectMany(p => p.ChemicalTests).ToList();
+
+                    // remove missing chemical tests
+                    var toRemoveChem = existingPlan.ChemicalTests
+                        .Where(ct => !dtoChemicalTests.Any(d => d.ID == ct.ID))
+                        .ToList();
+                    foreach (var rem in toRemoveChem)
+                        existingPlan.ChemicalTests.Remove(rem);
+
+                    // add / update chemical tests
+                    foreach (var c in dtoChemicalTests.Select((c, idx) => new { c, idx }))
+                    {
+                        var existingChem = existingPlan.ChemicalTests
+                            .FirstOrDefault(x => x.ID == c.c.ID);
+
+                        if (existingChem == null)
+                        {
+                            existingChem = new ChemicalTest();
+                            existingPlan.ChemicalTests.Add(existingChem);
+                        }
+
                         // update fields
-                        existingGeneral.Specification1 = g.g.Specification1;
-                        existingGeneral.Specification2 = g.g.Specification2;
-                        existingGeneral.Methods.Clear(); // re-sync methods
-                    }
+                        existingChem.ReportNo = string.IsNullOrEmpty(c.c.ReportNo)
+                            ? existingChem.ReportNo ?? $"{sample.SampleNo}-{c.idx}"
+                            : c.c.ReportNo;
 
-                    foreach (var m in g.g.Methods)
-                    {
-                        var newMethod = new GeneralTestMethod
+                        existingChem.UlrNo = string.IsNullOrEmpty(c.c.UlrNo)
+                            ? existingChem.UlrNo ?? $"{tcPrefix}{year}{labLocation}{sample.SampleNo.Split('-')[1].PadLeft(8, '0')}{ulrCounter++}F"
+                            : c.c.UlrNo;
+
+                        existingChem.MetalClassificationID = c.c.MetalClassificationID;
+                        existingChem.Specification1 = c.c.Specification1;
+                        existingChem.Specification2 = c.c.Specification2;
+                        existingChem.TestMethod = c.c.TestMethod;
+
+                        // sync elements
+                        existingChem.Elements.Clear();
+                        foreach (var e in c.c.Elements)
                         {
-                            TestMethodID = m.TestMethodID ?? 0,
-                            StandardID = m.StandardID ?? 0,
-                            Quantity = m.Quantity,
-                            ReportNo = string.IsNullOrEmpty(m.ReportNo)
-                                        ? existingGeneral.Methods.FirstOrDefault(x => x.TestMethodID == m.TestMethodID)?.ReportNo
-                                          ?? $"{sample.SampleNo}-{g.idx}"
-                                        : m.ReportNo,
-                            UlrNo = string.IsNullOrEmpty(m.UlrNo)
-                                        ? existingGeneral.Methods.FirstOrDefault(x => x.TestMethodID == m.TestMethodID)?.UlrNo
-                                          ?? $"{tcPrefix}{year}{labLocation}{sample.SampleNo.Split('-')[1].PadLeft(8, '0')}{ulrCounter++}F"
-                                        : m.UlrNo,
-                            Cancel = m.Cancel
-                        };
+                            existingChem.Elements.Add(new ChemicalTestElement
+                            {
+                                ParameterID = e.ParameterID
+                            });
+                        }
 
-                        existingGeneral.Methods.Add(newMethod);
+                        existingChem.TestTypes.Clear();
+                        foreach (var kvp in c.c.TestTypes)
+                        {
+                            existingChem.TestTypes.Add(new ChemicalTestType
+                            {
+                                Name = kvp.Key,
+                                IsSelected = kvp.Value
+                            });
+                        }
                     }
                 }
 
-                //  Sync Chemical Tests
-                var dtoChemicalTests = sampleDto.TestPlans.SelectMany(p => p.ChemicalTests).ToList();
+                await _SampleInwardRepository.UpdateSampleInward(entity);
+                _logger.LogInformation("Plans and sample prep updated for Inward '{InwardID}'", model.ID);
+                //await _workflowService.StartWorkflow(entity.ID, "Request of Review");
 
-                // remove missing chemical tests
-                var toRemoveChem = existingPlan.ChemicalTests
-                    .Where(ct => !dtoChemicalTests.Any(d => d.ID == ct.ID))
-                    .ToList();
-                foreach (var rem in toRemoveChem)
-                    existingPlan.ChemicalTests.Remove(rem);
-
-                // add / update chemical tests
-                foreach (var c in dtoChemicalTests.Select((c, idx) => new { c, idx }))
-                {
-                    var existingChem = existingPlan.ChemicalTests
-                        .FirstOrDefault(x => x.ID == c.c.ID);
-
-                    if (existingChem == null)
-                    {
-                        existingChem = new ChemicalTest();
-                        existingPlan.ChemicalTests.Add(existingChem);
-                    }
-
-                    // update fields
-                    existingChem.ReportNo = string.IsNullOrEmpty(c.c.ReportNo)
-                        ? existingChem.ReportNo ?? $"{sample.SampleNo}-{c.idx}"
-                        : c.c.ReportNo;
-
-                    existingChem.UlrNo = string.IsNullOrEmpty(c.c.UlrNo)
-                        ? existingChem.UlrNo ?? $"{tcPrefix}{year}{labLocation}{sample.SampleNo.Split('-')[1].PadLeft(8, '0')}{ulrCounter++}F"
-                        : c.c.UlrNo;
-
-                    existingChem.MetalClassificationID = c.c.MetalClassificationID;
-                    existingChem.Specification1 = c.c.Specification1;
-                    existingChem.Specification2 = c.c.Specification2;
-                    existingChem.TestMethod = c.c.TestMethod;
-
-                    // sync elements
-                    existingChem.Elements.Clear();
-                    foreach (var e in c.c.Elements)
-                    {
-                        existingChem.Elements.Add(new ChemicalTestElement
-                        {
-                            ParameterID = e.ParameterID
-                        });
-                    }
-
-                    existingChem.TestTypes.Clear();
-                    foreach (var kvp in c.c.TestTypes)
-                    {
-                        existingChem.TestTypes.Add(new ChemicalTestType
-                        {
-                            Name = kvp.Key,
-                            IsSelected = kvp.Value
-                        });
-                    }
-                }
             }
-
-            await _SampleInwardRepository.UpdateSampleInward(entity);
-            _logger.LogInformation("Plans and sample prep updated for Inward '{InwardID}'", model.ID);
-            await _workflowService.StartWorkflow(entity.ID, "Request of Review");
+            catch (Exception ex)
+            {
+                throw ex;
+            }
         }
 
 
