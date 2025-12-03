@@ -64,10 +64,10 @@ namespace LIMSApi.Controllers
             });
         }
 
-        [HttpPost("action")]
-        public async Task<IActionResult> PerformAction(long instanceId, string action, long userId, string comments)
+        [HttpPost("perform-action")]
+        public async Task<IActionResult> PerformAction(WorkflowActionRequestDto request)
         {
-            await _service.PerformAction(instanceId, action, userId, comments);
+            await _service.PerformWorkflowActionAsync(request);
             return Ok(new
             {
                 status = "success",

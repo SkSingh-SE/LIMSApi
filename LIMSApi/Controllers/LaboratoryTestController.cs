@@ -1,9 +1,11 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
+using MailKit.Search;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Controllers
 {
@@ -78,6 +80,13 @@ namespace LIMSApi.Controllers
         {
             var data = await _testMethodService.GetTestMethodDropdown(searchTerm, pageNo, pageSize);
             return data == null ? NoContent(): Ok(data);
+        }
+        [HttpGet("test-cases/{testMethodId}")]
+        public async Task<IActionResult> GetTestCases(long testMethodId)
+        {
+            var data = await _testMethodService.GetTestCases(testMethodId);
+            return data == null ? NoContent() : Ok(data);
+
         }
 
     }

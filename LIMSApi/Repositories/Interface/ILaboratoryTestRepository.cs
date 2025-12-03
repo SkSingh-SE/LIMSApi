@@ -12,6 +12,7 @@ namespace LIMSApi.Repositories.Interface
         Task<PagedResponse<object>> GetAllTestMethods(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetTestMethodDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<object>> GetTestCases(long labTestId);
         Task<bool> ExistsByName(string name);
         Task<bool> ExistsByNameAndNotId(string name, long Id);
     }

@@ -59,10 +59,10 @@ namespace LIMSApi.Models
         public string? RequestFileName { get; set; }
 
         public long? UploadReferenceID { get; set; } = null;
-        public string Status { get; set; } = "Sample Received";
+        public string InwardStatus { get; set; } = "Sample Received";
+        public string ReviewStatus { get; set; } = "Pending";
 
         public DateTime CollectionTime { get; set; } = DateTime.UtcNow;
-        public string ReviewStatus { get; set; } = "Pending";
         public long? ReviewedBy { get; set; }     
         public DateTime? ReviewedOn { get; set; }
 
@@ -75,7 +75,7 @@ namespace LIMSApi.Models
         //public virtual ICollection<SampleTestPlan> SampleTestPlans { get; set; } = new List<SampleTestPlan>();
 
         [ForeignKey("CustomerID")]
-        public virtual Customer? Customer { get; set; } = null!;
+        public virtual Customer? Customer { get; set; } = null!;    
 
         [NotMapped]
        public IFormFile File { get; set; } = null!;

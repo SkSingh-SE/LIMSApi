@@ -87,6 +87,14 @@ namespace LIMSApi.Controllers
         [HttpPost("update-permission")]
         public async Task<IActionResult> UpdateMenuPermission(long menuId, List<PermissionMaster> updatedPermissions)
         {
+            if(menuId < 1)
+            {
+                return BadRequest(new
+                {
+                    status = "error",
+                    message = $"Menu Id cannot be blank."
+                });
+            }
             var result = await _MenuService.UpdateMenuPermission(menuId, updatedPermissions);
             if (result)
             {

@@ -1,8 +1,10 @@
 ﻿using System.Xml.Linq;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
+using LIMSApi.Helpers.Enums;
 using LIMSApi.Migrations;
 using LIMSApi.Models;
+using LIMSApi.Repositories;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Mvc;
@@ -17,14 +19,18 @@ namespace LIMSApi.Services
         private readonly IFileUploadService _uploadService;
         private readonly IWorkflowService _workflowService;
         private LoggedInUserDTO loggedInUser;
+        private readonly ISampleStatusService _sampleStatusService;
+        private readonly IProformaInvoiceRepository _proformaInvoiceRepository;
 
-        public SampleInwardService(ISampleInwardRepository SampleInwardRepo, ILogger<SampleInwardService> logger, IFileUploadService uploadService,IWorkflowService workflowService)
+        public SampleInwardService(ISampleInwardRepository SampleInwardRepo, ILogger<SampleInwardService> logger, IFileUploadService uploadService, IWorkflowService workflowService, ISampleStatusService sampleStatusService, IProformaInvoiceRepository proformaInvoiceRepository)
         {
             _SampleInwardRepository = SampleInwardRepo;
             _logger = logger;
             _uploadService = uploadService;
             _workflowService = workflowService;
             loggedInUser = LoggedInUserProvider.CurrentUser;
+            _sampleStatusService = sampleStatusService;
+            _proformaInvoiceRepository = proformaInvoiceRepository;
         }
 
         public async Task CreateSampleInward(SampleInwardDto model)
@@ -37,7 +43,7 @@ namespace LIMSApi.Services
                 throw new InvalidOperationException("Invalid case and sample data returned.");
             }
 
-            int nextSampleNumber = caseAndSample.nextSampleCounter;
+            int nextSampleNumber = (int)caseAndSample?.nextSampleCounter;
 
             var year = DateTime.UtcNow.Year.ToString().Substring(2, 2);
             int testCounter = 1;
@@ -69,7 +75,6 @@ namespace LIMSApi.Services
                 RequestFilePath = model.RequestFilePath,
                 RequestFileName = model.RequestFileName,
                 UploadReferenceID = model.UploadReferenceID,
-                Status = model.Status,
                 File = model.File,
 
                 DispatchModes = model.DispatchModes.Select(d => new SampleDispatchMode
@@ -152,6 +157,8 @@ namespace LIMSApi.Services
                 entity.UploadReferenceID = fileUploadResponse.ID;
             }
 
+            var statusJobs = new List<Func<Task>>();
+
             if (entity.SampleDetails.Any())
             {
                 foreach (var sampleDetail in entity.SampleDetails)
@@ -165,10 +172,27 @@ namespace LIMSApi.Services
                         sampleDetail.FileName = fileUploadResponse.OriginalFileName;
                         sampleDetail.UploadReferenceID = fileUploadResponse.ID;
                     }
+                    // Queue status update job
+                    statusJobs.Add(async () =>
+                    {
+                        await _sampleStatusService.ForceAutoStatusAsync(
+                            sampleDetail.ID,
+                            SampleStatus.SAMPLE_INWARD_REGISTERED,
+                            loggedInUser.EmployeeID
+                        );
+                    });
                 }
             }
             await _SampleInwardRepository.AddSampleInward(entity);
             _logger.LogInformation("SampleInward '{Case}' created successfully.", model.CaseNo);
+
+            // Process queued jobs
+            foreach (var job in statusJobs)
+            {
+                await job();
+            }
+            await _sampleStatusService.UpdateInwardStatus(entity.ID, loggedInUser.EmployeeID);
+
         }
 
         public async Task ModifySampleInward(SampleInwardDto model)
@@ -200,7 +224,6 @@ namespace LIMSApi.Services
                 entity.ReturnSample = model.ReturnSample;
                 entity.NotDestroyed = model.NotDestroyed;
                 entity.SampleReceiptNote = model.SampleReceiptNote;
-                entity.Status = model.Status;
 
                 // Handle request file update
                 if (model.File != null)
@@ -271,7 +294,7 @@ namespace LIMSApi.Services
                     Type = model.BillingTo.Type
                 });
 
-                // ✅ Only fetch next sample number if a new sample will be added
+                //  Only fetch next sample number if a new sample will be added
                 int nextSampleNumber = 0;
                 var year = DateTime.UtcNow.Year.ToString().Substring(2, 2);
 
@@ -285,6 +308,7 @@ namespace LIMSApi.Services
                     dynamic caseAndSample = await _SampleInwardRepository.GetCaseNoAndSampleNo();
                     nextSampleNumber = caseAndSample.nextSampleCounter;
                 }
+                var statusJobs = new List<Func<Task>>();
 
                 foreach (var s in model.SampleDetails)
                 {
@@ -292,10 +316,11 @@ namespace LIMSApi.Services
 
                     if (existingSample != null)
                     {
-                        // ✅ Update existing sample, keep original SampleNo
+                        //  Update existing sample, keep original SampleNo
                         existingSample.Details = s.Details;
                         existingSample.MetalClassificationID = s.MetalClassificationID;
                         existingSample.ProductConditionID = s.ProductConditionID;
+                        existingSample.TpiAgencyID = s.TpiAgencyID;
                         existingSample.Remarks = s.Remarks;
                         existingSample.Quantity = s.Quantity;
                         existingSample.Specimen = s.Specimen;
@@ -322,10 +347,20 @@ namespace LIMSApi.Services
                                 Value = a.Value
                             });
                         }
+
+                        //  Queue status update job for existing sample
+                        statusJobs.Add(async () =>
+                        {
+                            await _sampleStatusService.ForceAutoStatusAsync(
+                                existingSample.ID,
+                                SampleStatus.INWARD_COMPLETED,
+                                loggedInUser.EmployeeID
+                            );
+                        });
                     }
                     else
                     {
-                        // ✅ Add new sample with new SampleNo only for new entries
+                        //  Add new sample with new SampleNo only for new entries
                         var newSampleNo = $"{year}-{nextSampleNumber++:D6}";
                         var newSample = new SampleDetail
                         {
@@ -359,11 +394,25 @@ namespace LIMSApi.Services
                         }
 
                         entity.SampleDetails.Add(newSample);
+                        //  Queue status update job for new sample
+                        statusJobs.Add(async () =>
+                        {
+                            await _sampleStatusService.ForceAutoStatusAsync(
+                                newSample.ID,
+                                SampleStatus.INWARD_COMPLETED,
+                                loggedInUser.EmployeeID
+                            );
+                        });
                     }
                 }
 
                 await _SampleInwardRepository.UpdateSampleInward(entity);
                 _logger.LogInformation("SampleInward '{Case}' updated successfully.", entity.CaseNo);
+                foreach (var job in statusJobs)
+                {
+                    await job();
+                }
+                await _sampleStatusService.UpdateInwardStatus(entity.ID, loggedInUser.EmployeeID);
             }
             catch (Exception ex)
             {
@@ -375,6 +424,169 @@ namespace LIMSApi.Services
 
 
 
+        //public async Task ModifySamplePlan(PlanDto model)
+        //{
+        //    try
+        //    {
+        //        var entity = await _SampleInwardRepository.GetSampleInwardWithPlans(model.ID);
+        //        if (entity == null)
+        //            throw new Exception("Sample Inward not found");
+
+        //        // Update high-level plan info
+        //        entity.StatementOfConformity = model.StatementOfConformity;
+        //        entity.DecisionRule = model.DecisionRule;
+        //        entity.ReviewedBy = loggedInUser.EmployeeID;
+        //        entity.ReviewedOn = DateTime.UtcNow;
+
+        //        string tcPrefix = "TC5098";
+        //        string labLocation = "0";
+        //        string year = DateTime.UtcNow.Year.ToString().Substring(2, 2);
+
+        //        var statusJobs = new List<Task>();
+
+        //        foreach (var sampleDto in model.SampleDetails)
+        //        {
+        //            var sample = entity.SampleDetails.FirstOrDefault(s => s.SampleNo == sampleDto.SampleNo);
+        //            if (sample == null)
+        //                throw new Exception($"Sample '{sampleDto.SampleNo}' not found in inward {model.ID}");
+
+        //            // Queue status update (async)
+        //            statusJobs.Add(
+        //                _sampleStatusService.ForceAutoStatusAsync(
+        //                    sample.ID,
+        //                    SampleStatus.SAMPLE_UNDER_PLANNING,
+        //                    loggedInUser.EmployeeID
+        //                )
+        //            );
+
+        //            // Update prep fields
+        //            sample.PreparationRequired = sampleDto.PreparationRequired;
+        //            sample.MachiningRequired = sampleDto.MachiningRequired;
+        //            sample.MachiningAmount = sampleDto.MachiningAmount ?? 0;
+        //            sample.OtherPreparation = sampleDto.OtherPreparation;
+        //            sample.OtherPreparationCharge = sampleDto.OtherPreparationCharge ?? 0;
+        //            sample.TpiRequired = sampleDto.TpiRequired;
+
+        //            var existingPlan = sample.TestPlans.FirstOrDefault()
+        //                ?? new SampleTestPlan { SampleNo = sampleDto.SampleNo };
+
+        //            if (!sample.TestPlans.Contains(existingPlan))
+        //                sample.TestPlans.Add(existingPlan);
+
+        //            int ulrCounter = 1;
+
+        //            // ========== GENERAL TESTS ==========
+        //            var dtoGeneral = sampleDto.TestPlans.SelectMany(p => p.GeneralTests).ToList();
+
+        //            var toRemoveGeneral = existingPlan.GeneralTests
+        //                .Where(gt => !dtoGeneral.Any(d => d.ID == gt.ID))
+        //                .ToList();
+
+        //            foreach (var rem in toRemoveGeneral)
+        //                existingPlan.GeneralTests.Remove(rem);
+
+        //            foreach (var g in dtoGeneral.Select((g, idx) => new { g, idx }))
+        //            {
+        //                var gt = existingPlan.GeneralTests.FirstOrDefault(x => x.ID == g.g.ID)
+        //                    ?? new GeneralTest();
+
+        //                gt.Specification1 = g.g.Specification1;
+        //                gt.Specification2 = g.g.Specification2;
+        //                gt.Methods.Clear();
+
+        //                foreach (var m in g.g.Methods)
+        //                {
+        //                    gt.Methods.Add(new GeneralTestMethod
+        //                    {
+        //                        TestMethodID = m.TestMethodID ?? 0,
+        //                        StandardID = m.StandardID ?? 0,
+        //                        Quantity = m.Quantity,
+        //                        ReportNo = string.IsNullOrEmpty(m.ReportNo)
+        //                            ? $"{sample.SampleNo}-{g.idx}"
+        //                            : m.ReportNo,
+        //                        UlrNo = string.IsNullOrEmpty(m.UlrNo)
+        //                            ? $"{tcPrefix}{year}{labLocation}{sample.SampleNo.Split('-')[1].PadLeft(8, '0')}{ulrCounter++}F"
+        //                            : m.UlrNo,
+        //                        Cancel = m.Cancel
+        //                    });
+        //                }
+
+        //                if (!existingPlan.GeneralTests.Contains(gt))
+        //                    existingPlan.GeneralTests.Add(gt);
+        //            }
+
+        //            // ========== CHEMICAL TESTS ==========
+        //            var dtoChem = sampleDto.TestPlans.SelectMany(p => p.ChemicalTests).ToList();
+
+        //            var toRemoveChem = existingPlan.ChemicalTests
+        //                .Where(ct => !dtoChem.Any(d => d.ID == ct.ID))
+        //                .ToList();
+
+        //            foreach (var rem in toRemoveChem)
+        //                existingPlan.ChemicalTests.Remove(rem);
+
+        //            foreach (var c in dtoChem.Select((c, idx) => new { c, idx }))
+        //            {
+        //                var ct = existingPlan.ChemicalTests.FirstOrDefault(x => x.ID == c.c.ID)
+        //                    ?? new ChemicalTest();
+
+        //                ct.ReportNo = string.IsNullOrEmpty(c.c.ReportNo)
+        //                    ? $"{sample.SampleNo}-{c.idx}"
+        //                    : c.c.ReportNo;
+
+        //                ct.UlrNo = string.IsNullOrEmpty(c.c.UlrNo)
+        //                    ? $"{tcPrefix}{year}{labLocation}{sample.SampleNo.Split('-')[1].PadLeft(8, '0')}{ulrCounter++}F"
+        //                    : c.c.UlrNo;
+
+        //                ct.Specification1 = c.c.Specification1;
+        //                ct.Specification2 = c.c.Specification2;
+        //                ct.TestMethod = c.c.TestMethod;
+
+        //                // Sync elements
+        //                ct.Elements.Clear();
+        //                foreach (var e in c.c.Elements)
+        //                {
+        //                    ct.Elements.Add(new ChemicalTestElement
+        //                    {
+        //                        ParameterID = e.ParameterID,
+        //                        SpecificationLineID = e.SpecificationLineID,
+        //                        ParameterUnitID = e.ParameterUnitID,
+        //                        ParameterUnit = e.ParameterUnit,
+        //                        MinValue = e.MinValue,
+        //                        MaxValue = e.MaxValue,
+        //                        Selected = e.Selected
+        //                    });
+        //                }
+
+        //                // Sync TestTypes
+        //                ct.TestTypes.Clear();
+        //                foreach (var kvp in c.c.TestTypes)
+        //                {
+        //                    ct.TestTypes.Add(new ChemicalTestType
+        //                    {
+        //                        Name = kvp.Key,
+        //                        IsSelected = kvp.Value
+        //                    });
+        //                }
+
+        //                if (!existingPlan.ChemicalTests.Contains(ct))
+        //                    existingPlan.ChemicalTests.Add(ct);
+        //            }
+        //        }
+
+        //        await _SampleInwardRepository.UpdateSampleInward(entity);
+
+        //        // Execute all pending status jobs
+        //        await Task.WhenAll(statusJobs);
+
+        //        _logger.LogInformation("Plan updated for Inward '{InwardID}'.", model.ID);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "ModifySamplePlan ERROR for inward {ID}", model.ID);
+        //        throw;
+        //    }
+        //}
         public async Task ModifySamplePlan(PlanDto model)
         {
             try
@@ -387,27 +599,36 @@ namespace LIMSApi.Services
                 // update review info
                 entity.StatementOfConformity = model.StatementOfConformity;
                 entity.DecisionRule = model.DecisionRule;
-                entity.ReviewStatus = model.ReviewStatus ?? "Reviewed";
-                entity.ReviewedBy = loggedInUser.EmployeeID;
-                entity.ReviewedOn = DateTime.UtcNow;
 
                 string tcPrefix = "TC5098";
                 string labLocation = "0";
                 string year = DateTime.UtcNow.Year.ToString().Substring(2, 2);
 
+                var statusJobs = new List<Func<Task>>();
                 foreach (var sampleDto in model.SampleDetails)
                 {
                     var sample = entity.SampleDetails.FirstOrDefault(s => s.SampleNo == sampleDto.SampleNo);
                     if (sample == null)
                         throw new Exception($"Sample '{sampleDto.SampleNo}' not found in inward {model.ID}");
 
+
+                    // Queue status update (async)
+                    statusJobs.Add(()=>
+                        _sampleStatusService.ForceAutoStatusAsync(
+                            sample.ID,
+                            SampleStatus.UNDER_PLANNING,
+                            loggedInUser.EmployeeID
+                        )
+                    );
+
                     // update prep fields
-                    sample.CuttingRequired = sampleDto.CuttingRequired;
+                    sample.PreparationRequired = sampleDto.PreparationRequired;
                     sample.MachiningRequired = sampleDto.MachiningRequired;
                     sample.MachiningAmount = sampleDto.MachiningAmount ?? 0;
                     sample.OtherPreparation = sampleDto.OtherPreparation;
                     sample.OtherPreparationCharge = sampleDto.OtherPreparationCharge ?? 0;
                     sample.TpiRequired = sampleDto.TpiRequired;
+                    sample.TpiAgencyID = sampleDto.TpiAgencyID;
 
                     // ensure plan
                     var existingPlan = sample.TestPlans.FirstOrDefault();
@@ -458,11 +679,14 @@ namespace LIMSApi.Services
                             var newMethod = new GeneralTestMethod
                             {
                                 TestMethodID = m.TestMethodID ?? 0,
+                                TestCaseID = m.TestCaseID ?? 0,
+                                SelectionType = m.SelectionType,
+                                Value = m.Value,
                                 StandardID = m.StandardID ?? 0,
                                 Quantity = m.Quantity,
                                 ReportNo = string.IsNullOrEmpty(m.ReportNo)
                                             ? existingGeneral.Methods.FirstOrDefault(x => x.TestMethodID == m.TestMethodID)?.ReportNo
-                                              ?? $"{sample.SampleNo}-{g.idx}"
+                                              ?? $"{sample.SampleNo}-{g.idx+1}"
                                             : m.ReportNo,
                                 UlrNo = string.IsNullOrEmpty(m.UlrNo)
                                             ? existingGeneral.Methods.FirstOrDefault(x => x.TestMethodID == m.TestMethodID)?.UlrNo
@@ -506,7 +730,6 @@ namespace LIMSApi.Services
                             ? existingChem.UlrNo ?? $"{tcPrefix}{year}{labLocation}{sample.SampleNo.Split('-')[1].PadLeft(8, '0')}{ulrCounter++}F"
                             : c.c.UlrNo;
 
-                        existingChem.MetalClassificationID = c.c.MetalClassificationID;
                         existingChem.Specification1 = c.c.Specification1;
                         existingChem.Specification2 = c.c.Specification2;
                         existingChem.TestMethod = c.c.TestMethod;
@@ -517,7 +740,13 @@ namespace LIMSApi.Services
                         {
                             existingChem.Elements.Add(new ChemicalTestElement
                             {
-                                ParameterID = e.ParameterID
+                                ParameterID = e.ParameterID,
+                                SpecificationLineID = e.SpecificationLineID,
+                                ParameterUnitID = e.ParameterUnitID,
+                                ParameterUnit = e.ParameterUnit,
+                                MinValue = e.MinValue,
+                                MaxValue = e.MaxValue,
+                                Selected = e.Selected
                             });
                         }
 
@@ -535,7 +764,12 @@ namespace LIMSApi.Services
 
                 await _SampleInwardRepository.UpdateSampleInward(entity);
                 _logger.LogInformation("Plans and sample prep updated for Inward '{InwardID}'", model.ID);
-                //await _workflowService.StartWorkflow(entity.ID, "Request of Review");
+
+                foreach (var job in statusJobs)
+                {
+                    await job();
+                }
+                await _sampleStatusService.UpdateInwardStatus(entity.ID, loggedInUser.EmployeeID);
 
             }
             catch (Exception ex)
@@ -543,6 +777,55 @@ namespace LIMSApi.Services
                 throw ex;
             }
         }
+
+        public async Task SubmitPlanForReview(PlanDto model)
+        {
+            try
+            {
+
+                await ModifySamplePlan(model);
+
+
+                var entity = await _SampleInwardRepository.GetSampleInwardWithPlans(model.ID);
+                if (entity == null)
+                    throw new Exception("Sample Inward not found");
+
+
+                entity.ReviewStatus = "Pending for Approval";
+                entity.ReviewedBy = loggedInUser.EmployeeID;
+                entity.ReviewedOn = DateTime.UtcNow;
+
+
+                var statusJobs = new List<Func<Task>>();
+
+                foreach (var sample in entity.SampleDetails)
+                {
+                    statusJobs.Add(()=>
+                        _sampleStatusService.ForceAutoStatusAsync(
+                            sample.ID,
+                            SampleStatus.UNDER_REVIEW_REQUEST,
+                            loggedInUser.EmployeeID
+                        )
+                    );
+                }
+
+                await _workflowService.StartWorkflow(entity.ID, "Request of Review");
+
+                await _SampleInwardRepository.UpdateSampleInward(entity);
+
+                foreach (var job in statusJobs)
+                {
+                    await job();
+                }
+                await _sampleStatusService.UpdateInwardStatus(entity.ID, loggedInUser.EmployeeID);
+                _logger.LogInformation("Plan submitted for review for inward {ID}", model.ID);
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+        }
+
 
 
 
@@ -590,7 +873,7 @@ namespace LIMSApi.Services
                 RequestFilePath = sampleInward.RequestFilePath,
                 RequestFileName = sampleInward.RequestFileName,
                 UploadReferenceID = sampleInward.UploadReferenceID,
-                Status = sampleInward.Status,
+                Status = sampleInward.InwardStatus,
                 CollectionTime = sampleInward.CollectionTime,
 
                 DispatchModes = sampleInward.DispatchModes
@@ -661,7 +944,15 @@ namespace LIMSApi.Services
                         Quantity = s.Quantity,
                         UploadReferenceID = s.UploadReferenceID,
                         SampleFilePath = s.SampleFilePath,
-                        FileName = s.FileName
+                        FileName = s.FileName,
+                        PreparationRequired = s.PreparationRequired,
+                        MachiningRequired = s.MachiningRequired,
+                        MachiningAmount = s.MachiningAmount,
+                        OtherPreparation = s.OtherPreparation,
+                        OtherPreparationCharge = s.OtherPreparationCharge,
+                        TpiRequired = s.TpiRequired,
+                        Specimen = s.Specimen,
+                        TestInstructions = s.TestInstructions
                     }).ToList(),
 
                 SampleAdditionalDetails = sampleInward.SampleDetails
@@ -676,40 +967,39 @@ namespace LIMSApi.Services
                     }).ToList(),
 
                 //  NEW: Sample Test Plans
-                SampleTestPlans = sampleInward.SampleDetails
-                    .Where(s => s.TestPlans.Any())
-                    .SelectMany(s => s.TestPlans.Select(tp => new SampleTestPlanDto
-                    {
-                        SampleNo = tp.SampleNo,
-                        GeneralTests = tp.GeneralTests.Select(gt => new GeneralTestDto
-                        {
-                            Specification1 = gt.Specification1,
-                            Specification2 = gt.Specification2,
-                            Methods = gt.Methods.Select(m => new GeneralTestMethodDto
-                            {
-                                TestMethodID = m.TestMethodID,
-                                StandardID = m.StandardID,
-                                Quantity = m.Quantity,
-                                ReportNo = m.ReportNo,
-                                UlrNo = m.UlrNo,
-                                Cancel = m.Cancel
-                            }).ToList()
-                        }).ToList(),
-                        ChemicalTests = tp.ChemicalTests.Select(ct => new ChemicalTestDto
-                        {
-                            ReportNo = ct.ReportNo,
-                            UlrNo = ct.UlrNo,
-                            MetalClassificationID = ct.MetalClassificationID,
-                            Specification1 = ct.Specification1,
-                            Specification2 = ct.Specification2,
-                            TestMethod = ct.TestMethod,
-                            Elements = ct.Elements.Select(e => new ChemicalTestElementDto
-                            {
-                                ParameterID = e.ParameterID
-                            }).ToList()
-                        }).ToList()
-                    }))
-                    .ToList()
+                //SampleTestPlans = sampleInward.SampleDetails
+                //    .Where(s => s.TestPlans.Any())
+                //    .SelectMany(s => s.TestPlans.Select(tp => new SampleTestPlanDto
+                //    {
+                //        SampleNo = tp.SampleNo,
+                //        GeneralTests = tp.GeneralTests.Select(gt => new GeneralTestDto
+                //        {
+                //            Specification1 = gt.Specification1,
+                //            Specification2 = gt.Specification2,
+                //            Methods = gt.Methods.Select(m => new GeneralTestMethodDto
+                //            {
+                //                TestMethodID = m.TestMethodID,
+                //                StandardID = m.StandardID,
+                //                Quantity = m.Quantity,
+                //                ReportNo = m.ReportNo,
+                //                UlrNo = m.UlrNo,
+                //                Cancel = m.Cancel
+                //            }).ToList()
+                //        }).ToList(),
+                //        ChemicalTests = tp.ChemicalTests.Select(ct => new ChemicalTestDto
+                //        {
+                //            ReportNo = ct.ReportNo,
+                //            UlrNo = ct.UlrNo,
+                //            Specification1 = ct.Specification1,
+                //            Specification2 = ct.Specification2,
+                //            TestMethod = ct.TestMethod,
+                //            Elements = ct.Elements.Select(e => new ChemicalTestElementDto
+                //            {
+                //                ParameterID = e.ParameterID
+                //            }).ToList()
+                //        }).ToList()
+                //    }))
+                //    .ToList()
             };
 
             return dto;
@@ -725,6 +1015,7 @@ namespace LIMSApi.Services
                 ID = sampleInward.ID,
                 CaseNo = sampleInward.CaseNo,
                 CustomerID = sampleInward.CustomerID,
+                CustomerName = sampleInward?.Customer?.Name,
                 Address = sampleInward.Address,
                 Area = sampleInward.Area,
                 State = sampleInward.State,
@@ -744,7 +1035,7 @@ namespace LIMSApi.Services
                 RequestFilePath = sampleInward.RequestFilePath,
                 RequestFileName = sampleInward.RequestFileName,
                 UploadReferenceID = sampleInward.UploadReferenceID,
-                Status = sampleInward.Status,
+                Status = sampleInward.InwardStatus,
                 CollectionTime = sampleInward.CollectionTime,
                 StatementOfConformity = sampleInward.StatementOfConformity,
                 DecisionRule = sampleInward.DecisionRule,
@@ -763,7 +1054,7 @@ namespace LIMSApi.Services
                 Contacts = sampleInward.Contacts
                     .Select(c => new ContactDto
                     {
-                        ID= c.ID,
+                        ID = c.ID,
                         InwardID = c.InwardID,
                         ContactID = c.ContactID,
                         Name = c.Name,
@@ -824,7 +1115,7 @@ namespace LIMSApi.Services
                         UploadReferenceID = s.UploadReferenceID,
                         SampleFilePath = s.SampleFilePath,
                         FileName = s.FileName,
-                        CuttingRequired = s.CuttingRequired,
+                        PreparationRequired = s.PreparationRequired,
                         MachiningRequired = s.MachiningRequired,
                         MachiningAmount = s.MachiningAmount,
                         OtherPreparation = s.OtherPreparation,
@@ -875,7 +1166,6 @@ namespace LIMSApi.Services
                             SampleTestPlanID = ct.SampleTestPlanID,
                             ReportNo = ct.ReportNo,
                             UlrNo = ct.UlrNo,
-                            MetalClassificationID = ct.MetalClassificationID,
                             Specification1 = ct.Specification1,
                             Specification2 = ct.Specification2,
                             TestMethod = ct.TestMethod,
@@ -891,13 +1181,51 @@ namespace LIMSApi.Services
                     .ToList()
             };
 
+            var step =  await _workflowService.GetCurrentWorkflowStepAsync(sampleInward.ID, "Request of Review");
+            if (step != null)
+            {
+                var approverIds = step.AssignedToValue?
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(x => long.TryParse(x, out var id) ? id : 0)
+                    .Where(id => id > 0)
+                    .ToList()
+                    ?? new List<long>();
+
+                dto.CanTakeAction = approverIds.Contains(loggedInUser.EmployeeID);
+
+               
+                if (dto.CanTakeAction)
+                {
+                    var instance = await _workflowService
+                        .GetActiveInstanceForEntityAsync(sampleInward.ID, "Request of Review");
+
+                    dto.Actions = step.Transitions
+                        .Where(t => t.IsActive)
+                        .Select(t => new ActionDto
+                        {
+                            Id = instance.ID,
+                            Name = t.Alias ?? t.Action,
+                            Action = t.Action
+                        })
+                        .ToList();
+                }
+            }
+
             return dto;
         }
 
 
         public async Task<PagedResponse<object>> FetchSampleInwardList(PageFilter filter)
         {
-            return await _SampleInwardRepository.GetAllSampleInwards(filter);
+            return await _SampleInwardRepository.GetInwardList(filter);
+        }
+        public async Task<PagedResponse<object>> FetchPlanList(PageFilter filter)
+        {
+            return await _SampleInwardRepository.GetPlanList(filter);
+        }
+        public async Task<PagedResponse<object>> FetchReviewList(PageFilter filter)
+        {
+            return await _SampleInwardRepository.GetReviewList(filter);
         }
 
         public async Task<object> GetCaseNoAndSampleNo()
@@ -906,6 +1234,47 @@ namespace LIMSApi.Services
             if (caseNumber == null)
                 throw new InvalidOperationException("No case number found!");
             return caseNumber;
+        }
+
+        public static string GetStatusLabel(SampleWorkflowStatus status)
+        {
+            return status switch
+            {
+                SampleWorkflowStatus.INWARD_REGISTERED => "Inward Registered",
+                SampleWorkflowStatus.INWARD_VERIFIED => "Sample Verified",
+                SampleWorkflowStatus.PLAN_DRAFT => "Plan Draft",
+                SampleWorkflowStatus.PLAN_SUBMITTED => "Plan Submitted",
+                SampleWorkflowStatus.TECHNICAL_REVIEW => "Technical Review",
+                SampleWorkflowStatus.QUALITY_REVIEW => "Quality Review",
+                SampleWorkflowStatus.AWAITING_L1_APPROVAL => "Awaiting Level 1 Approval",
+                SampleWorkflowStatus.APPROVED_L1 => "Approved Level 1",
+                SampleWorkflowStatus.AWAITING_L2_APPROVAL => "Awaiting Level 2 Approval",
+                SampleWorkflowStatus.APPROVED_L2 => "Approved Level 2",
+                SampleWorkflowStatus.FINAL_APPROVED => "Final Approved",
+                SampleWorkflowStatus.REJECTED => "Rejected",
+                SampleWorkflowStatus.RETURNED_TO_ORIGIN => "Returned for Correction",
+                SampleWorkflowStatus.PI_GENERATION_PENDING => "PI Pending",
+                SampleWorkflowStatus.PI_GENERATED => "PI Generated",
+                SampleWorkflowStatus.WORK_ASSIGNED => "Work Assigned",
+                SampleWorkflowStatus.TESTING_IN_PROGRESS => "Testing In Progress",
+                SampleWorkflowStatus.TESTING_COMPLETED => "Testing Completed",
+                SampleWorkflowStatus.ARCHIVED => "Archived",
+                _ => status.ToString()
+            };
+        }
+
+        public async Task<List<DropdwonSelector>> GetSampleInwardDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _SampleInwardRepository.GetSampleInwardDropdown(searchTerm, pageNo, pageSize);
+        }
+        public async Task<List<DropdwonSelector>> GetSamplePreparationInwardDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _SampleInwardRepository.GetSamplePreparationInwardDropdown(searchTerm, pageNo, pageSize);
+        }
+
+        public async Task<byte[]> GeneratePIPdfAsync(long piId)
+        {
+            return await _proformaInvoiceRepository.GeneratePIPdfAsync(piId);
         }
     }
 }

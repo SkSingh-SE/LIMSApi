@@ -12,5 +12,6 @@ namespace LIMSApi.Services.Interface
         Task<PagedResponse<object>> FetchTestMethodList(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetTestMethodDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<object>> GetTestCases(long labTestId);
     }
 }

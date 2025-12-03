@@ -2,6 +2,7 @@
 using System.Security.Claims;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
+using LIMSApi.Helpers.Enums;
 using LIMSApi.Models;
 using LIMSApi.Repositories;
 using LIMSApi.Repositories.Interface;
@@ -18,12 +19,16 @@ namespace LIMSApi.Services
         private readonly LoggedInUserDTO _loggedInUser;
         private readonly INotificationService _notificationService;
         private readonly IEmployeeService _employeeService;
-        public WorkflowService(IWorkflowRepository WorkflowRepository, ILogger<WorkflowService> logger, INotificationService notification, IEmployeeService employeeService)
+        private readonly ISampleInwardRepository _sampleInwardRepo;
+        private readonly ISampleStatusService _statusService;
+        public WorkflowService(IWorkflowRepository WorkflowRepository, ILogger<WorkflowService> logger, INotificationService notification, IEmployeeService employeeService, ISampleInwardRepository sampleInwardRepo , ISampleStatusService statusService)
         {
             _logger = logger;
             _repository = WorkflowRepository;
             _notificationService = notification;
             _employeeService = employeeService;
+            _sampleInwardRepo = sampleInwardRepo;
+            _statusService = statusService;
             _loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
@@ -194,97 +199,105 @@ namespace LIMSApi.Services
         // ----------- Transactions ---------------------
         public async Task StartWorkflow(long entityId, string entityType)
         {
-            var instance = await _repository.GetActiveInstanceForEntityAsync(entityId, entityType);
-
-            if (instance != null)
+            try
             {
-                // Reset existing workflow
-                var logs = await _repository.GetActionLogsForInstanceAsync(instance.ID);
 
-                // Only reset if the workflow already has actions (optional, can reset always)
-                if (logs.Count > 0)
+                // Cancel existing workflow if any
+                var existing = await _repository.GetActiveInstanceForEntityAsync(entityId, entityType);
+                if (existing != null)
                 {
-                    instance.Status = "Cancelled";
-                    await _repository.UpdateWorkflowInstanceAsync(instance);
-
-                    await _repository.AddWorkflowActionLogAsync(new WorkflowActionLog
-                    {
-                        WorkflowID = instance.WorkflowID,
-                        InstanceID = instance.ID,
-                        StepID = instance.CurrentStepID,
-                        Action = "Cancel",
-                        EmployeeID = _loggedInUser.EmployeeID,
-                        Comments = "Workflow reset due to repeated StartWorkflow call",
-                        Timestamp = DateTime.UtcNow
-                    });
+                    existing.Status = WorkflowInstanceStatus.Cancelled.ToString();
+                    existing.IsActive = false;
+                    await _repository.UpdateWorkflowInstanceAsync(existing);
                 }
-            }
 
-            var workflow = await _repository.GetWorkflowByEntityNameAsync(entityType)
-                ?? throw new Exception("Workflow not found");
+                var workflow = await _repository.GetWorkflowByEntityNameAsync(entityType)
+                    ?? throw new Exception("Workflow not found");
 
-            if (!workflow.EntityType.Equals(entityType, StringComparison.OrdinalIgnoreCase))
-                throw new Exception($"Workflow type mismatch. Expected {workflow.EntityType}, got {entityType}");
+                var firstStep = workflow.Steps
+                    .Where(s => s.IsActive)
+                    .OrderBy(s => s.OrderNo)
+                    .First();
 
-            var firstStep = workflow.Steps.OrderBy(s => s.OrderNo).FirstOrDefault()
-                ?? throw new Exception("Workflow has no steps");
+                var instance = new WorkflowInstance
+                {
+                    WorkflowID = workflow.ID,
+                    EntityID = entityId,
+                    EntityType = entityType,
+                    CurrentStepID = firstStep.ID,
+                    Status = WorkflowInstanceStatus.InProgress.ToString(),
+                    CreatedBy = _loggedInUser.EmployeeID,
+                    CreatedOn = DateTime.UtcNow,
+                    IsActive = true
+                };
 
-             instance = new WorkflowInstance
-            {
-                WorkflowID = workflow.ID,
-                EntityID = entityId,
-                EntityType = entityType,
-                CurrentStepID = firstStep.ID,
-                Status = "InProgress"
-            };
+                await _repository.AddWorkflowInstanceAsync(instance);
 
-            await _repository.AddWorkflowInstanceAsync(instance);
-
-            await _repository.AddWorkflowActionLogAsync(new WorkflowActionLog
-            {
-                WorkflowID = workflow.ID,
-                InstanceID = instance.ID,
-                StepID = firstStep.ID,
-                Action = "Start",
-                EmployeeID = _loggedInUser.EmployeeID,
-                Comments = "Workflow started automatically on entity creation",
-                Timestamp = DateTime.UtcNow
-            });
-
-            //  Send notification to assigned users of the first step
-            if (!string.IsNullOrWhiteSpace(firstStep.AssignedToValue))
-            {
-                var userIds = firstStep.AssignedToValue.Split(',')
-                    .Select(x => long.Parse(x.Trim()))
+                //  Extract approver list for first step
+                var approvers = firstStep.AssignedToValue
+                    .Split(',')
+                    .Select(long.Parse)
                     .ToList();
 
-                foreach (var userId in userIds)
+                bool creatorIsApprover = approvers.Contains(_loggedInUser.EmployeeID);
+
+                var nextTransition = firstStep.Transitions
+                            .Where(t => t.Action == "Next").FirstOrDefault(t => t.ToStepName != "End")
+                            ?? firstStep.Transitions.FirstOrDefault(t => t.Action == "Next");
+
+
+                //  AUTO APPROVE if creator is the ONLY approver
+                if (approvers.Count == 1 && creatorIsApprover)
+                {
+                    await PerformAction(
+                        instance.ID,
+                        nextTransition?.Action ?? "Next",
+                        _loggedInUser.EmployeeID,
+                        "Auto-approved (creator is only approver)"
+                    );
+                    return;
+                }
+
+                //  AUTO APPROVE creator's step if he is part of approver group
+                if (creatorIsApprover)
+                {
+                    await PerformAction(
+                        instance.ID,
+                        nextTransition?.Action ?? "Next",
+                        _loggedInUser.EmployeeID,
+                        "Auto-approved (creator is approver)"
+                    );
+
+                    // Remove creator from list so we don't notify him
+                    approvers = approvers.Where(a => a != _loggedInUser.EmployeeID).ToList();
+                }
+
+                //  Send notifications ONLY to other approvers
+                foreach (var userId in approvers)
                 {
                     var user = await _employeeService.GetEmployeeDetails(userId);
-                    var notification = new Notification
+
+                    await _notificationService.CreateNotificationAsync(new Notification
                     {
                         UserID = userId,
                         Email = user?.EmailId,
                         Title = $"Workflow Started: {workflow.Name}",
-                        Message = $"Entity {entityType} (ID: {entityId}) has entered step: {firstStep.Name}",
-                        Type = NotificationType.Workflow,
+                        Message = $"Entity {entityType} (ID: {entityId}) requires your approval at step '{firstStep.Name}'.",
                         EntityID = entityId,
                         EntityType = entityType,
                         WorkflowID = workflow.ID,
                         StepID = firstStep.ID,
-                        Action = "Start",
+                        Action = "Pending",
                         CreatedOn = DateTime.UtcNow,
                         IsRead = false
-                    };
-
-                    // store + real-time + email if needed
-                    await _notificationService.CreateNotificationAsync(notification);
+                    });
                 }
+            }catch(Exception ex)
+            {
+                throw ex;
             }
-            _logger.LogInformation(
-                "Workflow started. WorkflowID: {WorkflowId}, EntityID: {EntityId}, EntityType: {EntityType}, InstanceID: {InstanceId}, Step: {StepName}",
-                workflow.ID, entityId, entityType, instance.ID, firstStep.Name);
         }
+
 
 
         public async Task PerformAction(long instanceId, string action, long employeeId, string comments)
@@ -296,36 +309,88 @@ namespace LIMSApi.Services
                 ?? throw new Exception("Workflow not found");
 
             var currentStep = workflow.Steps.First(s => s.ID == instance.CurrentStepID);
+            //  Permission Check
+            var approvers = currentStep.AssignedToValue.Split(',').Select(long.Parse);
+            if (!approvers.Contains(employeeId))
+                throw new Exception("You are not allowed to perform this action");
+
             var transition = currentStep.Transitions.FirstOrDefault(t =>
                 t.Action.Equals(action, StringComparison.OrdinalIgnoreCase));
 
             if (transition == null)
                 throw new Exception($"Invalid action '{action}' for step '{currentStep.Name}'");
 
-            var log = new WorkflowActionLog
+            bool isFinalStep = transition.ToStepID == null ? true : false;
+            //  Log action
+            await _repository.AddWorkflowActionLogAsync(new WorkflowActionLog
             {
                 WorkflowID = workflow.ID,
-                InstanceID = instanceId,
+                InstanceID = instance.ID,
                 StepID = currentStep.ID,
                 Action = action,
                 EmployeeID = employeeId,
                 Comments = comments,
                 Timestamp = DateTime.UtcNow
-            };
+            });
 
-            await _repository.AddWorkflowActionLogAsync(log);
+            //  Handle Reject
+            if (action.Equals("Cancel", StringComparison.OrdinalIgnoreCase))
+            {
+                instance.Status = WorkflowInstanceStatus.Rejected.ToString();
+                instance.IsActive = false;
+                await _repository.UpdateWorkflowInstanceAsync(instance);
 
-            // Move to next step
-            instance.CurrentStepID = transition.ToStepID ?? 0;
-            instance.Status = action.Equals("Reject", StringComparison.OrdinalIgnoreCase) ? "Rejected" :
-                              action.Equals("Approve", StringComparison.OrdinalIgnoreCase) ? "Approved" : "Pending";
+                await ApplyEntityStatusUpdate(instance, action, isFinal: isFinalStep);
+                return;
+            }
 
+            //  Move to Next Step
+            if (transition.ToStepID == null)
+            {
+                // Final Step Completed
+                instance.CurrentStepID = 0;
+                instance.Status = WorkflowInstanceStatus.Completed.ToString();
+                instance.IsActive = false;
+                await _repository.UpdateWorkflowInstanceAsync(instance);
+
+                await ApplyEntityStatusUpdate(instance, action, isFinal: true);
+                return;
+            }
+
+            instance.CurrentStepID = transition.ToStepID.Value;
+            instance.Status = WorkflowInstanceStatus.InProgress.ToString();
             await _repository.UpdateWorkflowInstanceAsync(instance);
 
-            _logger.LogInformation(
-                "Workflow action performed. WorkflowID: {WorkflowId}, InstanceID: {InstanceId}, EntityType: {EntityType}, Step: {StepName}, Action: {Action}, User: {UserId}, Comments: {Comments}",
-                workflow.ID, instanceId, instance.EntityType, currentStep.Name, action, employeeId, comments);
+            await ApplyEntityStatusUpdate(instance, action, isFinal: false);
+
+            //  Auto-approval if same approver in next step
+            var nextStep = workflow.Steps.First(s => s.ID == transition.ToStepID.Value);
+            var nextApprovers = nextStep.AssignedToValue.Split(',').Select(long.Parse);
+
+            if (nextApprovers.SequenceEqual(approvers))
+            {
+                await PerformAction(instance.ID, "Approve", employeeId, "Auto-approved (same approver)");
+                return;
+            }
+
+            //  Notify next approvers
+            foreach (var nextUser in nextApprovers)
+            {
+                await _notificationService.CreateNotificationAsync(new Notification
+                {
+                    UserID = nextUser,
+                    Title = "Action Required",
+                    Message = $"Approval required on step '{nextStep.Name}'",
+                    EntityID = instance.EntityID,
+                    EntityType = instance.EntityType,
+                    WorkflowID = instance.WorkflowID,
+                    StepID = nextStep.ID,
+                    Action = "Pending",
+                    CreatedOn = DateTime.UtcNow
+                });
+            }
         }
+
 
         public async Task<List<WorkflowActionLog>> GetWorkflowActionHistory(long workflowId)
         {
@@ -372,5 +437,87 @@ namespace LIMSApi.Services
                 await StartWorkflow(entityId, entityType);
             }
         }
+
+        public Task<WorkflowStep> GetCurrentWorkflowStepAsync(long entityId, string entityType)
+        {
+            return _repository.GetCurrentWorkflowStepAsync(entityId, entityType);
+        }
+
+        public Task<WorkflowInstance?> GetActiveInstanceForEntityAsync(long entityId, string entityType)
+        {
+            return _repository.GetActiveInstanceForEntityAsync(entityId, entityType);
+        }
+
+        public async Task PerformWorkflowActionAsync(WorkflowActionRequestDto dto)
+        {
+            await PerformAction(dto.Id, dto.Action, _loggedInUser.EmployeeID, dto.Remarks);
+
+        }
+
+        private async Task ApplyEntityStatusUpdate(WorkflowInstance instance, string action, bool isFinal)
+        {
+            switch (instance.EntityType)
+            {
+                case "Request of Review":
+                    if (isFinal)
+                    {
+                        var inward = await _sampleInwardRepo.GetSampleInwardById(instance.EntityID);
+                        if (inward != null)
+                        {
+                            if(inward.SampleDetails == null)
+                            {
+                                throw new KeyNotFoundException($"No Sample Details found for the Inward Request {instance.EntityID}.");
+                            }
+
+                            if (action == "Next")
+                            {
+                                foreach (var detail in inward.SampleDetails)
+                                {
+                                    if (detail.PreparationRequired)
+                                    {
+                                        await _statusService.ForceAutoStatusAsync(detail.ID, SampleStatus.PREPARATION_REQUIRED, _loggedInUser.EmployeeID);
+                                    }
+                                    else
+                                    {
+                                        await _statusService.ForceAutoStatusAsync(detail.ID, SampleStatus.REQUEST_APPROVED, _loggedInUser.EmployeeID);
+                                    }
+                                }
+                                
+                            }
+                            else if (action == "Back")
+                            {
+                                foreach (var detail in inward.SampleDetails)
+                                {
+                                    await _statusService.ForceAutoStatusAsync(detail.ID, SampleStatus.UNDER_REVIEW_REQUEST, _loggedInUser.EmployeeID);
+                                }
+                            }
+                            else if (action == "Cancel")
+                            {
+                                foreach (var detail in inward.SampleDetails)
+                                {
+                                    await _statusService.ForceAutoStatusAsync(detail.ID, SampleStatus.REQUEST_REJECTED, _loggedInUser.EmployeeID);
+                                }
+                            }
+                        }
+                    }
+                    break;
+
+                //case "Plan Approval":
+                //    if (action == "Approve" && isFinal)
+                //        await _planRepository.UpdatePlanStatus(instance.EntityID, "Plan Approved");
+
+                //    if (action == "Reject")
+                //        await _planRepository.UpdatePlanStatus(instance.EntityID, "Plan Rejected");
+                //    break;
+
+                //case "Sample Inward":
+                //    if (action == "Approve" && isFinal)
+                //        await _inwardRepository.UpdateInwardStatus(instance.EntityID, "Inward Approved");
+                //    break;
+
+                    // Add more modules later if needed
+            }
+        }
+
     }
 }

@@ -11,7 +11,11 @@ namespace LIMSApi.Services.Interface
         Task UpdateWorkflow(WorkflowDto workflow);
         Task StartWorkflow(long entityId, string entityType);
         Task PerformAction(long instanceId, string action, long userId, string comments);
+        Task PerformWorkflowActionAsync(WorkflowActionRequestDto dto);
         Task<List<WorkflowActionLog>> GetWorkflowActionHistory(long workflowId);
+
+        Task<WorkflowStep> GetCurrentWorkflowStepAsync(long entityId, string entityType);
+        Task<WorkflowInstance?> GetActiveInstanceForEntityAsync(long entityId, string entityType);
 
     }
 }

@@ -93,5 +93,10 @@ namespace LIMSApi.Services
         {
             return await _itemRepository.GetCuttingPriceDropdown(searchTerm, pageNo, pageSize);
         }
+
+        public async Task<List<CuttingPriceMaster>> CuttingPriceList()
+        {
+            return await _itemRepository.GetAllCuttingPricesList();
+        }
     }
 }

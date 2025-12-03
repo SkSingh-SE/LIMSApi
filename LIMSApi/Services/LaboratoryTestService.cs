@@ -100,5 +100,9 @@ namespace LIMSApi.Services
         {
             return await _testMethodRepository.GetTestMethodDropdown(searchTerm, pageNo, pageSize);
         }
+        public async Task<List<object>> GetTestCases(long labTestId)
+        {
+            return await _testMethodRepository.GetTestCases(labTestId);
+        }
     }
 }

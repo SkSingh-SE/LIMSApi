@@ -95,5 +95,16 @@ namespace LIMSApi.Helpers
             }
             return query;
         }
+
+        public static bool IsUserApprover(string assignedToValue, long userId)
+        {
+            if (string.IsNullOrWhiteSpace(assignedToValue))
+                return false;
+
+            return assignedToValue
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Any(v => long.TryParse(v, out var id) && id == userId);
+        }
+
     }
 }

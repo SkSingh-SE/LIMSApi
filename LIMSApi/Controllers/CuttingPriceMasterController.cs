@@ -24,6 +24,11 @@ namespace LIMSApi.Controllers
             return Ok(await _cuttingPriceService.FetchCuttingPriceList(filter));
         }
 
+        [HttpGet("get-all")]
+        public async Task<ActionResult<CuttingPriceMaster>> GetAll()
+        {
+            return Ok(await _cuttingPriceService.CuttingPriceList());
+        }
 
         [HttpGet("details/{id}")]
         public async Task<ActionResult<CuttingPriceMaster>> GetCuttingPriceMaster(long id)

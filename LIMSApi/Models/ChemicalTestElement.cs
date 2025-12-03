@@ -10,6 +10,11 @@ namespace LIMSApi.Models
         public long ID { get; set; }
         public long ChemicalTestID { get; set; }
         public long ParameterID { get; set; }
+        public long SpecificationLineID { get; set; }
+        public long ParameterUnitID { get; set; }
+        public string ParameterUnit { get; set; }
+        public decimal? MinValue { get; set; }
+        public decimal? MaxValue { get; set; }
         public bool Selected { get; set; }
         [ForeignKey("ChemicalTestID"), JsonIgnore]
         public virtual ChemicalTest? ChemicalTest { get; set; }

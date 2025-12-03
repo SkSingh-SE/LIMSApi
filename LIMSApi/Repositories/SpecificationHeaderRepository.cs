@@ -1,9 +1,11 @@
-﻿using System.Linq.Dynamic.Core;
+﻿using System.Linq;
+using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Repositories
@@ -331,5 +333,38 @@ namespace LIMSApi.Repositories
             return data.DistinctBy(x => x.Id).ToList();
 
         }
+        public async Task<List<ChemicalElementDto>> GetChemicalElementsBySpecificationsAsync(long spec1Id = 0, long spec2Id = 0)
+        {
+            var gradeIds = new List<long>();
+            if (spec1Id > 0) gradeIds.Add(spec1Id);
+            if (spec2Id > 0 && spec2Id != spec1Id) gradeIds.Add(spec2Id);
+
+            if (!gradeIds.Any())
+                return new List<ChemicalElementDto>();
+
+            var chemicalLines = await _context.SpecificationLines
+                .Where(l => gradeIds.Contains(l.SpecificationGradeID.Value) && l.Type.ToLower() == "chemical")
+                .Select(l => new ChemicalElementDto
+                {
+                    SpecificationLineID = l.ID,
+                    ParameterID = l.ParameterID,
+                    ParameterName = l.Parameter != null ? l.Parameter.Name : null,
+                    MinValue = l.MinValue,
+                    MaxValue = l.MaxValue,
+                    ParameterUnitID = l.ParameterUnitID,
+                    ParameterUnit = l.ParameterUnit != null ? l.ParameterUnit.Name : null
+                })
+                .Distinct()
+                .ToListAsync();
+
+            // Deduplicate by parameterID
+            var unique = chemicalLines
+                .GroupBy(x => x.ParameterID)
+                .Select(g => g.First())
+                .ToList();
+
+            return unique;
+        }
+
     }
 }

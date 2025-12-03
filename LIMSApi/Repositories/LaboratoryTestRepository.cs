@@ -132,5 +132,28 @@ namespace LIMSApi.Repositories
         {
             return await _context.LaboratoryTests.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
+
+        public async Task<List<object>> GetTestCases(long testMethodId)
+        {
+            var query = (
+                from l in _context.LaboratoryTests
+                join li in _context.LaboratoryTestInvoiceCase on l.ID equals li.LabTestID
+                join c in _context.InvoiceCaseConfigurations on li.InvoiceCaseConfigID equals c.ID
+                where l.ID == testMethodId && c.IsActive
+                select new
+                {
+                    c.ID,
+                    c.SelectionType,   // Element / Hours / Load / Day …
+                    c.Name,            // "1 Element", "Up to 24 hrs"
+                    c.Value,           // 1, 24, 5
+                    c.Unit             // Element, hr, ton, day
+                }
+            ).Distinct();
+
+            var data = await query.ToListAsync();
+
+            var result = data.Cast<object>().ToList();
+            return result;
+        }
     }
 }

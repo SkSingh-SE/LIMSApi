@@ -111,5 +111,19 @@ namespace LIMSApi.Controllers
             return data == null ? NoContent() : Ok(data);
         }
 
+        [HttpGet("GetChemicalElementsBySpecifications")]
+        public async Task<IActionResult> GetChemicalElementsBySpecifications(long spec1Id = 0, long spec2Id = 0)
+        {
+            try
+            {
+                var elements = await _service.GetChemicalElementsBySpecificationsAsync(spec1Id, spec2Id);
+                return Ok(elements);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[GetChemicalElementsBySpecifications] Error: {ex.Message}");
+                return StatusCode(500, "Error fetching chemical parameters for specifications.");
+            }
+        }
     }
 }

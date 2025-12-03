@@ -49,10 +49,17 @@ namespace LIMSApi.Services
             mapping.MetalClassificationID = dto.MetalClassificationID;
             mapping.ProductConditionID = dto.ProductConditionID;
             mapping.GradeID = dto.GradeID;
-            mapping.LaboratoryTestID = dto.LaboratoryTestID;
             mapping.IsDefault = dto.IsDefault;
-            mapping.ModifiedBy = _loggedInUser.EmployeeID;
-            mapping.ModifiedOn = DateTime.UtcNow;
+
+            if (dto.LaboratoryTests.Any())
+            {
+                mapping.LaboratoryTests.Clear();
+                foreach (var test in dto.LaboratoryTests)
+                {
+                    test.TestMappingID = mapping.ID;
+                    mapping.LaboratoryTests.Add(test);
+                }
+            }
 
             await _repository.UpdateAsync(mapping);
             _logger.LogInformation("MaterialTestMapping updated: {@Mapping}", mapping);

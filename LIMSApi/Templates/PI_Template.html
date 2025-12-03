@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<style>
+body { font-family: Arial; font-size: 11px; margin: 15px; }
+.center { text-align:center; }
+.right { text-align:right; }
+.bold { font-weight:bold; }
+
+table { width:100%; border-collapse:collapse; }
+td, th { border:1px solid #000; padding:4px; }
+
+.no-border td { border:none; }
+
+.header { font-size:15px; font-weight:bold; text-align:center; }
+.sub-header { font-size:11px; text-align:center; }
+
+.watermark {
+    position: fixed;
+    top: 35%;
+    left: 15%;
+    font-size: 80px;
+    color: rgba(0,0,0,0.08);
+    transform: rotate(-30deg);
+}
+</style>
+</head>
+<body>
+
+<div class="watermark">PROFORMA</div>
+
+<!-- HEADER WITH LOGO -->
+<table class="no-border">
+<tr>
+<td width="20%">
+    <img src="{{LogoPath}}" style="width:90px;height:auto"/>
+</td>
+<td width="80%" class="center">
+    <div class="header">DIVINE METALLURGICAL SERVICES PVT. LTD.</div>
+    <div class="sub-header">
+        CIN: U74900GJ2012PTC069436<br/>
+        14, Gopal Industrial Estate, Opp. Vallabhnagar, Odhav, Ahmedabad-382415<br/>
+        Ph: 079-2289 1013 | Email: accounts@divinelaboratory.com
+    </div>
+</td>
+</tr>
+</table>
+
+<br/>
+
+<table class="no-border">
+<tr>
+<td class="bold">PROFORMA INVOICE</td>
+<td class="right">Invoice No.: {{InvoiceNo}}</td>
+</tr>
+<tr>
+<td></td>
+<td class="right">Date : {{InvoiceDate}}</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td width="50%">
+<b>Customer :</b><br/>
+{{CustomerName}}<br/>
+{{CustomerAddress}}<br/>
+GSTIN : {{CustomerGST}}<br/>
+State : {{State}} ({{StateCode}})
+</td>
+<td width="50%">
+Place of Supply : {{State}}<br/>
+Date of Received : {{ReceivedDate}}<br/>
+Ref No : {{RefNo}}
+</td>
+</tr>
+</table>
+
+<br/>
+
+<table>
+<thead>
+<tr>
+<th>Sample</th>
+<th>Description</th>
+<th>Qty / Element</th>
+<th>Rate</th>
+<th>Total Amount (Rs.)</th>
+</tr>
+</thead>
+<tbody>
+{{PI_ROWS}}
+</tbody>
+</table>
+
+<br/>
+
+<table class="no-border">
+<tr>
+<td width="60%">
+GST Category : Technical Testing & Analysis Service<br/>
+HSN / SAC Code : 998346
+</td>
+<td width="40%">
+<table>
+<tr><td>Sub Total</td><td class="right">{{SubTotal}}</td></tr>
+<tr><td>CGST @ 9%</td><td class="right">{{CGST}}</td></tr>
+<tr><td>SGST @ 9%</td><td class="right">{{SGST}}</td></tr>
+<tr><td>IGST @ 18%</td><td class="right">{{IGST}}</td></tr>
+<tr class="bold"><td>Grand Total</td><td class="right">{{GrandTotal}}</td></tr>
+</table>
+</td>
+</tr>
+</table>
+
+<br/>
+
+<b>Word :</b> {{AmountInWords}}
+
+<br/><br/>
+
+<table class="no-border">
+<tr>
+<td>
+<b>Current Bank Account Details</b><br/>
+Bank : SBI - GIDC Odhav<br/>
+Account No : 32651714994<br/>
+IFSC : SBIN0001387
+</td>
+<td class="right">
+For, DIVINE METALLURGICAL SERVICES PVT. LTD<br/><br/>
+<img src="{{SignaturePath}}" style="width:100px;height:auto"/><br/>
+Authorised Signatory
+</td>
+</tr>
+</table>
+
+</body>
+</html>

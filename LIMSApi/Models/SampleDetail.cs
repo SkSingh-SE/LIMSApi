@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 
 namespace LIMSApi.Models
 {
-    public class SampleDetail
+    public class SampleDetail : AuditProperty
     {
         
         public long ID { get; set; }
@@ -16,14 +16,16 @@ namespace LIMSApi.Models
         public int Quantity { get; set; }
         public bool Disabled { get; set; }
 
-        public bool CuttingRequired { get; set; }
+        public bool PreparationRequired { get; set; }
         public bool MachiningRequired { get; set; }
         public decimal MachiningAmount { get; set; }
         public bool OtherPreparation { get; set; }
         public decimal OtherPreparationCharge { get; set; }
         public bool TpiRequired { get; set; }
+        public long? TpiAgencyID { get; set; }
         public string? Specimen { get; set; }
         public string? TestInstructions { get; set; }
+        public string SampleStatus { get; set; } = string.Empty;
         public long? UploadReferenceID { get; set; }
         [StringLength(255)]
         public string? SampleFilePath { get; set; }

@@ -12,6 +12,7 @@ namespace LIMSApi.Dtos
 
         // Customer + Address
         public long CustomerID { get; set; }
+        public string? CustomerName { get; set; }
         public string Address { get; set; } = string.Empty;
         public string Area { get; set; } = string.Empty;
         public string State { get; set; } = string.Empty;
@@ -55,6 +56,9 @@ namespace LIMSApi.Dtos
 
         [NotMapped]
         public IFormFile? File { get; set; } = null!;
+
+        public bool CanTakeAction { get; set; } = false;
+        public List<ActionDto> Actions { get; set; } = new();
     }
 
     public class DispatchModeDto
@@ -105,12 +109,13 @@ namespace LIMSApi.Dtos
         public bool Disabled { get; set; }
 
         // Prep flags
-        public bool CuttingRequired { get; set; }
+        public bool PreparationRequired { get; set; }
         public bool MachiningRequired { get; set; }
         public decimal? MachiningAmount { get; set; }
         public bool OtherPreparation { get; set; }
         public decimal? OtherPreparationCharge { get; set; }
         public bool TpiRequired { get; set; }
+        public long? TpiAgencyID { get; set; }
         public string? Specimen { get; set; }
         public string? TestInstructions { get; set; }
 
@@ -159,6 +164,9 @@ namespace LIMSApi.Dtos
         public long ID { get; set; }
         public long GeneralTestID { get; set; }
         public long? TestMethodID { get; set; }
+        public long? TestCaseID { get; set; }
+        public string? SelectionType { get; set; }
+        public decimal? Value { get; set; }
         public long? StandardID { get; set; }
         public int Quantity { get; set; }
         public string? ReportNo { get; set; }
@@ -174,7 +182,6 @@ namespace LIMSApi.Dtos
         public string? ReportNo { get; set; } = "";
         public string? UlrNo { get; set; } = "";
         public Dictionary<string, bool> TestTypes { get; set; } = new();
-        public long MetalClassificationID { get; set; }
         public long Specification1 { get; set; }
         public long? Specification2 { get; set; }
         public long TestMethod { get; set; }
@@ -186,6 +193,41 @@ namespace LIMSApi.Dtos
         public long ID { get; set; }
         public long ChemicalTestID { get; set; }
         public long ParameterID { get; set; }
-        public int Quantity { get; set; }
+        public long SpecificationLineID { get; set; }
+        public long ParameterUnitID { get; set; }
+        public string ParameterUnit { get; set; }
+        public decimal? MinValue { get; set; }
+        public decimal? MaxValue { get; set; }
+        public bool Selected { get; set; }
+    }
+
+    public enum SampleWorkflowStatus
+    {
+        INWARD_REGISTERED,
+        INWARD_VERIFIED,
+        PLAN_DRAFT,
+        PLAN_SUBMITTED,
+        TECHNICAL_REVIEW,
+        QUALITY_REVIEW,
+        AWAITING_L1_APPROVAL,
+        APPROVED_L1,
+        AWAITING_L2_APPROVAL,
+        APPROVED_L2,
+        FINAL_APPROVED,
+        REJECTED,
+        RETURNED_TO_ORIGIN,
+        PI_GENERATION_PENDING,
+        PI_GENERATED,
+        WORK_ASSIGNED,
+        TESTING_IN_PROGRESS,
+        TESTING_COMPLETED,
+        ARCHIVED
+    }
+
+    public class ActionDto
+    {
+        public long Id { get; set; }
+        public string Name { get; set; }
+        public string Action { get; set; }
     }
 }

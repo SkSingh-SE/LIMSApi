@@ -13,6 +13,10 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using DinkToPdf;
+using DinkToPdf.Contracts;
+
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -165,7 +169,9 @@ builder.Services.AddScoped<ISampleInwardRepository, SampleInwardRepository>();
 builder.Services.AddScoped<IWorkflowRepository, WorkflowRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<IMaterialTestMappingRepository, MaterialTestMappingRepository>();
-
+builder.Services.AddScoped<ISampleStatusRepository, SampleStatusRepository>();
+builder.Services.AddScoped<ICuttingRepository, CuttingRepository>();
+builder.Services.AddScoped<IProformaInvoiceRepository, ProformaInvoiceRepository>();
 
 
 // Register Services
@@ -228,12 +234,19 @@ builder.Services.AddScoped<IWorkflowService, WorkflowService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IPushNotificationService, PushNotificationService>();
 builder.Services.AddScoped<IMaterialTestMappingService, MaterialTestMappingService>();
+builder.Services.AddScoped<ISampleStatusService, SampleStatusService>();
+builder.Services.AddScoped<ICuttingService, CuttingService>();
 
 
 // Third party services
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<SMSService>();
 builder.Services.AddScoped<WhatsAppService>();
+
+builder.Services.AddSingleton<IConverter>(new SynchronizedConverter(new PdfTools()));
+
+// your other services…
+
 
 builder.Services.AddSignalR();
 

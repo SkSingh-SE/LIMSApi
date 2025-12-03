@@ -32,7 +32,9 @@ namespace LIMSApi.Repositories
                          from g in grade.DefaultIfEmpty()
                          join e in _context.EmployeeMasters on m.CreatedBy equals e.ID into emp
                          from e in emp.DefaultIfEmpty()
-                         join lt in _context.LaboratoryTests on m.LaboratoryTestID equals lt.ID into labTest
+                         join ml in _context.MappingLaboratoryTests on m.ID equals ml.TestMappingID into mapLabTest
+                         from ml in mapLabTest.DefaultIfEmpty()
+                         join lt in _context.LaboratoryTests on ml.LaboratoryTestID equals lt.ID into labTest
                          from lt in labTest.DefaultIfEmpty()
                          select new
                          {
@@ -83,6 +85,7 @@ namespace LIMSApi.Repositories
                 .Include(x => x.MetalClassification)
                 .Include(x => x.ProductCondition)
                 .Include(x => x.Grade)
+                .Include(x => x.LaboratoryTests)
                 .FirstOrDefaultAsync(x => x.ID == id);
         }
 
@@ -148,14 +151,15 @@ namespace LIMSApi.Repositories
 
             //  Build base query
             var query = from m in _context.MaterialTestMappings
-                        join lt in _context.LaboratoryTests on m.LaboratoryTestID equals lt.ID
+                        join ml in _context.MappingLaboratoryTests on m.ID equals ml.TestMappingID
+                        join lt in _context.LaboratoryTests on ml.LaboratoryTestID equals lt.ID
                         where m.IsActive
                         select new
                         {
                             m.GradeID,
                             m.MetalClassificationID,
                             m.ProductConditionID,
-                            m.LaboratoryTestID,
+                            ml.LaboratoryTestID,
                             LaboratoryTestSubGroup = lt.SubGroup
                         };
 

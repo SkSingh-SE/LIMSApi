@@ -20,5 +20,6 @@ namespace LIMSApi.Repositories.Interface
         Task<List<WorkflowActionLog>> GetWorkflowActionLogsAsync(long workflowId);
         Task<WorkflowInstance?> GetActiveInstanceForEntityAsync(long entityId, string entityType);
         Task<List<WorkflowActionLog>> GetActionLogsForInstanceAsync(long instanceId);
+        Task<WorkflowStep> GetCurrentWorkflowStepAsync(long entityId, string entityType);
     }
 }

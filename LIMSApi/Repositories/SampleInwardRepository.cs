@@ -2,6 +2,8 @@
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
+using LIMSApi.Helpers.Enums;
+using LIMSApi.Helpers.StatusFlow.Extensions;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using Microsoft.EntityFrameworkCore;
@@ -21,9 +23,20 @@ namespace LIMSApi.Repositories
 
         public async Task AddSampleInward(SampleInward model)
         {
-            model.CompanyCode = loggedInUser.CompanyCode;
-            await _context.SampleInwards.AddAsync(model);
-            await _context.SaveChangesAsync();
+            using var trx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                model.CreatedOn = DateTime.UtcNow;
+                model.CompanyCode = loggedInUser.CompanyCode;
+                await _context.SampleInwards.AddAsync(model);
+                await _context.SaveChangesAsync();
+                await trx.CommitAsync();
+            }
+            catch
+            {
+                await trx.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task DeleteSampleInward(long id)
@@ -53,6 +66,7 @@ namespace LIMSApi.Repositories
         public async Task<SampleInward?> GetSampleInwardWithPlans(long id)
         {
             var sampleInward = await _context.SampleInwards
+                .Include(x => x.Customer)
                 .Include(x => x.DispatchModes)
                 .Include(x => x.Contacts)
                 .Include(x => x.Addresses)
@@ -82,62 +96,297 @@ namespace LIMSApi.Repositories
 
         public async Task UpdateSampleInward(SampleInward model)
         {
-            _context.SampleInwards.Update(model);
-            await _context.SaveChangesAsync();
+            using var trx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                model.ModifiedOn = DateTime.UtcNow;
+                model.CompanyCode = loggedInUser.CompanyCode;
+                _context.SampleInwards.Update(model);
+                await _context.SaveChangesAsync();
+                await trx.CommitAsync();
+            }
+            catch
+            {
+                await trx.RollbackAsync();
+                throw;
+            }
         }
 
-        public async Task<PagedResponse<object>> GetAllSampleInwards(PageFilter filter)
+        //public async Task<PagedResponse<object>> GetInwardList(PageFilter filter)
+        //{
+        //    var _query = _context.SampleInwards
+        //                 .Where(c => c.IsActive && c.CompanyCode == loggedInUser.CompanyCode)
+        //                 .Select(c => new
+        //                 {
+        //                     c.ID,
+        //                     c.CaseNo,
+        //                     c.CustomerID,
+        //                     CustomerName = c.Customer != null ? c.Customer.Name : string.Empty,
+        //                     ContactPersonName = c.Contacts.OrderBy(x => x.ID).Select(x => x.Name).FirstOrDefault(),
+        //                     ContactEmail = c.Contacts.OrderBy(x => x.ID).Select(x => x.EmailId).FirstOrDefault(),
+        //                     ContactPhone = c.Contacts.OrderBy(x => x.ID).Select(x => x.MobileNo).FirstOrDefault(),
+        //                     c.CollectionTime,
+        //                     c.InwardStatus,
+        //                     c.ReviewStatus,
+        //                     c.ModifiedOn,
+        //                     ModifiedBy = _context.EmployeeMasters
+        //                                  .Where(e => e.ID == c.ModifiedBy)
+        //                                  .Select(e => e.Name)
+        //                                  .FirstOrDefault()
+        //                 });
+
+
+
+        //    _query = _query.AsQueryable().ApplyFilters(filter.Filter);
+        //    if (!string.IsNullOrWhiteSpace(filter.searchTerm))
+        //    {
+        //        var search = filter.searchTerm.Trim().ToLower();
+        //        _query = _query.Where(x =>
+        //           (x.CaseNo != null && x.CaseNo.ToLower().Contains(search)) ||
+        //           (x.CustomerName != null && x.CustomerName.ToLower().Contains(search)) ||
+        //           (x.ContactPersonName != null && x.ContactPersonName.ToLower().Contains(search)) ||
+        //           (x.ContactEmail != null && x.ContactEmail.ToLower().Contains(search)) ||
+        //           (x.ContactPhone != null && x.ContactPhone.ToLower().Contains(search)) ||
+        //           (x.InwardStatus != null && x.InwardStatus.ToLower().Contains(search)) ||
+        //           (x.ReviewStatus != null && x.ReviewStatus.ToLower().Contains(search)) ||
+        //           (x.ModifiedBy != null && x.ModifiedBy.ToLower().Contains(search)) ||
+
+        //           // Date Search (optional)
+        //           x.CollectionTime.ToString().ToLower().Contains(search)
+        //       );
+        //    }
+
+        //    if (filter.SortByColumn != null)
+        //    {
+        //        _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
+        //    }
+
+        //    // Total Records Count
+        //    int totalRecords = await _query.CountAsync();
+
+        //    // Apply Pagination
+        //    var items = await _query
+        //        .Skip((filter.PageNumber - 1) * filter.PageSize)
+        //        .Take(filter.PageSize)
+        //        .ToListAsync();
+
+        //    return new PagedResponse<object>(items.Cast<object>().ToList(), totalRecords, filter.PageNumber, filter.PageSize);
+        //}
+
+        public async Task<PagedResponse<object>> GetInwardList(PageFilter filter)
         {
-            var _query = _context.SampleInwards
-                         .Where(c => c.IsActive && c.CompanyCode == loggedInUser.CompanyCode)
-                         .Select(c => new
-                         {
-                             c.ID,
-                             c.CaseNo,
-                             c.CustomerID,
-                             CustomerName = c.Customer != null ? c.Customer.Name : string.Empty,
-                             ContactPersonName = c.Contacts.OrderBy(x => x.ID).Select(x => x.Name).FirstOrDefault(),
-                             ContactEmail = c.Contacts.OrderBy(x => x.ID).Select(x => x.EmailId).FirstOrDefault(),
-                             ContactPhone = c.Contacts.OrderBy(x => x.ID).Select(x => x.MobileNo).FirstOrDefault(),
-                             c.CollectionTime,
-                             c.ModifiedOn,
-                             ModifiedBy = _context.EmployeeMasters
-                                          .Where(e => e.ID == c.ModifiedBy)
-                                          .Select(e => e.Name)
-                                          .FirstOrDefault()
-                         });
+            var query = _context.SampleInwards
+                .Where(c => c.IsActive && c.CompanyCode == loggedInUser.CompanyCode)
+                .Select(c => new
+                {
+                    c.ID,
+                    c.CaseNo,
+                    CustomerName = c.Customer.Name,
+                    ContactPersonName = c.Contacts.OrderBy(x => x.ID).Select(x => x.Name).FirstOrDefault(),
+                    ContactEmail = c.Contacts.OrderBy(x => x.ID).Select(x => x.EmailId).FirstOrDefault(),
+                    ContactPhone = c.Contacts.OrderBy(x => x.ID).Select(x => x.MobileNo).FirstOrDefault(),
+                    c.CollectionTime,
+                    InwardStatus = c.InwardStatus,
+                    ModifiedOn = c.ModifiedOn,
+                    ModifiedBy = _context.EmployeeMasters
+                                   .Where(e => e.ID == c.ModifiedBy)
+                                   .Select(e => e.Name)
+                                   .FirstOrDefault()
+                });
+
+            return await ApplyPagingFilteringSorting(query, filter);
+        }
+        public async Task<PagedResponse<object>> GetPlanList(PageFilter filter)
+        {
+            var planStatuses = new[]
+            {
+                SampleStatus.UNDER_PLANNING.ToString(),
+                SampleStatus.INWARD_COMPLETED.ToString(),
+                SampleStatus.UNDER_REVIEW_REQUEST.ToString(),
+            };
+            var query = _context.SampleInwards
+                .Where(c => c.IsActive && c.CompanyCode == loggedInUser.CompanyCode)
+                .Where(c => c.SampleDetails.Any(s => planStatuses.Contains(s.SampleStatus)))
+                .Select(c => new
+                {
+                    c.ID,
+                    c.CaseNo,
+                    CustomerName = c.Customer.Name,
+                    ContactPersonName = c.Contacts.OrderBy(x => x.ID).Select(x => x.Name).FirstOrDefault(),
+                    ContactEmail = c.Contacts.OrderBy(x => x.ID).Select(x => x.EmailId).FirstOrDefault(),
+                    ContactPhone = c.Contacts.OrderBy(x => x.ID).Select(x => x.MobileNo).FirstOrDefault(),
+                    c.CollectionTime,
+                    PlanStatus = c.InwardStatus,
+                    ModifiedOn = c.ModifiedOn,
+                    ModifiedBy = _context.EmployeeMasters
+                                   .Where(e => e.ID == c.ModifiedBy)
+                                   .Select(e => e.Name)
+                                   .FirstOrDefault()
+                });
+
+            return await ApplyPagingFilteringSorting(query, filter);
+        }
+
+        public async Task<PagedResponse<object>> GetReviewList(PageFilter filter)
+        {
+            var userId = loggedInUser.EmployeeID;
+
+            var query = from inward in _context.SampleInwards
+                        join instance in _context.WorkflowInstances
+                            on new { inward.ID, EntityType = "Request of Review" }
+                            equals new { ID = instance.EntityID, instance.EntityType }
+                        join step in _context.WorkflowSteps
+                            on instance.CurrentStepID equals step.ID
+                        where inward.IsActive
+                              && inward.CompanyCode == loggedInUser.CompanyCode
+                              && instance.IsActive
+                        select new
+                        {
+                            inward.ID,
+                            inward.CaseNo,
+                            CustomerName = inward.Customer != null ? inward.Customer.Name : string.Empty,
+                            Reviewer = inward.ReviewedBy,
+                            ReviewStatus = inward.ReviewStatus,
+                            InwardStatus = inward.InwardStatus,
+                            CurrentStep = step.Name,
+                            AssignedToValue = step.AssignedToValue,
+                            ModifiedOn = inward.ModifiedOn,
+                            ModifiedBy = _context.EmployeeMasters
+                                        .Where(e => e.ID == inward.ModifiedBy)
+                                        .Select(e => e.Name)
+                                        .FirstOrDefault(),
+
+                            CanTakeAction = FilterHelper.IsUserApprover(step.AssignedToValue, userId),
+                            //  Workflow Actions (dynamic from transitions)
+                            Actions = step.Transitions
+                                .Where(t => t.IsActive)
+                                .Select(t => new
+                                {
+                                    ID = instance.ID,
+                                    Name = t.Alias ?? t.Action,
+                                    Action = t.Action
+                                })
+                        };
+
+            //// Apply custom filters (your extension method)
+            //query = query.AsQueryable().ApplyFilters(filter.Filter);
+
+            //// Search
+            //if (!string.IsNullOrWhiteSpace(filter.searchTerm))
+            //{
+            //    var search = filter.searchTerm.Trim().ToLower();
+
+            //    query = query.Where(x =>
+            //        EF.Functions.Like(EF.Property<string>(x, "CaseNo") ?? "", $"%{search}%") ||
+            //        EF.Functions.Like(EF.Property<string>(x, "CustomerName") ?? "", $"%{search}%") ||
+            //        EF.Functions.Like(EF.Property<string>(x, "ContactPersonName") ?? "", $"%{search}%") ||
+            //        EF.Functions.Like(EF.Property<string>(x, "ContactEmail") ?? "", $"%{search}%") ||
+            //        EF.Functions.Like(EF.Property<string>(x, "ContactPhone") ?? "", $"%{search}%") ||
+            //        EF.Functions.Like(EF.Property<string>(x, "InwardStatus") ?? "", $"%{search}%") ||
+            //        EF.Functions.Like(EF.Property<string>(x, "ReviewStatus") ?? "", $"%{search}%") ||
+            //        EF.Functions.Like(EF.Property<string>(x, "ModifiedBy") ?? "", $"%{search}%") ||
+            //        EF.Functions.Like(EF.Property<DateTime?>(x, "CollectionTime")
+            //            .ToString() ?? "", $"%{search}%")
+            //    );
+            //}
+
+            //// Sorting
+            //if (!string.IsNullOrWhiteSpace(filter.SortByColumn))
+            //{
+            //    string order = filter.SortOrder == "asc" ? "ascending" : "descending";
+            //    query = query.OrderBy($"{filter.SortByColumn} {order}");
+            //}
+
+            //// Total Count
+            //int totalRecords = await query.CountAsync();
+            //var data = await query.ToListAsync();
+            //var result = data.Select(x => new
+            //{
+            //    x.ID,
+            //    x.CaseNo,
+            //    x.CustomerName,
+            //    x.Reviewer,
+            //    x.ReviewStatus,
+            //    x.InwardStatus,
+            //    x.CurrentStep,
+            //    x.ModifiedOn,
+            //    x.ModifiedBy,
+
+            //    Actions = FilterHelper.IsUserApprover(x.AssignedToValue, userId)
+            //            ? x.Actions : Enumerable.Empty<object>()
+
+            //});
+
+            //// Pagination
+            //var items = result
+            //    .Skip((filter.PageNumber - 1) * filter.PageSize)
+            //    .Take(filter.PageSize).ToList<object>();
+
+            //return new PagedResponse<object>(
+            //    items,
+            //    totalRecords,
+            //    filter.PageNumber,
+            //    filter.PageSize
+            //);
+
+            return await ApplyPagingFilteringSorting(query, filter);
+        }
 
 
+        private async Task<PagedResponse<object>> ApplyPagingFilteringSorting(IQueryable<object> query, PageFilter filter)
+        {
+            // Apply custom filters (your extension method)
+            query = query.AsQueryable().ApplyFilters(filter.Filter);
 
-            _query = _query.AsQueryable().ApplyFilters(filter.Filter);
+            // Search
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.CaseNo != null && x.CaseNo.ToLower().Contains(search)));
+
+                query = query.Where(x =>
+                    EF.Functions.Like(EF.Property<string>(x, "CaseNo") ?? "", $"%{search}%") ||
+                    EF.Functions.Like(EF.Property<string>(x, "CustomerName") ?? "", $"%{search}%") ||
+                    EF.Functions.Like(EF.Property<string>(x, "ContactPersonName") ?? "", $"%{search}%") ||
+                    EF.Functions.Like(EF.Property<string>(x, "ContactEmail") ?? "", $"%{search}%") ||
+                    EF.Functions.Like(EF.Property<string>(x, "ContactPhone") ?? "", $"%{search}%") ||
+                    EF.Functions.Like(EF.Property<string>(x, "InwardStatus") ?? "", $"%{search}%") ||
+                    EF.Functions.Like(EF.Property<string>(x, "ReviewStatus") ?? "", $"%{search}%") ||
+                    EF.Functions.Like(EF.Property<string>(x, "ModifiedBy") ?? "", $"%{search}%") ||
+                    EF.Functions.Like(EF.Property<DateTime?>(x, "CollectionTime")
+                        .ToString() ?? "", $"%{search}%")
+                );
             }
 
-            if (filter.SortByColumn != null)
+            // Sorting
+            if (!string.IsNullOrWhiteSpace(filter.SortByColumn))
             {
-                _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
+                string order = filter.SortOrder == "asc" ? "ascending" : "descending";
+                query = query.OrderBy($"{filter.SortByColumn} {order}");
             }
 
-            // Total Records Count
-            int totalRecords = await _query.CountAsync();
+            // Total Count
+            int totalRecords = await query.CountAsync();
 
-            // Apply Pagination
-            var items = await _query
+            // Pagination
+            var items = await query
                 .Skip((filter.PageNumber - 1) * filter.PageSize)
                 .Take(filter.PageSize)
                 .ToListAsync();
 
-            return new PagedResponse<object>(items.Cast<object>().ToList(), totalRecords, filter.PageNumber, filter.PageSize);
+            return new PagedResponse<object>(
+                items,
+                totalRecords,
+                filter.PageNumber,
+                filter.PageSize
+            );
         }
+
 
         public async Task<List<DropdwonSelector>> GetSampleInwardDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.SampleInwards where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode select a;
+            var _query = _context.SampleInwards.Include(x => x.SampleDetails).Where(a => a.IsActive && a.CompanyCode == loggedInUser.CompanyCode);
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
@@ -150,7 +399,30 @@ namespace LIMSApi.Repositories
             var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
             {
                 Id = x.ID,
-                Name = x.CaseNo,
+                Name = $"{x.CaseNo} ({x.SampleDetails.Count} Samples)",
+            })).ToListAsync();
+
+            return data;
+        }
+
+        public async Task<List<DropdwonSelector>> GetSamplePreparationInwardDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = _context.SampleInwards.Include(x => x.SampleDetails).Where(a => a.IsActive && a.CompanyCode == loggedInUser.CompanyCode && a.SampleDetails.Any(sd => sd.PreparationRequired));
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var search = searchTerm.Trim().ToLower();
+                _query = _query.Where(x =>x.ID.ToString().Contains(search) || (x.CaseNo != null && x.CaseNo.ToLower().Contains(search)));
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            {
+                Id = x.ID,
+                Name = $"{x.CaseNo} ({x.SampleDetails.Count(sd => sd.PreparationRequired)} Prep Samples)",
             })).ToListAsync();
 
             return data;
@@ -193,9 +465,9 @@ namespace LIMSApi.Repositories
 
             var res = new
             {
-                caseNo = $"DMSPL-{nextCaseNumber:D6}",  
-                sampleNo = $"{year}-{nextSampleNumber:D6}", 
-                nextSampleCounter = nextSampleNumber     
+                caseNo = $"DMSPL-{nextCaseNumber:D6}",
+                sampleNo = $"{year}-{nextSampleNumber:D6}",
+                nextSampleCounter = nextSampleNumber
             };
 
             return res;

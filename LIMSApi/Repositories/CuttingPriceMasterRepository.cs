@@ -103,5 +103,12 @@ namespace LIMSApi.Repositories
         {
             return await _context.CuttingPriceMasters.AnyAsync(x => x.CuttingType == name && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
+
+        public async Task<List<CuttingPriceMaster>> GetAllCuttingPricesList()
+        {
+            return await _context.CuttingPriceMasters
+                .Where(x => x.IsActive && x.CompanyCode == loggedInUser.CompanyCode)
+                .ToListAsync();
+        }
     }
 }

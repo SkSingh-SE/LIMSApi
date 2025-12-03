@@ -187,5 +187,9 @@ namespace LIMSApi.Services
         {
             return await _specificationRepo.GetTestMethodsForSpecifications(gradeId1,gradeId2);
         }
+        public async Task<List<ChemicalElementDto>> GetChemicalElementsBySpecificationsAsync(long gradeId1, long gradeId2 = 0)
+        {
+            return await _specificationRepo.GetChemicalElementsBySpecificationsAsync(gradeId1,gradeId2);
+        }
     }
 }

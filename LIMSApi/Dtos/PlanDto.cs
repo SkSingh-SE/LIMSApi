@@ -8,7 +8,7 @@
 
         public string StatementOfConformity { get; set; }
         public string DecisionRule { get; set; }
-        public string ReviewStatus { get; set; } = "Pending";
+        public string Status { get; set; } = "Pending";
         public long? ReviewedBy { get; set; }
         public DateTime? ReviewedOn { get; set; }
 

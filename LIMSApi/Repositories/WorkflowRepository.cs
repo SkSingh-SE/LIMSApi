@@ -99,7 +99,7 @@ namespace LIMSApi.Repositories
 
         public async Task<WorkflowInstance?> GetWorkflowInstanceAsync(long id) =>
             await _context.WorkflowInstances
-                .Include(i => i.WorkflowID)
+                .Include(i => i.Workflow)
                 .FirstOrDefaultAsync(i => i.ID == id);
 
         public async Task AddWorkflowInstanceAsync(WorkflowInstance instance)
@@ -128,13 +128,7 @@ namespace LIMSApi.Repositories
         }
         public async Task<WorkflowInstance?> GetActiveInstanceForEntityAsync(long entityId, string entityType)
         {
-            return await _context.WorkflowInstances
-                .Include(i => i.Workflow)
-                .FirstOrDefaultAsync(i =>
-                    i.EntityID == entityId &&
-                    i.Workflow.EntityType == entityType &&
-                    i.Status != "Completed" &&
-                    i.Status != "Cancelled");
+            return await _context.WorkflowInstances.Where(w => w.EntityID == entityId && w.EntityType == entityType && w.IsActive).FirstOrDefaultAsync();
         }
 
         public async Task<List<WorkflowActionLog>> GetActionLogsForInstanceAsync(long instanceId)
@@ -143,6 +137,16 @@ namespace LIMSApi.Repositories
                 .Where(l => l.InstanceID == instanceId)
                 .OrderBy(l => l.Timestamp)
                 .ToListAsync();
+        }
+
+        public async Task<WorkflowStep> GetCurrentWorkflowStepAsync(long entityId, string entityType)
+        {
+            var instance = await GetActiveInstanceForEntityAsync(entityId, entityType);
+            if (instance == null) return null;
+
+            var step = await _context.WorkflowSteps.Include(x => x.Transitions)
+                .FirstOrDefaultAsync(s => s.WorkflowID == instance.WorkflowID && s.ID == instance.CurrentStepID);
+            return step;
         }
     }
 }

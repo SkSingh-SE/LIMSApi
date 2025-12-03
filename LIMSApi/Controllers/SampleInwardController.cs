@@ -1,5 +1,6 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
+using LIMSApi.Services;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -24,6 +25,18 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> SampleInwardList(PageFilter filter)
         {
             return Ok(await _SampleInwardService.FetchSampleInwardList(filter));
+        }
+
+        [HttpPost("plan-list")]
+        public async Task<IActionResult> PlanList(PageFilter filter)
+        {
+            return Ok(await _SampleInwardService.FetchPlanList(filter));
+        }
+
+        [HttpPost("review-list")]
+        public async Task<IActionResult> ReviewList(PageFilter filter)
+        {
+            return Ok(await _SampleInwardService.FetchReviewList(filter));
         }
 
 
@@ -66,6 +79,17 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [HttpPut("plan-for-review")]
+        public async Task<IActionResult> SubmitPlanForReview(PlanDto model)
+        {
+            await _SampleInwardService.SubmitPlanForReview(model);
+            return Ok(new
+            {
+                status = "success",
+                message = $"Plan has been updated successfully."
+            });
+        }
+
         [HttpPost("create")]
         public async Task<ActionResult<SampleInward>> PostSampleInward([FromForm] SampleInwardDto model)
         {
@@ -100,5 +124,44 @@ namespace LIMSApi.Controllers
 
             return caseNumber == null ? NoContent() : Ok(caseNumber);
         }
+
+        [HttpGet("dropdown")]
+        public async Task<IActionResult> Dropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            var data = await _SampleInwardService.GetSampleInwardDropdown(searchTerm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);   
+        }
+
+        [HttpGet("preparation-inward-dropdown")]
+        public async Task<IActionResult> PreprationInwardDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            var data = await _SampleInwardService.GetSamplePreparationInwardDropdown(searchTerm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);   
+        }
+
+        [HttpGet("{piId}/pdf")]
+        public async Task<IActionResult> GetPIPdf(long piId)
+        {
+            try
+            {
+                var pdfBytes = await _SampleInwardService.GeneratePIPdfAsync(piId);
+
+                if (pdfBytes == null || pdfBytes.Length == 0)
+                    return NotFound("PDF could not be generated.");
+
+                var fileName = $"ProformaInvoice_{piId}.pdf";
+
+                return File(
+                    pdfBytes,
+                    "application/pdf",
+                    fileName
+                );
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ex.Message);
+            }
+        }
+
     }
 }

@@ -93,6 +93,7 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<TestGroupMapping> TestGroupMappings { get; set; }
     public virtual DbSet<TestMaster> TestMasters { get; set; }
     public virtual DbSet<LaboratoryTest> LaboratoryTests { get; set; }
+    public virtual DbSet<LaboratoryTestInvoiceCase> LaboratoryTestInvoiceCase { get; set; }
     public virtual DbSet<TestMethodStandard> TestMethodStandards { get; set; }
     public virtual DbSet<TestMethodSubGroup> TestMethodSubGroups { get; set; }
     public virtual DbSet<TestMethodSpecification> TestMethodSpecifications { get; set; }
@@ -115,6 +116,13 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<UserPushSubscription> UserPushSubscriptions { get; set; }
     public virtual DbSet<JobExecutionLog> JobExecutionLogs { get; set; }
     public virtual DbSet<MaterialTestMapping> MaterialTestMappings { get; set; }
+
+    public DbSet<CuttingChargeHeader> CuttingChargeHeaders { get; set; }
+    public DbSet<CuttingChargeSample> CuttingChargeSamples { get; set; }
+    public DbSet<CuttingChargeDetail> CuttingChargeDetails { get; set; }
+    public DbSet<TestMappingLaboratoryTest> MappingLaboratoryTests { get; set; }
+    public DbSet<ProformaInvoiceHeader> ProformaInvoiceHeader { get; set; }
+    public DbSet<ProformaInvoiceDetail> ProformaInvoiceDetails { get; set; }
 
     //    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     //#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the BankName= syntax to read it from _configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.

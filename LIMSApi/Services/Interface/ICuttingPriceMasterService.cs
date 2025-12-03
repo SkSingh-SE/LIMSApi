@@ -9,6 +9,7 @@ namespace LIMSApi.Services.Interface
         Task ModifyCuttingPrice(CuttingPriceMaster model);
         Task RemoveCuttingPrice(long id);
         Task<CuttingPriceMaster> GetCuttingPriceDetails(long id);
+        Task<List<CuttingPriceMaster>> CuttingPriceList();
         Task<PagedResponse<object>> FetchCuttingPriceList(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetCuttingPriceDropdown(string? searchTerm, int pageNo, int pageSize);

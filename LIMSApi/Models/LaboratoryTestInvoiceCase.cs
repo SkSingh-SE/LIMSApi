@@ -13,5 +13,6 @@ namespace LIMSApi.Models
         [ForeignKey("InvoiceCaseConfigID")]
         public virtual InvoiceCaseConfiguration? InvoiceCaseConfiguration { get; set; }
 
+
     }
 }
