@@ -13,8 +13,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using DinkToPdf;
-using DinkToPdf.Contracts;
+using QuestPDF.Infrastructure;
 
 
 
@@ -243,7 +242,11 @@ builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<SMSService>();
 builder.Services.AddScoped<WhatsAppService>();
 
-builder.Services.AddSingleton<IConverter>(new SynchronizedConverter(new PdfTools()));
+//builder.Services.AddSingleton<IConverter>(
+//    new SynchronizedConverter(new PdfTools()));
+
+// QuestPDF license (free Community)
+QuestPDF.Settings.License = LicenseType.Community;
 
 // your other services…
 

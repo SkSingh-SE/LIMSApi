@@ -64,6 +64,13 @@ namespace LIMSApi.Services
                 existingTestMethod.InvoiceCases.Add(invoiceCase);
             }
 
+            existingTestMethod.Parameters.Clear();
+            foreach(var pm in model.Parameters)
+            {
+                pm.LaboratoryTestID = model.ID;
+                existingTestMethod.Parameters.Add(pm);
+            }
+
             await _testMethodRepository.UpdateTestMethod(existingTestMethod);
             _logger.LogInformation("SubGroup '{SubGroup}' updated successfully.", model.SubGroup);
         }

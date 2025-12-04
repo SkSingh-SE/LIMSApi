@@ -24,6 +24,7 @@ namespace LIMSApi.Models
         public virtual MetalClassificationMaster? MetalClassification { get; set; }
         public ICollection<LaboratoryTestInvoiceCase> InvoiceCases { get; set; } = new List<LaboratoryTestInvoiceCase>();
         //public ICollection<TestMethodSubGroup> SubGroups { get; set; } = new List<TestMethodSubGroup>();
+        public ICollection<LaboratoryTestParameter> Parameters { get; set; } = new List<LaboratoryTestParameter>();
 
     }
 }

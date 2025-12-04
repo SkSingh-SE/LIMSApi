@@ -19,19 +19,19 @@ namespace LIMSApi.Models
             loggedInUser = LoggedInUserProvider.CurrentUser;
             if (loggedInUser != null)
             {
-                CreatedBy = loggedInUser.EmployeeID;
-                ModifiedBy = loggedInUser.EmployeeID;
-                CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
+                this.CreatedBy = loggedInUser.EmployeeID;
+                this.ModifiedBy = loggedInUser.EmployeeID;
+                this.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
             }
             else
             {
-                CreatedBy = 0; // Or throw/log warning as needed
-                ModifiedBy = 0;
-                CompanyCode = "LIMS";
+                this.CreatedBy = 0; // Or throw/log warning as needed
+                this.ModifiedBy = 0;
+                this.CompanyCode = "LIMS";
             }
 
-            CreatedOn = DateTime.UtcNow;
-            ModifiedOn = DateTime.UtcNow;
+            this.CreatedOn = DateTime.UtcNow;
+            this.ModifiedOn = DateTime.UtcNow;
 
         }
     }

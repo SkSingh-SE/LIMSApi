@@ -40,8 +40,11 @@ namespace LIMSApi.Repositories
         public async Task<LaboratoryTest?> GetTestMethodById(long id)
         {
             //return await _context.LaboratoryTests.Include(t => t.SubGroups).FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
-            return await _context.LaboratoryTests.Include(y=> y.InvoiceCases)
-                .ThenInclude(z => z.InvoiceCaseConfiguration).FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.LaboratoryTests
+                .Include(y=> y.InvoiceCases)
+                .ThenInclude(z => z.InvoiceCaseConfiguration)
+                .Include(x=> x.Parameters)
+                .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
         public async Task UpdateTestMethod(LaboratoryTest model)

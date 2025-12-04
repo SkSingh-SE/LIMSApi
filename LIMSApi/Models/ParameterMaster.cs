@@ -17,6 +17,8 @@ public partial class ParameterMaster : AuditProperty
     public string? AliasName { get; set; }
     public long ParameterUnitID {  get; set; }
     public string? ElementType { get; set; } = "normal";
+    public bool IsCalculated { get; set; } = false;
+    public string? Formula { get; set; }
 
     public string? Note { get; set; }
     [ForeignKey("ParameterUnitID")]

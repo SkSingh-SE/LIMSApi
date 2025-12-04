@@ -1,10 +1,11 @@
-﻿using DinkToPdf;
-using DinkToPdf.Contracts;
+﻿
 using LIMSApi.Data;
+using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using Microsoft.EntityFrameworkCore;
+using QuestPDF.Fluent;
 
 namespace LIMSApi.Repositories
 {
@@ -12,12 +13,12 @@ namespace LIMSApi.Repositories
     {
         private readonly LIMSContext _context;
         private LoggedInUserDTO loggedInUser;
-        private readonly IConverter _converter;
-        public ProformaInvoiceRepository(LIMSContext context, IConverter converter)
+        //private readonly IConverter _converter;
+        public ProformaInvoiceRepository(LIMSContext context)
         {
             _context = context;
             loggedInUser = LoggedInUserProvider.CurrentUser;
-            _converter = converter;
+            //_converter = converter;
         }
 
         public async Task<string> GeneratePINoAsync()
@@ -280,170 +281,219 @@ namespace LIMSApi.Repositories
 
         public async Task<byte[]> GeneratePIPdfAsync(long piId)
         {
-            var pi = await _context.ProformaInvoiceHeader
-                .Include(x => x.SampleInward)
-                    .ThenInclude(x => x.Customer)
-                .Include(x => x.Details)
-                .FirstOrDefaultAsync(x => x.ID == piId);   //  FIX: FirstOrDefaultAsync
-
-            //  IF PI NOT FOUND → USE DUMMY DATA
-            if (pi == null)
+            try
             {
-                pi = new ProformaInvoiceHeader
+
+
+                var pi = await _context.ProformaInvoiceHeader
+                    .Include(x => x.SampleInward)
+                        .ThenInclude(x => x.Customer)
+                    .Include(x => x.Details)
+                    .FirstOrDefaultAsync(x => x.ID == piId);   //  FIX: FirstOrDefaultAsync
+
+                //  IF PI NOT FOUND → USE DUMMY DATA
+                if (pi == null)
                 {
-                    ID = 0,
-                    PINo = "PI/DUMMY/000001",
-                    PIDate = DateTime.Today,
-
-                    SubTotal = 1000,
-                    CGST = 90,
-                    SGST = 90,
-                    IGST = 0,
-                    TaxAmount = 180,
-                    GrandTotal = 1180,
-
-                    SampleInward = new SampleInward
+                    pi = new ProformaInvoiceHeader
                     {
-                        CaseNo = "CASE-DUMMY-001",
-                        CreatedOn = DateTime.Today,
-                        GstNo = "24ABCDE1234F1Z5",
-                        Address = "Dummy Industrial Area, Ahmedabad",
-                        State = "Gujarat",
+                        ID = 0,
+                        PINo = "PI/DUMMY/000001",
+                        PIDate = DateTime.Today,
 
-                        Customer = new Customer
+                        SubTotal = 1000,
+                        CGST = 90,
+                        SGST = 90,
+                        IGST = 0,
+                        TaxAmount = 180,
+                        GrandTotal = 1180,
+
+                        SampleInward = new SampleInward
                         {
-                            Name = "DUMMY INDUSTRIES PVT LTD",
+                            CaseNo = "CASE-DUMMY-001",
+                            CreatedOn = DateTime.Today,
+                            GstNo = "24ABCDE1234F1Z5",
                             Address = "Dummy Industrial Area, Ahmedabad",
-                            GSTNo = "24ABCDE1234F1Z5",
-                            PinCode = "380015",
-                            TallyLedgerName = "DUMMY INDUSTRIES PVT LTD",
-                            CustomerType = "Regular"
-                        }
-                    },
+                            State = "Gujarat",
 
-                    //  DUMMY LINE ITEMS
-                    Details = new List<ProformaInvoiceDetail>
-            {
-                new ProformaInvoiceDetail
-                {
-                    SampleID = 1,
-                    Description = "Sample Machining Charges",
-                    Quantity = 1,
-                    Rate = 500,
-                    Amount = 500
-                },
-                new ProformaInvoiceDetail
-                {
-                    SampleID = 2,
-                    Description = "Chemical Testing Charges",
-                    Quantity = 1,
-                    Rate = 500,
-                    Amount = 500
+                            Customer = new Customer
+                            {
+                                Name = "DUMMY INDUSTRIES PVT LTD",
+                                Address = "Dummy Industrial Area, Ahmedabad",
+                                GSTNo = "24ABCDE1234F1Z5",
+                                PinCode = "380015",
+                                TallyLedgerName = "DUMMY INDUSTRIES PVT LTD",
+                                CustomerType = "Regular"
+                            }
+                        },
+
+                        //  DUMMY LINE ITEMS
+                        Details = new List<ProformaInvoiceDetail>
+                            {
+                                new ProformaInvoiceDetail
+                                {
+                                    SampleID = 1,
+                                    Description = "Sample Machining Charges",
+                                    Quantity = 1,
+                                    Rate = 500,
+                                    Amount = 500
+                                },
+                                new ProformaInvoiceDetail
+                                {
+                                    SampleID = 2,
+                                    Description = "Chemical Testing Charges",
+                                    Quantity = 1,
+                                    Rate = 500,
+                                    Amount = 500
+                                }
+                            }
+                    };
                 }
-            }
+
+                //var html = BuildHtml(pi);
+                //var result = ConvertHtmlToPdf(html);
+                //return result;
+
+                var model = new ProformaInvoicePdfModel
+                {
+                    InvoiceNo = pi.PINo,
+                    InvoiceDate = pi.PIDate,
+                    CustomerName = pi.SampleInward.Customer.Name,
+                    CustomerAddress = pi.SampleInward.Address,
+                    CustomerGst = pi.SampleInward.GstNo,
+                    State = pi.SampleInward.State,
+                    StateCode = "24", // TODO: DB se lo agar hai
+                    RefNo = pi.SampleInward.CaseNo,
+                    ReceivedDate = pi.SampleInward.CreatedOn,
+                    SubTotal = pi.SubTotal,
+                    CGST = pi.CGST,
+                    SGST = pi.SGST,
+                    IGST = pi.IGST,
+                    GrandTotal = pi.GrandTotal,
+                    AmountInWords = NumberToWords((long)pi.GrandTotal)
                 };
-            }
 
-            var html = BuildHtml(pi);
-            return ConvertHtmlToPdf(html);
-        }
-
-        private string BuildHtml(ProformaInvoiceHeader pi)
-        {
-            var templatePath = Path.Combine(
-                Directory.GetCurrentDirectory(), "Templates", "PI_Template.html");
-
-            var html = File.ReadAllText(templatePath);
-
-            var logoPath = Path.Combine(
-                Directory.GetCurrentDirectory(), "Assets", "logo.png");
-
-            var signPath = Path.Combine(
-                Directory.GetCurrentDirectory(), "Assets", "signature.png");
-
-            html = html
-                .Replace("{{LogoPath}}", $"file:///{logoPath.Replace("\\", "/")}")
-                .Replace("{{SignaturePath}}", $"file:///{signPath.Replace("\\", "/")}")
-                .Replace("{{InvoiceNo}}", pi.PINo)
-                .Replace("{{InvoiceDate}}", pi.PIDate.ToString("dd-MM-yyyy"))
-                .Replace("{{CustomerName}}", pi.SampleInward.Customer.Name)
-                .Replace("{{CustomerAddress}}", pi.SampleInward.Address)
-                .Replace("{{CustomerGST}}", pi.SampleInward.GstNo)
-                .Replace("{{State}}", pi.SampleInward.State)
-                .Replace("{{StateCode}}", "24")
-                .Replace("{{ReceivedDate}}", pi.SampleInward.CreatedOn.ToString("dd-MM-yyyy"))
-                .Replace("{{RefNo}}", pi.SampleInward.CaseNo)
-                .Replace("{{PI_ROWS}}", BuildPIRows(pi))
-                .Replace("{{SubTotal}}", pi.SubTotal.ToString("0.00"))
-                .Replace("{{CGST}}", pi.CGST.ToString("0.00"))
-                .Replace("{{SGST}}", pi.SGST.ToString("0.00"))
-                .Replace("{{IGST}}", pi.IGST.ToString("0.00"))
-                .Replace("{{GrandTotal}}", pi.GrandTotal.ToString("0.00"))
-                .Replace("{{AmountInWords}}", NumberToWords((long)pi.GrandTotal));
-
-            return html;
-        }
-        private string BuildPIRows(ProformaInvoiceHeader pi)
-        {
-            var rows = "";
-
-            var details = pi.Details?.ToList();
-
-            //  Fallback dummy rows if empty
-            if (details == null || !details.Any())
-            {
-                return @"
-        <tr>
-            <td>1</td>
-            <td>Sample Machining Charges</td>
-            <td class='center'>1</td>
-            <td class='right'>500.00</td>
-            <td class='right'>500.00</td>
-        </tr>
-        <tr>
-            <td>2</td>
-            <td>Chemical Testing Charges</td>
-            <td class='center'>1</td>
-            <td class='right'>500.00</td>
-            <td class='right'>500.00</td>
-        </tr>";
-            }
-
-            foreach (var d in details)
-            {
-                rows += $@"
-        <tr>
-            <td>{d.SampleID}</td>
-            <td>{d.Description}</td>
-            <td class='center'>{d.Quantity}</td>
-            <td class='right'>{d.Rate:0.00}</td>
-            <td class='right'>{d.Amount:0.00}</td>
-        </tr>";
-            }
-
-            return rows;
-        }
-
-
-        //  Convert HTML to PDF
-        private byte[] ConvertHtmlToPdf(string html)
-        {
-            var doc = new HtmlToPdfDocument()
-            {
-                GlobalSettings = {
-                PaperSize = PaperKind.A4,
-                Orientation = Orientation.Portrait
-            },
-                Objects = {
-                new ObjectSettings {
-                    HtmlContent = html,
-                    WebSettings = { DefaultEncoding = "utf-8" }
+                foreach (var d in pi.Details)
+                {
+                    model.Rows.Add(new ProformaInvoicePdfRow
+                    {
+                        Sample = d.SampleID.ToString(),
+                        Description = d.Description,
+                        QtyDisplay = d.Quantity.ToString(),
+                        Rate = d.Rate,
+                        Amount = d.Amount
+                    });
                 }
-            }
-            };
 
-            return _converter.Convert(doc);
+                var logoPath = Path.Combine(Directory.GetCurrentDirectory(), "Assets", "logo.png");
+                var signPath = Path.Combine(Directory.GetCurrentDirectory(), "Assets", "signature.png");
+
+                var document = new ProformaInvoiceDocument(model, logoPath, signPath);
+                var pdfBytes = document.GeneratePdf(); // QuestPDF extension
+
+                return pdfBytes;
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
         }
+
+        //private string BuildHtml(ProformaInvoiceHeader pi)
+        //{
+        //    var templatePath = Path.Combine(
+        //        Directory.GetCurrentDirectory(), "Templates", "PI_Template.html");
+
+        //    var html = File.ReadAllText(templatePath);
+
+        //    var logoPath = Path.Combine(
+        //        Directory.GetCurrentDirectory(), "Assets", "logo.png");
+
+        //    var signPath = Path.Combine(
+        //        Directory.GetCurrentDirectory(), "Assets", "signature.png");
+
+        //    html = html
+        //        .Replace("{{LogoPath}}", $"file:///{logoPath.Replace("\\", "/")}")
+        //        .Replace("{{SignaturePath}}", $"file:///{signPath.Replace("\\", "/")}")
+        //        .Replace("{{InvoiceNo}}", pi.PINo)
+        //        .Replace("{{InvoiceDate}}", pi.PIDate.ToString("dd-MM-yyyy"))
+        //        .Replace("{{CustomerName}}", pi.SampleInward.Customer.Name)
+        //        .Replace("{{CustomerAddress}}", pi.SampleInward.Address)
+        //        .Replace("{{CustomerGST}}", pi.SampleInward.GstNo)
+        //        .Replace("{{State}}", pi.SampleInward.State)
+        //        .Replace("{{StateCode}}", "24")
+        //        .Replace("{{ReceivedDate}}", pi.SampleInward.CreatedOn.ToString("dd-MM-yyyy"))
+        //        .Replace("{{RefNo}}", pi.SampleInward.CaseNo)
+        //        .Replace("{{PI_ROWS}}", BuildPIRows(pi))
+        //        .Replace("{{SubTotal}}", pi.SubTotal.ToString("0.00"))
+        //        .Replace("{{CGST}}", pi.CGST.ToString("0.00"))
+        //        .Replace("{{SGST}}", pi.SGST.ToString("0.00"))
+        //        .Replace("{{IGST}}", pi.IGST.ToString("0.00"))
+        //        .Replace("{{GrandTotal}}", pi.GrandTotal.ToString("0.00"))
+        //        .Replace("{{AmountInWords}}", NumberToWords((long)pi.GrandTotal));
+
+        //    return html;
+        //}
+        //private string BuildPIRows(ProformaInvoiceHeader pi)
+        //{
+        //    var rows = "";
+
+        //    var details = pi.Details?.ToList();
+
+        //    //  Fallback dummy rows if empty
+        //    if (details == null || !details.Any())
+        //    {
+        //        return @"
+        //<tr>
+        //    <td>1</td>
+        //    <td>Sample Machining Charges</td>
+        //    <td class='center'>1</td>
+        //    <td class='right'>500.00</td>
+        //    <td class='right'>500.00</td>
+        //</tr>
+        //<tr>
+        //    <td>2</td>
+        //    <td>Chemical Testing Charges</td>
+        //    <td class='center'>1</td>
+        //    <td class='right'>500.00</td>
+        //    <td class='right'>500.00</td>
+        //</tr>";
+        //    }
+
+        //    foreach (var d in details)
+        //    {
+        //        rows += $@"
+        //<tr>
+        //    <td>{d.SampleID}</td>
+        //    <td>{d.Description}</td>
+        //    <td class='center'>{d.Quantity}</td>
+        //    <td class='right'>{d.Rate:0.00}</td>
+        //    <td class='right'>{d.Amount:0.00}</td>
+        //</tr>";
+        //    }
+
+        //    return rows;
+        //}
+
+
+        ////  Convert HTML to PDF
+        //private byte[] ConvertHtmlToPdf(string html)
+        //{
+        //    var doc = new HtmlToPdfDocument()
+        //    {
+        //        GlobalSettings = {
+        //        PaperSize = PaperKind.A4,
+        //        Orientation = Orientation.Portrait
+        //    },
+        //        Objects = {
+        //        new ObjectSettings {
+        //            HtmlContent = html,
+        //            WebSettings = { DefaultEncoding = "utf-8" }
+        //        }
+        //    }
+        //    };
+
+        //    return _converter.Convert(doc);
+        //}
 
         private string NumberToWords(long number)
         {
