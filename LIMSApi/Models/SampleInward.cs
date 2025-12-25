@@ -1,8 +1,10 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using Microsoft.EntityFrameworkCore;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace LIMSApi.Models
 {
+    [Index(nameof(CaseNo), IsUnique = true)]
     public class SampleInward:AuditProperty
     {
         
@@ -67,7 +69,7 @@ namespace LIMSApi.Models
         public DateTime? ReviewedOn { get; set; }
 
         // Navigation Properties
-        public virtual ICollection<SampleDispatchMode> DispatchModes { get; set; } = new List<SampleDispatchMode>();
+        public virtual ICollection<SampleInwardDispatchMode> DispatchModes { get; set; } = new List<SampleInwardDispatchMode>();
         public virtual ICollection<SampleInwardContactPerson> Contacts { get; set; } = new List<SampleInwardContactPerson>();
         public virtual ICollection<SampleInwardAddressInfo> Addresses { get; set; }
         = new List<SampleInwardAddressInfo>();

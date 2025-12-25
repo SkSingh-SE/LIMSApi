@@ -67,6 +67,16 @@ namespace LIMSApi.Controllers
 
             return Ok(suggestions);
         }
+        [HttpGet("AutoSuggestedGrade")]
+        public async Task<IActionResult> AutoSuggestGrades([FromQuery] GradeSuggestionRequest request)
+        {
+            var suggestions = await _service.GetSuggestedGradeAsync(request);
+
+            if (suggestions == null || !suggestions.Any())
+                return NoContent();
+
+            return Ok(suggestions);
+        }
 
     }
 }

@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 
 namespace LIMSApi.Models
 {
-    public class SampleDispatchMode
+    public class SampleInwardDispatchMode
     {
         [Key]
         public long ID { get; set; }

@@ -149,7 +149,16 @@ namespace LIMSApi.Repositories
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.ParameterMasters where a.IsActive && a.ParameterType == "Chemical" select a;
+            var _query = from a in _context.ParameterMasters 
+                         join u in _context.ParameterUnitMasters on a.ParameterUnitID equals u.ID
+                         where a.IsActive && a.ParameterType == "Chemical" select new
+                         {
+                             a.Name,
+                             a.ID,
+                             a.ParameterType,
+                             unitID = a.ParameterUnitID,
+                             unit = u.Name
+                         };
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
@@ -162,7 +171,12 @@ namespace LIMSApi.Repositories
             var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
             {
                 Id = x.ID,
-                Name = $"{x.Name} - ({x.ParameterType})",
+                Name = $"{x.Name}",
+                AdditionalValues = new Dictionary<string, object>
+                {
+                    { "Unit", x.unit},
+                    { "UnitID", x.unitID }
+                }
             })).ToListAsync();
 
             return data;
@@ -184,7 +198,7 @@ namespace LIMSApi.Repositories
             var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
             {
                 Id = x.ID,
-                Name = $"{x.Name} - ({x.ParameterType})",
+                Name = $"{x.Name}",
             })).ToListAsync();
 
             return data;

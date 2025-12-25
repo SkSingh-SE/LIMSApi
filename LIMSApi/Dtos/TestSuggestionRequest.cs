@@ -6,4 +6,10 @@
         public long? ProductConditionID { get; set; }
         public string GradeIDs { get; set; }
     }
+
+    public class GradeSuggestionRequest
+    {
+        public long? MetalClassificationID { get; set; }
+        public long? ProductConditionID { get; set; }
+    }
 }

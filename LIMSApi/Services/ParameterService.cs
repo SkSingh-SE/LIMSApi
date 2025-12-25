@@ -158,10 +158,10 @@ namespace LIMSApi.Services
 
     //        // 2️⃣ Build Parameter Value Map
     //        var valueMap = manualValues
-    //            .Where(x => x.NumericValue.HasValue)
+    //            .Where(x => x.Value.HasValue)
     //            .ToDictionary(
     //                x => x.TestParameterID,
-    //                x => x.NumericValue!.Value
+    //                x => x.Value!.Value
     //            );
 
     //        // 3️⃣ Fetch Calculated Parameters Used in This Test
@@ -181,7 +181,7 @@ namespace LIMSApi.Services
     //            {
     //                ResultHeaderID = resultHeaderId,
     //                TestParameterID = param.ID,
-    //                NumericValue = calculatedValue,
+    //                Value = calculatedValue,
     //                IsPass = true // will be updated by spec check next
     //            };
 

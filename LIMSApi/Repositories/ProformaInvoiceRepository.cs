@@ -94,7 +94,7 @@ namespace LIMSApi.Repositories
                                 decimal usedValue = method.Quantity; // HOURS / LOAD / etc
 
                                 var (rate, configId) = await GetRateBySelectionAsync(
-                                    method.TestMethodID,
+                                    method.LaboratoryTestID,
                                     method.SelectionType,
                                     method.Value.Value
                                 );
@@ -117,33 +117,42 @@ namespace LIMSApi.Repositories
                             }
                         }
 
-                        // ---------------- CHEMICAL TESTS ----------------
+                        // ---------------- CHEMICAL TESTS (NEW LOGIC) ----------------
                         foreach (var ct in plan.ChemicalTests)
                         {
+                            // Count selected elements once
                             var usedElements = ct.Elements.Count(x => x.Selected);
 
-                            var (rate, configId) = await GetRateBySelectionAsync(
-                                ct.TestMethod,
-                                "Element",
-                                usedElements
-                            );
-
-                            var amount = rate;
-                            totalTestAmount += amount;
-
-                            piTestDetails.Add(new ProformaInvoiceDetail
+                            // Loop over each selected TestType
+                            foreach (var tt in ct.TestTypes.Where(t => t.IsSelected))
                             {
-                                SampleID = sd.ID,
-                                ChargeType = "ChemicalTest",
-                                Description = "Chemical Test",
-                                Quantity = 1,
-                                Rate = rate,
-                                Amount = amount,
-                                SelectionType = "Element",
-                                UsedValue = usedElements,
-                                InvoiceCaseConfigID = configId
-                            });
+                                long labTestId = tt.LaboratoryTestID ?? 0;
+
+                                // Fetch rate for this particular test type
+                                var (rate, configId) = await GetRateBySelectionAsync(
+                                    labTestId,
+                                    "Element",
+                                    usedElements
+                                );
+
+                                var amount = rate;
+                                totalTestAmount += amount;
+
+                                piTestDetails.Add(new ProformaInvoiceDetail
+                                {
+                                    SampleID = sd.ID,
+                                    ChargeType = "ChemicalTest",
+                                    Description = $"Chemical Test - {tt.Name}",   // more meaningful
+                                    Quantity = 1,
+                                    Rate = rate,
+                                    Amount = amount,
+                                    SelectionType = "Element",
+                                    UsedValue = usedElements,
+                                    InvoiceCaseConfigID = configId
+                                });
+                            }
                         }
+
                     }
                 }
 

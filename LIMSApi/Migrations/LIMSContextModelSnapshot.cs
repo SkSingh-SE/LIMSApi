@@ -22,6 +22,54 @@ namespace LIMSApi.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("LIMSApi.Models.AmendmentRequest", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("ReportHeaderID")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SupportingDocumentsJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("ReportHeaderID");
+
+                    b.ToTable("AmendmentRequests");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.AreaMaster", b =>
                 {
                     b.Property<long>("ID")
@@ -265,7 +313,7 @@ namespace LIMSApi.Migrations
                     b.Property<long?>("Specification2")
                         .HasColumnType("bigint");
 
-                    b.Property<long>("TestMethod")
+                    b.Property<long?>("TestMethod")
                         .HasColumnType("bigint");
 
                     b.Property<string>("UlrNo")
@@ -274,9 +322,9 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.HasIndex("SamplePlanID");
+                    b.HasIndex("SampleTestPlanID");
 
-                    b.ToTable("ChemicalTest");
+                    b.ToTable("ChemicalTests");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ChemicalTestElement", b =>
@@ -318,7 +366,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("ParameterID");
 
-                    b.ToTable("ChemicalTestElement");
+                    b.ToTable("ChemicalTestElements");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ChemicalTestType", b =>
@@ -335,6 +383,9 @@ namespace LIMSApi.Migrations
                     b.Property<bool>("IsSelected")
                         .HasColumnType("bit");
 
+                    b.Property<long?>("LaboratoryTestID")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -343,7 +394,9 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("ChemicalTestID");
 
-                    b.ToTable("ChemicalTestType");
+                    b.HasIndex("LaboratoryTestID");
+
+                    b.ToTable("ChemicalTestTypes");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.CityMaster", b =>
@@ -1921,7 +1974,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("SampleTestPlanID");
 
-                    b.ToTable("GeneralTest");
+                    b.ToTable("GeneralTests");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.GeneralTestMethod", b =>
@@ -1936,6 +1989,9 @@ namespace LIMSApi.Migrations
                         .HasColumnType("bit");
 
                     b.Property<long>("GeneralTestID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("LaboratoryTestID")
                         .HasColumnType("bigint");
 
                     b.Property<int>("Quantity")
@@ -1954,9 +2010,6 @@ namespace LIMSApi.Migrations
                     b.Property<long?>("TestCaseID")
                         .HasColumnType("bigint");
 
-                    b.Property<long>("TestMethodID")
-                        .HasColumnType("bigint");
-
                     b.Property<string>("UlrNo")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -1968,7 +2021,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("GeneralTestID");
 
-                    b.ToTable("GeneralTestMethod");
+                    b.ToTable("GeneralTestMethods");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.GroupMaster", b =>
@@ -2488,9 +2541,6 @@ namespace LIMSApi.Migrations
                     b.Property<long?>("LabDepartmentID")
                         .HasColumnType("bigint");
 
-                    b.Property<long?>("MetalClassificationID")
-                        .HasColumnType("bigint");
-
                     b.Property<long?>("ModifiedBy")
                         .HasColumnType("bigint");
 
@@ -2510,8 +2560,6 @@ namespace LIMSApi.Migrations
                     b.HasKey("ID");
 
                     b.HasIndex("LabDepartmentID");
-
-                    b.HasIndex("MetalClassificationID");
 
                     b.HasIndex("SubGroup")
                         .IsUnique();
@@ -2566,6 +2614,110 @@ namespace LIMSApi.Migrations
                     b.HasIndex("ParameterID");
 
                     b.ToTable("LaboratoryTestParameter");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.LongTermRecord", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DataJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<long>("LongTermTestID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("LongTermTestID");
+
+                    b.ToTable("LongTermRecords");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.LongTermTest", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DurationHours")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<long>("SampleID")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<long>("TestResultHeaderID")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("SampleID");
+
+                    b.HasIndex("TestResultHeaderID");
+
+                    b.ToTable("LongTermTests");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.MakerMaster", b =>
@@ -3360,6 +3512,296 @@ namespace LIMSApi.Migrations
                     b.ToTable("RemarkMasters");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.Report", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<string>("CertificateNo")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("GeneratedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("GeneratedBy")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PdfPath")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("ReportHeaderID")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ReportNo")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SnapshotJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("ReportHeaderID");
+
+                    b.ToTable("Reports");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.ReportBlock", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<string>("BlockType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("ReportID")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("ReportID");
+
+                    b.ToTable("ReportBlocks");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.ReportHeader", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<string>("CertificateNo")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("GeneratedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("GeneratedBy")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PdfPath")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ReportNo")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("SampleID")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SnapshotJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long?>("WorkflowInstanceId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("SampleID");
+
+                    b.ToTable("ReportHeaders");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.ReportTemplate", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsLocked")
+                        .HasColumnType("bit");
+
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("TemplateCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("TestType")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<long?>("TestTypeID")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("TestTypeID");
+
+                    b.ToTable("ReportTemplates");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.ReportTemplateBlock", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<string>("BlockType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ConditionExpression")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ConfigJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("ReportTemplateID")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("ReportTemplateID");
+
+                    b.ToTable("ReportTemplateBlocks");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.RoleMaster", b =>
                 {
                     b.Property<long>("ID")
@@ -3490,6 +3932,9 @@ namespace LIMSApi.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsTestingCompleted")
+                        .HasColumnType("bit");
+
                     b.Property<decimal>("MachiningAmount")
                         .HasColumnType("decimal(18,2)");
 
@@ -3530,7 +3975,7 @@ namespace LIMSApi.Migrations
 
                     b.Property<string>("SampleNo")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("SampleStatus")
                         .IsRequired()
@@ -3541,6 +3986,9 @@ namespace LIMSApi.Migrations
 
                     b.Property<string>("TestInstructions")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("TestingCompletedOn")
+                        .HasColumnType("datetime2");
 
                     b.Property<long?>("TpiAgencyID")
                         .HasColumnType("bigint");
@@ -3555,28 +4003,14 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("InwardID");
 
+                    b.HasIndex("MetalClassificationID");
+
+                    b.HasIndex("ProductConditionID");
+
+                    b.HasIndex("SampleNo")
+                        .IsUnique();
+
                     b.ToTable("SampleDetails");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.SampleDispatchMode", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<long>("DispatchModeID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("InwardID")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("InwardID");
-
-                    b.ToTable("SampleDispatchModes");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SampleInward", b =>
@@ -3712,6 +4146,9 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
+                    b.HasIndex("CaseNo")
+                        .IsUnique();
+
                     b.HasIndex("CustomerID");
 
                     b.ToTable("SampleInwards");
@@ -3810,6 +4247,27 @@ namespace LIMSApi.Migrations
                     b.HasIndex("InwardID");
 
                     b.ToTable("InwardContacts");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.SampleInwardDispatchMode", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<long>("DispatchModeID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("InwardID")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("InwardID");
+
+                    b.ToTable("InwardDispatchModes");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SampleTestPlan", b =>
@@ -3939,12 +4397,6 @@ namespace LIMSApi.Migrations
                     b.Property<bool?>("IsUNS")
                         .HasColumnType("bit");
 
-                    b.Property<long?>("MetalCalssificationID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("MetalClassificationID")
-                        .HasColumnType("bigint");
-
                     b.Property<long>("SpecificationHeaderID")
                         .HasColumnType("bigint");
 
@@ -3955,8 +4407,6 @@ namespace LIMSApi.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("ID");
-
-                    b.HasIndex("MetalCalssificationID");
 
                     b.HasIndex("SpecificationHeaderID");
 
@@ -4966,6 +5416,196 @@ namespace LIMSApi.Migrations
                     b.ToTable("TestMethodSubGroups");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.TestResultHeader", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<string>("CertificateNo")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("EquipmentID")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsNabl")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("IsOverallPass")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LabNo")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("LaboratoryTestID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("SampleID")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("StartedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<long?>("TestID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("TestPlanID")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("LaboratoryTestID");
+
+                    b.HasIndex("SampleID");
+
+                    b.ToTable("TestResultHeaders");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.TestResultImage", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<string>("Caption")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FilePath")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<long>("TestResultHeaderID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("UploadReferenceID")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("TestResultHeaderID");
+
+                    b.ToTable("TestResultImages");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.TestResultParameter", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<string>("Formula")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsAdditional")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsCalculated")
+                        .HasColumnType("bit");
+
+                    b.Property<bool?>("IsWithinLimit")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal?>("MaxValue")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("MinValue")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<long>("ParameterID")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ParameterName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Remarks")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long?>("SpecificationLineID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("TestResultHeaderID")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal?>("Value")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("TestResultHeaderID");
+
+                    b.ToTable("TestResultParameters");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.TestTypeMaster", b =>
                 {
                     b.Property<long>("ID")
@@ -5567,6 +6207,17 @@ namespace LIMSApi.Migrations
                     b.ToTable("WorkflowTransitions");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.AmendmentRequest", b =>
+                {
+                    b.HasOne("LIMSApi.Models.ReportHeader", "ReportHeader")
+                        .WithMany()
+                        .HasForeignKey("ReportHeaderID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ReportHeader");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.AreaMaster", b =>
                 {
                     b.HasOne("LIMSApi.Models.CityMaster", "City")
@@ -5582,7 +6233,9 @@ namespace LIMSApi.Migrations
                 {
                     b.HasOne("LIMSApi.Models.SampleTestPlan", "SampleTestPlan")
                         .WithMany("ChemicalTests")
-                        .HasForeignKey("SamplePlanID");
+                        .HasForeignKey("SampleTestPlanID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("SampleTestPlan");
                 });
@@ -5614,7 +6267,13 @@ namespace LIMSApi.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("LIMSApi.Models.LaboratoryTest", "LaboratoryTest")
+                        .WithMany()
+                        .HasForeignKey("LaboratoryTestID");
+
                     b.Navigation("ChemicalTest");
+
+                    b.Navigation("LaboratoryTest");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.CityMaster", b =>
@@ -5970,13 +6629,7 @@ namespace LIMSApi.Migrations
                         .WithMany()
                         .HasForeignKey("LabDepartmentID");
 
-                    b.HasOne("LIMSApi.Models.MetalClassificationMaster", "MetalClassification")
-                        .WithMany()
-                        .HasForeignKey("MetalClassificationID");
-
                     b.Navigation("LabDepartment");
-
-                    b.Navigation("MetalClassification");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.LaboratoryTestInvoiceCase", b =>
@@ -6011,6 +6664,36 @@ namespace LIMSApi.Migrations
                     b.Navigation("LaboratoryTest");
 
                     b.Navigation("Parameter");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.LongTermRecord", b =>
+                {
+                    b.HasOne("LIMSApi.Models.LongTermTest", "LongTermTest")
+                        .WithMany("Records")
+                        .HasForeignKey("LongTermTestID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("LongTermTest");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.LongTermTest", b =>
+                {
+                    b.HasOne("LIMSApi.Models.SampleDetail", "Sample")
+                        .WithMany()
+                        .HasForeignKey("SampleID")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LIMSApi.Models.TestResultHeader", "TestResultHeader")
+                        .WithMany("LongTermTests")
+                        .HasForeignKey("TestResultHeaderID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Sample");
+
+                    b.Navigation("TestResultHeader");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.MaterialTestMapping", b =>
@@ -6137,6 +6820,59 @@ namespace LIMSApi.Migrations
                     b.Navigation("SampleInward");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.Report", b =>
+                {
+                    b.HasOne("LIMSApi.Models.ReportHeader", "ReportHeader")
+                        .WithMany("Reports")
+                        .HasForeignKey("ReportHeaderID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ReportHeader");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.ReportBlock", b =>
+                {
+                    b.HasOne("LIMSApi.Models.Report", "Report")
+                        .WithMany("Blocks")
+                        .HasForeignKey("ReportID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Report");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.ReportHeader", b =>
+                {
+                    b.HasOne("LIMSApi.Models.SampleDetail", "Sample")
+                        .WithMany()
+                        .HasForeignKey("SampleID")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Sample");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.ReportTemplate", b =>
+                {
+                    b.HasOne("LIMSApi.Models.LaboratoryTest", "Test")
+                        .WithMany()
+                        .HasForeignKey("TestTypeID");
+
+                    b.Navigation("Test");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.ReportTemplateBlock", b =>
+                {
+                    b.HasOne("LIMSApi.Models.ReportTemplate", "Template")
+                        .WithMany("Blocks")
+                        .HasForeignKey("ReportTemplateID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Template");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.RoleMenuMapping", b =>
                 {
                     b.HasOne("LIMSApi.Models.MenuMaster", "Menu")
@@ -6175,16 +6911,17 @@ namespace LIMSApi.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("SampleInward");
-                });
+                    b.HasOne("LIMSApi.Models.MetalClassificationMaster", "MetalClassification")
+                        .WithMany()
+                        .HasForeignKey("MetalClassificationID");
 
-            modelBuilder.Entity("LIMSApi.Models.SampleDispatchMode", b =>
-                {
-                    b.HasOne("LIMSApi.Models.SampleInward", "SampleInward")
-                        .WithMany("DispatchModes")
-                        .HasForeignKey("InwardID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                    b.HasOne("LIMSApi.Models.ProductConditionMaster", "ProductCondition")
+                        .WithMany()
+                        .HasForeignKey("ProductConditionID");
+
+                    b.Navigation("MetalClassification");
+
+                    b.Navigation("ProductCondition");
 
                     b.Navigation("SampleInward");
                 });
@@ -6222,6 +6959,17 @@ namespace LIMSApi.Migrations
                     b.Navigation("SampleInward");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.SampleInwardDispatchMode", b =>
+                {
+                    b.HasOne("LIMSApi.Models.SampleInward", "SampleInward")
+                        .WithMany("DispatchModes")
+                        .HasForeignKey("InwardID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SampleInward");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.SampleTestPlan", b =>
                 {
                     b.HasOne("LIMSApi.Models.SampleDetail", "SampleDetail")
@@ -6235,10 +6983,6 @@ namespace LIMSApi.Migrations
 
             modelBuilder.Entity("LIMSApi.Models.SpecificationGrade", b =>
                 {
-                    b.HasOne("LIMSApi.Models.MetalClassificationMaster", "MetalClassification")
-                        .WithMany()
-                        .HasForeignKey("MetalCalssificationID");
-
                     b.HasOne("LIMSApi.Models.SpecificationHeader", null)
                         .WithMany("Grades")
                         .HasForeignKey("SpecificationHeaderID")
@@ -6248,8 +6992,6 @@ namespace LIMSApi.Migrations
                     b.HasOne("LIMSApi.Models.TestMethodSpecification", "TestMethodSpecification")
                         .WithMany()
                         .HasForeignKey("TestMethodSpecificationID");
-
-                    b.Navigation("MetalClassification");
 
                     b.Navigation("TestMethodSpecification");
                 });
@@ -6416,6 +7158,47 @@ namespace LIMSApi.Migrations
                         .HasForeignKey("TestMethodID");
 
                     b.Navigation("TestMethod");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.TestResultHeader", b =>
+                {
+                    b.HasOne("LIMSApi.Models.LaboratoryTest", "LaboratoryTest")
+                        .WithMany()
+                        .HasForeignKey("LaboratoryTestID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LIMSApi.Models.SampleDetail", "Sample")
+                        .WithMany()
+                        .HasForeignKey("SampleID")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("LaboratoryTest");
+
+                    b.Navigation("Sample");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.TestResultImage", b =>
+                {
+                    b.HasOne("LIMSApi.Models.TestResultHeader", "TestResultHeader")
+                        .WithMany("Images")
+                        .HasForeignKey("TestResultHeaderID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("TestResultHeader");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.TestResultParameter", b =>
+                {
+                    b.HasOne("LIMSApi.Models.TestResultHeader", "TestResultHeader")
+                        .WithMany("Parameters")
+                        .HasForeignKey("TestResultHeaderID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("TestResultHeader");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.UserMaster", b =>
@@ -6599,6 +7382,11 @@ namespace LIMSApi.Migrations
                     b.Navigation("Parameters");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.LongTermTest", b =>
+                {
+                    b.Navigation("Records");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.MaterialTestMapping", b =>
                 {
                     b.Navigation("LaboratoryTests");
@@ -6617,6 +7405,21 @@ namespace LIMSApi.Migrations
             modelBuilder.Entity("LIMSApi.Models.ProformaInvoiceHeader", b =>
                 {
                     b.Navigation("Details");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.Report", b =>
+                {
+                    b.Navigation("Blocks");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.ReportHeader", b =>
+                {
+                    b.Navigation("Reports");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.ReportTemplate", b =>
+                {
+                    b.Navigation("Blocks");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.RoleMaster", b =>
@@ -6672,6 +7475,15 @@ namespace LIMSApi.Migrations
             modelBuilder.Entity("LIMSApi.Models.TestMethodSpecification", b =>
                 {
                     b.Navigation("Versions");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.TestResultHeader", b =>
+                {
+                    b.Navigation("Images");
+
+                    b.Navigation("LongTermTests");
+
+                    b.Navigation("Parameters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.Workflow", b =>

@@ -9,9 +9,12 @@ namespace LIMSApi.Models
         [Key]
         public long ID { get; set; }
         public long ChemicalTestID { get; set; }
-        public string Name { get; set; }
+        public long? LaboratoryTestID { get; set; }
+        public string Name { get; set; } = string.Empty;
         public bool IsSelected { get; set; }
         [ForeignKey("ChemicalTestID"),JsonIgnore]
         public virtual ChemicalTest? ChemicalTest { get; set; }
+        [ForeignKey("LaboratoryTestID")]
+        public virtual LaboratoryTest? LaboratoryTest { get; set; }
     }
 }

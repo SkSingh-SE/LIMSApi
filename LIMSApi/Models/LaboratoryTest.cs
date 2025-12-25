@@ -16,12 +16,9 @@ namespace LIMSApi.Models
         [StringLength(100),]
         public required string SubGroup { get; set; }
         public string? Equation { get; set; }
-        public long? MetalClassificationID { get; set; }
 
         [ForeignKey("LabDepartmentID")]
         public virtual DepartmentMaster? LabDepartment { get; set; }
-        [ForeignKey("MetalClassificationID")]
-        public virtual MetalClassificationMaster? MetalClassification { get; set; }
         public ICollection<LaboratoryTestInvoiceCase> InvoiceCases { get; set; } = new List<LaboratoryTestInvoiceCase>();
         //public ICollection<TestMethodSubGroup> SubGroups { get; set; } = new List<TestMethodSubGroup>();
         public ICollection<LaboratoryTestParameter> Parameters { get; set; } = new List<LaboratoryTestParameter>();

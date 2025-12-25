@@ -188,5 +188,44 @@ namespace LIMSApi.Repositories
             return results;
         }
 
+        public async Task<List<DropdwonSelector>> GetSuggestedGradeAsync(GradeSuggestionRequest request)
+        {
+            //  Handle multiple grade IDs (comma-separated)
+            
+            //  Build base query
+            var query = from m in _context.MaterialTestMappings
+                        join g in _context.SpecificationGrades on m.GradeID equals g.ID into gm
+                        from g in gm.DefaultIfEmpty()
+                        where m.IsActive
+                        select new
+                        {
+                            m.GradeID,
+                            g.Grade,
+                            m.MetalClassificationID,
+                            m.ProductConditionID
+                        };
+
+            // Filter by MetalClassificationID (if provided)
+            if (request.MetalClassificationID.HasValue)
+                query = query.Where(x => x.MetalClassificationID == request.MetalClassificationID);
+
+            // Filter by ProductConditionID (if provided)
+            if (request.ProductConditionID.HasValue)
+                query = query.Where(x => x.ProductConditionID == request.ProductConditionID);
+
+
+            // Get distinct tests
+            var results = await query
+                .Select(x => new DropdwonSelector
+                {
+                    Id = (long)x.GradeID,
+                    Name = x.Grade
+                })
+                .Distinct()
+                .ToListAsync();
+
+            return results;
+        }
+
     }
 }

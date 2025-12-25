@@ -1,4 +1,6 @@
 ﻿using LIMSApi.Dtos;
+using LIMSApi.Helpers;
+using LIMSApi.Helpers.Enums;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
@@ -11,10 +13,14 @@ namespace LIMSApi.Services
     {
         private readonly ICuttingRepository _cuttingRepository;
         private readonly ILogger<CuttingService> _logger;
-        public CuttingService(ICuttingRepository cuttingRepository,  ILogger<CuttingService> logger)
+        private LoggedInUserDTO loggedInUser;
+        private readonly ISampleStatusService _sampleStatusService;
+        public CuttingService(ICuttingRepository cuttingRepository,  ILogger<CuttingService> logger, ISampleStatusService sampleStatusService)
         {
             _cuttingRepository = cuttingRepository;
             _logger = logger;
+            _sampleStatusService = sampleStatusService;
+            loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
         public async Task CreateAsync(CuttingChargeHeader payload)
@@ -28,27 +34,44 @@ namespace LIMSApi.Services
             if (payload.Samples == null || payload.Samples.Count == 0)
                 throw new Exception("At least one sample is required.");
 
-            
+
             var exists = await _cuttingRepository.ExistsByInwardIdAsync(payload.InwardID);
 
             if (exists)
                 throw new Exception("Cutting charges already exist for this inward.");
 
-            
+            var statusJobs = new List<Func<Task>>();
             foreach (var sample in payload.Samples)
             {
                 sample.SampleTotal = sample.CuttingChargeDetails.Sum(x => x.Total);
+                statusJobs.Add(async () =>
+                {
+                    await _sampleStatusService.ForceAutoStatusAsync(
+                        sample.ID,
+                        SampleStatus.PREPARATION_COMPLETED,
+                        loggedInUser.EmployeeID
+                    );
+                });
             }
 
             payload.GrandTotal = payload.Samples.Sum(x => x.SampleTotal);
 
             await _cuttingRepository.CreateAsync(payload);
             _logger.LogInformation("Cutting charges created successfully for InwardID: {InwardID}", payload.InwardID);
+
+            // Update Status
+            foreach (var job in statusJobs)
+            {
+                await job();
+            }
+
+            
+            await _sampleStatusService.UpdateInwardStatus(payload.InwardID, InwardStatus.IN_PROGRESS, loggedInUser.EmployeeID);
         }
 
         public async Task<PagedResponse<object>> GetAllAsync(PageFilter filter)
         {
-             return await _cuttingRepository.GetAllAsync(filter);
+             return await _cuttingRepository.GetAllCuttingList(filter);
         }
 
         public async Task<CuttingChargeHeader?> GetByIdAsync(long id)

@@ -70,7 +70,6 @@ namespace LIMSApi.Services
 
                 // Update existing grade
                 existingGrade.Grade = grade.Grade;
-                existingGrade.MetalClassificationID = grade.MetalClassificationID;
                 existingGrade.IsUNS = grade.IsUNS;
                 existingGrade.UNSSteelNumber = grade.UNSSteelNumber;
                 existingGrade.TestMethodSpecificationID = grade.TestMethodSpecificationID;

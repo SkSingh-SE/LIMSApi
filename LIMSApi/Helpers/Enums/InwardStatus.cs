@@ -3,9 +3,12 @@
     public enum InwardStatus
     {
         NOT_STARTED,
-        IN_PROGRESS,
+        INWARD_REGISTERED,
+        INWARD_COMPLETED,
         UNDER_PLANNING,
         UNDER_REVIEW,
+        REVIEW_COMPLETED,
+        IN_PROGRESS,
         PARTIALLY_COMPLETED,
         COMPLETED,
         REJECTED,

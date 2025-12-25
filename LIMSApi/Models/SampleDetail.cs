@@ -1,18 +1,21 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using Microsoft.EntityFrameworkCore;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
 
 namespace LIMSApi.Models
 {
+    [Index(nameof(SampleNo), IsUnique = true)]
     public class SampleDetail : AuditProperty
     {
-        
+        [Key]
         public long ID { get; set; }
-        public string SampleNo { get; set; }
-        public string Details { get; set; }
+        [Required]
+        public string SampleNo { get; set; } = string.Empty;
+        public string Details { get; set; } = string.Empty;
         public long? MetalClassificationID { get; set; }
         public long? ProductConditionID { get; set; }
-        public string Remarks { get; set; }
+        public string Remarks { get; set; } = string.Empty;
         public int Quantity { get; set; }
         public bool Disabled { get; set; }
 
@@ -37,8 +40,17 @@ namespace LIMSApi.Models
         public virtual ICollection<SampleAdditionalDetail> AdditionalDetails { get; set; } = new List<SampleAdditionalDetail>();
         public virtual ICollection<SampleTestPlan> TestPlans { get; set; } = new List<SampleTestPlan>();
 
+        [ForeignKey("MetalClassificationID")]
+        public virtual MetalClassificationMaster? MetalClassification { get; set; }
+
+        [ForeignKey("ProductConditionID")]
+        public virtual ProductConditionMaster? ProductCondition { get; set; }
+
 
         [NotMapped]
         public IFormFile File { get; set; } = null!;
+
+        public bool IsTestingCompleted { get; set; }
+        public DateTime? TestingCompletedOn { get; set; }
     }
 }

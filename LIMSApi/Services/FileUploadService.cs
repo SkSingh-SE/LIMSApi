@@ -14,7 +14,7 @@ namespace LIMSApi.Services
         private readonly string _baseUploadDirectory;
         private readonly LoggedInUserDTO _loggedInUser;
         private readonly IWebHostEnvironment _env;
-        public FileUploadService(IFileUploadRepository fileUploadRepo, ILogger<FileUploadService> logger, IConfiguration configuration,IWebHostEnvironment env)
+        public FileUploadService(IFileUploadRepository fileUploadRepo, ILogger<FileUploadService> logger, IConfiguration configuration, IWebHostEnvironment env)
         {
             _fileUploadRepository = fileUploadRepo;
             _logger = logger;
@@ -39,8 +39,15 @@ namespace LIMSApi.Services
                     throw new ArgumentException("File cannot be empty");
 
                 string originalFileName = Path.GetFileName(file.FileName);
-                string originalFileExtension = Path.GetExtension(file.FileName);
+                string originalFileExtension = Path.GetExtension(originalFileName);
+
                 string newFileName = $"{Guid.NewGuid()}_{fileType}{(string.IsNullOrWhiteSpace(identifier) ? "" : $"_{identifier}")}";
+
+                // Append extension ONLY if missing
+                if (string.IsNullOrWhiteSpace(Path.GetExtension(newFileName)))
+                {
+                    newFileName += originalFileExtension;
+                }
 
                 string relativeDirectory = getFileTypePath(fileType, year);
                 string uploadDirectory = Path.Combine(_env.WebRootPath, relativeDirectory);
@@ -98,6 +105,14 @@ namespace LIMSApi.Services
                     uploadDirectory = Path.Combine(uploadDirectory, year.ToString());
                 }
             }
+            else if (fileType == FileType.Report)
+            {
+                uploadDirectory = Path.Combine(_baseUploadDirectory, "Report");
+                if (year.HasValue)
+                {
+                    uploadDirectory = Path.Combine(uploadDirectory, year.ToString());
+                }
+            }
             else if (fileType == FileType.Material)
             {
                 uploadDirectory = Path.Combine(_baseUploadDirectory, "Material");
@@ -132,7 +147,7 @@ namespace LIMSApi.Services
         public async Task RemoveFileAsync(long Id)
         {
             var existingFile = await _fileUploadRepository.GetUploadFile(Id);
-            if(existingFile != null)
+            if (existingFile != null)
             {
                 if (File.Exists(existingFile.FilePath))
                 {
@@ -140,6 +155,18 @@ namespace LIMSApi.Services
                     await _fileUploadRepository.RemoveFile(existingFile);
                 }
             }
+        }
+
+        public string GetFilePath(string fileName, FileType fileType, int? year)
+        {
+            string relativeDirectory = getFileTypePath(fileType, year);
+            string uploadDirectory = Path.Combine(_env.WebRootPath, relativeDirectory);
+
+            if (!Directory.Exists(uploadDirectory))
+                Directory.CreateDirectory(uploadDirectory);
+
+            string filePath = Path.Combine(uploadDirectory, fileName);
+            return filePath;
         }
     }
 }

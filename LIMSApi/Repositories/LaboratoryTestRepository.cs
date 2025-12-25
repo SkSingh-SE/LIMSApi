@@ -41,9 +41,9 @@ namespace LIMSApi.Repositories
         {
             //return await _context.LaboratoryTests.Include(t => t.SubGroups).FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
             return await _context.LaboratoryTests
-                .Include(y=> y.InvoiceCases)
+                .Include(y => y.InvoiceCases)
                 .ThenInclude(z => z.InvoiceCaseConfiguration)
-                .Include(x=> x.Parameters)
+                .Include(x => x.Parameters)
                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
@@ -60,8 +60,6 @@ namespace LIMSApi.Repositories
                          where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
                          join d in _context.DepartmentMasters on c.LabDepartmentID equals d.ID into dsGroup
                          from ds in dsGroup.DefaultIfEmpty()
-                         join m in _context.MetalClassificationMasters on c.MetalClassificationID equals m.ID into mcGroup
-                         from mc in mcGroup.DefaultIfEmpty()
                          select new
                          {
                              c.ID,
@@ -69,7 +67,6 @@ namespace LIMSApi.Repositories
                              c.LabDepartmentID,
                              DepartmentName = ds.Name,
                              c.SubGroup,
-                             MetalClassification = mc.Name
                          };
 
 
@@ -81,8 +78,7 @@ namespace LIMSApi.Repositories
                 _query = _query.Where(x =>
                                     (!string.IsNullOrEmpty(x.Name) && x.Name.ToLower().Contains(search)) ||
                                     (!string.IsNullOrEmpty(x.DepartmentName) && x.DepartmentName.ToLower().Contains(search)) ||
-                                    (!string.IsNullOrEmpty(x.SubGroup) && x.SubGroup.ToLower().Contains(search)) ||
-                                    (!string.IsNullOrEmpty(x.MetalClassification) && x.MetalClassification.ToLower().Contains(search))
+                                    (!string.IsNullOrEmpty(x.SubGroup) && x.SubGroup.ToLower().Contains(search))
                                     );
             }
 
@@ -107,8 +103,47 @@ namespace LIMSApi.Repositories
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.LaboratoryTests where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode select a;
+            var _query = from a in _context.LaboratoryTests
+                         join d in _context.DepartmentMasters on a.LabDepartmentID equals d.ID
+                         where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode
+                         select new
+                         {
+                             a.ID,
+                             a.SubGroup,
+                             Department = d.Name
+                         };
 
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var search = searchTerm.Trim().ToLower();
+                _query = _query.Where(x =>(x.SubGroup != null && x.SubGroup.ToLower().Contains(search)) || x.ID.ToString().Contains(search));
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            {
+                Id = x.ID,
+                Name = $"{x.SubGroup} ({x.Department}) ",
+            })).ToListAsync();
+
+            return data;
+        }
+        public async Task<List<DropdwonSelector>> GetChemicalTestMethodDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = from a in _context.LaboratoryTests
+                         join d in _context.DepartmentMasters on a.LabDepartmentID equals d.ID
+                         where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode
+                         select new
+                         {
+                             a.ID,
+                             a.SubGroup,
+                             Department = d.Name
+                         };
+
+            _query = _query.Where(x => x.Department.ToString().ToLower().Contains("chemical"));
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var search = searchTerm.Trim().ToLower();
@@ -120,7 +155,7 @@ namespace LIMSApi.Repositories
             var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
             {
                 Id = x.ID,
-                Name = x.SubGroup,
+                Name = $"{x.SubGroup} ({x.Department}) ",
             })).ToListAsync();
 
             return data;

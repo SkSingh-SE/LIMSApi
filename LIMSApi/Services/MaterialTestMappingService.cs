@@ -69,5 +69,10 @@ namespace LIMSApi.Services
         {
             return await _repository.GetSuggestedTestsAsync(request);
         }
+
+        public async Task<List<DropdwonSelector>> GetSuggestedGradeAsync(GradeSuggestionRequest request)
+        {
+            return await _repository.GetSuggestedGradeAsync(request);
+        }
     }
 }

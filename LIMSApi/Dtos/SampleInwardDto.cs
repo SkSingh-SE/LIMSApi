@@ -184,7 +184,7 @@ namespace LIMSApi.Dtos
         public Dictionary<string, bool> TestTypes { get; set; } = new();
         public long Specification1 { get; set; }
         public long? Specification2 { get; set; }
-        public long TestMethod { get; set; }
+        public long? TestMethod { get; set; }
         public List<ChemicalTestElementDto> Elements { get; set; } = new();
     }
 

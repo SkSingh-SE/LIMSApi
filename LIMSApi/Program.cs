@@ -9,6 +9,7 @@ using LIMSApi.Repositories;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services;
 using LIMSApi.Services.Interface;
+using LIMSApi.ServiceWORepo;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -236,6 +237,15 @@ builder.Services.AddScoped<IMaterialTestMappingService, MaterialTestMappingServi
 builder.Services.AddScoped<ISampleStatusService, SampleStatusService>();
 builder.Services.AddScoped<ICuttingService, CuttingService>();
 
+
+
+//Service without Repo
+
+builder.Services.AddScoped<ITestResultService, TestResultService>();
+builder.Services.AddScoped<FormulaEvaluator>();
+builder.Services.AddScoped<IReportService, ReportService>();
+builder.Services.AddScoped<IReportTemplateService, ReportTemplateService>();
+builder.Services.AddScoped<IReportBlockGenerator, ReportBlockGenerator>();
 
 // Third party services
 builder.Services.AddScoped<EmailService>();

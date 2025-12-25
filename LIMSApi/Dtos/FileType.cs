@@ -6,6 +6,7 @@
         Employee,
         Sample,
         Test,
+        Report,
         Material,
         Product,
         Other

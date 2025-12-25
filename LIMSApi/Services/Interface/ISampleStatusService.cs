@@ -6,6 +6,6 @@ namespace LIMSApi.Services.Interface
     {
         Task<(bool ok, string msg)> UpdateStatusAsync(long sampleId, SampleStatus newStatus, long empId);
         Task ForceAutoStatusAsync(long sampleId, SampleStatus newStatus, long empId);
-        Task<bool> UpdateInwardStatus(long inwardId, long empId);
+        Task<bool> UpdateInwardStatus(long inwardId, InwardStatus newStatus, long empId);
     }
 }

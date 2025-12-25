@@ -233,30 +233,34 @@ namespace LIMSApi.Repositories
         {
             if (pageNo < 0) pageNo = 0;
 
-            var query =
-                from a in _context.SpecificationHeaders
-                join g in _context.SpecificationGrades on a.ID equals g.SpecificationHeaderID
-                join tc in _context.TestMethodSpecifications on g.TestMethodSpecificationID equals tc.ID into tcGroup
-                from tc in tcGroup.DefaultIfEmpty()
-                where a.IsActive && g.MetalClassificationID == metalId
-                select new
-                {
-                    g.ID,
-                    g.MetalClassificationID,
-                    AliasName = a.AliasName + "-" + g.Grade + (tc != null ? ("-" + tc.Name) : "")
-                };
+            var query = from m in _context.MaterialTestMappings
+                        join g in _context.SpecificationGrades on m.GradeID equals g.ID into gm
+                        from g in gm.DefaultIfEmpty()
+                        join h in _context.SpecificationHeaders on g.SpecificationHeaderID equals h.ID
+                        join tc in _context.TestMethodSpecifications on g.TestMethodSpecificationID equals tc.ID into tcGroup
+                        from tc in tcGroup.DefaultIfEmpty()
+                        where m.IsActive
+                        select new
+                        {
+                            m.GradeID,
+                            Grade = g.Grade,
+                            AliasName = h.AliasName + "-" + g.Grade + (tc != null ? ("-" + tc.Name) : ""),
+                            m.MetalClassificationID,
+                            m.ProductConditionID
+                        };
 
+            // Filter by MetalClassificationID (if provided)
             if (metalId > 0)
-            {
                 query = query.Where(x => x.MetalClassificationID == metalId);
-            }
+
+
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var search = searchTerm.Trim().ToLower();
                 query = query.Where(x =>
                     (x.AliasName != null && x.AliasName.ToLower().Contains(search))
-                    || x.ID.ToString().Contains(search));
+                    || x.GradeID.ToString().Contains(search));
             }
 
             var skip = pageNo * pageSize;
@@ -266,7 +270,7 @@ namespace LIMSApi.Repositories
                 .Take(pageSize)
                 .Select(x => new DropdwonSelector
                 {
-                    Id = x.ID,
+                    Id = (long)x.GradeID,
                     Name = x.AliasName
                 })
                 .ToListAsync();

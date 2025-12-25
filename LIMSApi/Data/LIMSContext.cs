@@ -82,7 +82,7 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<SubGroupMaster> SubGroupMasters { get; set; }
     public virtual DbSet<SupplierMaster> SupplierMasters { get; set; }
     public virtual DbSet<SampleInward> SampleInwards { get; set; }
-    public virtual DbSet<SampleDispatchMode> SampleDispatchModes { get; set; }
+    public virtual DbSet<SampleInwardDispatchMode> InwardDispatchModes { get; set; }
     public virtual DbSet<SampleInwardContactPerson> InwardContacts { get; set; }
     public virtual DbSet<SampleInwardAddressInfo> InwardAddresses { get; set; }
     public virtual DbSet<SampleDetail> SampleDetails { get; set; }
@@ -123,6 +123,23 @@ public partial class LIMSContext : DbContext
     public DbSet<TestMappingLaboratoryTest> MappingLaboratoryTests { get; set; }
     public DbSet<ProformaInvoiceHeader> ProformaInvoiceHeader { get; set; }
     public DbSet<ProformaInvoiceDetail> ProformaInvoiceDetails { get; set; }
+    public DbSet<TestResultHeader> TestResultHeaders { get; set; }
+    public DbSet<TestResultParameter> TestResultParameters { get; set; }
+    public DbSet<TestResultImage> TestResultImages { get; set; }
+    public DbSet<GeneralTest> GeneralTests { get; set; }
+    public DbSet<GeneralTestMethod> GeneralTestMethods { get; set; }
+    public DbSet<ChemicalTest> ChemicalTests { get; set; }
+    public DbSet<ChemicalTestElement> ChemicalTestElements { get; set; }
+    public DbSet<ChemicalTestType> ChemicalTestTypes { get; set; }
+    public DbSet<LongTermTest> LongTermTests { get; set; }
+    public DbSet<LongTermRecord> LongTermRecords { get; set; }
+
+    public DbSet<ReportHeader> ReportHeaders { get; set; }
+    public DbSet<Report> Reports { get; set; }
+    public DbSet<ReportBlock> ReportBlocks { get; set; }
+    public DbSet<ReportTemplate> ReportTemplates { get; set; }
+    public DbSet<ReportTemplateBlock> ReportTemplateBlocks { get; set; }
+    public DbSet<AmendmentRequest> AmendmentRequests { get; set; }
 
     //    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     //#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the BankName= syntax to read it from _configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
@@ -133,7 +150,7 @@ public partial class LIMSContext : DbContext
         modelBuilder.Entity<SpecificationLineLaboratoryTest>()
       .HasKey(x => new { x.SpecificationLineID, x.LaboratoryTestID });
 
-        modelBuilder.Entity<MetalClassificationParameter>().HasKey(x => new {x.MetalClassificationID,x.ParameterID});
+        modelBuilder.Entity<MetalClassificationParameter>().HasKey(x => new { x.MetalClassificationID, x.ParameterID });
 
         // Workflow → Steps (keep cascade)
         modelBuilder.Entity<WorkflowStep>()
@@ -169,6 +186,90 @@ public partial class LIMSContext : DbContext
             .WithMany()
             .HasForeignKey(l => l.StepID)
             .OnDelete(DeleteBehavior.NoAction);
+
+        // --------------------------------------------------
+        // SampleDetail → TestResultHeader
+        // ❌ NO CASCADE (prevents multiple cascade paths)
+        // --------------------------------------------------
+        modelBuilder.Entity<TestResultHeader>()
+            .HasOne(trh => trh.Sample)
+            .WithMany() // SampleDetail does not need navigation here
+            .HasForeignKey(trh => trh.SampleID)
+            .OnDelete(DeleteBehavior.Restrict); // or NoAction
+
+        // --------------------------------------------------
+        // SampleDetail → ReportHeader
+        // ❌ NO CASCADE (workflow-controlled delete)
+        // --------------------------------------------------
+        modelBuilder.Entity<ReportHeader>()
+            .HasOne(rh => rh.Sample)
+            .WithMany()
+            .HasForeignKey(rh => rh.SampleID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // --------------------------------------------------
+        // ReportHeader → Report
+        // ✅ CASCADE (version lifecycle)
+        // --------------------------------------------------
+        modelBuilder.Entity<Report>()
+            .HasOne(r => r.ReportHeader)
+            .WithMany(h => h.Reports)
+            .HasForeignKey(r => r.ReportHeaderID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // --------------------------------------------------
+        // Report → ReportBlock
+        // ✅ CASCADE
+        // --------------------------------------------------
+        modelBuilder.Entity<ReportBlock>()
+            .HasOne(rb => rb.Report)
+            .WithMany(r => r.Blocks)
+            .HasForeignKey(rb => rb.ReportID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<LongTermTest>()
+        .HasOne(l => l.Sample)
+        .WithMany()
+        .HasForeignKey(l => l.SampleID)
+        .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<SampleTestPlan>()
+        .HasOne(p => p.SampleDetail)
+        .WithMany(s => s.TestPlans)
+        .HasForeignKey(p => p.SampleID)
+        .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<GeneralTest>()
+        .HasOne(g => g.SampleTestPlan)
+        .WithMany(p => p.GeneralTests)
+        .HasForeignKey(g => g.SampleTestPlanID)
+        .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<GeneralTestMethod>()
+        .HasOne(m => m.GeneralTest)
+        .WithMany(g => g.Methods)
+        .HasForeignKey(m => m.GeneralTestID)
+        .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ChemicalTest>()
+        .HasOne(c => c.SampleTestPlan)
+        .WithMany(p => p.ChemicalTests)
+        .HasForeignKey(c => c.SampleTestPlanID)
+        .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ChemicalTestElement>()
+        .HasOne(e => e.ChemicalTest)
+        .WithMany(c => c.Elements)
+        .HasForeignKey(e => e.ChemicalTestID)
+        .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ChemicalTestType>()
+        .HasOne(t => t.ChemicalTest)
+        .WithMany(c => c.TestTypes)
+        .HasForeignKey(t => t.ChemicalTestID)
+        .OnDelete(DeleteBehavior.Cascade);
+
+
     }
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);

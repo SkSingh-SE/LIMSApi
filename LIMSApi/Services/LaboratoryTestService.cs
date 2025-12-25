@@ -53,7 +53,6 @@ namespace LIMSApi.Services
             existingTestMethod.LabDepartmentID = model.LabDepartmentID;
             existingTestMethod.SubGroup = model.SubGroup;
             existingTestMethod.Equation = model.Equation;
-            existingTestMethod.MetalClassificationID = model.MetalClassificationID;
             existingTestMethod.ModifiedOn = DateTime.UtcNow;
             existingTestMethod.ModifiedBy = loggedInUser.EmployeeID;
 
@@ -106,6 +105,10 @@ namespace LIMSApi.Services
         public async Task<List<DropdwonSelector>> GetTestMethodDropdown(string? searchTerm, int pageNo, int pageSize)
         {
             return await _testMethodRepository.GetTestMethodDropdown(searchTerm, pageNo, pageSize);
+        }
+        public async Task<List<DropdwonSelector>> GetChemicalTestMethodDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _testMethodRepository.GetChemicalTestMethodDropdown(searchTerm, pageNo, pageSize);
         }
         public async Task<List<object>> GetTestCases(long labTestId)
         {
