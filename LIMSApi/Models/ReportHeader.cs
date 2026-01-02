@@ -7,7 +7,7 @@ namespace LIMSApi.Models
     {
         [Key]
         public long ID { get; set; }
-
+        public string CustomerName { get; set; } = string.Empty;
         public long SampleID { get; set; }
         public string ReportNo { get; set; } = string.Empty;
 

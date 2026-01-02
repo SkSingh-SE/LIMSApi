@@ -15,7 +15,9 @@ namespace LIMSApi.Models
         public string Status { get; set; } = "Pending";
         // Pending | Approved | Rejected
 
-        public string? SupportingDocumentsJson { get; set; }
+        public string FilePath { get; set; } = string.Empty;
+        public string FileName { get; set; } = string.Empty;
+        public long? UploadReferenceID { get; set; }
 
         [ForeignKey(nameof(ReportHeaderID))]
         public ReportHeader? ReportHeader { get; set; }

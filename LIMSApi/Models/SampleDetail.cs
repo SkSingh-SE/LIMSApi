@@ -33,6 +33,8 @@ namespace LIMSApi.Models
         [StringLength(255)]
         public string? SampleFilePath { get; set; }
         public string? FileName { get; set; }
+        
+        public bool IsReportUnlocked { get; set; }
         public long InwardID { get; set; }
         [ForeignKey("InwardID"), JsonIgnore]
         public virtual SampleInward? SampleInward { get; set; } = null!;

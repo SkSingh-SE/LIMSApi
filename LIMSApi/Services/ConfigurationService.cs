@@ -48,7 +48,7 @@ namespace LIMSApi.Services
             existing.Description = Configuration.Description;
             existing.ModifiedOn = DateTime.UtcNow;
 
-            await _ConfigurationRepository.UpdateConfiguration(Configuration);
+            await _ConfigurationRepository.UpdateConfiguration(existing);
             _logger.LogInformation("Configuration {KeyName} updated successfully", Configuration.KeyName);
         }
 

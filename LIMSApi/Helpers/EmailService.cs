@@ -51,7 +51,12 @@ namespace LIMSApi.Helpers
                 return false;
             }
         }
-        public async Task<bool> SendEmailWithAttachment(string toEmail, string subject, string body, List<IFormFile> attachments)
+        public async Task<bool> SendEmailWithAttachment(
+    string toEmail,
+    string subject,
+    string body,
+    string attachmentPath,
+    string attachmentName)
         {
             try
             {
@@ -60,20 +65,21 @@ namespace LIMSApi.Helpers
                     _configuration["SmtpSettings:SenderName"],
                     _configuration["SmtpSettings:SenderEmail"]
                 ));
-                email.To.Add(new MailboxAddress("", toEmail));
+                email.To.Add(MailboxAddress.Parse(toEmail));
                 email.Subject = subject;
 
-                var bodyBuilder = new BodyBuilder { HtmlBody = body };
-
-                // Handle attachments
-                if (attachments != null && attachments.Count > 0)
+                var bodyBuilder = new BodyBuilder
                 {
-                    foreach (var attachment in attachments)
-                    {
-                        using var memoryStream = new MemoryStream();
-                        await attachment.CopyToAsync(memoryStream);
-                        bodyBuilder.Attachments.Add(attachment.FileName, memoryStream.ToArray(), ContentType.Parse(attachment.ContentType));
-                    }
+                    HtmlBody = body
+                };
+
+                if (!string.IsNullOrWhiteSpace(attachmentPath) && File.Exists(attachmentPath))
+                {
+                    bodyBuilder.Attachments.Add(
+                        attachmentName,
+                        File.ReadAllBytes(attachmentPath),
+                        ContentType.Parse("application/pdf")
+                    );
                 }
 
                 email.Body = bodyBuilder.ToMessageBody();
@@ -81,7 +87,7 @@ namespace LIMSApi.Helpers
                 using var smtp = new SmtpClient();
                 await smtp.ConnectAsync(
                     _configuration["SmtpSettings:Server"],
-                    int.Parse(_configuration["SmtpSettings:Port"]),
+                     int.Parse((_configuration["SmtpSettings:Port"]) ?? "457"),
                     SecureSocketOptions.StartTls
                 );
 
@@ -92,6 +98,7 @@ namespace LIMSApi.Helpers
 
                 await smtp.SendAsync(email);
                 await smtp.DisconnectAsync(true);
+
                 return true;
             }
             catch (Exception ex)
@@ -100,5 +107,6 @@ namespace LIMSApi.Helpers
                 return false;
             }
         }
+
     }
 }

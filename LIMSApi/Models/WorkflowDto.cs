@@ -25,7 +25,7 @@
         public string Action { get; set; } = string.Empty;
         public string? Alias { get; set; }
         public long? ToStepID { get; set; }   
-        public string? ToStepName { get; set; }// <-- use orderNo here, not Id
+        public string? ToStepName { get; set; }// <-- use orderNo here, not ID
 
     }
 

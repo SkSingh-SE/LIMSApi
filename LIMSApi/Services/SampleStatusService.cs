@@ -33,11 +33,12 @@ namespace LIMSApi.Services
                 { SampleStatus.REPORT_SENT_FOR_CUSTOMER_REVIEW, 6 },
                 { SampleStatus.CUSTOMER_REQUESTED_AMENDMENT, 6 },
                 { SampleStatus.AMENDMENT_IN_PROGRESS, 6 },
-                { SampleStatus.AMENDMENT_COMPLETED, 6 },
                 { SampleStatus.PAYMENT_COMPLETED, 6 },
                 { SampleStatus.FINAL_REPORT_APPROVED, 6 },
 
-                // 5 = TESTING / EXECUTION
+            // 5 = TESTING / EXECUTION
+                { SampleStatus.AMENDMENT_COMPLETED, 5 },
+                { SampleStatus.REPORT_AMENDMENT_APPROVED, 5 },
                 { SampleStatus.TPI_WAITING_FOR_AGENT, 5 },
                 { SampleStatus.TPI_IN_PROGRESS, 5 },
                 { SampleStatus.TPI_COMPLETED, 5 },
@@ -65,7 +66,7 @@ namespace LIMSApi.Services
             };
 
 
-       
+
 
         public async Task<(bool ok, string msg)> UpdateStatusAsync(long sampleId, SampleStatus newStatus, long empId)
         {

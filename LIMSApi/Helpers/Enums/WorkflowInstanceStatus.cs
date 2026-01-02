@@ -11,7 +11,8 @@
     {
         Report_Review,
         Request_Review,
-        TestResult
+        TestResult,
+        Report_Amendment
     }
     public static class WorkFlowEntityTypeExtensions
     {
@@ -22,6 +23,7 @@
                 WorkFlowEntityType.Report_Review => "Report Review",
                 WorkFlowEntityType.Request_Review => "Request Review",
                 WorkFlowEntityType.TestResult => "TestResult",
+                WorkFlowEntityType.Report_Amendment => "Report Amendment",
                 _ => "Unknown"
             };
         }

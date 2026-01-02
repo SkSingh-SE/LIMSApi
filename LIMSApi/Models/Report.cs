@@ -23,6 +23,7 @@ namespace LIMSApi.Models
         public string? PdfPath { get; set; }
 
         public string? CertificateNo { get; set; }
+        public bool IsAmendmentAllowed { get; set; } = false;
 
         [ForeignKey(nameof(ReportHeaderID))]
         public ReportHeader? ReportHeader { get; set; }

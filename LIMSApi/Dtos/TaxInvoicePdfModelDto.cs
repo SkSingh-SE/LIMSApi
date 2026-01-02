@@ -1,29 +1,31 @@
 ﻿namespace LIMSApi.Dtos
 {
-    public class ProformaInvoicePdfModel
+    public class TaxInvoicePdfModelDto
     {
-        public string InvoiceNo { get; set; } = "";
+        public string InvoiceNo { get; set; } = null!;
         public DateTime InvoiceDate { get; set; }
 
-        public string CustomerName { get; set; } = "";
-        public string CustomerAddress { get; set; } = "";
-        public string CustomerGst { get; set; } = "";
-        public string State { get; set; } = "";
-        public string StateCode { get; set; } = "24";
-        public string RefNo { get; set; } = "";
+        public string CustomerName { get; set; } = null!;
+        public string CustomerAddress { get; set; } = null!;
+        public string CustomerGst { get; set; } = null!;
+        public string State { get; set; } = null!;
+        public string StateCode { get; set; } = null!;
+
         public DateTime ReceivedDate { get; set; }
+        public string RefNo { get; set; } = null!;
+
+        public List<TaxInvoiceRow> Rows { get; set; } = new();
 
         public decimal SubTotal { get; set; }
         public decimal CGST { get; set; }
         public decimal SGST { get; set; }
         public decimal IGST { get; set; }
         public decimal GrandTotal { get; set; }
-        public string AmountInWords { get; set; } = "";
 
-        public List<ProformaInvoicePdfRow> Rows { get; set; } = new();
+        public string AmountInWords { get; set; } = null!;
     }
 
-    public class ProformaInvoicePdfRow
+    public class TaxInvoiceRow
     {
         public string Sample { get; set; } = "";
         public string Description { get; set; } = "";
@@ -31,5 +33,4 @@
         public decimal Rate { get; set; }
         public decimal Amount { get; set; }
     }
-
 }

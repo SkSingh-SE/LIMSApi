@@ -141,6 +141,11 @@ public partial class LIMSContext : DbContext
     public DbSet<ReportTemplateBlock> ReportTemplateBlocks { get; set; }
     public DbSet<AmendmentRequest> AmendmentRequests { get; set; }
 
+    public DbSet<PaymentOrder> PaymentOrders { get; set; }
+    public DbSet<ReportAmendmentToken> ReportAmendmentTokens { get; set; }
+    public DbSet<CustomerAmendment> CustomerAmendments { get; set; }
+    public DbSet<TaxInvoice> TaxInvoices { get; set; }
+
     //    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     //#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the BankName= syntax to read it from _configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
     //        => optionsBuilder.UseSqlServer("Data Source=localhost;Initial Catalog=LIMS_Backup;Integrated Security=True;Encrypt=False");
@@ -198,7 +203,7 @@ public partial class LIMSContext : DbContext
             .OnDelete(DeleteBehavior.Restrict); // or NoAction
 
         // --------------------------------------------------
-        // SampleDetail → ReportHeader
+        // SampleDetail → Report
         // ❌ NO CASCADE (workflow-controlled delete)
         // --------------------------------------------------
         modelBuilder.Entity<ReportHeader>()
@@ -208,7 +213,7 @@ public partial class LIMSContext : DbContext
             .OnDelete(DeleteBehavior.Restrict);
 
         // --------------------------------------------------
-        // ReportHeader → Report
+        // Report → Report
         // ✅ CASCADE (version lifecycle)
         // --------------------------------------------------
         modelBuilder.Entity<Report>()
@@ -269,6 +274,41 @@ public partial class LIMSContext : DbContext
         .HasForeignKey(t => t.ChemicalTestID)
         .OnDelete(DeleteBehavior.Cascade);
 
+        modelBuilder.Entity<TaxInvoice>()
+    .HasOne(x => x.Inward)
+    .WithMany()
+    .HasForeignKey(x => x.InwardID)
+    .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<TaxInvoice>()
+    .HasOne(x => x.Customer)
+    .WithMany()
+    .HasForeignKey(x => x.CustomerID)
+    .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<PaymentOrder>()
+    .HasOne(x => x.Customer)
+    .WithMany()
+    .HasForeignKey(x => x.CustomerId)
+    .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<PaymentOrder>()
+    .HasOne(x => x.TaxInvoice)
+    .WithMany()
+    .HasForeignKey(x => x.TaxInvoiceID)
+    .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<CustomerAmendment>()
+    .HasOne(x => x.Report)
+    .WithMany()
+    .HasForeignKey(x => x.ReportID)
+    .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<CustomerAmendment>()
+    .HasOne(x => x.Token)
+    .WithMany()
+    .HasForeignKey(x => x.TokenID)
+    .OnDelete(DeleteBehavior.Restrict);
 
     }
 

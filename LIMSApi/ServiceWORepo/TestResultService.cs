@@ -194,7 +194,7 @@ namespace LIMSApi.ServiceWORepo
                         SampleID = sampleId,
                         LaboratoryTestID = g.LaboratoryTestId,
                         TestPlanID = planId,
-                        Status = "Completed"
+                        Status = "In-Progress"
                     };
 
                     _db.TestResultHeaders.Add(header);
@@ -224,8 +224,9 @@ namespace LIMSApi.ServiceWORepo
                     param.Remarks = p.Remarks;
                     param.MinValue = p.MinValue;
                     param.MaxValue = p.MaxValue;
-
-                    param.Value = Convert.ToDecimal(p.Value);
+                    if(header.Status == "Completed" && p.Value == 0)
+                        throw new Exception("All parameters must have values greater than 0 after completion.");
+                    param.Value = p.Value.HasValue ? Convert.ToDecimal(p.Value) : p.Value;
                 }
 
 
@@ -346,7 +347,7 @@ namespace LIMSApi.ServiceWORepo
         public async Task<object> UpdateParameterAsync(long headerId, long paramId, TestResultParameterDto update)
         {
             var param = await _db.TestResultParameters
-                .FirstOrDefaultAsync(x => x.ID == paramId && x.TestResultHeaderID == headerId);
+                .FirstOrDefaultAsync(x => x.ParameterID == paramId && x.TestResultHeaderID == headerId);
 
             if (param == null)
                 throw new Exception("Parameter not found.");
@@ -377,11 +378,11 @@ namespace LIMSApi.ServiceWORepo
             // -----------------------------------------------------------------
             var missing = header.Parameters
                 .Where(x =>
-                    x.Value == null
+                    x.Value == null || x.Value == 0
                 ).ToList();
 
             if (missing.Any())
-                throw new Exception("All parameters must have values before completion.");
+                throw new Exception("All parameters must have values greater than 0 before completion.");
 
             // -----------------------------------------------------------------
             // 2. Calculate Overall Pass/Fail
@@ -796,7 +797,7 @@ namespace LIMSApi.ServiceWORepo
                         else
                         {
                             // Early termination (LIMS standard)
-                            ltt.Status = "ForceCompleted";
+                            ltt.Status = "Force Completed";
                             ltt.EndedAt = DateTime.UtcNow;
                         }
                     }
@@ -850,10 +851,7 @@ namespace LIMSApi.ServiceWORepo
                         _db.ReportHeaders.Add(report);
                         await _db.SaveChangesAsync();
 
-                        await _workflowService.StartWorkflow(
-                            report.ID,
-                            WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Report_Review)
-                        );
+                        await _workflowService.StartWorkflow(report.ID,WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Report_Review));
                     }
 
                 }

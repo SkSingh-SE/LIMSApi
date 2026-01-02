@@ -60,7 +60,7 @@ namespace LIMSApi.Services
 
             var savedWorkflow = await _repository.AddWorkflowAsync(workflow);
 
-            // Build mapping OrderNo → Id
+            // Build mapping OrderNo → ID
             var stepMap = savedWorkflow.Steps.Where(s => s.IsActive).ToDictionary(s => s.Name, s => s.ID);
             foreach (var s in dto.Steps)
             {
@@ -467,103 +467,288 @@ namespace LIMSApi.Services
 
         }
 
-        private async Task ApplyEntityStatusUpdate(WorkflowInstance instance, string action, bool isFinal, string ActionName)
+        //private async Task ApplyEntityStatusUpdate(WorkflowInstance instance, string action, bool isFinal, string ActionName)
+        //{
+        //    switch (instance.EntityType)
+        //    {
+        //        case "Request Review":
+        //            if (isFinal)
+        //            {
+        //                var inward = await _sampleInwardRepo.GetSampleInwardById(instance.EntityID);
+        //                if (inward != null)
+        //                {
+        //                    if (inward.SampleDetails == null)
+        //                    {
+        //                        throw new KeyNotFoundException($"No Sample Details found for the Inward Request {instance.EntityID}.");
+        //                    }
+
+        //                    if (action == "Next")
+        //                    {
+        //                        foreach (var detail in inward.SampleDetails)
+        //                        {
+        //                            if (detail.PreparationRequired)
+        //                            {
+        //                                await _statusService.ForceAutoStatusAsync(detail.ID, SampleStatus.PREPARATION_REQUIRED, _loggedInUser.EmployeeID);
+        //                            }
+        //                            else
+        //                            {
+        //                                await _statusService.ForceAutoStatusAsync(detail.ID, SampleStatus.REQUEST_APPROVED, _loggedInUser.EmployeeID);
+        //                            }
+        //                        }
+        //                        await _statusService.UpdateInwardStatus(inward.ID, InwardStatus.REVIEW_COMPLETED, _loggedInUser.EmployeeID);
+
+        //                    }
+        //                    else if (action == "Back")
+        //                    {
+        //                        foreach (var detail in inward.SampleDetails)
+        //                        {
+        //                            await _statusService.ForceAutoStatusAsync(detail.ID, SampleStatus.UNDER_REVIEW_REQUEST, _loggedInUser.EmployeeID);
+        //                        }
+        //                        await _statusService.UpdateInwardStatus(inward.ID, InwardStatus.UNDER_PLANNING, _loggedInUser.EmployeeID);
+        //                    }
+        //                    else if (action == "Cancel")
+        //                    {
+        //                        foreach (var detail in inward.SampleDetails)
+        //                        {
+        //                            await _statusService.ForceAutoStatusAsync(detail.ID, SampleStatus.REQUEST_REJECTED, _loggedInUser.EmployeeID);
+        //                        }
+        //                        await _statusService.UpdateInwardStatus(inward.ID, InwardStatus.UNDER_PLANNING, _loggedInUser.EmployeeID);
+        //                    }
+        //                }
+        //            }
+        //            break;
+        //        case "Report Review":
+        //            {
+        //                if (isFinal)
+        //                {
+
+        //                    var reportHeader = await context.ReportHeaders.Where(x => x.ID == instance.EntityID)
+        //                        .Include(x => x.Sample).FirstOrDefaultAsync();
+        //                    if (reportHeader != null && reportHeader.Sample != null)
+        //                    {
+        //                        switch (action){
+        //                            case "Next":
+        //                                await _statusService.ForceAutoStatusAsync(reportHeader.SampleID, SampleStatus.FINAL_REPORT_APPROVED, _loggedInUser.EmployeeID);
+        //                                reportHeader.Status = "Completed";
+        //                                break;
+        //                            case "Back":
+        //                                await _statusService.ForceAutoStatusAsync(reportHeader.SampleID, SampleStatus.REPORT_UNDER_REVIEW, _loggedInUser.EmployeeID);
+        //                                reportHeader.Status = "Send Back";
+        //                                break;
+        //                            case "Cancel":
+        //                                await _statusService.ForceAutoStatusAsync(reportHeader.SampleID, SampleStatus.REPORT_REJECTED_BY_INTERNAL, _loggedInUser.EmployeeID);
+        //                                reportHeader.Status = "Rejected";
+        //                                break;
+        //                            default:
+        //                                break;
+        //                        }
+        //                        await context.SaveChangesAsync();
+        //                    }
+        //                }
+        //                break;
+        //            }
+        //        case "Report Amendment":
+        //            {
+        //                if (!isFinal)
+        //                    break;
+
+        //                var amendment = await context.AmendmentRequests
+        //                    .Include(a => a.Report)
+        //                    .FirstOrDefaultAsync(a => a.ID == instance.EntityID);
+
+        //                if (amendment == null || amendment.Report == null)
+        //                    throw new KeyNotFoundException(
+        //                        $"Amendment Request {instance.EntityID} not found.");
+
+        //                switch (action)
+        //                {
+        //                    case "Next": // APPROVE
+        //                        amendment.Status = "Approved";
+
+        //                        // Report will be regenerated in STEP 3
+        //                        amendment.Report.Status = "Approved";
+
+        //                        await _statusService.ForceAutoStatusAsync(
+        //                            amendment.Report.SampleID,
+        //                            SampleStatus.REPORT_AMENDMENT_APPROVED,
+        //                            _loggedInUser.EmployeeID);
+        //                        break;
+
+        //                    case "Back": // SEND BACK
+        //                        amendment.Status = "Pending";
+        //                        amendment.Report.Status = "Under Amendment Review";
+        //                        break;
+
+        //                    case "Cancel": // REJECT
+        //                        amendment.Status = "Rejected";
+        //                        amendment.Report.Status = "Report Generated";
+
+        //                        await _statusService.ForceAutoStatusAsync(
+        //                            amendment.Report.SampleID,
+        //                            SampleStatus.REPORT_AMENDED_REJECTED,
+        //                            _loggedInUser.EmployeeID);
+        //                        break;
+        //                }
+
+        //                await context.SaveChangesAsync();
+        //                break;
+        //            }
+        //            //case "Plan Approval":
+        //            //    if (action == "Approve" && isFinal)
+        //            //        await _planRepository.UpdatePlanStatus(instance.EntityID, "Plan Approved");
+
+        //            //    if (action == "Reject")
+        //            //        await _planRepository.UpdatePlanStatus(instance.EntityID, "Plan Rejected");
+        //            //    break;
+
+        //            //case "Sample Inward":
+        //            //    if (action == "Approve" && isFinal)
+        //            //        await _inwardRepository.UpdateInwardStatus(instance.EntityID, "Inward Approved");
+        //            //    break;
+
+        //            // Add more modules later if needed
+        //    }
+        //}
+        private async Task ApplyEntityStatusUpdate(WorkflowInstance instance,string action,bool isFinal,string actionName)
         {
+            if (!isFinal)
+                return;
+
             switch (instance.EntityType)
             {
                 case "Request Review":
-                    if (isFinal)
-                    {
-                        var inward = await _sampleInwardRepo.GetSampleInwardById(instance.EntityID);
-                        if (inward != null)
-                        {
-                            if (inward.SampleDetails == null)
-                            {
-                                throw new KeyNotFoundException($"No Sample Details found for the Inward Request {instance.EntityID}.");
-                            }
-
-                            if (action == "Next")
-                            {
-                                foreach (var detail in inward.SampleDetails)
-                                {
-                                    if (detail.PreparationRequired)
-                                    {
-                                        await _statusService.ForceAutoStatusAsync(detail.ID, SampleStatus.PREPARATION_REQUIRED, _loggedInUser.EmployeeID);
-                                    }
-                                    else
-                                    {
-                                        await _statusService.ForceAutoStatusAsync(detail.ID, SampleStatus.REQUEST_APPROVED, _loggedInUser.EmployeeID);
-                                    }
-                                }
-                                await _statusService.UpdateInwardStatus(inward.ID, InwardStatus.REVIEW_COMPLETED, _loggedInUser.EmployeeID);
-
-                            }
-                            else if (action == "Back")
-                            {
-                                foreach (var detail in inward.SampleDetails)
-                                {
-                                    await _statusService.ForceAutoStatusAsync(detail.ID, SampleStatus.UNDER_REVIEW_REQUEST, _loggedInUser.EmployeeID);
-                                }
-                                await _statusService.UpdateInwardStatus(inward.ID, InwardStatus.UNDER_PLANNING, _loggedInUser.EmployeeID);
-                            }
-                            else if (action == "Cancel")
-                            {
-                                foreach (var detail in inward.SampleDetails)
-                                {
-                                    await _statusService.ForceAutoStatusAsync(detail.ID, SampleStatus.REQUEST_REJECTED, _loggedInUser.EmployeeID);
-                                }
-                                await _statusService.UpdateInwardStatus(inward.ID, InwardStatus.UNDER_PLANNING, _loggedInUser.EmployeeID);
-                            }
-                        }
-                    }
+                    await HandleRequestReview(instance.EntityID, action);
                     break;
+
                 case "Report Review":
-                    {
-                        if (isFinal)
-                        {
+                    await HandleReportReview(instance.EntityID, action);
+                    break;
 
-                            var reportHeader = await context.ReportHeaders.Where(x => x.ID == instance.EntityID)
-                                .Include(x => x.Sample).FirstOrDefaultAsync();
-                            if (reportHeader != null && reportHeader.Sample != null)
-                            {
-                                switch (action){
-                                    case "Next":
-                                        await _statusService.ForceAutoStatusAsync(reportHeader.SampleID, SampleStatus.FINAL_REPORT_APPROVED, _loggedInUser.EmployeeID);
-                                        reportHeader.Status = "Completed";
-                                        break;
-                                    case "Back":
-                                        await _statusService.ForceAutoStatusAsync(reportHeader.SampleID, SampleStatus.REPORT_UNDER_REVIEW, _loggedInUser.EmployeeID);
-                                        reportHeader.Status = "Send Back";
-                                        break;
-                                    case "Cancel":
-                                        await _statusService.ForceAutoStatusAsync(reportHeader.SampleID, SampleStatus.REPORT_REJECTED_BY_INTERNAL, _loggedInUser.EmployeeID);
-                                        reportHeader.Status = "Rejected";
-                                        break;
-                                    default:
-                                        break;
-                                }
-                                await context.SaveChangesAsync();
-                            }
-                        }
-                        break;
-                    }
-
-                    //case "Plan Approval":
-                    //    if (action == "Approve" && isFinal)
-                    //        await _planRepository.UpdatePlanStatus(instance.EntityID, "Plan Approved");
-
-                    //    if (action == "Reject")
-                    //        await _planRepository.UpdatePlanStatus(instance.EntityID, "Plan Rejected");
-                    //    break;
-
-                    //case "Sample Inward":
-                    //    if (action == "Approve" && isFinal)
-                    //        await _inwardRepository.UpdateInwardStatus(instance.EntityID, "Inward Approved");
-                    //    break;
-
-                    // Add more modules later if needed
+                case "Report Amendment":
+                    await HandleReportAmendment(instance.EntityID, action);
+                    break;
             }
         }
+        private async Task HandleRequestReview(long inwardId, string action)
+        {
+            var inward = await _sampleInwardRepo.GetSampleInwardById(inwardId)
+                ?? throw new KeyNotFoundException("Inward not found.");
 
+            if (inward.SampleDetails == null || !inward.SampleDetails.Any())
+                throw new KeyNotFoundException("Sample details missing.");
+
+            switch (action)
+            {
+                case WorkflowActions.Next:
+                    foreach (var d in inward.SampleDetails)
+                    {
+                        var status = d.PreparationRequired
+                            ? SampleStatus.PREPARATION_REQUIRED
+                            : SampleStatus.REQUEST_APPROVED;
+
+                        await _statusService.ForceAutoStatusAsync(d.ID, status, _loggedInUser.EmployeeID);
+                    }
+
+                    await _statusService.UpdateInwardStatus(
+                        inward.ID,
+                        InwardStatus.REVIEW_COMPLETED,
+                        _loggedInUser.EmployeeID);
+                    break;
+
+                case WorkflowActions.Back:
+                    await _statusService.UpdateInwardStatus(
+                        inward.ID,
+                        InwardStatus.UNDER_PLANNING,
+                        _loggedInUser.EmployeeID);
+                    break;
+
+                case WorkflowActions.Cancel:
+                    await _statusService.UpdateInwardStatus(
+                        inward.ID,
+                        InwardStatus.UNDER_PLANNING,
+                        _loggedInUser.EmployeeID);
+                    break;
+            }
+        }
+        private async Task HandleReportReview(long reportHeaderId, string action)
+        {
+            var report = await context.ReportHeaders
+                .Include(x => x.Sample)
+                .FirstOrDefaultAsync(x => x.ID == reportHeaderId)
+                ?? throw new KeyNotFoundException("Report not found.");
+
+            switch (action)
+            {
+                case WorkflowActions.Next:
+                    report.Status = "Completed";
+                    await _statusService.ForceAutoStatusAsync(
+                        report.SampleID,
+                        SampleStatus.FINAL_REPORT_APPROVED,
+                        _loggedInUser.EmployeeID);
+                    break;
+
+                case WorkflowActions.Back:
+                    report.Status = "Send Back";
+                    await _statusService.ForceAutoStatusAsync(
+                        report.SampleID,
+                        SampleStatus.REPORT_UNDER_REVIEW,
+                        _loggedInUser.EmployeeID);
+                    break;
+
+                case WorkflowActions.Cancel:
+                    report.Status = "Rejected";
+                    await _statusService.ForceAutoStatusAsync(
+                        report.SampleID,
+                        SampleStatus.REPORT_REJECTED_BY_INTERNAL,
+                        _loggedInUser.EmployeeID);
+                    break;
+            }
+
+            await context.SaveChangesAsync();
+        }
+        private async Task HandleReportAmendment(long amendmentId, string action)
+        {
+            var amendment = await context.AmendmentRequests
+                .Include(a => a.ReportHeader)
+                .FirstOrDefaultAsync(a => a.ID == amendmentId)
+                ?? throw new KeyNotFoundException("Amendment not found.");
+
+            switch (action)
+            {
+                case WorkflowActions.Next: // APPROVED
+                    amendment.Status = "Approved";
+                    amendment.ReportHeader.Status = "Approved";
+
+                    await _statusService.ForceAutoStatusAsync(
+                        amendment.ReportHeader.SampleID,
+                        SampleStatus.REPORT_AMENDMENT_APPROVED,
+                        _loggedInUser.EmployeeID);
+                    break;
+
+                case WorkflowActions.Back: // SEND BACK
+                    amendment.Status = "Pending";
+                    amendment.ReportHeader.Status = "Under Amendment Review";
+                    break;
+
+                case WorkflowActions.Cancel: // REJECT
+                    amendment.Status = "Rejected";
+                    amendment.ReportHeader.Status = "Report Generated";
+
+                    await _statusService.ForceAutoStatusAsync(
+                        amendment.ReportHeader.SampleID,
+                        SampleStatus.REPORT_AMENDED_REJECTED,
+                        _loggedInUser.EmployeeID);
+                    break;
+            }
+
+            await context.SaveChangesAsync();
+        }
+
+    }
+    public static class WorkflowActions
+    {
+        public const string Next = "Next";
+        public const string Back = "Back";
+        public const string Cancel = "Cancel";
     }
 }

@@ -17,6 +17,8 @@ namespace LIMSApi.Models
         public string State { get; set; }
         public string Country { get; set; }
         public string Type { get; set; }
+        public string MobileNo { get; set; } = string.Empty;
+        public string EmailId { get; set; } = string.Empty;
         public long InwardID { get; set; }
         [ForeignKey("InwardID"), JsonIgnore]
         public virtual SampleInward? SampleInward { get; set; } = null!;

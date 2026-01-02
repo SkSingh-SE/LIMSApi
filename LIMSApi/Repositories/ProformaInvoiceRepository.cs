@@ -362,7 +362,7 @@ namespace LIMSApi.Repositories
                 //var result = ConvertHtmlToPdf(html);
                 //return result;
 
-                var model = new ProformaInvoicePdfModel
+                var model = new TaxInvoicePdfModelDto
                 {
                     InvoiceNo = pi.PINo,
                     InvoiceDate = pi.PIDate,
@@ -383,7 +383,7 @@ namespace LIMSApi.Repositories
 
                 foreach (var d in pi.Details)
                 {
-                    model.Rows.Add(new ProformaInvoicePdfRow
+                    model.Rows.Add(new TaxInvoiceRow
                     {
                         Sample = d.SampleID.ToString(),
                         Description = d.Description,

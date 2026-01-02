@@ -57,8 +57,16 @@ namespace LIMSApi.Dtos
         public List<ReportTestDto> ChemicalTests { get; set; }
         public List<ReportLongTermTestDto> LongTermTests { get; set; }
         public List<ReportActionDto> Actions { get; set; }
+        public ReportAmendmentPreviewDto? Amendment { get; set; }
     }
-
+    public class ReportAmendmentPreviewDto
+    {
+        public long AmendmentRequestId { get; set; }
+        public string Reason { get; set; } = "";
+        public string FileName { get; set; } = "";
+        public string FilePath { get; set; } = "";
+        public DateTime RequestedOn { get; set; }
+    }
     public class ReportTestDto
     {
         public long TestResultHeaderId { get; set; }
@@ -253,6 +261,11 @@ namespace LIMSApi.Dtos
         public string? Organization { get; set; }
         public string SignaturePath { get; set; } = string.Empty;
     }
-
+    public class AmendmentRequestDto
+    {
+        public long ReportHeaderId { get; set; }
+        public string Reason { get; set; } = string.Empty;
+        public IFormFile File { get; set; } = null!;
+    }
 
 }

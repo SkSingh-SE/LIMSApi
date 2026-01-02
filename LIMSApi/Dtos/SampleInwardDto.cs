@@ -95,6 +95,8 @@ namespace LIMSApi.Dtos
         public string Country { get; set; }
         public string Type { get; set; }
         public long InwardID { get; set; }
+        public string EmailId { get; set; } = string.Empty;
+        public string MobileNo { get; set; } = string.Empty;
     }
 
     public class SampleDetailDto

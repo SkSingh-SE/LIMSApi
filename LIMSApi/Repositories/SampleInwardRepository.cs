@@ -292,8 +292,7 @@ namespace LIMSApi.Repositories
                 from inward in _context.SampleInwards
                 where inward.IsActive
                       && inward.CompanyCode == loggedInUser.CompanyCode
-                      && (inward.InwardStatus == InwardStatus.UNDER_REVIEW.ToString()
-                          || inward.InwardStatus == InwardStatus.REVIEW_COMPLETED.ToString())
+                     
 
                 join instance in _context.WorkflowInstances
                     .Where(w => w.IsActive || w.Status == "Completed")

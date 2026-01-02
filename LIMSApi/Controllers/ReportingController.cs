@@ -66,8 +66,30 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> GeneratePDFSampleWise(long sampleId)
         {
             var report = await _service.GeneratePdfForSampleAsync(sampleId);
-            return Ok(report);
+            return Ok(new
+            {
+                success = true,
+                message = "Report Generated Successfully"
+            });
         }
 
+        [HttpPost("request-amendment")]
+        public async Task<IActionResult> RequestAmendment([FromForm] AmendmentRequestDto request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Reason))
+                return BadRequest("Amendment reason is required.");
+
+            if (request.File == null || request.File.Length == 0)
+                return BadRequest("Supporting document is required.");
+
+            await _service.RequestAmendmentAsync(request.ReportHeaderId,request.Reason,request.File);
+
+            return Ok(
+                new
+                {
+                    success = true,
+                    message = "Amendment requested successfully."
+                });
+        }
     }
 }

@@ -23,7 +23,7 @@ namespace LIMSApi.Helpers
                 var whatsappMessage = await MessageResource.CreateAsync(
                     body: message,
                     from: new Twilio.Types.PhoneNumber(_configuration["TwilioWhatsAPP:FromWhatsAppNumber"]),
-                    to: new Twilio.Types.PhoneNumber($"whatsapp:{toPhoneNumber}")
+                    to: new Twilio.Types.PhoneNumber($"whatsapp:+91{toPhoneNumber}")
                 );
 
                 Console.WriteLine($"WhatsApp Message Sent - SID: {whatsappMessage.Sid}");

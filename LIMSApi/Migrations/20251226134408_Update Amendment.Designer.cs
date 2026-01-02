@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20251226134408_Update Amendment")]
+    partial class UpdateAmendment
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1028,56 +1031,6 @@ namespace LIMSApi.Migrations
                     b.HasKey("ID");
 
                     b.ToTable("Customers");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.CustomerAmendment", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<decimal?>("Amount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CustomerName")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsChargeable")
-                        .HasColumnType("bit");
-
-                    b.Property<long?>("PaymentOrderID")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Remarks")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<long>("ReportID")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<long>("TokenID")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("ReportID");
-
-                    b.HasIndex("TokenID");
-
-                    b.ToTable("CustomerAmendments");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.CustomerCompanyCategory", b =>
@@ -3273,93 +3226,6 @@ namespace LIMSApi.Migrations
                     b.ToTable("ParameterUnitMasters");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.PaymentOrder", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("CaseNo")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Currency")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<long>("CustomerId")
-                        .HasColumnType("bigint");
-
-                    b.Property<bool>("EmailSent")
-                        .HasColumnType("bit");
-
-                    b.Property<long?>("InwardID")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime?>("LinkSentOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("OrderNo")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("PaidOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("PaymentToken")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("PaymentType")
-                        .HasColumnType("int");
-
-                    b.Property<string>("RazorpayOrderId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("RazorpayPaymentId")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("RazorpaySignature")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<long?>("ReportID")
-                        .HasColumnType("bigint");
-
-                    b.Property<bool>("SMSSent")
-                        .HasColumnType("bit");
-
-                    b.Property<long?>("SampleID")
-                        .HasColumnType("bigint");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
-
-                    b.Property<long?>("TaxInvoiceID")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("TokenExpiry")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("WhatsAppSent")
-                        .HasColumnType("bit");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("CustomerId");
-
-                    b.HasIndex("TaxInvoiceID");
-
-                    b.ToTable("PaymentOrders");
-                });
-
             modelBuilder.Entity("LIMSApi.Models.PermissionMaster", b =>
                 {
                     b.Property<long>("ID")
@@ -3688,9 +3554,6 @@ namespace LIMSApi.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
-                    b.Property<bool>("IsAmendmentAllowed")
-                        .HasColumnType("bit");
-
                     b.Property<long?>("ModifiedBy")
                         .HasColumnType("bigint");
 
@@ -3722,42 +3585,6 @@ namespace LIMSApi.Migrations
                     b.HasIndex("ReportHeaderID");
 
                     b.ToTable("Reports");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.ReportAmendmentToken", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("FreeUntil")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsUsed")
-                        .HasColumnType("bit");
-
-                    b.Property<DateTime>("LinkExpiryOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<long>("ReportID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("SampleID")
-                        .HasColumnType("bigint");
-
-                    b.Property<Guid>("Token")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("ReportID");
-
-                    b.ToTable("ReportAmendmentTokens");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ReportBlock", b =>
@@ -3829,10 +3656,6 @@ namespace LIMSApi.Migrations
 
                     b.Property<DateTime>("CreatedOn")
                         .HasColumnType("datetime2");
-
-                    b.Property<string>("CustomerName")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime>("GeneratedAt")
                         .HasColumnType("datetime2");
@@ -4120,9 +3943,6 @@ namespace LIMSApi.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
-                    b.Property<bool>("IsReportUnlocked")
-                        .HasColumnType("bit");
-
                     b.Property<bool>("IsTestingCompleted")
                         .HasColumnType("bit");
 
@@ -4283,15 +4103,6 @@ namespace LIMSApi.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
-                    b.Property<bool>("IsAmendmentAllowed")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsInvoiceGenerated")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsReportUnlocked")
-                        .HasColumnType("bit");
-
                     b.Property<long?>("ModifiedBy")
                         .HasColumnType("bigint");
 
@@ -4299,9 +4110,6 @@ namespace LIMSApi.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<bool>("NotDestroyed")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("PIReceived")
                         .HasColumnType("bit");
 
                     b.Property<string>("PinCode")
@@ -4340,9 +4148,6 @@ namespace LIMSApi.Migrations
 
                     b.Property<string>("StatementOfConformity")
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<decimal>("TotalTestCharges")
-                        .HasColumnType("decimal(18,2)");
 
                     b.Property<long?>("UploadReferenceID")
                         .HasColumnType("bigint");
@@ -4391,16 +4196,8 @@ namespace LIMSApi.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("EmailId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<long>("InwardID")
                         .HasColumnType("bigint");
-
-                    b.Property<string>("MobileNo")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("PinCode")
                         .IsRequired()
@@ -5225,61 +5022,6 @@ namespace LIMSApi.Migrations
                     b.HasKey("ID");
 
                     b.ToTable("TPIMasters");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.TaxInvoice", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<decimal>("CGST")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<long>("CustomerID")
-                        .HasColumnType("bigint");
-
-                    b.Property<decimal>("GrandTotal")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("IGST")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime>("InvoiceDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("InvoiceNo")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<long>("InwardID")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("PdfPath")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<decimal>("SGST")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<decimal>("SubTotal")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("CustomerID");
-
-                    b.HasIndex("InwardID");
-
-                    b.ToTable("TaxInvoices");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.TaxMaster", b =>
@@ -6606,25 +6348,6 @@ namespace LIMSApi.Migrations
                     b.Navigation("Department");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.CustomerAmendment", b =>
-                {
-                    b.HasOne("LIMSApi.Models.Report", "Report")
-                        .WithMany()
-                        .HasForeignKey("ReportID")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("LIMSApi.Models.ReportAmendmentToken", "Token")
-                        .WithMany()
-                        .HasForeignKey("TokenID")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Report");
-
-                    b.Navigation("Token");
-                });
-
             modelBuilder.Entity("LIMSApi.Models.CustomerCompanyCategory", b =>
                 {
                     b.HasOne("LIMSApi.Models.CompanyCategoryMaster", "CompanyCategory")
@@ -7044,24 +6767,6 @@ namespace LIMSApi.Migrations
                     b.Navigation("ParameterUnit");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.PaymentOrder", b =>
-                {
-                    b.HasOne("LIMSApi.Models.Customer", "Customer")
-                        .WithMany()
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("LIMSApi.Models.TaxInvoice", "TaxInvoice")
-                        .WithMany()
-                        .HasForeignKey("TaxInvoiceID")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("Customer");
-
-                    b.Navigation("TaxInvoice");
-                });
-
             modelBuilder.Entity("LIMSApi.Models.PermissionMaster", b =>
                 {
                     b.HasOne("LIMSApi.Models.MenuMaster", "Menu")
@@ -7135,17 +6840,6 @@ namespace LIMSApi.Migrations
                         .IsRequired();
 
                     b.Navigation("ReportHeader");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.ReportAmendmentToken", b =>
-                {
-                    b.HasOne("LIMSApi.Models.Report", "Report")
-                        .WithMany()
-                        .HasForeignKey("ReportID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Report");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ReportBlock", b =>
@@ -7396,25 +7090,6 @@ namespace LIMSApi.Migrations
                         .IsRequired();
 
                     b.Navigation("Group");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.TaxInvoice", b =>
-                {
-                    b.HasOne("LIMSApi.Models.Customer", "Customer")
-                        .WithMany()
-                        .HasForeignKey("CustomerID")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("LIMSApi.Models.SampleInward", "Inward")
-                        .WithMany()
-                        .HasForeignKey("InwardID")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Customer");
-
-                    b.Navigation("Inward");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.TestGroupMapping", b =>

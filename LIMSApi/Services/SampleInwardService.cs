@@ -39,7 +39,6 @@ namespace LIMSApi.Services
 
         public async Task CreateSampleInward(SampleInwardDto model)
         {
-            await using var trx = await _context.Database.BeginTransactionAsync();
             try
             {
 
@@ -115,7 +114,9 @@ namespace LIMSApi.Services
                        City = model.ReportingTo.City,
                        State = model.ReportingTo.State,
                        Country = model.ReportingTo.Country,
-                       Type = model.ReportingTo.Type
+                       Type = model.ReportingTo.Type,
+                       MobileNo = model.ReportingTo.MobileNo,
+                          EmailId = model.ReportingTo.EmailId
                    },
                    new SampleInwardAddressInfo
                    {
@@ -127,7 +128,9 @@ namespace LIMSApi.Services
                        City = model.BillingTo.City,
                        State = model.BillingTo.State,
                        Country = model.BillingTo.Country,
-                       Type = model.BillingTo.Type
+                       Type = model.BillingTo.Type,
+                          MobileNo = model.BillingTo.MobileNo,
+                              EmailId = model.BillingTo.EmailId
                    }
                },
 
@@ -194,7 +197,6 @@ namespace LIMSApi.Services
                 await _SampleInwardRepository.AddSampleInward(entity);
                 _logger.LogInformation("SampleInward '{Case}' created successfully.", model.CaseNo);
 
-                await trx.CommitAsync();
                 // Process queued jobs
                 foreach (var job in statusJobs)
                 {
@@ -204,8 +206,6 @@ namespace LIMSApi.Services
             }
             catch (Exception)
             {
-                await trx.RollbackAsync();
-                throw;
             }
         }
 
@@ -292,7 +292,9 @@ namespace LIMSApi.Services
                     City = model.ReportingTo.City,
                     State = model.ReportingTo.State,
                     Country = model.ReportingTo.Country,
-                    Type = model.ReportingTo.Type
+                    Type = model.ReportingTo.Type,
+                    MobileNo = model.ReportingTo.MobileNo,
+                    EmailId = model.ReportingTo.EmailId
                 });
                 entity.Addresses.Add(new SampleInwardAddressInfo
                 {
@@ -305,7 +307,9 @@ namespace LIMSApi.Services
                     City = model.BillingTo.City,
                     State = model.BillingTo.State,
                     Country = model.BillingTo.Country,
-                    Type = model.BillingTo.Type
+                    Type = model.BillingTo.Type,
+                    MobileNo = model.BillingTo.MobileNo,
+                    EmailId = model.BillingTo.EmailId
                 });
 
                 //  Only fetch next sample number if a new sample will be added
@@ -1100,7 +1104,9 @@ namespace LIMSApi.Services
                         City = a.City,
                         State = a.State,
                         Country = a.Country,
-                        Type = a.Type
+                        Type = a.Type,
+                        MobileNo = a.MobileNo,
+                        EmailId = a.EmailId
                     })
                     .FirstOrDefault(),
 
@@ -1118,7 +1124,9 @@ namespace LIMSApi.Services
                         City = a.City,
                         State = a.State,
                         Country = a.Country,
-                        Type = a.Type
+                        Type = a.Type,
+                        MobileNo = a.MobileNo,
+                        EmailId = a.EmailId
                     })
                     .FirstOrDefault(),
 
@@ -1269,7 +1277,9 @@ namespace LIMSApi.Services
                         City = a.City,
                         State = a.State,
                         Country = a.Country,
-                        Type = a.Type
+                        Type = a.Type,
+                        MobileNo = a.MobileNo,
+                        EmailId = a.EmailId
                     })
                     .FirstOrDefault(),
 
@@ -1287,7 +1297,9 @@ namespace LIMSApi.Services
                         City = a.City,
                         State = a.State,
                         Country = a.Country,
-                        Type = a.Type
+                        Type = a.Type,
+                        MobileNo = a.MobileNo,
+                        EmailId = a.EmailId
                     })
                     .FirstOrDefault(),
 

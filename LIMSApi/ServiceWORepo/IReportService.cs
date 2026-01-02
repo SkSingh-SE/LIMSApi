@@ -1,4 +1,6 @@
 ﻿using LIMSApi.Dtos;
+using LIMSApi.Models;
+using Microsoft.AspNetCore.Mvc;
 
 namespace LIMSApi.ServiceWORepo
 {
@@ -11,5 +13,7 @@ namespace LIMSApi.ServiceWORepo
         Task<bool> PerformAction(WorkflowActionRequestDto dto);
         Task<ReportPreviewDto> GetReportPreviewAsync(long reportHeaderId);
 
+
+        Task RequestAmendmentAsync([FromQuery] long reportHeaderId, string reason, IFormFile file);
     }
 }

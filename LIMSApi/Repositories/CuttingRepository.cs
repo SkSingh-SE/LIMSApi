@@ -160,7 +160,7 @@ namespace LIMSApi.Repositories
 
         //                select new
         //                {
-        //                    Id = c != null ? c.ID : 0,
+        //                    ID = c != null ? c.ID : 0,
         //                    InwardId = i.ID,
         //                    CaseNo = i.CaseNo,
 

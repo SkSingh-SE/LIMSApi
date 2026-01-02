@@ -67,7 +67,16 @@ namespace LIMSApi.Models
         public DateTime CollectionTime { get; set; } = DateTime.UtcNow;
         public long? ReviewedBy { get; set; }     
         public DateTime? ReviewedOn { get; set; }
-
+        
+        public bool PIReceived { get; set; } = false;
+        
+        public bool IsInvoiceGenerated { get; set; } = false;
+        
+        public bool IsReportUnlocked { get; set; } = false;
+        
+        public bool IsAmendmentAllowed { get; set; } = true;
+        
+        public decimal TotalTestCharges { get; set; } = 0;
         // Navigation Properties
         public virtual ICollection<SampleInwardDispatchMode> DispatchModes { get; set; } = new List<SampleInwardDispatchMode>();
         public virtual ICollection<SampleInwardContactPerson> Contacts { get; set; } = new List<SampleInwardContactPerson>();

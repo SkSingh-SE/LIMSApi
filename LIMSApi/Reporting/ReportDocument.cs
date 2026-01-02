@@ -131,12 +131,12 @@ namespace LIMSApi.Reporting
                         .FontSize(6);
                 });
 
-                row.ConstantItem(80).AlignMiddle().Row(r =>
-                {
-                    r.ConstantItem(38).Image(LogoPath).FitArea();
-                    r.ConstantItem(4);
-                    r.ConstantItem(38).Image(LogoPath).FitArea();
-                });
+                //row.ConstantItem(80).AlignMiddle().Row(r =>
+                //{
+                //    r.ConstantItem(38).Image(LogoPath).FitArea();
+                //    r.ConstantItem(4);
+                //    r.ConstantItem(38).Image(LogoPath).FitArea();
+                //});
             });
         }
 
@@ -162,24 +162,34 @@ namespace LIMSApi.Reporting
                     {
                         t.ColumnsDefinition(c =>
                         {
-                            c.RelativeColumn();
-                            c.RelativeColumn();
+                            c.ConstantColumn(120); // Label
+                            c.RelativeColumn();    // Value
+                            c.ConstantColumn(120); // Label
+                            c.RelativeColumn();    // Value
                         });
 
-                        AddKV(t, "Test Certificate No.", d.CertificateNo);
-                        AddKV(t, "Report No.", d.ReportNo);
+                        // Row 1
+                        t.Cell().Text("Test Certificate No.").Style(LabelStyle);
+                        t.Cell().Text(d.CertificateNo).Style(ValueStyle);
+                        t.Cell().Text("Date of Issue").Style(LabelStyle);
+                        t.Cell().Text(d.DateOfIssue).Style(ValueStyle);
 
-                        AddKV(t, "Date of Issue", d.DateOfIssue);
-                        AddKV(t, "Sample No.", d.SampleNo);
+                        // Row 2
+                        t.Cell().Text("Report No.").Style(LabelStyle);
+                        t.Cell().Text(d.ReportNo).Style(ValueStyle);
+                        t.Cell().Text("Test Performed At").Style(LabelStyle);
+                        t.Cell().Text(d.TestPerformedAt).Style(ValueStyle);
+
+                        //AddKV(t, "Sample No.", d.SampleNo);
 
 
-                        AddKV(t, "Test Name", d.TestName);
+                        //AddKV(t, "Test Name", d.TestName);
 
-                        AddKV(t, "Customer Name", d.CustomerName);
-                        AddKV(t, "Sample Received On", d.SampleReceivedOn);
+                        //AddKV(t, "Customer Name", d.CustomerName);
+                        //AddKV(t, "Sample Received On", d.SampleReceivedOn);
 
-                        AddKV(t, "Customer Address", d.CustomerAddress);
-                        AddKV(t, "Test Performed At", d.TestPerformedAt);
+                        //AddKV(t, "Customer Address", d.CustomerAddress);
+                        //AddKV(t, "Test Performed At", d.TestPerformedAt);
                     });
                 });
         }

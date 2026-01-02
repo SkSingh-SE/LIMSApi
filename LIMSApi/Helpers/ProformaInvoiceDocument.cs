@@ -9,11 +9,11 @@ namespace LIMSApi.Helpers
 
     public class ProformaInvoiceDocument : IDocument
     {
-        private readonly ProformaInvoicePdfModel _model;
+        private readonly TaxInvoicePdfModelDto _model;
         private readonly byte[]? _logoBytes;
         private readonly byte[]? _signatureBytes;
 
-        public ProformaInvoiceDocument(ProformaInvoicePdfModel model, string? logoPath, string? signaturePath)
+        public ProformaInvoiceDocument(TaxInvoicePdfModelDto model, string? logoPath, string? signaturePath)
         {
             _model = model;
 

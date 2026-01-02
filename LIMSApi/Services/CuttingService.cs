@@ -47,7 +47,7 @@ namespace LIMSApi.Services
                 statusJobs.Add(async () =>
                 {
                     await _sampleStatusService.ForceAutoStatusAsync(
-                        sample.ID,
+                        sample.SampleID,
                         SampleStatus.PREPARATION_COMPLETED,
                         loggedInUser.EmployeeID
                     );

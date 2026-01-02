@@ -246,11 +246,15 @@ builder.Services.AddScoped<FormulaEvaluator>();
 builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IReportTemplateService, ReportTemplateService>();
 builder.Services.AddScoped<IReportBlockGenerator, ReportBlockGenerator>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<ICustomerAmendmentService, CustomerAmendmentService>();
+builder.Services.AddScoped<IAccountService, AccountService>();
 
 // Third party services
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<SMSService>();
 builder.Services.AddScoped<WhatsAppService>();
+builder.Services.AddScoped<InvoicePdfService>();
 
 //builder.Services.AddSingleton<IConverter>(
 //    new SynchronizedConverter(new PdfTools()));

@@ -10,7 +10,9 @@ using LIMSApi.Reporting;
 using LIMSApi.Services.Interface;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.VisualBasic.FileIO;
+using Microsoft.VisualStudio.Web.CodeGenerators.Mvc.Templates.BlazorIdentity.Pages.Manage;
 using QuestPDF.Fluent;
+using Razorpay.Api;
 using static LIMSApi.Reporting.ReportDocument;
 
 namespace LIMSApi.ServiceWORepo
@@ -23,8 +25,11 @@ namespace LIMSApi.ServiceWORepo
         private readonly IWorkflowService _workflowService;
         private readonly ITestResultService _testResultService;
         private readonly IReportBlockGenerator _reportBlockGenerator;
+        private readonly ISampleStatusService _sampleStatusService;
+        private readonly IConfiguration _config;
+        private readonly EmailService _emailService;
 
-        public ReportService(LIMSContext db, IFileUploadService uploadService, IWorkflowService workflowService, ITestResultService testResultService, IReportBlockGenerator reportBlockGenerator)
+        public ReportService(LIMSContext db, IFileUploadService uploadService, IWorkflowService workflowService, ITestResultService testResultService, IReportBlockGenerator reportBlockGenerator, ISampleStatusService sampleStatusService, IConfiguration config, EmailService emailService)
         {
             _db = db;
             fileUploadService = uploadService;
@@ -32,6 +37,9 @@ namespace LIMSApi.ServiceWORepo
             _workflowService = workflowService;
             _testResultService = testResultService;
             _reportBlockGenerator = reportBlockGenerator;
+            _sampleStatusService = sampleStatusService;
+            _config = config;
+            _emailService = emailService;
         }
 
         public async Task<PagedResponse<object>> GetReportDashboardList(PageFilter filter)
@@ -40,7 +48,7 @@ namespace LIMSApi.ServiceWORepo
 
             // ----------------------------------------------------------
             // BASE QUERY
-            // ReportHeader → Sample → Inward → Workflow
+            // Report → Sample → Inward → Workflow
             // ----------------------------------------------------------
             var query = from report in _db.ReportHeaders
 
@@ -50,12 +58,25 @@ namespace LIMSApi.ServiceWORepo
                         join inward in _db.SampleInwards
                             on sample.InwardID equals inward.ID
 
-                        // LEFT JOIN WorkflowInstance
+                        join amendment in _db.AmendmentRequests on report.ID equals amendment.ReportHeaderID into amendmentJoin
+                        from amendment in amendmentJoin
+                            .Where(a => a.Status == "Pending")
+                            .OrderByDescending(a => a.CreatedOn)
+                            .Take(1)
+                            .DefaultIfEmpty()
+                            // LEFT JOIN WorkflowInstance
                         join instance in _db.WorkflowInstances
-                            on new { EntityID = report.ID, EntityType = "Report Review" }
+                            on new
+                            {
+                                EntityID = amendment != null ? amendment.ID : report.ID,
+                                EntityType = amendment != null
+                                    ? WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Report_Amendment)
+                                    : WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Report_Review)
+                            }
                             equals new { instance.EntityID, instance.EntityType }
                             into workflowJoin
                         from instance in workflowJoin.DefaultIfEmpty()
+
 
                         join step in _db.WorkflowSteps
                             on instance.CurrentStepID equals step.ID
@@ -68,10 +89,11 @@ namespace LIMSApi.ServiceWORepo
                         select new
                         {
                             ReportHeaderId = report.ID,
-
+                            AmendmentRequestId = amendment != null ? amendment.ID : 0,
+                            sampleId = sample.ID,
                             sample.SampleNo,
                             inward.CaseNo,
-
+                            inward.CustomerID,
                             Customer = inward.Customer != null
                                 ? inward.Customer.Name
                                 : string.Empty,
@@ -94,37 +116,27 @@ namespace LIMSApi.ServiceWORepo
                             report.PdfPath,
                             report.Status,
 
-                            // 🔹 NORMALIZED WORKFLOW STATUS
-                            WorkflowStatus =
-                                instance == null
-                                    ? "Pending"
-                                    : instance.Status,
-
-                            // 🔹 STEP NAME (null-safe)
+                            WorkflowStatus = instance == null ? "Pending" : instance.Status,
                             CurrentStep = step != null ? step.Name : null,
 
-                            // 🔹 ACTION PERMISSION
-                            CanTakeAction =
-                                instance != null
-                                && instance.IsActive
-                                && step != null
-                                && FilterHelper.IsUserApprover(step.AssignedToValue, userId),
+                            CanTakeAction = instance != null
+                                            && instance.IsActive
+                                            && step != null
+                                            && FilterHelper.IsUserApprover(step.AssignedToValue, userId),
 
-                            // 🔹 ACTIONS (ONLY WHEN ACTIONABLE)
-                            Actions =
-                                instance != null
-                                && instance.IsActive
-                                && step != null
-                                    ? step.Transitions
-                                        .Where(t => t.IsActive)
-                                        .Select(t => new
-                                        {
-                                            ID = instance.ID,
-                                            Name = t.Alias ?? t.Action,
-                                            Action = t.Action
-                                        })
-                                        .ToList()
-                                    : null
+                            Actions = instance != null
+                                        && instance.IsActive
+                                        && step != null
+                                            ? step.Transitions
+                                                .Where(t => t.IsActive)
+                                                .Select(t => new
+                                                {
+                                                    ID = instance.ID,
+                                                    Name = t.Alias ?? t.Action,
+                                                    Action = t.Action
+                                                })
+                                                .ToList()
+                                            : null
                         };
 
             // ----------------------------------------------------------
@@ -176,13 +188,21 @@ namespace LIMSApi.ServiceWORepo
             // ----------------------------------------------------------
             var result = data.Select(x => new
             {
+                x.sampleId,
                 x.ReportHeaderId,
                 x.SampleNo,
                 x.CaseNo,
                 x.Customer,
+                x.CustomerID,
                 x.Material,
                 x.Condition,
-                Status = x.CanTakeAction ? x.WorkflowStatus : x.Status,
+                Status =
+    x.Status == "Under Amendment Review"
+        ? "Under Amendment Review"
+        : x.CanTakeAction
+            ? x.WorkflowStatus
+            : x.Status,
+
                 x.ReportNo,
                 x.CurrentStep,
                 x.CanTakeAction,
@@ -396,7 +416,7 @@ namespace LIMSApi.ServiceWORepo
             document.GeneratePdf(filePath);
 
             report.PdfPath = filePath;
-            // Optionally store PDF path in ReportHeader
+            // Optionally store PDF path in Report
             var reportHeader = await _db.ReportHeaders.FirstOrDefaultAsync(r => r.ReportNo == report.ReportNo);
             if (reportHeader != null)
             {
@@ -434,6 +454,14 @@ namespace LIMSApi.ServiceWORepo
             if (reportHeader == null)
                 throw new Exception("Report header not found");
 
+            var pendingAmendment = await _db.AmendmentRequests
+                .Where(a =>
+                    a.ReportHeaderID == reportHeader.ID &&
+                    a.Status == "Pending")
+                .OrderByDescending(a => a.CreatedOn)
+                .FirstOrDefaultAsync();
+
+
             var sample = reportHeader.Sample!;
             var inward = sample.SampleInward!;
 
@@ -452,9 +480,24 @@ namespace LIMSApi.ServiceWORepo
             // -------------------------------------------------
             // 3. Load Workflow + Actions (SAME PATTERN AS YOUR CODE)
             // -------------------------------------------------
-            var workflowInstance =
-                await _workflowService.GetActiveInstanceForEntityAsync(
-                    reportHeader.ID, WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Report_Review));
+
+            long entityId;
+            string entityType;
+
+            if (reportHeader.Status == "Under Amendment Review" && pendingAmendment != null)
+            {
+                entityId = pendingAmendment.ID;
+                entityType = WorkFlowEntityTypeExtensions.GetEntityType(
+                    WorkFlowEntityType.Report_Amendment);
+            }
+            else
+            {
+                entityId = reportHeader.ID;
+                entityType = WorkFlowEntityTypeExtensions.GetEntityType(
+                    WorkFlowEntityType.Report_Review);
+            }
+
+            var workflowInstance = await _workflowService.GetActiveInstanceForEntityAsync(entityId, entityType);
 
             var actions = new List<ReportActionDto>();
 
@@ -462,8 +505,7 @@ namespace LIMSApi.ServiceWORepo
 
             if (workflowInstance != null)
             {
-                var step = await _workflowService
-                    .GetCurrentWorkflowStepAsync(reportHeader.ID, WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Report_Review));
+                var step = await _workflowService.GetCurrentWorkflowStepAsync(entityId, entityType);
 
                 if (step != null)
                 {
@@ -555,6 +597,20 @@ namespace LIMSApi.ServiceWORepo
             // -------------------------------------------------
             // 6. Assemble FINAL DTO
             // -------------------------------------------------
+            ReportAmendmentPreviewDto? amendmentDto = null;
+
+            if (reportHeader.Status == "Under Amendment Review" && pendingAmendment != null)
+            {
+                amendmentDto = new ReportAmendmentPreviewDto
+                {
+                    AmendmentRequestId = pendingAmendment.ID,
+                    Reason = pendingAmendment.Reason,
+                    FileName = pendingAmendment.FileName,
+                    FilePath = pendingAmendment.FilePath,
+                    RequestedOn = pendingAmendment.CreatedOn
+                };
+            }
+
             return new ReportPreviewDto
             {
                 ReportHeaderId = reportHeader.ID,
@@ -573,7 +629,8 @@ namespace LIMSApi.ServiceWORepo
                 LongTermTests = longTermDtos,
 
                 Actions = canTakeAction ? actions : new List<ReportActionDto>(),
-                Status = reportHeader.Status == "Pending" ? "Pending for Approval" : reportHeader.Status,
+                Status = reportHeader.Status == "Under Amendment Review" ? "Under Amendment Review" : reportHeader.Status == "Pending" ? "Pending for Approval" : reportHeader.Status,
+                Amendment = amendmentDto
             };
         }
         private LongTermParsedValue? SafeParseLongTermJson(string json)
@@ -623,9 +680,10 @@ namespace LIMSApi.ServiceWORepo
         public async Task<string> GeneratePdfForSampleAsync(long sampleId)
         {
             // -------------------------------------------------
-            // 1️⃣ Get ReportHeader for Sample
+            // 1️⃣ Get Report for Sample
             // -------------------------------------------------
             var reportHeader = await _db.ReportHeaders
+                .Include(x => x.Sample).ThenInclude(s => s.SampleInward).ThenInclude(c => c.Customer)
                 .FirstOrDefaultAsync(r => r.SampleID == sampleId);
 
             Report report;
@@ -635,7 +693,7 @@ namespace LIMSApi.ServiceWORepo
             // -------------------------------------------------
             if (reportHeader == null || reportHeader.Status != "Final")
             {
-                // this internally creates Report + ReportHeader if needed
+                // this internally creates Report + Report if needed
                 var reportId = await GenerateReportAsync(sampleId);
 
                 report = await _db.Reports
@@ -660,9 +718,59 @@ namespace LIMSApi.ServiceWORepo
             // 4️⃣ Generate PDF (idempotent)
             // -------------------------------------------------
             var pdfPath = await GeneratePdfAsync(report.ID);
+
+            var token = Guid.NewGuid();
+
+            var amendmentToken = new ReportAmendmentToken
+            {
+                Token = token,
+                SampleID = sampleId,
+                ReportID = reportHeader.ID,
+                LinkExpiryOn = DateTime.UtcNow.AddDays(7),  // secure link
+                FreeUntil = DateTime.UtcNow.AddDays(1),
+                IsUsed = false,
+                CreatedOn = DateTime.UtcNow
+            };
+
+            _db.ReportAmendmentTokens.Add(amendmentToken);
+            await _db.SaveChangesAsync();
+
+            // -------------------------------------------------
+            // 5️⃣ Build Public Amendment Link
+            // -------------------------------------------------
+            var amendmentLink = GenerateReportLink(token.ToString());
+
+            // -------------------------------------------------
+            // 6️⃣ Email Template Model (MATCHES TEMPLATE)
+            // -------------------------------------------------
+            var emailModel = new
+            {
+                CustomerName = reportHeader.Sample?.SampleInward?.Customer?.Name,
+                ReportNo = reportHeader.ReportNo,
+                AmendmentLink = amendmentLink
+            };
+            var email = reportHeader.Sample?.SampleInward?.Contacts?.FirstOrDefault(x => x.Selected)?.EmailId;
+            // -------------------------------------------------
+            // 7️⃣ Send Email with PDF + Link
+            // -------------------------------------------------
+            var body = EmailTemplateBuilder.Build("FINAL_REPORT_WITH_AMENDMENT_LINK", emailModel);
+            if (email != null)
+            {
+                await _emailService.SendEmailWithAttachment(
+                    toEmail: email,
+                    subject: $"Your Test Report {reportHeader.ReportNo}",
+                    body: body,
+                    attachmentPath: pdfPath,
+                    attachmentName: $"Report_{reportHeader.ReportNo}.pdf"
+                );
+            }
+
             return pdfPath;
         }
-
+        public string GenerateReportLink(string token)
+        {
+            return $"{_config["PublicBaseUrl"]}/report/amend/{token}";
+        }
 
 
         // =====================================================
@@ -749,13 +857,13 @@ namespace LIMSApi.ServiceWORepo
                         new() { Label = "Customer Name", Value = sample.SampleInward.Customer.Name },
                         new() { Label = "Customer Address", Value = sample.SampleInward.Customer.Address }
                     }
-                        };
+                };
 
-                        // ---------------- Sample ----------------
-                        testPayload.SampleDetails = new KeyValueTablePayload
-                        {
-                            Title = "Sample Details",
-                            Rows = new List<KeyValueRow>
+                // ---------------- Sample ----------------
+                testPayload.SampleDetails = new KeyValueTablePayload
+                {
+                    Title = "Sample Details",
+                    Rows = new List<KeyValueRow>
                     {
                         new() { Label = "Sample No", Value = sample.SampleNo },
                         new() { Label = "Case No", Value = sample.SampleInward.CaseNo },
@@ -943,101 +1051,6 @@ namespace LIMSApi.ServiceWORepo
         }
 
 
-
-
-        // =====================================================
-        // 3️⃣ REQUEST AMENDMENT (LOG ONLY)
-        // =====================================================
-        public async Task RequestAmendmentAsync(
-            long reportHeaderId,
-            string reason,
-            List<string> supportingDocuments)
-        {
-            var header = await _db.ReportHeaders
-                .FirstOrDefaultAsync(h => h.ID == reportHeaderId);
-
-            if (header == null || header.Status != "Final")
-                throw new InvalidOperationException(
-                    "Amendment allowed only on final reports.");
-
-            var request = new AmendmentRequest
-            {
-                ReportHeaderID = reportHeaderId,
-                Reason = reason,
-                SupportingDocumentsJson =
-                    JsonSerializer.Serialize(supportingDocuments),
-                Status = "Pending",
-                CreatedBy = loggedInUser.EmployeeID,
-                CreatedOn = DateTime.UtcNow
-            };
-
-            _db.AmendmentRequests.Add(request);
-            await _db.SaveChangesAsync();
-        }
-
-        // =====================================================
-        // 4️⃣ APPROVE AMENDMENT (NEW VERSION)
-        // =====================================================
-        public async Task<long> ApproveAmendmentAsync(long amendmentRequestId)
-        {
-            var request = await _db.AmendmentRequests
-                .Include(r => r.ReportHeader)
-                .FirstOrDefaultAsync(r => r.ID == amendmentRequestId);
-
-            if (request == null || request.Status != "Pending")
-                throw new InvalidOperationException("Invalid amendment request.");
-
-            var header = request.ReportHeader!;
-            var sample = await _db.SampleDetails
-                .FirstAsync(s => s.ID == header.SampleID);
-
-            var testHeaders = await LoadTestResultHeaders(sample.ID);
-
-            var blocks = await BuildBlocksAsync(
-                testHeaders,
-                sample,
-                header.ReportNo,
-                header.CertificateNo);
-
-            int nextVersion = await GetNextReportVersionAsync(header.ID);
-
-            var amendedReport = new Report
-            {
-                ReportHeaderID = header.ID,
-                ReportNo = header.ReportNo,
-                CertificateNo = header.CertificateNo,
-                Version = nextVersion,
-                Status = "Final",
-                GeneratedBy = loggedInUser.EmployeeID.ToString(),
-                GeneratedAt = DateTime.UtcNow
-            };
-
-            int sortOrder = 0;
-            foreach (var block in blocks)
-            {
-                block.SortOrder = sortOrder++;
-                amendedReport.Blocks.Add(new ReportBlock
-                {
-                    BlockType = block.BlockType,
-                    SortOrder = block.SortOrder,
-                    PayloadJson = block.PayloadJson
-                });
-            }
-
-            amendedReport.SnapshotJson = JsonSerializer.Serialize(amendedReport);
-
-            request.Status = "Approved";
-
-            _db.Reports.Add(amendedReport);
-
-            header.GeneratedAt = DateTime.UtcNow;
-            header.GeneratedBy = loggedInUser.EmployeeID.ToString();
-            header.SnapshotJson = amendedReport.SnapshotJson;
-
-            await _db.SaveChangesAsync();
-            return amendedReport.ID;
-        }
-
         // =====================================================
         // 🔥 BLOCK BUILDER (CORE IDEA)
         // =====================================================
@@ -1142,6 +1155,69 @@ namespace LIMSApi.ServiceWORepo
 
         private static string GenerateCertificateNo(long sampleId)
             => $"DMSPL-{DateTime.UtcNow:yy}-{sampleId:D6}-1";
+
+        public async Task RequestAmendmentAsync(long reportHeaderId, string reason, IFormFile file)
+        {
+            using var transaction = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                var header = await _db.ReportHeaders
+                    .FirstOrDefaultAsync(h => h.ID == reportHeaderId);
+
+                if (header == null)
+                    throw new InvalidOperationException("Report not found.");
+
+                if (header.Status != "Report Generated")
+                    throw new InvalidOperationException(
+                        "Amendment allowed only on generated reports.");
+
+                // -------------------------------------------------
+                // 1️⃣ Upload Supporting Document
+                // -------------------------------------------------
+                if (file == null)
+                    throw new InvalidOperationException("Supporting document is required.");
+
+                var uploadResult = await fileUploadService.UploadFileAsync(file, FileType.Report, null, "ReportAmend");
+
+                // -------------------------------------------------
+                // 2️⃣ Create Amendment Request
+                // -------------------------------------------------
+                var amendment = new AmendmentRequest
+                {
+                    ReportHeaderID = reportHeaderId,
+                    Reason = reason,
+                    Status = "Pending",
+
+                    FilePath = uploadResult.FilePath,
+                    FileName = uploadResult.OriginalFileName,
+                    UploadReferenceID = uploadResult.ID,
+
+                    CreatedBy = loggedInUser.EmployeeID,
+                    CreatedOn = DateTime.UtcNow
+                };
+
+                _db.AmendmentRequests.Add(amendment);
+
+                // -------------------------------------------------
+                // 3️⃣ Update Report Header Status
+                // -------------------------------------------------
+                header.Status = "Under Amendment Review";
+
+                await _db.SaveChangesAsync();
+                // -------------------------------------------------
+                // 4️⃣ Start Workflow (NEW ENTITY TYPE)
+                // -------------------------------------------------
+                await _workflowService.StartWorkflow(amendment.ID, WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Report_Amendment));
+
+                await _sampleStatusService.ForceAutoStatusAsync(header.SampleID, SampleStatus.REPORT_AMENDED_BY_INTERNAL, loggedInUser.EmployeeID);
+                await transaction.CommitAsync();
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
     }
 
 }
