@@ -344,6 +344,14 @@ namespace LIMSApi.Services
             }
         }
 
+        public async Task<OrgNodeDto?> GetOrgChartAsync()
+        {
+            return await _employeeRepository.GetOrgChartAsync();
+        }
 
+        public async Task<List<OrgNodeDto>> GetDirectReportsAsync(long managerId)
+        {
+            return await _employeeRepository.GetDirectReportsAsync(managerId);
+        }
     }
 }

@@ -12,5 +12,6 @@ namespace LIMSApi.Services.Interface
         Task<PagedResponse<object>> FetchCustomerList(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetCustomerDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task VerifyCustomer(long id, bool status);
     }
 }

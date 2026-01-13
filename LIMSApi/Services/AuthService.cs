@@ -146,7 +146,7 @@ namespace LIMSApi.Services
                 {
                     new Claim(ClaimTypes.NameIdentifier, user.ID.ToString()),
                     new Claim(ClaimTypes.Name, user.UserName),
-                    new Claim(ClaimTypes.Role, user.RoleID != null && user.RoleID != 0 ? user.RoleID.ToString() : ""),
+                    new Claim(ClaimTypes.Role, user.RoleName),
                     new Claim(ClaimTypes.Email, user.EmailId ?? string.Empty),
                     new Claim("EmployeeID", user.EmployeeID != null ? user.EmployeeID.ToString() : "0"),
                     new Claim("CompanyCode", user.CompanyCode ?? string.Empty)

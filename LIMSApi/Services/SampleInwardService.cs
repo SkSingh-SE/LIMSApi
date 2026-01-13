@@ -8,6 +8,7 @@ using LIMSApi.Models;
 using LIMSApi.Repositories;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
+using LIMSApi.ServiceWORepo;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.DotNet.Scaffolding.Shared.CodeModifier.CodeChange;
 using Microsoft.EntityFrameworkCore;
@@ -24,8 +25,10 @@ namespace LIMSApi.Services
         private readonly ISampleStatusService _sampleStatusService;
         private readonly IProformaInvoiceRepository _proformaInvoiceRepository;
         private readonly LIMSContext _context;
+        private readonly EmailService _emailService;
+        private readonly TemplateService _templateService;
 
-        public SampleInwardService(ISampleInwardRepository SampleInwardRepo, ILogger<SampleInwardService> logger, IFileUploadService uploadService, IWorkflowService workflowService, ISampleStatusService sampleStatusService, IProformaInvoiceRepository proformaInvoiceRepository, ILaboratoryTestRepository laboratoryTestRepository, LIMSContext context)
+        public SampleInwardService(ISampleInwardRepository SampleInwardRepo, ILogger<SampleInwardService> logger, IFileUploadService uploadService, IWorkflowService workflowService, ISampleStatusService sampleStatusService, IProformaInvoiceRepository proformaInvoiceRepository, ILaboratoryTestRepository laboratoryTestRepository, LIMSContext context, EmailService emailService, TemplateService templateService)
         {
             _SampleInwardRepository = SampleInwardRepo;
             _logger = logger;
@@ -35,6 +38,8 @@ namespace LIMSApi.Services
             _sampleStatusService = sampleStatusService;
             _proformaInvoiceRepository = proformaInvoiceRepository;
             _context = context;
+            _emailService = emailService;
+            _templateService = templateService;
         }
 
         public async Task CreateSampleInward(SampleInwardDto model)
@@ -194,6 +199,9 @@ namespace LIMSApi.Services
                         });
                     }
                 }
+                // Validate mandatory information
+                var isComplete = ValidateMandatoryInformation(entity);
+                
                 await _SampleInwardRepository.AddSampleInward(entity);
                 _logger.LogInformation("SampleInward '{Case}' created successfully.", model.CaseNo);
 
@@ -202,11 +210,72 @@ namespace LIMSApi.Services
                 {
                     await job();
                 }
-                await _sampleStatusService.UpdateInwardStatus(entity.ID, InwardStatus.INWARD_REGISTERED, loggedInUser.EmployeeID);
+
+                // Set InwardStatus based on validation
+                var inwardStatus = isComplete ? InwardStatus.INWARD_COMPLETED : InwardStatus.INWARD_REGISTERED;
+                await _sampleStatusService.UpdateInwardStatus(entity.ID, inwardStatus, loggedInUser.EmployeeID);
+
+                // Send acknowledgment email if complete
+                if (isComplete && entity.Contacts.Any())
+                {
+                    var emailBody = await _templateService.GetTemplateAsync(MessageTemplateKey.SAMPLE_INWARD_ACK, NotificationType.Email, new
+                    {
+                        CustomerName = entity.Customer.Name,
+                        CaseNo = entity.CaseNo
+                    });
+                    var contact = entity.Contacts.FirstOrDefault(c => !string.IsNullOrEmpty(c.EmailId));
+                    if (contact != null)
+                    {
+                        //var emailBody = $"<h3>Sample Inward Acknowledgment</h3><p>Your sample case {entity.CaseNo} has been registered successfully. All required information has been received.</p>";
+                        await _emailService.SendEmailAsync(contact.EmailId, $"Sample Inward Acknowledgment - {entity.CaseNo}", emailBody);
+                    }
+                }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "Error creating SampleInward");
+                throw;
             }
+        }
+
+        /// <summary>
+        /// Validates mandatory information for sample inward
+        /// Returns true if all mandatory fields are complete
+        /// </summary>
+        private bool ValidateMandatoryInformation(SampleInward inward)
+        {
+            // Check mandatory fields
+            if (string.IsNullOrWhiteSpace(inward.CaseNo) ||
+                inward.CustomerID == 0 ||
+                string.IsNullOrWhiteSpace(inward.Address) ||
+                string.IsNullOrWhiteSpace(inward.City) ||
+                string.IsNullOrWhiteSpace(inward.State) ||
+                string.IsNullOrWhiteSpace(inward.PinCode) ||
+                string.IsNullOrWhiteSpace(inward.Country) ||
+                string.IsNullOrWhiteSpace(inward.GstNo))
+            {
+                return false;
+            }
+
+            // Check if contacts exist
+            if (!inward.Contacts.Any())
+            {
+                return false;
+            }
+
+            // Check if at least one contact has email
+            if (!inward.Contacts.Any(c => !string.IsNullOrWhiteSpace(c.EmailId)))
+            {
+                return false;
+            }
+
+            // Check if sample details exist
+            if (!inward.SampleDetails.Any())
+            {
+                return false;
+            }
+
+            return true;
         }
 
         public async Task ModifySampleInward(SampleInwardDto model)
@@ -430,7 +499,26 @@ namespace LIMSApi.Services
                 {
                     await job();
                 }
-                await _sampleStatusService.UpdateInwardStatus(entity.ID, InwardStatus.INWARD_COMPLETED, loggedInUser.EmployeeID);
+
+                // Re-validate and update status
+                var isComplete = ValidateMandatoryInformation(entity);
+                var inwardStatus = isComplete ? InwardStatus.INWARD_COMPLETED : InwardStatus.INWARD_REGISTERED;
+                await _sampleStatusService.UpdateInwardStatus(entity.ID, inwardStatus, loggedInUser.EmployeeID);
+
+                // Send acknowledgment email if just completed
+                if (isComplete && entity.InwardStatus != InwardStatus.INWARD_COMPLETED.ToString())
+                {
+                    var contact = entity.Contacts.FirstOrDefault(c => !string.IsNullOrEmpty(c.EmailId));
+                    if (contact != null)
+                    {
+                        var emailBody = await _templateService.GetTemplateAsync(MessageTemplateKey.SAMPLE_INWARD_UPDATED, NotificationType.Email, new
+                        {
+                            CustomerName = entity.Customer.Name,
+                            CaseNo = entity.CaseNo
+                        });
+                        await _emailService.SendEmailAsync(contact.EmailId, $"Sample Inward Completed - {entity.CaseNo}", emailBody);
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -949,7 +1037,7 @@ namespace LIMSApi.Services
 
                 await _sampleStatusService.UpdateInwardStatus(
                     entity.ID,
-                    InwardStatus.INWARD_COMPLETED,
+                    InwardStatus.UNDER_PLANNING,
                     loggedInUser.EmployeeID);
             }
             catch

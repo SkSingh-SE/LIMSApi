@@ -12,8 +12,7 @@ namespace LIMSApi.Models
         public long LaboratoryTestID { get; set; }
         public long StandardID { get; set; }
         public long? TestCaseID { get; set; }
-        public string? SelectionType { get; set; }
-        public decimal? Value { get; set; }
+
         public int Quantity { get; set; }
         public string ReportNo { get; set; }
         public string UlrNo { get; set; } = string.Empty;

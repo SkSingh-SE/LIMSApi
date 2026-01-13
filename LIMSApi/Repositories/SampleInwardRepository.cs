@@ -123,6 +123,7 @@ namespace LIMSApi.Repositories
                 {
                     c.ID,
                     c.CaseNo,
+                    c.CustomerID,
                     CustomerName = c.Customer.Name,
                     ContactPersonName = c.Contacts.OrderBy(x => x.ID).Select(x => x.Name).FirstOrDefault(),
                     ContactEmail = c.Contacts.OrderBy(x => x.ID).Select(x => x.EmailId).FirstOrDefault(),
@@ -156,6 +157,7 @@ namespace LIMSApi.Repositories
                 {
                     c.ID,
                     c.CaseNo,
+                    c.CustomerID,
                     CustomerName = c.Customer.Name,
                     ContactPersonName = c.Contacts.OrderBy(x => x.ID).Select(x => x.Name).FirstOrDefault(),
                     ContactEmail = c.Contacts.OrderBy(x => x.ID).Select(x => x.EmailId).FirstOrDefault(),
@@ -315,7 +317,7 @@ namespace LIMSApi.Repositories
                 {
                     inward.ID,
                     inward.CaseNo,
-
+                    inward.CustomerID,
                     CustomerName = inward.Customer != null ? inward.Customer.Name : string.Empty,
 
                     InwardStatus = inward.InwardStatus,

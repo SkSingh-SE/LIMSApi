@@ -3,6 +3,8 @@ using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Helpers.Enums;
 using LIMSApi.Models;
+using LIMSApi.Repositories.Interface;
+using LIMSApi.Services.Interface;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Dynamic.Core;
 
@@ -14,13 +16,19 @@ namespace LIMSApi.ServiceWORepo
         private readonly EmailService _emailService;
         private readonly WhatsAppService _whatsAppService;
         private readonly InvoicePdfService _invoicePdfService;
+        private readonly IPriceCalculationService _priceCalculationService;
+        private readonly IProformaInvoiceRepository _proformaInvoiceRepository;
+        private readonly TemplateService _templateService;
 
-        public AccountService(LIMSContext db, EmailService emailService, WhatsAppService whatsAppService, InvoicePdfService invoicePdfService)
+        public AccountService(LIMSContext db, EmailService emailService, WhatsAppService whatsAppService, InvoicePdfService invoicePdfService, IPriceCalculationService priceCalculationService, IProformaInvoiceRepository proformaInvoiceRepository, TemplateService templateService)
         {
             _db = db;
             _emailService = emailService;
             _whatsAppService = whatsAppService;
             _invoicePdfService = invoicePdfService;
+            _priceCalculationService = priceCalculationService;
+            _proformaInvoiceRepository = proformaInvoiceRepository;
+            _templateService = templateService;
         }
 
         public async Task<AccountDashboardDto> GetDashboardAsync()
@@ -71,20 +79,8 @@ namespace LIMSApi.ServiceWORepo
                      CustomerName = c.Name,
                      CustomerType = c.CustomerType, // Walk-in / Credit
 
-                     PIStatus = i.AdvancePIRequired ? i.PIReceived ? "Completed" : "Pending" : "Completed",
-                     InvoiceStatus = i.IsInvoiceGenerated ? "Completed" : "Pending",
-
-                     PaymentStatus =
-                         _db.PaymentOrders.Any(p => p.InwardID == i.ID && p.Status == PaymentStatus.Pending)
-                             ? "Pending"
-                             : _db.PaymentOrders.Any(p => p.InwardID == i.ID && p.Status == PaymentStatus.Failed)
-                                 ? "Failed"
-                                 : "Paid",
-
-                     Action =
-                         _db.PaymentOrders.Any(p => p.InwardID == i.ID && p.Status != PaymentStatus.Paid)
-                             ? "Open"
-                             : "View"
+                     PIStatus =  i.AdvancePIRequired ? i.PIReceived ? "Completed" :  _db.ProformaInvoiceHeader.Any(x => x.InwardID == i.ID) ? "Generated" : "Pending" : "Completed",
+                     InvoiceStatus = i.IsInvoiceGenerated ? "Completed" : "Pending"
                  })
                 .AsQueryable()
                 .ApplyFilters(filter.Filter);
@@ -144,7 +140,6 @@ namespace LIMSApi.ServiceWORepo
                 CaseNo = inward.CaseNo,
                 CustomerName = inward.Customer!.Name,
                 CustomerType = inward.Customer.CustomerType,
-
                 PIStatus = inward.PIReceived ? "Completed" : "Pending",
                 InvoiceStatus = inward.IsInvoiceGenerated ? "Completed" : "Pending",
                 HasPendingPayment = hasPendingPayment
@@ -227,8 +222,27 @@ namespace LIMSApi.ServiceWORepo
             );
         }
 
+        public async Task CreatePriceSnapshotAsync(long inwardId)
+        {
+            // Role check: Only Accounts role can create price snapshot
+            var user = Helpers.LoggedInUserProvider.CurrentUser;
+            if (user == null || (user.Role != "Accounts" && !user.Role.Contains("Admin", StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new UnauthorizedAccessException("Only Accounts role can create price snapshot.");
+            }
+
+            await _priceCalculationService.CreatePriceSnapshotAsync(inwardId);
+        }
+
         public async Task<long> GenerateInvoiceAsync(long inwardId)
         {
+            // Role check: Only Accounts role can generate invoices
+            var user = Helpers.LoggedInUserProvider.CurrentUser;
+            if (user == null || (user.Role != "Accounts" && !user.Role.Contains("Admin", StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new UnauthorizedAccessException("Only Accounts role can generate invoices.");
+            }
+
             var inward = await _db.SampleInwards
                 .Include(x => x.Customer)
                 .FirstAsync(x => x.ID == inwardId);
@@ -236,10 +250,46 @@ namespace LIMSApi.ServiceWORepo
             if (inward.IsInvoiceGenerated)
                 throw new Exception("Invoice already generated");
 
-            // 🔹 Calculate charges (already available via challans/tests)
-            var subTotal = inward.TotalTestCharges;
-            var cgst = subTotal * 0.09m;
-            var sgst = subTotal * 0.09m;
+            // Validate price snapshot exists
+            var snapshotEvents = await _db.ChargeEvents
+                .Where(x => x.InwardID == inwardId && x.Status == ChargeEventStatus.SNAPSHOT.ToString())
+                .ToListAsync();
+
+            if (!snapshotEvents.Any())
+                throw new Exception("Price snapshot not created. Please create snapshot before generating invoice.");
+
+            // Calculate totals from SNAPSHOT ChargeEvents
+            var subTotal = snapshotEvents.Sum(x => x.Amount);
+
+            // Apply GST (9% CGST + 9% SGST for same state, 18% IGST for interstate)
+            var isInterState = false; // TODO: Determine from customer state vs company state
+            decimal cgst = 0, sgst = 0, igst = 0;
+
+            if (isInterState)
+            {
+                igst = subTotal * 0.18m;
+            }
+            else
+            {
+                cgst = subTotal * 0.09m;
+                sgst = subTotal * 0.09m;
+            }
+
+            var grandTotal = subTotal + cgst + sgst + igst;
+
+            // ADVANCE PAYMENT ADJUSTMENT
+            var advancePayment = inward.AdvancePayment;
+            
+            // Validate: Advance payment should not exceed final amount
+            if (advancePayment > grandTotal)
+            {
+                throw new InvalidOperationException(
+                    $"Advance payment ({advancePayment:C}) exceeds final invoice amount ({grandTotal:C}). " +
+                    $"Cannot generate invoice.");
+            }
+
+            // Calculate balance payable after advance adjustment
+            var balancePayable = grandTotal - advancePayment;
 
             var invoice = new TaxInvoice
             {
@@ -250,12 +300,26 @@ namespace LIMSApi.ServiceWORepo
                 SubTotal = subTotal,
                 CGST = cgst,
                 SGST = sgst,
-                IGST = 0,
-                GrandTotal = subTotal + cgst + sgst
+                IGST = igst,
+                GrandTotal = grandTotal
             };
 
             _db.TaxInvoices.Add(invoice);
+            await _db.SaveChangesAsync(); // Save to get invoice ID
+
+            // Move ChargeEvents from SNAPSHOT to INVOICED
+            foreach (var evt in snapshotEvents)
+            {
+                evt.Status = ChargeEventStatus.INVOICED.ToString();
+                evt.TaxInvoiceID = invoice.ID;
+                evt.InvoicedDate = DateTime.UtcNow;
+                evt.ModifiedOn = DateTime.UtcNow;
+            }
+
+            // Update inward status
             inward.IsInvoiceGenerated = true;
+            inward.BillingStatus = BillingStatus.INVOICE_GENERATED.ToString();
+            inward.ModifiedOn = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
             return invoice.ID;
@@ -290,7 +354,7 @@ namespace LIMSApi.ServiceWORepo
             var fileName = paths.Count > 0 ? paths.Last() : "invoice.pdf";
             if (sendEmail)
             {
-                var body = EmailTemplateBuilder.Build("FINAL_INVOICE_POST_TESTING", modelBody);
+                var body =await _templateService.GetTemplateAsync(MessageTemplateKey.FINAL_INVOICE_GENERATED, NotificationType.Email, modelBody);
                 await _emailService.SendEmailWithAttachment(
                     invoice.Inward.Contacts.First().EmailId,
                     $"Tax Invoice - {invoice.InvoiceNo}",
@@ -302,7 +366,7 @@ namespace LIMSApi.ServiceWORepo
 
             if (sendWhatsApp)
             {
-                var body = WhatsAppTemplateBuilder.Build("FINAL_INVOICE_POST_TESTING", modelBody);
+                var body = await _templateService.GetTemplateAsync(MessageTemplateKey.FINAL_INVOICE_GENERATED, NotificationType.WhatsApp, modelBody);
                 await _whatsAppService.SendWhatsAppMessageAsync(
                     invoice.Inward.Contacts.First().MobileNo,
                     body
@@ -312,6 +376,11 @@ namespace LIMSApi.ServiceWORepo
 
         private TaxInvoicePdfModelDto MapToPdfModel(TaxInvoice invoice)
         {
+            // Get advance payment from inward (inward should already be loaded in SendInvoiceAsync)
+            var inward = invoice.Inward;
+            var advancePayment = inward?.AdvancePayment ?? 0;
+            var balancePayable = invoice.GrandTotal - advancePayment;
+
             return new TaxInvoicePdfModelDto
             {
                 InvoiceNo = invoice.InvoiceNo,
@@ -323,8 +392,16 @@ namespace LIMSApi.ServiceWORepo
                 CGST = invoice.CGST,
                 SGST = invoice.SGST,
                 IGST = invoice.IGST,
-                GrandTotal = invoice.GrandTotal
+                GrandTotal = invoice.GrandTotal,
+                AdvancePayment = advancePayment,
+                BalancePayable = balancePayable
             };
+        }
+
+        public async Task<long> GenerateProformaInvoiceAsync(long inwardId)
+        {
+            var proformaInvoiceId = await _proformaInvoiceRepository.GeneratePIAsync(inwardId);
+            return proformaInvoiceId;
         }
     }
 

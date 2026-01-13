@@ -29,5 +29,9 @@ namespace LIMSApi.Repositories.Interface
         Task DeleteEmployeeDocument(long id);
         Task<EmployeeDocument?> GetEmployeeDocumentById(long id);
         Task<List<EmployeeDocument>> GetEmployeeDocuments(long employeeId);
+
+        // Org Chart
+        Task<OrgNodeDto?> GetOrgChartAsync();
+        Task<List<OrgNodeDto>> GetDirectReportsAsync(long managerId);
     }
 }

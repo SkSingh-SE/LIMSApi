@@ -216,5 +216,84 @@ namespace LIMSApi.Repositories
                 .Where(d => d.EmployeeID == employeeId)
                 .ToListAsync();
         }
+
+        // Org Chart
+        public async Task<OrgNodeDto?> GetOrgChartAsync()
+        {
+            long rootEmployeeId = loggedInUser.EmployeeID;
+            var employees = await _context.EmployeeMasters
+                .Include(e => e.Department)
+                .Include(e => e.Designation)
+                .AsNoTracking()
+                .ToListAsync();
+
+            var lookup = employees.ToLookup(e => e.ReportingManagerID);
+
+            OrgNodeDto BuildTree(EmployeeMaster emp)
+            {
+                return new OrgNodeDto
+                {
+                    Id = emp.ID.ToString(),
+                    Name = emp.Name,
+                    Role = emp.Designation?.Name ?? "Employee",
+                    Department = emp.Department?.Name ?? "N/A",
+                    Location = (_context.AreaMasters.Find(emp.ResidentialAreaID))?.Name ?? "Patna",
+                    Initial = GetInitials(emp.Name),
+                    Type = emp.Designation?.Name ?? "Employee",
+                    ImageUrl = "",
+                    Color = GetAvatarColor(emp.EmailId),
+                    IsExpanded = true,
+                    Children = lookup[emp.ID]
+                        .Select(BuildTree)
+                        .ToList()
+                };
+            }
+
+            var root = employees.FirstOrDefault(e => e.ID == rootEmployeeId);
+            return root == null ? null : BuildTree(root);
+        }
+
+        public async Task<List<OrgNodeDto>> GetDirectReportsAsync(long managerId)
+        {
+            return await _context.EmployeeMasters
+                .Where(e => e.ReportingManagerID == managerId)
+                .Include(e => e.Department)
+                .Include(e => e.Designation)
+                .Select(e => new OrgNodeDto
+                {
+                    Id = e.ID.ToString(),
+                    Name = e.Name,
+                    Role = e.Designation!.Name!,
+                    Department = e.Department!.Name!,
+                    Location = e.ResidentialPinCode,
+                    Initial = GetInitials(e.Name),
+                    Type = e.Designation!.Name!,
+                    IsExpanded = false,
+                    Color = GetAvatarColor(e.EmailId)
+                })
+                .AsNoTracking()
+                .ToListAsync();
+        }
+
+        private static string GetInitials(string name)
+        {
+            return string.Join("", name
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Take(2)
+                .Select(x => char.ToUpper(x[0])));
+        }
+
+        private static string GetAvatarColor(string seed)
+        {
+            int hash = seed.GetHashCode();
+            var random = new Random(hash);
+
+            int r = random.Next(80, 200);
+            int g = random.Next(80, 200);
+            int b = random.Next(80, 200);
+
+            return $"#{r:X2}{g:X2}{b:X2}";
+        }
+
     }
 }

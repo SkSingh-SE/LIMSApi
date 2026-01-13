@@ -28,8 +28,9 @@ namespace LIMSApi.ServiceWORepo
         private readonly ISampleStatusService _sampleStatusService;
         private readonly IConfiguration _config;
         private readonly EmailService _emailService;
+        private readonly TemplateService _templateService;
 
-        public ReportService(LIMSContext db, IFileUploadService uploadService, IWorkflowService workflowService, ITestResultService testResultService, IReportBlockGenerator reportBlockGenerator, ISampleStatusService sampleStatusService, IConfiguration config, EmailService emailService)
+        public ReportService(LIMSContext db, IFileUploadService uploadService, IWorkflowService workflowService, ITestResultService testResultService, IReportBlockGenerator reportBlockGenerator, ISampleStatusService sampleStatusService, IConfiguration config, EmailService emailService, TemplateService templateService)
         {
             _db = db;
             fileUploadService = uploadService;
@@ -40,6 +41,7 @@ namespace LIMSApi.ServiceWORepo
             _sampleStatusService = sampleStatusService;
             _config = config;
             _emailService = emailService;
+            _templateService = templateService;
         }
 
         public async Task<PagedResponse<object>> GetReportDashboardList(PageFilter filter)
@@ -753,7 +755,7 @@ namespace LIMSApi.ServiceWORepo
             // -------------------------------------------------
             // 7️⃣ Send Email with PDF + Link
             // -------------------------------------------------
-            var body = EmailTemplateBuilder.Build("FINAL_REPORT_WITH_AMENDMENT_LINK", emailModel);
+            var body = await _templateService.GetTemplateAsync(MessageTemplateKey.AMENDED_REPORT_READY, NotificationType.Email, emailModel);
             if (email != null)
             {
                 await _emailService.SendEmailWithAttachment(

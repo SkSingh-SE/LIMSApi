@@ -64,8 +64,6 @@ namespace LIMSApi.Models
         public decimal? CreditLimitAmount { get; set; }
         public int? CreditLimitTime { get; set; } // in days
 
-        public bool CompanyVerified { get; set; }
-
         [MaxLength(500)]
         public string? Remark { get; set; }
         public string? DTestoLoginId { get; set; }
@@ -75,6 +73,9 @@ namespace LIMSApi.Models
 
         [StringLength(250)]
         public string? BlockReason { get; set; }
+        public bool IsVerified { get; set; } = false;
+        public DateTime? VerifiedOn { get; set; }
+        public long? VerifiedBy { get; set; }
 
         public virtual ICollection<ContactPerson> ContactPersons { get; set; } = new List<ContactPerson>();
         public virtual ICollection<CustomerCompanyCategory> CustomerCompanyCategories { get; set; } = new List<CustomerCompanyCategory>();

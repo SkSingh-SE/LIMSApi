@@ -20,15 +20,21 @@ namespace LIMSApi.ServiceWORepo
         private readonly EmailService _emailService;
         private readonly WhatsAppService _whatsAppService;
         private readonly INotificationService _notificationService;
+        private readonly ISampleStatusService _sampleStatusService;
+        private readonly LoggedInUserDTO _loggedInUser;
+        private readonly TemplateService _templateService;
 
         public PaymentService(LIMSContext db, IConfiguration config, EmailService emailService, WhatsAppService whatsAppService,
-        INotificationService notificationService)
+        INotificationService notificationService, ISampleStatusService sampleStatusService, TemplateService templateService)
         {
             _db = db;
             _config = config;
             _emailService = emailService;
             _whatsAppService = whatsAppService;
             _notificationService = notificationService;
+            _sampleStatusService = sampleStatusService;
+            _templateService = templateService;
+            _loggedInUser = LoggedInUserProvider.CurrentUser;
 
             _razorpay = new RazorpayClient(
                 _config["Razorpay:Key"],
@@ -202,8 +208,18 @@ namespace LIMSApi.ServiceWORepo
             return $"{_config["PublicBaseUrl"]}/payment/{token}";
         }
 
+        /// <summary>
+        /// Sends payment link via Email and WhatsApp. Only Accounts role can send payment links.
+        /// </summary>
         public async Task SendPaymentLinkAsync(long paymentOrderId)
         {
+            // Role check: Only Accounts role can send payment links
+            var user = LoggedInUserProvider.CurrentUser;
+            if (user == null || (user.Role != "Accounts" && !user.Role.Contains("Admin", StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new UnauthorizedAccessException("Only Accounts role can send payment links.");
+            }
+
             var order = await _db.PaymentOrders
                 .Include(x => x.Customer)
                 .FirstOrDefaultAsync(x => x.ID == paymentOrderId);
@@ -267,25 +283,13 @@ namespace LIMSApi.ServiceWORepo
                 }
                 if (order.PaymentType == PaymentType.PIInvoice)
                 {
-                    emailBody = EmailTemplateBuilder.Build(
-                        "PAYMENT_LINK",
-                        templateModel
-                    );
-                    whatsAppMsg = WhatsAppTemplateBuilder.Build(
-                        "PAYMENT_LINK",
-                        templateModel
-                    );
+                    emailBody = await _templateService.GetTemplateAsync(MessageTemplateKey.PAYMENT_LINK, NotificationType.Email, templateModel);
+                    whatsAppMsg = await _templateService.GetTemplateAsync(MessageTemplateKey.PAYMENT_LINK, NotificationType.WhatsApp, templateModel);
                 }
                 else
                 {
-                    emailBody = EmailTemplateBuilder.Build(
-                        "PAYMENT_LINK",
-                        templateModel
-                    );
-                    whatsAppMsg = WhatsAppTemplateBuilder.Build(
-                        "PAYMENT_LINK",
-                        templateModel
-                    );
+                    emailBody = await _templateService.GetTemplateAsync(MessageTemplateKey.PAYMENT_LINK, NotificationType.Email, templateModel);
+                    whatsAppMsg = await _templateService.GetTemplateAsync(MessageTemplateKey.PAYMENT_LINK, NotificationType.WhatsApp, templateModel);
                 }
             }
             else if (order.PaymentType == PaymentType.AmendmentInvoice)
@@ -305,14 +309,8 @@ namespace LIMSApi.ServiceWORepo
                 referenceText = $"Report {report?.ReportNo}";
                 customerName = report?.ReportHeader?.CustomerName ?? customerName;
 
-                emailBody = EmailTemplateBuilder.Build(
-                    "PAYMENT_LINK",
-                    templateModel
-                );
-                whatsAppMsg = WhatsAppTemplateBuilder.Build(
-                    "PAYMENT_LINK",
-                    templateModel
-                );
+                emailBody = await _templateService.GetTemplateAsync(MessageTemplateKey.PAYMENT_LINK, NotificationType.Email, templateModel);
+                whatsAppMsg = await _templateService.GetTemplateAsync(MessageTemplateKey.PAYMENT_LINK, NotificationType.WhatsApp, templateModel);
             }
 
             if (string.IsNullOrWhiteSpace(email) && string.IsNullOrWhiteSpace(mobileNo))
@@ -395,8 +393,9 @@ namespace LIMSApi.ServiceWORepo
             switch (order.PaymentType)
             {
                 case PaymentType.PIInvoice:
-                    var inward = await _db.SampleInwards.FindAsync(order.InwardID);
-                    inward!.PIReceived = true;
+                    var inwardPI = await _db.SampleInwards.FindAsync(order.InwardID);
+                    inwardPI!.PIReceived = true;
+                    // BillingStatus remains PI_GENERATED until final invoice
                     break;
 
                 case PaymentType.Invoice:
@@ -410,6 +409,36 @@ namespace LIMSApi.ServiceWORepo
                         var inwardFinal = await _db.SampleInwards.FindAsync(order.InwardID);
                         inwardFinal!.IsReportUnlocked = true;
                     }
+
+                    // Update BillingStatus based on payment status
+                    if (order.InwardID.HasValue)
+                    {
+                        var inward = await _db.SampleInwards
+                            .Include(i => i.ChargeEvents)
+                            .FirstOrDefaultAsync(i => i.ID == order.InwardID.Value);
+                        
+                        if (inward != null)
+                        {
+                            var totalInvoiceAmount = await _db.TaxInvoices
+                                .Where(t => t.InwardID == inward.ID)
+                                .SumAsync(t => t.GrandTotal);
+                            
+                            var totalPaid = await _db.PaymentOrders
+                                .Where(p => p.InwardID == inward.ID && 
+                                           (p.PaymentType == PaymentType.Invoice || p.PaymentType == PaymentType.AmendmentInvoice) &&
+                                           p.Status == PaymentStatus.Paid)
+                                .SumAsync(p => p.Amount);
+
+                            if (totalPaid >= totalInvoiceAmount)
+                            {
+                                inward.BillingStatus = BillingStatus.PAYMENT_COMPLETED.ToString();
+                            }
+                            else if (totalPaid > 0)
+                            {
+                                inward.BillingStatus = BillingStatus.PAYMENT_PARTIAL.ToString();
+                            }
+                        }
+                    }
                     break;
 
                 case PaymentType.AmendmentInvoice:
@@ -421,6 +450,43 @@ namespace LIMSApi.ServiceWORepo
 
                     if (amendment != null)
                         amendment.Status = "Approved";
+                    break;
+
+                case PaymentType.Advance:
+                    // Advance payment recording against PI
+                    if (!order.InwardID.HasValue)
+                        throw new Exception("Advance payment must be against Inward");
+
+                    var inwardAdvance = await _db.SampleInwards
+                        .Include(i => i.SampleDetails)
+                        .FirstOrDefaultAsync(i => i.ID == order.InwardID.Value);
+
+                    if (inwardAdvance == null)
+                        throw new Exception("Inward not found for advance payment");
+
+                    // Validate that PI exists for this inward
+                    var piExists = await _db.ProformaInvoiceHeader
+                        .AnyAsync(pi => pi.InwardID == inwardAdvance.ID && pi.IsActive);
+
+                    if (!piExists)
+                        throw new InvalidOperationException("Cannot record advance payment. Proforma Invoice must be generated first.");
+
+                    // Record advance payment amount (accumulate if multiple advance payments)
+                    inwardAdvance.AdvancePayment += order.Amount;
+
+                    // Update status of all samples for this inward to ADVANCE_PAYMENT_COMPLETED
+                    var samples = inwardAdvance.SampleDetails.Where(s => s.IsActive).ToList();
+                    foreach (var sample in samples)
+                    {
+                        await _sampleStatusService.ForceAutoStatusAsync(
+                            sample.ID,
+                            SampleStatus.ADVANCE_PAYMENT_COMPLETED,
+                            _loggedInUser.EmployeeID);
+                    }
+
+                    // Note: Advance does NOT close billing (BillingStatus remains unchanged)
+                    // Note: Advance does NOT unlock report (IsReportUnlocked remains false)
+                    
                     break;
             }
 

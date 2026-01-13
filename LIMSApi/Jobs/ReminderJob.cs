@@ -1,7 +1,10 @@
 ﻿
 using Hangfire;
 using LIMSApi.Data;
+using LIMSApi.Helpers;
+using LIMSApi.Helpers.Enums;
 using LIMSApi.Models;
+using LIMSApi.ServiceWORepo;
 using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Jobs
@@ -10,11 +13,16 @@ namespace LIMSApi.Jobs
     {
         private readonly LIMSContext _dbContext;
         private readonly ILogger<ReminderJob> _logger;
-        public ReminderJob(LIMSContext context, ILogger<ReminderJob> logger)
+        private readonly EmailService _emailService;
+        private readonly TemplateService _templateService;
+
+        public ReminderJob(LIMSContext context, ILogger<ReminderJob> logger, EmailService emailService,TemplateService templateService)
         {
             _dbContext = context;
             _logger = logger;
+            _emailService = emailService;
         }
+
         [AutomaticRetry(Attempts = 3)] // Hangfire retry policy
         public async Task Execute()
         {
@@ -28,7 +36,40 @@ namespace LIMSApi.Jobs
             {
                 _logger.LogInformation("ReminderJob started at {time}", DateTime.Now);
 
-                // Example: fetch customers needing reminders
+                // Send 12-hour reminders for cases with missing information (INWARD_REGISTERED status)
+                var casesNeedingReminder = await _dbContext.SampleInwards
+                    .Include(i => i.Customer)
+                    .Include(i => i.Contacts)
+                    .Where(i => i.IsActive && 
+                               i.InwardStatus == InwardStatus.INWARD_REGISTERED.ToString() &&
+                               i.ModifiedOn.HasValue &&
+                               (DateTime.UtcNow - i.ModifiedOn.Value).TotalHours >= 12)
+                    .ToListAsync();
+
+                int reminderCount = 0;
+                foreach (var inward in casesNeedingReminder)
+                {
+                    var modal = new
+                    {
+                        CaseNo = inward.CaseNo,
+                        CustomerName = inward.Customer?.Name
+                    };
+                    var contact = inward.Contacts?.FirstOrDefault(c => !string.IsNullOrEmpty(c.EmailId));
+                    if (contact != null)
+                    {
+                       var emailBody = await _templateService.GetTemplateAsync(MessageTemplateKey.SAMPLE_INWARD_INCOMPLETE_REMINDER, NotificationType.Email, modal);
+                        
+                        await _emailService.SendEmailAsync(
+                            contact.EmailId,
+                            $"Missing Information Reminder - Case {inward.CaseNo}",
+                            emailBody);
+                        
+                        reminderCount++;
+                        _logger.LogInformation("Sent reminder email for Case {CaseNo}", inward.CaseNo);
+                    }
+                }
+
+                // Also handle monthly billing customers (existing logic)
                 var customersToRemind = await _dbContext.Customers
                     .Where(c => c.MonthlyBillingCustomer && c.IsActive).ToListAsync();
 
@@ -36,15 +77,13 @@ namespace LIMSApi.Jobs
                 {
                     // Send reminder (email/SMS logic here)
                     // For example: await _notificationService.SendEmailAsync(customer.Email);
-
-                    // Mark reminder sent
                     Console.WriteLine("Send Reminder");
                 }
 
                 await _dbContext.SaveChangesAsync();
 
                 log.Status = "Success";
-                _logger.LogInformation("ReminderJob completed successfully at {time}", DateTime.Now);
+                _logger.LogInformation("ReminderJob completed successfully. Sent {Count} reminders at {time}", reminderCount, DateTime.Now);
             }
             catch (Exception ex)
             {

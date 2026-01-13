@@ -2,6 +2,7 @@
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
+using LIMSApi.Helpers.Enums;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using Microsoft.EntityFrameworkCore;
@@ -35,7 +36,7 @@ namespace LIMSApi.Repositories
 
             return $"PI/{year}/{next.ToString("D6")}";
         }
-        public async Task<long> GeneratePIAsync(long inwardId, bool applyGST, bool isInterState)
+        public async Task<long> GeneratePIAsync(long inwardId)
         {
             using var tx = await _context.Database.BeginTransactionAsync();
 
@@ -45,16 +46,23 @@ namespace LIMSApi.Repositories
                 if (await _context.ProformaInvoiceHeader.AnyAsync(x => x.InwardID == inwardId))
                     throw new Exception("PI already generated.");
 
-                // 2. VALIDATE PREPARATION COMPLETED
-                var prepRequired = await _context.SampleDetails
-                    .CountAsync(x => x.InwardID == inwardId && x.PreparationRequired);
+                // 2. VALIDATE INVOICE NOT ALREADY GENERATED
+                var inward = await _context.SampleInwards
+                    .Include(x => x.Customer)
+                    .FirstOrDefaultAsync(x => x.ID == inwardId);
 
-                var completed = await _context.CuttingChargeSamples
-                    .Where(x => x.CuttingChargeHeader.InwardID == inwardId)
-                    .CountAsync();
+                if (inward == null)
+                    throw new Exception("Inward not found.");
 
-                if (prepRequired > completed)
-                    throw new Exception("Sample preparation is not fully completed.");
+                if (inward.IsInvoiceGenerated)
+                    throw new InvalidOperationException("Cannot generate PI. Invoice has already been generated for this inward.");
+                var applyGST = inward?.Customer?.GSTNA ?? false;
+                // Check for existing TaxInvoice as additional safeguard
+                var hasInvoice = await _context.TaxInvoices
+                    .AnyAsync(x => x.InwardID == inwardId);
+
+                if (hasInvoice)
+                    throw new InvalidOperationException("Cannot generate PI. Invoice has already been generated for this inward.");
 
                 // 3. CUTTING + MACHINING
                 var cuttingHeader = await _context.CuttingChargeHeaders
@@ -80,76 +88,95 @@ namespace LIMSApi.Repositories
                     .Include(x => x.TestPlans)
                         .ThenInclude(x => x.ChemicalTests)
                             .ThenInclude(x => x.Elements)
+                    .Include(x => x.TestPlans)
+                        .ThenInclude(x => x.ChemicalTests)
+                            .ThenInclude(x => x.TestTypes)
                     .ToListAsync();
 
                 foreach (var sd in sampleDetails)
                 {
                     foreach (var plan in sd.TestPlans)
                     {
-                        // ---------------- GENERAL TESTS ----------------
+                        // ---------------- GENERAL TESTS ---------------- 
                         foreach (var gt in plan.GeneralTests)
                         {
                             foreach (var method in gt.Methods)
                             {
-                                decimal usedValue = method.Quantity; // HOURS / LOAD / etc
-
-                                var (rate, configId) = await GetRateBySelectionAsync(
-                                    method.LaboratoryTestID,
-                                    method.SelectionType,
-                                    method.Value.Value
-                                );
-
-                                var amount = rate * method.Quantity;
-                                totalTestAmount += amount;
-
-                                piTestDetails.Add(new ProformaInvoiceDetail
+                                try
                                 {
-                                    SampleID = sd.ID,
-                                    ChargeType = "GeneralTest",
-                                    Description = "General Test",
-                                    Quantity = method.Quantity,
-                                    Rate = rate,
-                                    Amount = amount,
-                                    SelectionType = method.SelectionType,
-                                    UsedValue = method.Value.Value,
-                                    InvoiceCaseConfigID = configId
-                                });
+                                    var (rate, configId, selectionType, usedValue) = await GetRateForGeneralTestAsync(
+                                        method.LaboratoryTestID,
+                                        gt,
+                                        method,
+                                        plan.ID
+                                    );
+
+                                    var amount = rate * method.Quantity;
+                                    totalTestAmount += amount;
+
+                                    piTestDetails.Add(new ProformaInvoiceDetail
+                                    {
+                                        SampleID = sd.ID,
+                                        ChargeType = "GeneralTest",
+                                        Description = "General Test",
+                                        Quantity = method.Quantity,
+                                        Rate = rate,
+                                        Amount = amount,
+                                        SelectionType = selectionType,
+                                        UsedValue = usedValue ?? 0,
+                                        InvoiceCaseConfigID = configId
+                                    });
+                                }
+                                catch
+                                {
+                                    // Log error and continue with next method
+                                    // You may want to add logging here
+                                    continue;
+                                }
                             }
                         }
 
-                        // ---------------- CHEMICAL TESTS (NEW LOGIC) ----------------
+                        // ---------------- CHEMICAL TESTS (NEW LOGIC) ---------------- 
                         foreach (var ct in plan.ChemicalTests)
                         {
                             // Count selected elements once
                             var usedElements = ct.Elements.Count(x => x.Selected);
 
                             // Loop over each selected TestType
-                            foreach (var tt in ct.TestTypes.Where(t => t.IsSelected))
+                            foreach (var tt in ct.TestTypes.Where(t => t.IsSelected && t.LaboratoryTestID.HasValue))
                             {
-                                long labTestId = tt.LaboratoryTestID ?? 0;
-
-                                // Fetch rate for this particular test type
-                                var (rate, configId) = await GetRateBySelectionAsync(
-                                    labTestId,
-                                    "Element",
-                                    usedElements
-                                );
-
-                                var amount = rate;
-                                totalTestAmount += amount;
-
-                                piTestDetails.Add(new ProformaInvoiceDetail
+                                try
                                 {
-                                    SampleID = sd.ID,
-                                    ChargeType = "ChemicalTest",
-                                    Description = $"Chemical Test - {tt.Name}",   // more meaningful
-                                    Quantity = 1,
-                                    Rate = rate,
-                                    Amount = amount,
-                                    SelectionType = "Element",
-                                    UsedValue = usedElements,
-                                    InvoiceCaseConfigID = configId
-                                });
+                                    if (!tt.LaboratoryTestID.HasValue) continue;
+
+                                    var (rate, configId, selectionType, usedValue) = await GetRateForChemicalTestAsync(
+                                        tt.LaboratoryTestID.Value,
+                                        ct,
+                                        usedElements
+                                    );
+
+                                    var amount = rate;
+                                    totalTestAmount += amount;
+
+                                    piTestDetails.Add(new ProformaInvoiceDetail
+                                    {
+                                        SampleID = sd.ID,
+                                        ChargeType = "ChemicalTest",
+                                        Description = $"Chemical Test - {tt.Name}",
+                                        Quantity = 1,
+                                        Rate = rate,
+                                        Amount = amount,
+                                        SelectionType = selectionType,
+                                        UsedValue = usedValue ?? 0,
+                                        InvoiceCaseConfigID = configId
+                                    });
+                                }
+                                catch
+                                {
+                                    // Log error and continue with next test type
+                                    // You may want to add logging here
+                                    continue;
+                                }
                             }
                         }
 
@@ -165,13 +192,8 @@ namespace LIMSApi.Repositories
 
                 if (applyGST)
                 {
-                    if (isInterState)
-                        igst = subTotal * 0.18m;
-                    else
-                    {
-                        cgst = subTotal * 0.09m;
-                        sgst = subTotal * 0.09m;
-                    }
+                    cgst = subTotal * 0.09m;
+                    sgst = subTotal * 0.09m;
                 }
 
                 var taxAmount = cgst + sgst + igst;
@@ -233,6 +255,13 @@ namespace LIMSApi.Repositories
                 }
 
                 await _context.SaveChangesAsync();
+
+                // Update BillingStatus to PI_GENERATED after successful PI creation
+                // Note: inward variable already loaded earlier for validation
+                inward.BillingStatus = BillingStatus.PI_GENERATED.ToString();
+                inward.ModifiedOn = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+
                 await tx.CommitAsync();
 
                 return piHeader.ID;
@@ -245,47 +274,315 @@ namespace LIMSApi.Repositories
         }
 
 
-        private async Task<(decimal Rate, long ConfigId)> GetRateBySelectionAsync(long testMethodId, string selectionType, decimal usedValue)
+        /// <summary>
+        /// Get rate for General Test by extracting parameter values from SpecificationLine
+        /// </summary>
+        private async Task<(decimal Rate, long ConfigId, string? SelectionType, decimal? UsedValue)> GetRateForGeneralTestAsync(
+            long laboratoryTestId,
+            GeneralTest generalTest,
+            GeneralTestMethod method,
+            long testPlanId)
         {
-            // 1️ Get Invoice Case for this Lab Test
+            // Get all InvoiceCaseConfigurations linked to this LaboratoryTest
+            var configs = await _context.LaboratoryTestInvoiceCase
+                .Where(lt => lt.LabTestID == laboratoryTestId)
+                .Include(lt => lt.InvoiceCaseConfiguration)
+                .Where(lt => lt.InvoiceCaseConfiguration != null && lt.InvoiceCaseConfiguration.IsActive)
+                .Select(lt => lt.InvoiceCaseConfiguration!)
+                .ToListAsync();
+
+            if (!configs.Any())
+                throw new Exception($"No pricing configuration found for LaboratoryTest {laboratoryTestId}");
+
+            // Get SpecificationLines for this GeneralTest (mechanical type)
+            var specificationLines = await _context.SpecificationLines
+                .Where(sl => (sl.SpecificationGradeID == generalTest.Specification1 ||
+                             (generalTest.Specification2.HasValue && sl.SpecificationGradeID == generalTest.Specification2.Value))
+                            && sl.Type == "mechanical"
+                            && sl.ParameterID.HasValue)
+                .Include(sl => sl.Parameter)
+                .ToListAsync();
+
+            // Get sample ID from the test plan
+            var testPlan = await _context.TestPlans
+                .FirstOrDefaultAsync(tp => tp.ID == testPlanId);
+
+            if (testPlan == null)
+                throw new Exception($"TestPlan {testPlanId} not found");
+
+            // Try to get TestResultParameter values if test results are available
+            var testResultHeader = await _context.TestResultHeaders
+                .Where(trh => trh.LaboratoryTestID == laboratoryTestId
+                             && trh.TestPlanID == testPlanId
+                             && trh.SampleID == testPlan.SampleID)
+                .Include(trh => trh.Parameters)
+                .FirstOrDefaultAsync();
+
+            // For each configuration, try to find matching parameter and calculate rate
+            foreach (var config in configs.OrderBy(c => c.SelectionType))
+            {
+                try
+                {
+                    var parameterValue = await ExtractParameterValueForConfigAsync(
+                        config,
+                        specificationLines,
+                        testResultHeader?.Parameters,
+                        "mechanical"
+                    );
+
+                    if (parameterValue.HasValue)
+                    {
+                        var (rate, configId) = await MatchConfigAndGetRateAsync(
+                            laboratoryTestId,
+                            config,
+                            parameterValue.Value
+                        );
+
+                        return (rate, configId, config.SelectionType, parameterValue.Value);
+                    }
+                }
+                catch
+                {
+                    continue;
+                }
+            }
+
+            throw new Exception($"No matching pricing configuration found for LaboratoryTest {laboratoryTestId} with available parameters");
+        }
+
+        /// <summary>
+        /// Get rate for Chemical Test
+        /// </summary>
+        private async Task<(decimal Rate, long ConfigId, string? SelectionType, decimal? UsedValue)> GetRateForChemicalTestAsync(
+            long laboratoryTestId,
+            ChemicalTest chemicalTest,
+            int usedElements)
+        {
+            // Get all InvoiceCaseConfigurations linked to this LaboratoryTest
+            var configs = await _context.LaboratoryTestInvoiceCase
+                .Where(lt => lt.LabTestID == laboratoryTestId)
+                .Include(lt => lt.InvoiceCaseConfiguration)
+                .Where(lt => lt.InvoiceCaseConfiguration != null && lt.InvoiceCaseConfiguration.IsActive)
+                .Select(lt => lt.InvoiceCaseConfiguration!)
+                .ToListAsync();
+
+            if (!configs.Any())
+                throw new Exception($"No pricing configuration found for LaboratoryTest {laboratoryTestId}");
+
+            // For Element type, use element count
+            var elementConfig = configs.FirstOrDefault(c => c.SelectionType == "Element");
+            if (elementConfig != null)
+            {
+                var (rate, configId) = await MatchConfigAndGetRateAsync(
+                    laboratoryTestId,
+                    elementConfig,
+                    usedElements
+                );
+
+                return (rate, configId, "Element", usedElements);
+            }
+
+            // For other types, get SpecificationLines from ChemicalTestElement
+            var specificationLineIds = chemicalTest.Elements
+                .Where(e => e.Selected)
+                .Select(e => e.SpecificationLineID)
+                .ToList();
+
+            var specificationLines = await _context.SpecificationLines
+                .Where(sl => specificationLineIds.Contains(sl.ID)
+                            && sl.Type == "chemical"
+                            && sl.ParameterID.HasValue)
+                .Include(sl => sl.Parameter)
+                .ToListAsync();
+
+            // Try to get TestResultParameter values if test results are available
+            var testResultHeader = await _context.TestResultHeaders
+                .Where(trh => trh.LaboratoryTestID == laboratoryTestId)
+                .Include(trh => trh.Parameters)
+                .FirstOrDefaultAsync();
+
+            // For each configuration, try to find matching parameter and calculate rate
+            foreach (var config in configs.OrderBy(c => c.SelectionType))
+            {
+                try
+                {
+                    var parameterValue = await ExtractParameterValueForConfigAsync(
+                        config,
+                        specificationLines,
+                        testResultHeader?.Parameters,
+                        "chemical"
+                    );
+
+                    if (parameterValue.HasValue)
+                    {
+                        var (rate, configId) = await MatchConfigAndGetRateAsync(
+                            laboratoryTestId,
+                            config,
+                            parameterValue.Value
+                        );
+
+                        return (rate, configId, config.SelectionType, parameterValue.Value);
+                    }
+                }
+                catch
+                {
+                    continue;
+                }
+            }
+
+            throw new Exception($"No matching pricing configuration found for LaboratoryTest {laboratoryTestId} with available parameters");
+        }
+
+        /// <summary>
+        /// Extract parameter value for a given configuration from SpecificationLine or TestResultParameter
+        /// </summary>
+        private Task<decimal?> ExtractParameterValueForConfigAsync(
+            InvoiceCaseConfiguration config,
+            List<SpecificationLine> specificationLines,
+            ICollection<TestResultParameter>? testResultParameters,
+            string parameterType)
+        {
+            // Get parameter names/aliases to match
+            var configNames = new List<string> { config.Name };
+            if (!string.IsNullOrWhiteSpace(config.AliasName))
+            {
+                configNames.AddRange(config.AliasName.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(a => a.Trim()));
+            }
+
+            // First, try to get from TestResultParameter (actual test results)
+            if (testResultParameters != null && testResultParameters.Any())
+            {
+                // Get ParameterMasters for the test result parameters
+                var parameterIds = testResultParameters.Select(trp => trp.ParameterID).Distinct().ToList();
+                var parameterMasters = _context.ParameterMasters
+                    .Where(pm => parameterIds.Contains(pm.ID))
+                    .ToDictionary(pm => pm.ID);
+
+                foreach (var trp in testResultParameters)
+                {
+                    if (!parameterMasters.TryGetValue(trp.ParameterID, out var paramMaster))
+                        continue;
+
+                    var paramName = paramMaster.Name?.ToLower() ?? "";
+                    var paramAlias = paramMaster.AliasName?.ToLower() ?? "";
+                    var trpParamName = trp.ParameterName?.ToLower() ?? "";
+
+                    foreach (var configName in configNames)
+                    {
+                        var configNameLower = configName.ToLower();
+                        if ((paramName.Contains(configNameLower) || configNameLower.Contains(paramName) ||
+                             paramAlias.Contains(configNameLower) || configNameLower.Contains(paramAlias) ||
+                             trpParamName.Contains(configNameLower) || configNameLower.Contains(trpParamName)) &&
+                            trp.Value.HasValue)
+                        {
+                            return Task.FromResult<decimal?>(trp.Value.Value);
+                        }
+                    }
+                }
+            }
+
+            // If not found in test results, try SpecificationLine
+            foreach (var specLine in specificationLines)
+            {
+                if (specLine.Parameter == null) continue;
+
+                var paramName = specLine.Parameter.Name?.ToLower() ?? "";
+                var paramAlias = specLine.Parameter.AliasName?.ToLower() ?? "";
+
+                foreach (var configName in configNames)
+                {
+                    var configNameLower = configName.ToLower();
+                    if (paramName.Contains(configNameLower) || configNameLower.Contains(paramName) ||
+                        paramAlias.Contains(configNameLower) || configNameLower.Contains(paramAlias))
+                    {
+                        // For range types, we might need to use MinValue or MaxValue
+                        // For single value types, we might need to use a default or calculated value
+                        // For now, return MinValue if available, otherwise MaxValue
+                        if (specLine.MinValue.HasValue)
+                            return Task.FromResult<decimal?>(specLine.MinValue.Value);
+                        if (specLine.MaxValue.HasValue)
+                            return Task.FromResult<decimal?>(specLine.MaxValue.Value);
+                    }
+                }
+            }
+
+            return Task.FromResult<decimal?>(null);
+        }
+
+        /// <summary>
+        /// Match configuration against parameter value and get rate
+        /// </summary>
+        private async Task<(decimal Rate, long ConfigId)> MatchConfigAndGetRateAsync(
+            long laboratoryTestId,
+            InvoiceCaseConfiguration config,
+            decimal usedValue)
+        {
+            // Get Invoice Case for this Lab Test
             var invoiceCase = await _context.InvoiceCases
-                .Where(x => x.LaboratoryTestID == testMethodId && x.IsActive)
+                .Where(x => x.LaboratoryTestID == laboratoryTestId && x.IsActive)
                 .Include(x => x.InvoiceCasePrices)
                 .FirstOrDefaultAsync();
 
             if (invoiceCase == null)
-                throw new Exception($"No invoice case found for TestMethodId {testMethodId}");
+                throw new Exception($"No invoice case found for LaboratoryTest {laboratoryTestId}");
 
-            // 2️ Get all related Configurations used in this Invoice Case
-            var configIds = invoiceCase.InvoiceCasePrices
-                .Select(x => x.InvoiceCaseConfigID)
-                .ToList();
+            // Check if this config is used in the invoice case
+            var configPrice = invoiceCase.InvoiceCasePrices
+                .FirstOrDefault(p => p.InvoiceCaseConfigID == config.ID);
 
-            var configs = await _context.InvoiceCaseConfigurations
-                .Where(c => configIds.Contains(c.ID)
-                            && c.SelectionType == selectionType
-                            && c.IsActive)
-                .ToListAsync();
+            if (configPrice == null)
+                throw new Exception($"Configuration {config.ID} not found in invoice case prices");
 
-            if (!configs.Any())
-                throw new Exception($"No pricing configuration found for SelectionType {selectionType}");
+            // Determine if this is a range type or single value type
+            var isRangeType = config.SelectionType.EndsWith("Range", StringComparison.OrdinalIgnoreCase);
 
-            // 3️ Select the nearest higher or equal slab
-            var selectedConfig = configs
-                .Where(c => decimal.Parse(c.Value) >= usedValue)
-                .OrderBy(c => decimal.Parse(c.Value))
-                .FirstOrDefault();
+            if (isRangeType)
+            {
+                // Range type: check if usedValue falls within Start and End
+                if (string.IsNullOrWhiteSpace(config.Start) || string.IsNullOrWhiteSpace(config.End))
+                    throw new Exception($"Configuration {config.ID} is a range type but Start or End is missing");
 
-            if (selectedConfig == null)
-                throw new Exception($"No pricing slab found for value {usedValue} under {selectionType}");
+                var startValue = decimal.Parse(config.Start);
+                var endValue = decimal.Parse(config.End);
 
-            // 4️ Get Price for the selected slab
-            var selectedPrice = invoiceCase.InvoiceCasePrices
-                .Where(p => p.InvoiceCaseConfigID == selectedConfig.ID)
-                .Select(p => p.Price)
-                .FirstOrDefault();
+                if (usedValue >= startValue && usedValue <= endValue)
+                {
+                    return (configPrice.Price, config.ID);
+                }
+            }
+            else
+            {
+                // Single value type: find the nearest higher or equal slab
+                // Get all configs of the same SelectionType
+                var allConfigsForType = await _context.LaboratoryTestInvoiceCase
+                    .Where(lt => lt.LabTestID == laboratoryTestId)
+                    .Include(lt => lt.InvoiceCaseConfiguration)
+                    .Where(lt => lt.InvoiceCaseConfiguration != null
+                                && lt.InvoiceCaseConfiguration.IsActive
+                                && lt.InvoiceCaseConfiguration.SelectionType == config.SelectionType)
+                    .Select(lt => lt.InvoiceCaseConfiguration!)
+                    .Where(c => !string.IsNullOrWhiteSpace(c.Value))
+                    .ToListAsync();
 
-            return (selectedPrice, selectedConfig.ID);
+                var matchingConfig = allConfigsForType
+                    .Where(c => !string.IsNullOrWhiteSpace(c.Value) && decimal.TryParse(c.Value, out var val) && val >= usedValue)
+                    .OrderBy(c => decimal.Parse(c.Value!))
+                    .FirstOrDefault();
+
+                if (matchingConfig != null && !string.IsNullOrWhiteSpace(matchingConfig.Value))
+                {
+                    var matchingPrice = invoiceCase.InvoiceCasePrices
+                        .FirstOrDefault(p => p.InvoiceCaseConfigID == matchingConfig.ID);
+
+                    if (matchingPrice != null)
+                    {
+                        return (matchingPrice.Price, matchingConfig.ID);
+                    }
+                }
+            }
+
+            throw new Exception($"No pricing slab found for value {usedValue} under SelectionType {config.SelectionType}");
         }
 
         public async Task<byte[]> GeneratePIPdfAsync(long piId)
@@ -401,9 +698,9 @@ namespace LIMSApi.Repositories
 
                 return pdfBytes;
             }
-            catch (Exception ex)
+            catch
             {
-                throw ex;
+                throw;
             }
         }
 

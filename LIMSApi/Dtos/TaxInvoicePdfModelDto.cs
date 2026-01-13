@@ -21,6 +21,10 @@
         public decimal SGST { get; set; }
         public decimal IGST { get; set; }
         public decimal GrandTotal { get; set; }
+        
+        // Advance payment adjustment
+        public decimal AdvancePayment { get; set; }
+        public decimal BalancePayable { get; set; }
 
         public string AmountInWords { get; set; } = null!;
     }

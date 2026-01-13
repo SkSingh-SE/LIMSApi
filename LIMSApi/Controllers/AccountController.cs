@@ -56,6 +56,16 @@ namespace LIMSApi.Controllers
             return Ok(result);
         }
         // -----------------------------------
+        // ZONE 4: CREATE PRICE SNAPSHOT
+        // -----------------------------------
+        [HttpPost("cases/{inwardId}/create-snapshot")]
+        public async Task<IActionResult> CreatePriceSnapshot(long inwardId)
+        {
+            await _accountService.CreatePriceSnapshotAsync(inwardId);
+            return Ok(new { message = "Price snapshot created successfully" });
+        }
+
+        // -----------------------------------
         // ZONE 4: GENERATE INVOICE
         // -----------------------------------
         [HttpPost("cases/{inwardId}/generate-invoice")]
@@ -73,6 +83,15 @@ namespace LIMSApi.Controllers
         {
             await _accountService.SendInvoiceAsync(invoiceId, email, whatsapp);
             return Ok(new { message = "Invoice sent successfully" });
+        }
+        // -----------------------------------
+        // GENERATE PROFORMA INVOICE
+        // -----------------------------------
+        [HttpPost("cases/{inwardId}/generate-proforma-invoice")]
+        public async Task<IActionResult> GenerateProformaInvoice(long inwardId)
+        {
+            var invoiceId = await _accountService.GenerateProformaInvoiceAsync(inwardId);
+            return Ok(new { invoiceId });
         }
     }
 }

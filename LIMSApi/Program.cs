@@ -236,6 +236,7 @@ builder.Services.AddScoped<IPushNotificationService, PushNotificationService>();
 builder.Services.AddScoped<IMaterialTestMappingService, MaterialTestMappingService>();
 builder.Services.AddScoped<ISampleStatusService, SampleStatusService>();
 builder.Services.AddScoped<ICuttingService, CuttingService>();
+builder.Services.AddScoped<IPriceCalculationService, PriceCalculationService>();
 
 
 
@@ -249,12 +250,18 @@ builder.Services.AddScoped<IReportBlockGenerator, ReportBlockGenerator>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<ICustomerAmendmentService, CustomerAmendmentService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
+builder.Services.AddScoped<DispatchService>();
+builder.Services.AddScoped<CaseClosureService>();
+
+// Register Dashboard Service
+builder.Services.AddScoped<IDashboardService, DashboardService>();
 
 // Third party services
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<SMSService>();
 builder.Services.AddScoped<WhatsAppService>();
 builder.Services.AddScoped<InvoicePdfService>();
+builder.Services.AddScoped<TemplateService>();
 
 //builder.Services.AddSingleton<IConverter>(
 //    new SynchronizedConverter(new PdfTools()));
@@ -262,7 +269,7 @@ builder.Services.AddScoped<InvoicePdfService>();
 // QuestPDF license (free Community)
 QuestPDF.Settings.License = LicenseType.Community;
 
-// your other services…
+// your other servicesï¿½
 
 
 builder.Services.AddSignalR();
@@ -278,7 +285,8 @@ var app = builder.Build();
 
 app.UseHangfireDashboard("/hangfire");
 // Schedule jobs directly
-RecurringJob.AddOrUpdate<ReminderJob>("ReminderJob", x => x.Execute(), "0 0 9 * * *");
+// ReminderJob: Run every 12 hours to send reminders for cases with missing information
+RecurringJob.AddOrUpdate<ReminderJob>("ReminderJob", x => x.Execute(), "0 */12 * * *");
 
 app.UseMiddleware<GeneralizedExceptionHandlingMiddleware>();
 // Configure the HTTP request pipeline.

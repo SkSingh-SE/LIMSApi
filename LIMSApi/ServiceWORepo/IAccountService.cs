@@ -9,8 +9,10 @@ namespace LIMSApi.ServiceWORepo
         Task<CaseAccountSummaryDto> GetCaseAccountSummaryAsync(long inwardId);
 
         Task<PagedResponse<object>> GetCasePaymentListAsync(long inwardId, PageFilter filter);
+        Task CreatePriceSnapshotAsync(long inwardId);
         Task<long> GenerateInvoiceAsync(long inwardId);
         Task SendInvoiceAsync(long invoiceId, bool sendEmail, bool sendWhatsApp);
+        Task<long> GenerateProformaInvoiceAsync(long inwardId);
     }
 
 }

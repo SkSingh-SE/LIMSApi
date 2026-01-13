@@ -2,7 +2,7 @@
 {
     public interface IProformaInvoiceRepository
     {
-        Task<long> GeneratePIAsync(long inwardId, bool applyGST, bool isInterState);
+        Task<long> GeneratePIAsync(long inwardId);
         Task<string> GeneratePINoAsync();
         Task<byte[]> GeneratePIPdfAsync(long piId);
     }

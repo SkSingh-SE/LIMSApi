@@ -125,5 +125,9 @@ namespace LIMSApi.Repositories
         {
             return await _context.Customers.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
+        public async Task<bool> ValidateDuplicateCustomer(string gst, long Id)
+        {
+            return await _context.Customers.AnyAsync(x => x.GSTNo == gst && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+        }
     }
 }

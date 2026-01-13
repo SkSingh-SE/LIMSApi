@@ -1,164 +1,116 @@
 ﻿using System;
 using System.Text;
 using System.Reflection;
+using LIMSApi.Helpers.Enums;
 
 namespace LIMSApi.Helpers
 {
     public static class EmailTemplateBuilder
     {
-        public static string Build(string templateCode, object model)
+        public static string Build(string body, object model)
         {
-            var template = GetTemplate(templateCode);
+            return ReplacePlaceholders(body, model);
+        }
+
+        public static string BuildWithTemplateKey(
+            MessageTemplateKey key,
+            object model)
+        {
+            var template = GetTemplate(key);
             return ReplacePlaceholders(template, model);
         }
 
         // =====================================================
-        // TEMPLATE REGISTRY (HARDCODED – REPLACE LATER)
+        // TEMPLATE REGISTRY (ENUM BASED)
         // =====================================================
-        private static string GetTemplate(string templateCode)
+        private static string GetTemplate(MessageTemplateKey key)
         {
-            return templateCode switch
+            return key switch
             {
-                "CASE_CREATED" => CaseCreated(),
-                "PI_GENERATED" => PiGenerated(),
-                "PI_PAID" => PiPaid(),
-                "FINAL_INVOICE_GENERATED" => FinalInvoiceGenerated(),
-                "CASE_CLOSED" => CaseClosed(),
-                "SAMPLE_ADDED" => SampleAdded(),
-                "SINGLE_SAMPLE_INVOICE" => SingleSampleInvoice(),
-                "SAMPLE_REPORT_DELIVERED" => SampleReportDelivered(),
-                "FINAL_INVOICE_POST_TESTING" => FinalInvoicePostTesting(),
-                "AMENDMENT_REQUESTED" => AmendmentRequested(),
-                "AMENDMENT_DELIVERED" => AmendmentDelivered(),
-                "FINAL_REPORT_WITH_AMENDMENT_LINK" => FinalReportWithAmendmentLink(),
-                "PAYMENT_LINK" => PaymentLink(),
+                MessageTemplateKey.SAMPLE_INWARD_ACK => SampleInwardAck(),
+                MessageTemplateKey.SAMPLE_INWARD_INCOMPLETE_REMINDER => SampleInwardIncompleteReminder(),
+                MessageTemplateKey.SAMPLE_INWARD_UPDATED => SampleInwardUpdated(),
+
+                MessageTemplateKey.PROFORMA_INVOICE_SENT => ProformaInvoiceSent(),
+                MessageTemplateKey.FINAL_INVOICE_GENERATED => FinalInvoiceGenerated(),
+                MessageTemplateKey.FINAL_INVOICE_POST_TESTING => FinalInvoicePostTesting(),
+
+                MessageTemplateKey.PAYMENT_LINK => PaymentLink(),
+                MessageTemplateKey.PAYMENT_RECEIVED => PaymentReceived(),
+
+                MessageTemplateKey.CUSTOMER_AMENDMENT_REQUESTED => CustomerAmendmentRequested(),
+                MessageTemplateKey.AMENDED_REPORT_READY => AmendedReportReady(),
+
+                MessageTemplateKey.CASE_CLOSED => CaseClosed(),
 
                 _ => throw new InvalidOperationException(
-                    $"Email template '{templateCode}' not found.")
+                    $"Email template not defined for {key}")
             };
         }
 
         // =====================================================
-        // TEMPLATE DEFINITIONS
+        // EMAIL TEMPLATES
         // =====================================================
-
-        private static string CaseCreated() => @"
+        private static string SampleInwardAck() => @"
 <p>Dear {{CustomerName}},</p>
-<p>Your case <strong>{{CaseNo}}</strong> has been successfully created.</p>
-<p>We will keep you informed as the case progresses.</p>
+<p>Your sample has been received successfully.</p>
+<p>Case No: <strong>{{CaseNo}}</strong></p>
 <p>Regards,<br/>Laboratory Team</p>";
 
-        private static string PiGenerated() => @"
+        private static string SampleInwardIncompleteReminder() => @"
 <p>Dear {{CustomerName}},</p>
-<p>A Proforma Invoice <strong>{{PINO}}</strong> has been generated for case <strong>{{CaseNo}}</strong>.</p>
-<p>Please find the invoice attached.</p>
-<p>Regards,<br/>Accounts Team</p>";
+<p>Your sample inward is incomplete for case <strong>{{CaseNo}}</strong>.</p>
+<p>Please submit pending details.</p>
+<p>Regards,<br/>Laboratory Team</p>";
 
-        private static string PiPaid() => @"
+        private static string SampleInwardUpdated() => @"
 <p>Dear {{CustomerName}},</p>
-<p>We have received payment for Proforma Invoice <strong>{{PINO}}</strong>.</p>
-<p>Thank you for your cooperation.</p>
+<p>Your sample details have been updated for case <strong>{{CaseNo}}</strong>.</p>
+<p>Regards,<br/>Laboratory Team</p>";
+
+        private static string ProformaInvoiceSent() => @"
+<p>Dear {{CustomerName}},</p>
+<p>Proforma Invoice <strong>{{PINO}}</strong> has been generated.</p>
 <p>Regards,<br/>Accounts Team</p>";
 
         private static string FinalInvoiceGenerated() => @"
 <p>Dear {{CustomerName}},</p>
-<p>The final invoice <strong>{{InvoiceNo}}</strong> has been generated for case <strong>{{CaseNo}}</strong>.</p>
-<p>Please find the invoice attached.</p>
+<p>Final Invoice <strong>{{InvoiceNo}}</strong> has been generated.</p>
 <p>Regards,<br/>Accounts Team</p>";
-
-        private static string CaseClosed() => @"
-<p>Dear {{CustomerName}},</p>
-<p>Your case <strong>{{CaseNo}}</strong> has been successfully closed.</p>
-<p>Thank you for choosing our laboratory services.</p>
-<p>Regards,<br/>Laboratory Team</p>";
-
-        private static string SampleAdded() => @"
-<p>Dear {{CustomerName}},</p>
-<p>A new sample <strong>{{SampleCode}}</strong> has been added to case <strong>{{CaseNo}}</strong>.</p>
-<p>We will notify you once testing is completed.</p>
-<p>Regards,<br/>Laboratory Team</p>";
-
-        private static string SingleSampleInvoice() => @"
-<p>Dear {{CustomerName}},</p>
-<p>An invoice <strong>{{InvoiceNo}}</strong> has been generated for sample <strong>{{SampleCode}}</strong>.</p>
-<p>Please find the invoice attached.</p>
-<p>Regards,<br/>Accounts Team</p>";
-
-        private static string SampleReportDelivered() => @"
-<p>Dear {{CustomerName}},</p>
-<p>The test report for sample <strong>{{SampleCode}}</strong> is now available.</p>
-<p>Please find the report attached.</p>
-<p>Regards,<br/>Laboratory Team</p>";
 
         private static string FinalInvoicePostTesting() => @"
 <p>Dear {{CustomerName}},</p>
-<p>The final invoice <strong>{{InvoiceNo}}</strong> has been generated after completion of testing for case <strong>{{CaseNo}}</strong>.</p>
-<p>Please find the invoice attached.</p>
+<p>Final Invoice <strong>{{InvoiceNo}}</strong> generated post testing.</p>
 <p>Regards,<br/>Accounts Team</p>";
-
-        private static string AmendmentRequested() => @"
-<p>Dear {{CustomerName}},</p>
-<p>Your amendment request for report <strong>{{ReportNo}}</strong> has been received.</p>
-<p>Our team will review the request and update you shortly.</p>
-<p>Regards,<br/>Laboratory Team</p>";
-
-        private static string AmendmentDelivered() => @"
-<p>Dear {{CustomerName}},</p>
-<p>The amended report for <strong>{{ReportNo}}</strong> has been completed.</p>
-<p>Please find the amended report attached.</p>
-<p>Regards,<br/>Laboratory Team</p>";
-
-        private static string FinalReportWithAmendmentLink() => @"
-<p>Dear {{CustomerName}},</p>
-
-<p>
-Please find attached the final test report
-<strong>{{ReportNo}}</strong>.
-</p>
-
-<p>
-If you require any amendments (typographical corrections,
-clarifications, or regulatory wording changes), you may submit
-a request using the secure link below:
-</p>
-
-<p>
-<a href=""{{AmendmentLink}}"">Request Report Amendment</a>
-</p>
-
-<p>
-This link is valid for 7 days.
-</p>
-
-<p>
-Regards,<br/>
-Laboratory Team
-</p>";
 
         private static string PaymentLink() => @"
 <p>Dear {{CustomerName}},</p>
+<p>Payment of ₹{{Amount}} is pending.</p>
+<p><a href=""{{PaymentLink}}"">Pay Now</a></p>
+<p>Regards,<br/>Accounts Team</p>";
 
-<p>
-Payment of <strong>₹{{Amount}}</strong> is pending for
-<strong>{{ReferenceText}}</strong>.
-</p>
+        private static string PaymentReceived() => @"
+<p>Dear {{CustomerName}},</p>
+<p>Payment received successfully.</p>
+<p>Regards,<br/>Accounts Team</p>";
 
-<p>
-Please complete the payment using the link below:
-</p>
+        private static string CustomerAmendmentRequested() => @"
+<p>Dear {{CustomerName}},</p>
+<p>Your amendment request has been received.</p>
+<p>Regards,<br/>Laboratory Team</p>";
 
-<p>
-<a href=""{{PaymentLink}}"">Pay Now</a>
-</p>
+        private static string AmendedReportReady() => @"
+<p>Dear {{CustomerName}},</p>
+<p>Your amended report is ready.</p>
+<p>Regards,<br/>Laboratory Team</p>";
 
-<p>
-Regards,<br/>
-Accounts Team
-</p>";
-
+        private static string CaseClosed() => @"
+<p>Dear {{CustomerName}},</p>
+<p>Your case <strong>{{CaseNo}}</strong> has been closed.</p>
+<p>Regards,<br/>Laboratory Team</p>";
 
         // =====================================================
-        // PLACEHOLDER ENGINE (COMMON FOR ALL TEMPLATES)
+        // PLACEHOLDER ENGINE
         // =====================================================
         private static string ReplacePlaceholders(string template, object model)
         {
@@ -167,7 +119,7 @@ Accounts Team
 
             var result = new StringBuilder(template);
             var props = model.GetType()
-                             .GetProperties(BindingFlags.Public | BindingFlags.Instance);
+                .GetProperties(BindingFlags.Public | BindingFlags.Instance);
 
             foreach (var prop in props)
             {
@@ -179,6 +131,4 @@ Accounts Team
             return result.ToString();
         }
     }
-
-
 }

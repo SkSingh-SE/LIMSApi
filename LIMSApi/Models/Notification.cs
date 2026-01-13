@@ -22,6 +22,8 @@ namespace LIMSApi.Models
     {
         System = 0,
         General = 1,
-        Workflow = 2
+        Workflow = 2,
+        Email = 3,
+        WhatsApp = 4
     }
 }

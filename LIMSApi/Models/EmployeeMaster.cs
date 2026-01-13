@@ -103,7 +103,7 @@ public partial class EmployeeMaster : AuditProperty
     [ForeignKey("DesignationID")]
     public virtual DesignationMaster? Designation { get; set; }
 
-    [ForeignKey("ReportingTo")]
+    [ForeignKey("ReportingManagerID")]
     public virtual EmployeeMaster? ReportingManager { get; set; }
 
     [ForeignKey("UserID")]

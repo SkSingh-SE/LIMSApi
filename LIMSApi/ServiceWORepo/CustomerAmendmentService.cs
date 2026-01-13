@@ -10,10 +10,15 @@ namespace LIMSApi.ServiceWORepo
     {
         private readonly LIMSContext _db;
         private readonly IPaymentService _paymentService;
-        public CustomerAmendmentService(LIMSContext db, IPaymentService paymentService)
+        private readonly Services.Interface.IPriceCalculationService _priceCalculationService;
+        private readonly ILogger<CustomerAmendmentService> _logger;
+
+        public CustomerAmendmentService(LIMSContext db, IPaymentService paymentService, Services.Interface.IPriceCalculationService priceCalculationService, ILogger<CustomerAmendmentService> logger)
         {
             _db = db;
             _paymentService = paymentService;
+            _priceCalculationService = priceCalculationService;
+            _logger = logger;
         }
 
         // ---------------------------------------------
@@ -135,6 +140,25 @@ namespace LIMSApi.ServiceWORepo
             amendment.Amount = amount;
             amendment.PaymentOrderID = paymentOrder.ID;
             amendment.Status = "PaymentPending";
+
+            // Create ChargeEvent for amendment
+            var inward = tokenEntity.Report.ReportHeader.Sample?.SampleInward;
+            if (inward != null)
+            {
+                var chargeEvent = new ChargeEvent
+                {
+                    InwardID = inward.ID,
+                    ReportID = amendment.ReportID,
+                    ChargeType = "Amendment",
+                    Description = $"Report Amendment - {tokenEntity.Report.ReportHeader.ReportNo}",
+                    Quantity = 1,
+                    Rate = amount,
+                    Amount = amount,
+                    Status = Helpers.Enums.ChargeEventStatus.DRAFT.ToString(),
+                    CreatedOn = DateTime.UtcNow
+                };
+                _db.ChargeEvents.Add(chargeEvent);
+            }
 
             await _db.SaveChangesAsync();
             await _paymentService.SendPaymentLinkAsync(paymentOrder.ID);

@@ -67,6 +67,10 @@ namespace LIMSApi.Services
             if (exists)
                 throw new InvalidOperationException("Same Customer already exists!");
 
+            bool duplicateCustomer = await _customerRepository.ValidateDuplicateCustomer(model.GSTNo, model.ID);
+            if(duplicateCustomer)
+                throw new InvalidOperationException("Same Customer GST already exists!");
+
             var existingCustomer = await _customerRepository.GetCustomerById(model.ID);
             if (existingCustomer == null)
                 throw new InvalidOperationException("Customer not found!");
@@ -99,7 +103,7 @@ namespace LIMSApi.Services
             existingCustomer.ConstantDiscountPercentage = model.ConstantDiscountPercentage;
             existingCustomer.CreditLimitAmount = model.CreditLimitAmount;
             existingCustomer.CreditLimitTime = model.CreditLimitTime;
-            existingCustomer.CompanyVerified = model.CompanyVerified;
+            existingCustomer.IsVerified = model.IsVerified;
             existingCustomer.Remark = model.Remark;
             existingCustomer.ModifiedOn = DateTime.UtcNow;
             existingCustomer.ModifiedBy = loggedInUser.EmployeeID;
@@ -248,6 +252,18 @@ namespace LIMSApi.Services
         public async Task<List<DropdwonSelector>> GetCustomerDropdown(string? searchTerm, int pageNo, int pageSize)
         {
             return await _customerRepository.GetCustomerDropdown(searchTerm, pageNo, pageSize);
+        }
+
+        public async Task VerifyCustomer(long id, bool status)
+        {
+           var customer = await _customerRepository.GetCustomerById(id);
+            if(customer == null)
+                throw new InvalidOperationException("Customer not found!");
+            customer.IsVerified = status;
+            customer.VerifiedOn = DateTime.UtcNow;
+            customer.VerifiedBy = loggedInUser.EmployeeID;
+            await _customerRepository.UpdateCustomer(customer);
+
         }
     }
 }

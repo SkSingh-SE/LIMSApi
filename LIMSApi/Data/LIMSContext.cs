@@ -145,6 +145,8 @@ public partial class LIMSContext : DbContext
     public DbSet<ReportAmendmentToken> ReportAmendmentTokens { get; set; }
     public DbSet<CustomerAmendment> CustomerAmendments { get; set; }
     public DbSet<TaxInvoice> TaxInvoices { get; set; }
+    public DbSet<ChargeEvent> ChargeEvents { get; set; }
+    public DbSet<MessageTemplate> MessageTemplates { get; set; }
 
     //    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     //#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the BankName= syntax to read it from _configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
@@ -156,6 +158,12 @@ public partial class LIMSContext : DbContext
       .HasKey(x => new { x.SpecificationLineID, x.LaboratoryTestID });
 
         modelBuilder.Entity<MetalClassificationParameter>().HasKey(x => new { x.MetalClassificationID, x.ParameterID });
+
+        // MessageTemplate unique constraint
+        modelBuilder.Entity<MessageTemplate>()
+            .HasIndex(t => new { t.TemplateKey, t.Type, t.Version })
+            .IsUnique()
+            .HasDatabaseName("IX_MessageTemplate_TemplateKey_Channel_Version");
 
         // Workflow → Steps (keep cascade)
         modelBuilder.Entity<WorkflowStep>()

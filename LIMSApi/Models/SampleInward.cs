@@ -64,6 +64,10 @@ namespace LIMSApi.Models
         public string InwardStatus { get; set; } = "Sample Received";
         public string ReviewStatus { get; set; } = "Pending";
 
+        // Billing status tracking
+        [StringLength(50)]
+        public string? BillingStatus { get; set; } // PRICE_DRAFTED, PI_GENERATED, PRICE_SNAPSHOT, etc.
+
         public DateTime CollectionTime { get; set; } = DateTime.UtcNow;
         public long? ReviewedBy { get; set; }     
         public DateTime? ReviewedOn { get; set; }
@@ -83,6 +87,7 @@ namespace LIMSApi.Models
         public virtual ICollection<SampleInwardAddressInfo> Addresses { get; set; }
         = new List<SampleInwardAddressInfo>();
         public virtual ICollection<SampleDetail> SampleDetails { get; set; } = new List<SampleDetail>();
+        public virtual ICollection<ChargeEvent> ChargeEvents { get; set; } = new List<ChargeEvent>();
         //public virtual ICollection<SampleTestPlan> SampleTestPlans { get; set; } = new List<SampleTestPlan>();
 
         [ForeignKey("CustomerID")]

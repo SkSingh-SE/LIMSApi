@@ -64,8 +64,15 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> GetCustomerDropdown(string? searchTerm, int pageNo, int pageSize)
         {
             var data = await _customerService.GetCustomerDropdown(searchTerm, pageNo, pageSize);
-            return data == null ? NoContent(): Ok(data);
+            return data == null ? NoContent() : Ok(data);
         }
 
+        [HttpPatch("verify/{id}")]
+        public async Task<IActionResult> VerifyCustomer(long id, bool status)
+        {
+             await _customerService.VerifyCustomer(id, status);
+            
+            return Ok(new { message = "Customer verified successfully." });
+        }
     }
 }

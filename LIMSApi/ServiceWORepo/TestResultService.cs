@@ -21,8 +21,10 @@ namespace LIMSApi.ServiceWORepo
         private readonly IFileUploadService _fileUploadService;
         private readonly IWorkflowService _workflowService;
         private readonly ISampleStatusService _sampleStatusService;
+        private readonly Services.Interface.IPriceCalculationService _priceCalculationService;
+        private readonly ILogger<TestResultService> _logger;
 
-        public TestResultService(LIMSContext db, FormulaEvaluator formulaEvaluator, IFileUploadService fileUploadService, IWorkflowService workflowService, ISampleStatusService sampleStatusService)
+        public TestResultService(LIMSContext db, FormulaEvaluator formulaEvaluator, IFileUploadService fileUploadService, IWorkflowService workflowService, ISampleStatusService sampleStatusService, Services.Interface.IPriceCalculationService priceCalculationService, ILogger<TestResultService> logger)
         {
             _db = db;
             _formulaEvaluator = formulaEvaluator;
@@ -30,6 +32,8 @@ namespace LIMSApi.ServiceWORepo
             _fileUploadService = fileUploadService;
             _workflowService = workflowService;
             _sampleStatusService = sampleStatusService;
+            _priceCalculationService = priceCalculationService;
+            _logger = logger;
         }
 
 
@@ -854,14 +858,55 @@ namespace LIMSApi.ServiceWORepo
                         await _workflowService.StartWorkflow(report.ID,WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Report_Review));
                     }
 
+                    // 5️⃣ Check inward-level testing status (informational only - price calculation happens after approval)
+                    await CheckAndUpdateInwardTestingStatusAsync(sample.InwardID);
+
                 }
                 await trx.CommitAsync();
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 await trx.RollbackAsync();
-                throw ex;
+                throw;
             }
+        }
+
+        /// <summary>
+        /// Checks inward-level testing status (informational only)
+        /// Note: Price calculation is triggered separately after report approval, not during testing completion
+        /// </summary>
+        private async Task CheckAndUpdateInwardTestingStatusAsync(long inwardId)
+        {
+            // Get all samples for this inward
+            var samples = await _db.SampleDetails
+                .Where(s => s.InwardID == inwardId && s.IsActive)
+                .ToListAsync();
+
+            if (!samples.Any())
+                return;
+
+            // Count testing status (informational tracking only)
+            var totalSamples = samples.Count;
+            var completedSamples = samples.Count(s => s.IsTestingCompleted);
+            
+            // Determine inward testing status (informational only)
+            bool isTestingPartial = completedSamples > 0 && completedSamples < totalSamples;
+            bool isTestingCompleted = completedSamples == totalSamples;
+
+            // Log status for informational purposes
+            if (isTestingPartial)
+            {
+                _logger.LogInformation("Inward {InwardID} has partial testing status: {Completed}/{Total} samples completed", 
+                    inwardId, completedSamples, totalSamples);
+            }
+            else if (isTestingCompleted)
+            {
+                _logger.LogInformation("Inward {InwardID} has completed testing: {Completed}/{Total} samples completed", 
+                    inwardId, completedSamples, totalSamples);
+            }
+
+            // Note: Price calculation will be triggered after report approval (FINAL_REPORT_APPROVED)
+            // This method only tracks status, does NOT trigger price calculation
         }
 
         public async Task MoveToLongTerm(MoveToLongTermDto dto)

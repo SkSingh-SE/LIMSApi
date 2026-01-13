@@ -24,7 +24,8 @@ namespace LIMSApi.Services
         private readonly ISampleInwardRepository _sampleInwardRepo;
         private readonly ISampleStatusService _statusService;
         private readonly LIMSContext context;
-        public WorkflowService(IWorkflowRepository WorkflowRepository, ILogger<WorkflowService> logger, INotificationService notification, IEmployeeService employeeService, ISampleInwardRepository sampleInwardRepo, ISampleStatusService statusService, LIMSContext context)
+        private readonly IPriceCalculationService _priceCalculationService;
+        public WorkflowService(IWorkflowRepository WorkflowRepository, ILogger<WorkflowService> logger, INotificationService notification, IEmployeeService employeeService, ISampleInwardRepository sampleInwardRepo, ISampleStatusService statusService, LIMSContext context, IPriceCalculationService priceCalculationService)
         {
             _logger = logger;
             _repository = WorkflowRepository;
@@ -33,6 +34,7 @@ namespace LIMSApi.Services
             _sampleInwardRepo = sampleInwardRepo;
             _statusService = statusService;
             this.context = context;
+            _priceCalculationService = priceCalculationService;
             _loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
@@ -674,6 +676,7 @@ namespace LIMSApi.Services
         {
             var report = await context.ReportHeaders
                 .Include(x => x.Sample)
+                    .ThenInclude(s => s.SampleInward)
                 .FirstOrDefaultAsync(x => x.ID == reportHeaderId)
                 ?? throw new KeyNotFoundException("Report not found.");
 
@@ -685,6 +688,14 @@ namespace LIMSApi.Services
                         report.SampleID,
                         SampleStatus.FINAL_REPORT_APPROVED,
                         _loggedInUser.EmployeeID);
+
+                    // After report approval, check if all samples for inward are approved
+                    // If all approved, trigger price calculation
+                    if (report.Sample != null && report.Sample.SampleInward != null)
+                    {
+                        var inwardId = report.Sample.InwardID;
+                        await TriggerPriceCalculationIfAllSamplesApprovedAsync(inwardId);
+                    }
                     break;
 
                 case WorkflowActions.Back:
@@ -706,6 +717,56 @@ namespace LIMSApi.Services
 
             await context.SaveChangesAsync();
         }
+
+        /// <summary>
+        /// Triggers price calculation if all samples for an inward have FINAL_REPORT_APPROVED status
+        /// </summary>
+        private async Task TriggerPriceCalculationIfAllSamplesApprovedAsync(long inwardId)
+        {
+            try
+            {
+                // Get all samples for this inward
+                var samples = await context.SampleDetails
+                    .Where(s => s.InwardID == inwardId && s.IsActive)
+                    .ToListAsync();
+
+                if (!samples.Any())
+                    return;
+
+                // Check if all samples have FINAL_REPORT_APPROVED status
+                var allSamplesApproved = samples.All(s => 
+                    s.SampleStatus == SampleStatus.FINAL_REPORT_APPROVED.ToString());
+
+                if (allSamplesApproved)
+                {
+                    // Check if DRAFT ChargeEvents already exist (avoid duplicates)
+                    var hasExistingDraftChargeEvents = await context.ChargeEvents
+                        .AnyAsync(ce => ce.InwardID == inwardId && 
+                                       ce.Status == ChargeEventStatus.DRAFT.ToString());
+
+                    if (!hasExistingDraftChargeEvents)
+                    {
+                        // Trigger price calculation
+                        await _priceCalculationService.CalculateAndCreateChargeEventsAsync(inwardId);
+                        _logger.LogInformation("Price calculation triggered for Inward {InwardID} after all reports approved", inwardId);
+                    }
+                    else
+                    {
+                        _logger.LogInformation("Price calculation already done for Inward {InwardID}, skipping", inwardId);
+                    }
+                }
+                else
+                {
+                    _logger.LogDebug("Not all samples approved for Inward {InwardID}, skipping price calculation", inwardId);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't fail the report approval
+                // Price calculation can be retried later
+                _logger.LogError(ex, "Failed to trigger price calculation for Inward {InwardID} after report approval", inwardId);
+            }
+        }
         private async Task HandleReportAmendment(long amendmentId, string action)
         {
             var amendment = await context.AmendmentRequests
@@ -713,11 +774,20 @@ namespace LIMSApi.Services
                 .FirstOrDefaultAsync(a => a.ID == amendmentId)
                 ?? throw new KeyNotFoundException("Amendment not found.");
 
+            // AUDIT LOGGING: Track who and when (ModifiedBy/ModifiedOn set explicitly for audit trail)
+            amendment.ModifiedBy = _loggedInUser.EmployeeID;
+            amendment.ModifiedOn = DateTime.UtcNow;
+
             switch (action)
             {
                 case WorkflowActions.Next: // APPROVED
                     amendment.Status = "Approved";
                     amendment.ReportHeader.Status = "Approved";
+
+                    _logger.LogInformation(
+                        "Internal amendment {AmendmentID} approved by Employee {EmployeeID}. " +
+                        "Reason: {Reason}. Report {ReportHeaderID}.",
+                        amendmentId, _loggedInUser.EmployeeID, amendment.Reason, amendment.ReportHeaderID);
 
                     await _statusService.ForceAutoStatusAsync(
                         amendment.ReportHeader.SampleID,
@@ -728,11 +798,20 @@ namespace LIMSApi.Services
                 case WorkflowActions.Back: // SEND BACK
                     amendment.Status = "Pending";
                     amendment.ReportHeader.Status = "Under Amendment Review";
+                    
+                    _logger.LogInformation(
+                        "Internal amendment {AmendmentID} sent back by Employee {EmployeeID}.",
+                        amendmentId, _loggedInUser.EmployeeID);
                     break;
 
                 case WorkflowActions.Cancel: // REJECT
                     amendment.Status = "Rejected";
                     amendment.ReportHeader.Status = "Report Generated";
+
+                    _logger.LogInformation(
+                        "Internal amendment {AmendmentID} rejected by Employee {EmployeeID}. " +
+                        "Original reason: {Reason}. Report {ReportHeaderID}.",
+                        amendmentId, _loggedInUser.EmployeeID, amendment.Reason, amendment.ReportHeaderID);
 
                     await _statusService.ForceAutoStatusAsync(
                         amendment.ReportHeader.SampleID,

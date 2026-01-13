@@ -91,5 +91,19 @@ namespace LIMSApi.Controllers
             return data == null ? NoContent(): Ok(data);
         }
 
+        // Full hierarchy (CEO / Root)
+        [HttpGet("org-chart")]
+        public async Task<IActionResult> GetOrgChart()
+        {
+            var result = await _employeeService.GetOrgChartAsync();
+            return result == null ? NotFound() : Ok(result);
+        }
+
+        // Lazy-load expand (children only)
+        [HttpGet("{employeeId}/children")]
+        public async Task<IActionResult> GetChildren(long employeeId)
+        {
+            return Ok(await _employeeService.GetDirectReportsAsync(employeeId));
+        }
     }
 }
