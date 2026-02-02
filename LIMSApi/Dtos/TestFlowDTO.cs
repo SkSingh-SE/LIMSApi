@@ -39,8 +39,8 @@
         public decimal? MaxValue { get; set; }
 
         // Evaluation flags
-        public bool IsWithinLimit { get; set; }      // true / false based on min-max
-        public bool Altered { get; set; }             // edited after initial entry
+        public bool? IsWithinLimit { get; set; } = false;     // true / false based on min-max
+        public bool Altered { get; set; } = false;   // edited after initial entry
 
         // Formula / calculation metadata
         public string? Formula { get; set; }

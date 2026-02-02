@@ -81,5 +81,32 @@ namespace LIMSApi.ServiceWORepo
                 _ => "Notification service temporarily unavailable"
             };
         }
+
+        public string GetMessageBody(MessageTemplateKey templateKey)
+        {
+            return templateKey switch
+            {
+                MessageTemplateKey.SEND_OTP => @"
+                        Dear {UserName},
+
+                        We received a request to enable two-factor authentication on your account.
+
+                        Your one-time verification code is:
+
+                        {OTP}
+
+                        This code is valid for the next 5 minutes.
+                        For your security, please do not share this code with anyone.
+
+                        If you did not initiate this request, please contact the system administrator immediately.
+
+                        Regards,
+                        Security Team
+                        {ApplicationName}
+                        ",
+                _ => throw new ArgumentOutOfRangeException(nameof(templateKey))
+            };
+        }
+
     }
 }

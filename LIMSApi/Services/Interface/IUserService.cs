@@ -12,6 +12,11 @@ namespace LIMSApi.Services.Interface
         Task<List<UserMaster>> GetAllUserByRoleId(long Id);
 
         Task<List<DropdwonSelector>> GetUserDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<UserAccountDto> GetByEmployee(long employeeId);
+        Task UpdateByEmployee(long employeeId, UserAccountDto dto);
+        Task ResetPassword(ResetPasswordDto dto);
+        Task SendTwoFactorOtp(Send2FADto dto);
+        Task VerifyTwoFactorOtp(Verify2FADto dto);
 
     }
 }

@@ -9,6 +9,9 @@
         Report,
         Material,
         Product,
+        Organization,
+        Nabl,
+        Signatory,
         Other
     }
 }

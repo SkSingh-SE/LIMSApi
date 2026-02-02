@@ -216,20 +216,20 @@ namespace LIMSApi.Services
                 await _sampleStatusService.UpdateInwardStatus(entity.ID, inwardStatus, loggedInUser.EmployeeID);
 
                 // Send acknowledgment email if complete
-                if (isComplete && entity.Contacts.Any())
-                {
-                    var emailBody = await _templateService.GetTemplateAsync(MessageTemplateKey.SAMPLE_INWARD_ACK, NotificationType.Email, new
-                    {
-                        CustomerName = entity.Customer.Name,
-                        CaseNo = entity.CaseNo
-                    });
-                    var contact = entity.Contacts.FirstOrDefault(c => !string.IsNullOrEmpty(c.EmailId));
-                    if (contact != null)
-                    {
-                        //var emailBody = $"<h3>Sample Inward Acknowledgment</h3><p>Your sample case {entity.CaseNo} has been registered successfully. All required information has been received.</p>";
-                        await _emailService.SendEmailAsync(contact.EmailId, $"Sample Inward Acknowledgment - {entity.CaseNo}", emailBody);
-                    }
-                }
+                //if (isComplete && entity.Contacts.Any())
+                //{
+                //    var emailBody = await _templateService.GetTemplateAsync(MessageTemplateKey.SAMPLE_INWARD_ACK, NotificationType.Email, new
+                //    {
+                //        CustomerName = entity.Customer.Name,
+                //        CaseNo = entity.CaseNo
+                //    });
+                //    var contact = entity.Contacts.FirstOrDefault(c => !string.IsNullOrEmpty(c.EmailId));
+                //    if (contact != null)
+                //    {
+                //        //var emailBody = $"<h3>Sample Inward Acknowledgment</h3><p>Your sample case {entity.CaseNo} has been registered successfully. All required information has been received.</p>";
+                //        await _emailService.SendEmailAsync(contact.EmailId, $"Sample Inward Acknowledgment - {entity.CaseNo}", emailBody);
+                //    }
+                //}
             }
             catch (Exception ex)
             {
@@ -978,6 +978,7 @@ namespace LIMSApi.Services
                         }
                         else
                         {
+                            plan.ChemicalTests.Clear(); // for safe & single chemical test
                             chem = new ChemicalTest
                             {
                                 Elements = new List<ChemicalTestElement>(),
@@ -1464,8 +1465,11 @@ namespace LIMSApi.Services
                             Elements = ct.Elements.Select(e => new ChemicalTestElementDto
                             {
                                 ID = e.ID,
+                                ParameterUnitID = e.ParameterUnitID,
                                 ChemicalTestID = e.ChemicalTestID,
-                                ParameterID = e.ParameterID
+                                ParameterID = e.ParameterID,
+                                Selected = e.Selected,
+                                SpecificationLineID = e.SpecificationLineID
                             }).ToList()
                         }).ToList()
                     }))

@@ -137,11 +137,23 @@ namespace LIMSApi.Services
                     uploadDirectory = Path.Combine(uploadDirectory, year.ToString());
                 }
             }
+            else if (fileType == FileType.Organization)
+            {
+                uploadDirectory = Path.Combine(_baseUploadDirectory, "Organization");
+            }
+            else if (fileType == FileType.Nabl)
+            {
+                uploadDirectory = Path.Combine(_baseUploadDirectory, "Nabl");
+            }
+            else if (fileType == FileType.Signatory)
+            {
+                uploadDirectory = Path.Combine(_baseUploadDirectory, "Signatory");
+            }
             else
             {
                 uploadDirectory = Path.Combine(_baseUploadDirectory, "Other");
             }
-            return uploadDirectory;
+            return uploadDirectory; 
         }
 
         public async Task RemoveFileAsync(long Id)

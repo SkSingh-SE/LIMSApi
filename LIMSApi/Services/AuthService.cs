@@ -1,4 +1,5 @@
 ﻿using System.IdentityModel.Tokens.Jwt;
+using System.Net;
 using System.Security.Authentication;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -20,61 +21,114 @@ namespace LIMSApi.Services
         private readonly string _jwtSecret;
         private readonly PasswordHasher<UserMaster> _passwordHasher;
         private readonly IConfiguration _configuration;
-        private readonly EmailService emailService;
-        private LoggedInUserDTO loggedInUserDTO;
-        public AuthService(IUserRepository userRepository, ILogger<AuthService> logger, string jwtSecret, IConfiguration configuration, EmailService emailService)
+        private readonly EmailService _emailService;
+        private readonly IHttpContextAccessor _httpContextAccessor;
+        public AuthService(IHttpContextAccessor httpContextAccessor, IConfiguration configuration, ILogger<AuthService> logger, IUserRepository userRepository, EmailService emailService)
         {
             _userRepository = userRepository;
             _logger = logger;
-            _jwtSecret = jwtSecret;
             _passwordHasher = new PasswordHasher<UserMaster>();
             _configuration = configuration;
-            this.emailService = emailService;
-            loggedInUserDTO = LoggedInUserProvider.CurrentUser;
+            _emailService = emailService;
+            _httpContextAccessor = httpContextAccessor;
+            _jwtSecret = _configuration["Jwt:Secret"] ?? string.Empty;
+
         }
         public static DateTimeOffset ConvertToTimeZone(DateTime utcDateTime, string timeZoneId)
         {
             var timeZone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
             return TimeZoneInfo.ConvertTimeFromUtc(utcDateTime, timeZone);
         }
+
         public async Task<object> Authenticate(LoginDTO login)
         {
-            var date1 = DateTime.UtcNow;
-
-            DateTimeOffset localTime = ConvertToTimeZone(date1, "India Standard Time");
-            Console.WriteLine(localTime);
+            var nowUtc = DateTime.UtcNow;
+            var localTime = ConvertToTimeZone(nowUtc, "India Standard Time");
 
             var user = await _userRepository.GetUserByEmail(login.Email);
 
-            if (user == null)
+            if (user is null)
+                throw new UnauthorizedAccessException("Invalid credentials");
+
+            if (user.AccountStatus is "Disabled" or "Locked")
+                throw new UnauthorizedAccessException("Account is not accessible");
+
+            if (!user.IsLoginEnabled)
+                throw new UnauthorizedAccessException("Login access denied");
+
+            // 🔐 Access policy checks
+
+            var httpContext = _httpContextAccessor.HttpContext!;
+            var isRemote = IsRemoteRequest(httpContext);
+
+            if (isRemote && !user.RemoteLogin)
+                throw new UnauthorizedAccessException("Access denied");
+
+            if (isRemote)
             {
-                throw new UnauthorizedAccessException($"Login failed for user: {login.Email}");
+                if (!IsIpAllowed(user.IpRestriction, httpContext))
+                    throw new UnauthorizedAccessException("Access denied");
+
+                if (!IsWithinWorkingHours(user.WorkingHours, localTime))
+                    throw new UnauthorizedAccessException("Access denied");
             }
 
+            if (user.ForcePasswordChange && user.SessionTimeout > 0)
+            {
+                throw new UnauthorizedAccessException("Session Time out, need to change password");
+            }
             // Validate password hash
-            var result = _passwordHasher.VerifyHashedPassword(user, user.Password, login.Password);
+            var passwordResult = _passwordHasher.VerifyHashedPassword(user, user.Password!, login.Password);
 
-            if (result == PasswordVerificationResult.Failed)
+            if (passwordResult == PasswordVerificationResult.Failed)
             {
-                throw new InvalidCredentialException($"Invalid password for user: {user.UserName}");
+                user.FailedLoginAttempts++;
+
+                if (user.AutoLockAfterAttempts > 0 && user.FailedLoginAttempts >= user.AutoLockAfterAttempts)
+                {
+                    user.AccountStatus = "Locked";
+                }
+
+                await _userRepository.UpdateUser(user);
+                throw new UnauthorizedAccessException("Invalid credentials");
             }
+
+
+            user.FailedLoginAttempts = 0;
+            user.LastLoginDate = nowUtc;
 
             var token = GenerateJwtToken(user);
             _logger.LogInformation("User {Username} logged in successfully", user.UserName);
 
+            await _userRepository.UpdateUser(user);
+
             var expireHours = Convert.ToInt32(_configuration["Jwt:ExpirationHours"]);
-            var responseObject = new
+            return new LoginResponseDto
             {
-                token = token,
-                userId = user.ID,
-                name = user.UserName,
-                email = user.EmailId,
-                role = user.RoleName,
-                isAdmin = user.IsAdmin,
-                expiresInSecond = expireHours * 60 * 60,
-                employeeId = user.EmployeeID
+                Token = token,
+                UserId = user.ID,
+                EmployeeId = user.EmployeeID,
+
+                UserName = user.UserName,
+                Email = user.EmailId!,
+                Role = user.RoleName!,
+                IsAdmin = user.IsAdmin,
+
+                AccountStatus = string.IsNullOrEmpty(user.AccountStatus) ? user.IsActive ? "Active" : "In-Active" : user.AccountStatus,
+                LastLoginDate = user.LastLoginDate,
+                FailedLoginAttempts = user.FailedLoginAttempts,
+
+                SessionTimeout = user.SessionTimeout,
+                TwoFactorEnabled = user.TwoFactorEnabled,
+                AutoLockAfterAttempts = user.AutoLockAfterAttempts,
+                UnlockMethod = string.IsNullOrEmpty(user.UnlockMethod) ? "Admin" : user.UnlockMethod,
+
+                AllowRemoteLogin = user.RemoteLogin,
+                IpRestriction = user.IpRestriction,
+                WorkingHours = user.WorkingHours,
+
+                ExpiresInSeconds = expireHours * 60 * 60
             };
-            return responseObject;
         }
 
         public async Task<object> GetRefreshToken()
@@ -86,7 +140,7 @@ namespace LIMSApi.Services
             //{
             //    throw new UnauthorizedAccessException("Token has expired. Please login again.");
             //}
-
+            var loggedInUserDTO = GetCurrentUser();
             if (loggedInUserDTO != null)
             {
                 var user = await _userRepository.GetUserByEmail(loggedInUserDTO.Email);
@@ -139,7 +193,7 @@ namespace LIMSApi.Services
         {
             var expireHours = Convert.ToInt32(_configuration["Jwt:ExpirationHours"]);
             var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.UTF8.GetBytes(_jwtSecret);
+            var key = string.IsNullOrWhiteSpace(_jwtSecret) ? Encoding.UTF8.GetBytes(_configuration["Jwt:Secret"]) : Encoding.UTF8.GetBytes(_jwtSecret);
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(new[]
@@ -175,7 +229,118 @@ namespace LIMSApi.Services
 
         public string GetHashedPassword(string password)
         {
-            return _passwordHasher.HashPassword(null, password); 
+            return _passwordHasher.HashPassword(null, password);
         }
+        private bool IsRemoteRequest(HttpContext context)
+        {
+            var remoteIp = context.Connection.RemoteIpAddress;
+
+            if (remoteIp is null)
+                return false;
+
+            return !IPAddress.IsLoopback(remoteIp);
+        }
+
+
+        private bool IsIpAllowed(string? ipRestriction, HttpContext context)
+        {
+            if (string.IsNullOrWhiteSpace(ipRestriction))
+                return true;
+
+            var remoteIp = context.Connection.RemoteIpAddress;
+            if (remoteIp is null)
+                return false;
+
+            var rules = ipRestriction
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            foreach (var rule in rules)
+            {
+                if (IsIpMatch(remoteIp, rule))
+                    return true;
+            }
+
+            return false;
+        }
+        private bool IsIpMatch(IPAddress clientIp, string rule)
+        {
+            if (rule.Contains('/'))
+                return IsInCidrRange(clientIp, rule);
+
+            return IPAddress.TryParse(rule, out var allowedIp) &&
+                   allowedIp.Equals(clientIp);
+        }
+        private bool IsInCidrRange(IPAddress address, string cidr)
+        {
+            var parts = cidr.Split('/');
+            if (parts.Length != 2)
+                return false;
+
+            if (!IPAddress.TryParse(parts[0], out var baseIp))
+                return false;
+
+            if (!int.TryParse(parts[1], out var prefixLength))
+                return false;
+
+            var addressBytes = address.GetAddressBytes();
+            var baseBytes = baseIp.GetAddressBytes();
+
+            if (addressBytes.Length != baseBytes.Length)
+                return false;
+
+            var maskBits = prefixLength;
+
+            for (int i = 0; i < addressBytes.Length && maskBits > 0; i++)
+            {
+                var mask = maskBits >= 8 ? 255 : (byte)(~(255 >> maskBits));
+                if ((addressBytes[i] & mask) != (baseBytes[i] & mask))
+                    return false;
+
+                maskBits -= 8;
+            }
+
+            return true;
+        }
+
+
+        private bool IsWithinWorkingHours(string? workingHours, DateTimeOffset localTime)
+        {
+            if (string.IsNullOrWhiteSpace(workingHours))
+                return true;
+
+            var parts = workingHours.Split('-', StringSplitOptions.TrimEntries);
+            if (parts.Length != 2)
+                return false;
+
+            if (!TimeSpan.TryParse(parts[0], out var start))
+                return false;
+
+            if (!TimeSpan.TryParse(parts[1], out var end))
+                return false;
+
+            var now = localTime.TimeOfDay;
+
+            return now >= start && now <= end;
+        }
+
+        private LoggedInUserDTO? GetCurrentUser()
+        {
+            var user = _httpContextAccessor.HttpContext?.User;
+
+            if (user == null || !user.Identity?.IsAuthenticated == true)
+                return null;
+
+            return new LoggedInUserDTO
+            {
+                UserId = long.Parse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0"),
+                Name = user.FindFirst(ClaimTypes.Name)?.Value ?? "",
+                Email = user.FindFirst(ClaimTypes.Email)?.Value ?? "",
+                Role = user.FindFirst(ClaimTypes.Role)?.Value,
+                EmployeeID = long.Parse(user.FindFirst("EmployeeID")?.Value ?? "0"),
+                CompanyCode = user.FindFirst("CompanyCode")?.Value
+            };
+        }
+
+
     }
 }

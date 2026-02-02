@@ -140,6 +140,7 @@ namespace LIMSApi.Repositories
                                    .Select(e => e.Name)
                                    .FirstOrDefault()
                 });
+            query = query.AsQueryable().ApplyFilters(filter.Filter);
 
             return await ApplyPagingFilteringSorting(query, filter);
         }
@@ -173,6 +174,7 @@ namespace LIMSApi.Repositories
                                    .FirstOrDefault()
                 });
 
+            query = query.AsQueryable().ApplyFilters(filter.Filter);
             return await ApplyPagingFilteringSorting(query, filter);
         }
 
@@ -361,14 +363,13 @@ namespace LIMSApi.Repositories
                         .FirstOrDefault()
                 };
 
+            query = query.AsQueryable().ApplyFilters(filter.Filter);
             return await ApplyPagingFilteringSorting(query, filter);
         }
 
 
         private async Task<PagedResponse<object>> ApplyPagingFilteringSorting(IQueryable<object> query, PageFilter filter)
         {
-            // Apply custom filters (your extension method)
-            query = query.AsQueryable().ApplyFilters(filter.Filter);
 
             // Search
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))

@@ -98,5 +98,35 @@ namespace LIMSApi.Repositories
 
             return data;
         }
+
+        public async Task<UserMaster> GetByEmployee(long employeeId)
+        {
+            var user = await context.UserMasters
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.EmployeeID == employeeId);
+
+            if (user is null) throw new InvalidOperationException("User not found for the given employee ID.");
+
+            return user;
+        }
+        public async Task UpdateByEmployee(long employeeId, UserAccountDto dto)
+        {
+            var user = await context.UserMasters
+                .FirstOrDefaultAsync(u => u.EmployeeID == employeeId);
+
+            if (user is null) throw new InvalidOperationException("User not found for the given employee ID.");
+
+
+            user.SessionTimeout = dto.SessionTimeout;
+            user.ForcePasswordChange = dto.ForcePasswordChange;
+            user.UnlockMethod = dto.UnlockMethod;
+            user.RemoteLogin = dto.AllowRemoteLogin;
+            user.IpRestriction = dto.IpRestriction;
+            user.WorkingHours = dto.WorkingHours;
+            user.TwoFactorEnabled = dto.TwoFactorEnabled;
+
+            await context.SaveChangesAsync();
+
+        }
     }
 }

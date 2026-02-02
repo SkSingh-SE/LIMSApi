@@ -12,6 +12,7 @@ using LIMSApi.Services.Interface;
 using LIMSApi.ServiceWORepo;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using QuestPDF.Infrastructure;
@@ -88,8 +89,24 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         ValidAudience = builder.Configuration["Jwt:Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret))
     };
-});
 
+    option.Events = new JwtBearerEvents
+    {
+        OnChallenge = context =>
+        {
+            context.HandleResponse();
+
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            context.Response.ContentType = "application/json";
+
+            return context.Response.WriteAsJsonAsync(new
+            {
+                message = "Token expired or invalid. Please login again."
+            });
+        }
+    };
+});
+builder.Services.AddAuthorization();
 
 
 
@@ -98,19 +115,12 @@ builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
 builder.Services.AddScoped<LoggedInUserProvider>();
 
 
-builder.Services.AddScoped<IAuthService>(provider =>
-{
-    var userRepository = provider.GetRequiredService<IUserRepository>();
-    var logger = provider.GetRequiredService<ILogger<AuthService>>();
-    var configuration = provider.GetRequiredService<IConfiguration>();
-    var emailService = provider.GetRequiredService<EmailService>();
-    return new AuthService(userRepository, logger, jwtSecret, configuration,emailService);
-});
+builder.Services.AddScoped<IAuthService, AuthService>();
 
 // Register Repositories
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAreaRepository, AreaRepository>();
-builder.Services.AddScoped<IBankRepository,BankRepository>();
+builder.Services.AddScoped<IBankRepository, BankRepository>();
 builder.Services.AddScoped<ICalibrationAgencyRepository, CalibrationAgencyRepository>();
 builder.Services.AddScoped<ICityRepository, CityRepository>();
 builder.Services.AddScoped<ICompanyCategoryRepository, CompanyCategoryRepository>();
@@ -160,11 +170,11 @@ builder.Services.AddScoped<IUniversalCodeTypeRepository, UniversalCodeTypeReposi
 builder.Services.AddScoped<IVendorRepository, VendorRepository>();
 builder.Services.AddScoped<IInvoiceCaseConfigurationRepository, InvoiceCaseConfigurationRepository>();
 builder.Services.AddScoped<IInvoiceCaseRepository, InvoiceCaseRepository>();
-builder.Services.AddScoped<ICuttingPriceMasterRepository,CuttingPriceMasterRepository>();
-builder.Services.AddScoped<IConfigurationRepository,ConfigurationRepository>();
-builder.Services.AddScoped<IMenuRepository,MenuRepository>();
-builder.Services.AddScoped<IRoleRepository,RoleRepository>();
-builder.Services.AddScoped<IUserPermissionRepository,UserPermissionRepository>();
+builder.Services.AddScoped<ICuttingPriceMasterRepository, CuttingPriceMasterRepository>();
+builder.Services.AddScoped<IConfigurationRepository, ConfigurationRepository>();
+builder.Services.AddScoped<IMenuRepository, MenuRepository>();
+builder.Services.AddScoped<IRoleRepository, RoleRepository>();
+builder.Services.AddScoped<IUserPermissionRepository, UserPermissionRepository>();
 builder.Services.AddScoped<ISampleInwardRepository, SampleInwardRepository>();
 builder.Services.AddScoped<IWorkflowRepository, WorkflowRepository>();
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
@@ -177,19 +187,19 @@ builder.Services.AddScoped<IProformaInvoiceRepository, ProformaInvoiceRepository
 // Register Services
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAreaService, AreaService>();
-builder.Services.AddScoped<IBankService,BankService>();
+builder.Services.AddScoped<IBankService, BankService>();
 builder.Services.AddScoped<ICalibrationAgencyService, CalibrationAgencyService>();
 builder.Services.AddScoped<ICityService, CityService>();
 builder.Services.AddScoped<ICompanyCategoryService, CompanyCategoryService>();
 builder.Services.AddScoped<ICountryService, CountryService>();
-builder.Services.AddScoped<ICourierService,CourierService>();
+builder.Services.AddScoped<ICourierService, CourierService>();
 builder.Services.AddScoped<ICurrencyService, CurrencyService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
-builder.Services.AddScoped<IDepartmentService,DepartmentService>();
+builder.Services.AddScoped<IDepartmentService, DepartmentService>();
 builder.Services.AddScoped<IDesignationService, DesignationService>();
-builder.Services.AddScoped<IDimensionalFactorService,DimensionalFactorService>();
+builder.Services.AddScoped<IDimensionalFactorService, DimensionalFactorService>();
 builder.Services.AddScoped<IDisciplineService, DisciplineService>();
-builder.Services.AddScoped<IDispatchModeService,DispatchModeService>();
+builder.Services.AddScoped<IDispatchModeService, DispatchModeService>();
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
 builder.Services.AddScoped<IEquipmentService, EquipmentService>();
 builder.Services.AddScoped<IEquipmentTypeService, EquipmentTypeService>();
@@ -205,7 +215,7 @@ builder.Services.AddScoped<IParameterService, ParameterService>();
 builder.Services.AddScoped<IParameterUnitService, ParameterUnitService>();
 builder.Services.AddScoped<IProductConditionService, ProductConditionService>();
 builder.Services.AddScoped<IProductSpecificationService, ProductSpecificationService>();
-builder.Services.AddScoped<IRemarkService,RemarkService>();
+builder.Services.AddScoped<IRemarkService, RemarkService>();
 builder.Services.AddScoped<ISiteActivityService, SiteActivityService>();
 builder.Services.AddScoped<ISiteErrorService, SiteErrorService>();
 builder.Services.AddScoped<ISpecificationHeaderService, SpecificationHeaderService>();
@@ -216,7 +226,7 @@ builder.Services.AddScoped<IStateService, StateService>();
 builder.Services.AddScoped<ISubContractorService, SubContractorService>();
 builder.Services.AddScoped<ISubGroupService, SubGroupService>();
 builder.Services.AddScoped<ISupplierService, SupplierService>();
-builder.Services.AddScoped<ITaxService,TaxService>();
+builder.Services.AddScoped<ITaxService, TaxService>();
 builder.Services.AddScoped<ITestGroupService, TestGroupService>();
 builder.Services.AddScoped<ITestMethodSpecificationService, TestMethodSpecificationService>();
 builder.Services.AddScoped<ITPIMasterService, TPIMasterService>();
@@ -252,6 +262,7 @@ builder.Services.AddScoped<ICustomerAmendmentService, CustomerAmendmentService>(
 builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<DispatchService>();
 builder.Services.AddScoped<CaseClosureService>();
+builder.Services.AddScoped<ISettingsService,SettingsService>();
 
 // Register Dashboard Service
 builder.Services.AddScoped<IDashboardService, DashboardService>();
@@ -283,33 +294,59 @@ builder.Services.AddHangfireServer();
 
 var app = builder.Build();
 
-app.UseHangfireDashboard("/hangfire");
-// Schedule jobs directly
-// ReminderJob: Run every 12 hours to send reminders for cases with missing information
-RecurringJob.AddOrUpdate<ReminderJob>("ReminderJob", x => x.Execute(), "0 */12 * * *");
+// --------------------
+// Infrastructure (no auth needed)
+// --------------------
+app.UseStaticFiles();
+app.UseHttpsRedirection();
 
+// --------------------
+// Routing
+// --------------------
+app.UseRouting();
+
+// --------------------
+// Security (CRITICAL ORDER)
+// --------------------
+app.UseCors("AllowAngular");
+
+app.UseAuthentication();   // MUST exist
+app.UseAuthorization();    // MUST follow authentication
+
+// --------------------
+// Global Exception Handling (AFTER auth)
+// --------------------
 app.UseMiddleware<GeneralizedExceptionHandlingMiddleware>();
-// Configure the HTTP request pipeline.
+
+// --------------------
+// Swagger (safe after auth)
+// --------------------
 if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
 {
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "My API V1");
-        c.RoutePrefix = ""; // ? Make Swagger the root (http://lims.com/)
+        c.RoutePrefix = ""; // root
     });
 }
-app.UseCors("AllowAngular");
+
+// --------------------
+// Hangfire
+// --------------------
+app.UseHangfireDashboard("/hangfire");
+
+// Jobs
+RecurringJob.AddOrUpdate<ReminderJob>(
+    "ReminderJob",
+    x => x.Execute(),
+    "0 */12 * * *");
+
+// --------------------
+// Endpoints
+// --------------------
+app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");
 
-
-
-app.UseStaticFiles();
-app.UseHttpsRedirection();
-
-
-app.UseAuthorization();
-
-app.MapControllers();
-
 app.Run();
+

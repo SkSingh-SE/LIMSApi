@@ -12,6 +12,8 @@ namespace LIMSApi.Repositories.Interface
         Task UpdateUsers(List<UserMaster> users);
         Task<bool> DeleteUser(string email);
         Task<List<DropdwonSelector>> GetUserDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<UserMaster> GetByEmployee(long employeeId);
+        Task UpdateByEmployee(long employeeId, UserAccountDto dto);
 
     }
 }

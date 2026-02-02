@@ -41,16 +41,16 @@ namespace LIMSApi.Repositories
 
             if (root != null)
             {
-                if(root.SubMenu.Count > 0)
+                if (root.SubMenu.Count > 0)
                 {
-                    foreach(var item in root.SubMenu)
+                    foreach (var item in root.SubMenu)
                     {
                         await DeleteMenuTree(item.ID);
                     }
                 }
                 else
                 {
-                   _context.MenuMasters.Remove(root);
+                    _context.MenuMasters.Remove(root);
                 }
                 await _context.SaveChangesAsync();
             }
@@ -180,28 +180,50 @@ namespace LIMSApi.Repositories
 
             try
             {
-                var menu = await _context.MenuMasters.FirstOrDefaultAsync(x => x.ID == menuId);
-                if (menu == null)
-                {
-                    return false; // Menu not found
-                }
+                var menuExists = await _context.MenuMasters
+                    .AnyAsync(x => x.ID == menuId);
 
-                foreach (PermissionMaster permission in updatedPermissions)
+                if (!menuExists)
+                    return false;
+
+                var existingPermissions = await _context.PermissionMasters
+                    .Where(x => x.MenuID == menuId)
+                    .ToListAsync();
+
+                // -------------------------------
+                // DELETE: permissions removed from UI
+                // -------------------------------
+                var updatedIds = updatedPermissions
+                    .Where(p => p.ID > 0)
+                    .Select(p => p.ID)
+                    .ToHashSet();
+
+                var permissionsToDelete = existingPermissions
+                    .Where(ep => !updatedIds.Contains(ep.ID))
+                    .ToList();
+
+                if (permissionsToDelete.Any())
+                    _context.PermissionMasters.RemoveRange(permissionsToDelete);
+
+                // -------------------------------
+                // UPDATE / INSERT
+                // -------------------------------
+                foreach (var permission in updatedPermissions)
                 {
                     permission.MenuID = menuId;
 
-                    var existingPermission = await _context.PermissionMasters
-                        .FirstOrDefaultAsync(x => x.MenuID == menuId && x.Type == permission.Type);
-
-                    if (existingPermission != null)
+                    if (permission.ID > 0)
                     {
-                        // Update only necessary fields instead of overwriting whole entity
-                        existingPermission.Description = permission.Description;
-                        existingPermission.Name = permission.Name;
-                        existingPermission.DisplayName = permission.DisplayName;
-                        existingPermission.Type = permission.Type;
+                        var existing = existingPermissions
+                            .FirstOrDefault(x => x.ID == permission.ID);
 
-                        _context.PermissionMasters.Update(existingPermission);
+                        if (existing == null)
+                            continue;
+
+                        existing.Name = permission.Name;
+                        existing.DisplayName = permission.DisplayName;
+                        existing.Description = permission.Description;
+                        existing.Type = permission.Type;
                     }
                     else
                     {
@@ -214,12 +236,13 @@ namespace LIMSApi.Repositories
 
                 return true;
             }
-            catch (Exception)
+            catch
             {
                 await transaction.RollbackAsync();
-                throw; // Let the caller handle the exception
+                throw;
             }
         }
+
 
         public async Task<List<PermissionMaster>> GetMenuPermissions(long menuId)
         {

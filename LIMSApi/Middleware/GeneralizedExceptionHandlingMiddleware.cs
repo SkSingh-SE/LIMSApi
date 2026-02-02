@@ -21,103 +21,70 @@ namespace LIMSApi.Middleware
             _logger = logger;
         }
 
-        public async Task Invoke(HttpContext httpContext, LoggedInUserProvider userProvider, ISiteActivityService siteActivityService, ISiteErrorService siteErrorService)
+        public async Task Invoke(
+     HttpContext context,
+     LoggedInUserProvider userProvider,
+     ISiteActivityService siteActivityService,
+     ISiteErrorService siteErrorService)
         {
-            // initialize the current user
             try
             {
                 userProvider.Initialize();
-                await _next(httpContext);
+                await _next(context);
 
-                if (httpContext.Items["ActivityLog"] is List<SiteActivity> siteActivities)
+                if (context.Items["ActivityLog"] is List<SiteActivity> activities)
                 {
-                    await siteActivityService.CreateMultipleSiteActivities(siteActivities);
+                    await siteActivityService.CreateMultipleSiteActivities(activities);
                 }
             }
             catch (Exception ex)
             {
-                // Capture controller and action names dynamically
-                var controllerName = httpContext.Request.RouteValues["controller"]?.ToString();
-                var actionName = httpContext.Request.RouteValues["action"]?.ToString();
-                var userIp = httpContext.Connection.RemoteIpAddress?.ToString();
-                var userAgent = httpContext.Request.Headers["User-Agent"].ToString();
-                var userId = LoggedInUserProvider.CurrentUser?.UserId;
+                var controller = context.Request.RouteValues["controller"]?.ToString();
+                var action = context.Request.RouteValues["action"]?.ToString();
 
-                string message = $"Error in controller: {controllerName}, action: {actionName}";
+                var user = LoggedInUserProvider.CurrentUser;
 
                 var errorResponse = new ExceptionResponse
                 {
                     Message = "An unexpected error occurred.",
-                    Controller = controllerName,
-                    Action = actionName,
+                    Controller = controller,
+                    Action = action,
                     ExceptionType = ex.GetType().Name,
                     Timestamp = DateTime.UtcNow
                 };
 
-                if (ex is ArgumentNullException || ex is InvalidOperationException)
+                context.Response.StatusCode = ex switch
                 {
-                    httpContext.Response.StatusCode = (int)HttpStatusCode.BadRequest;
-                    errorResponse.Message = ex.Message;
-
-                }
-                else if (ex is UnauthorizedAccessException)
-                {
-                    httpContext.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
-                    errorResponse.Message = $"You are not authorized to access this resource ({actionName}).";
-                }
-                else if (ex is KeyNotFoundException)
-                {
-                    httpContext.Response.StatusCode = (int)HttpStatusCode.NotFound;
-                    errorResponse.Message = $"The requested resource was not found ({actionName}).";
-                }
-                else if (ex is InvalidCredentialException)
-                {
-                    message = $"Error in controller: {controllerName}, action: {actionName} Invalid Credential.";
-                    httpContext.Response.StatusCode = (int)HttpStatusCode.BadRequest;
-                    errorResponse.Message = ex.Message;
-                }
-                else if (ex is SqlException)
-                {
-                    message = $"Error in controller: {controllerName}, action: {actionName} from: database";
-                    httpContext.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-                    errorResponse.Message = "An error occurred while processing your request.";
-                }
-                else if (ex is DbUpdateException)
-                {
-                    message = $"Error in controller: {controllerName}, action: {actionName} from: database";
-                    httpContext.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-                    errorResponse.Message = "An error occurred while processing your request.";
-                }
-                else
-                {
-                    httpContext.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-                }
+                    ArgumentNullException or InvalidOperationException => StatusCodes.Status400BadRequest,
+                    UnauthorizedAccessException => StatusCodes.Status401Unauthorized,
+                    KeyNotFoundException => StatusCodes.Status404NotFound,
+                    InvalidCredentialException => StatusCodes.Status400BadRequest,
+                    SqlException or DbUpdateException => StatusCodes.Status500InternalServerError,
+                    _ => StatusCodes.Status500InternalServerError
+                };
 
                 var siteError = new SiteError
                 {
-                    ErrorCode = controllerName,
+                    ErrorCode = controller,
                     ExceptionMessage = ex.Message,
                     ExceptionStackTrace = ex.StackTrace,
                     Source = ex.Source,
-                    Ipaddress = userIp,
-                    Browser = userAgent,
-                    Description = ex.InnerException != null ? ex.InnerException.InnerException?.HResult.ToString() + " : " + ex.InnerException.InnerException?.Message : $"Error in {controllerName}/{actionName}: {ex.Message}",
-                    WebUrl = $"{controllerName}/{actionName}",
-                    ModifiedBy = "" + userId,
+                    Ipaddress = context.Connection.RemoteIpAddress?.ToString(),
+                    Browser = context.Request.Headers["User-Agent"].ToString(),
+                    Description = $"Error in {controller}/{action}: {ex.Message}",
+                    WebUrl = $"{controller}/{action}",
+                    ModifiedBy = user?.UserId.ToString() ?? "Anonymous",
                     ModifiedOn = DateTime.UtcNow,
-                    CompanyCode = "LIMS"
+                    CompanyCode = user?.CompanyCode ?? "LIMS"
                 };
 
                 await siteErrorService.CreateSiteError(siteError);
-                _logger.LogError(ex, message);
-                await httpContext.Response.WriteAsJsonAsync(errorResponse);
-            }
-            finally
-            {
-                // Clear the User Data
-                LoggedInUserProvider.ClearUser();
+                _logger.LogError(ex, "Unhandled exception");
+
+                await context.Response.WriteAsJsonAsync(errorResponse);
             }
         }
+
 
 
     }

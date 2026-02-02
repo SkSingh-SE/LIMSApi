@@ -38,7 +38,7 @@ namespace LIMSApi.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "An error occurred while login the user.");
-                return Unauthorized("Invalid credentials");
+                return Unauthorized(ex?.Message ?? "Something went wrong");
             }
         }
 

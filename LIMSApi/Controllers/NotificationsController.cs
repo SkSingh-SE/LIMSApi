@@ -10,6 +10,7 @@ namespace LIMSApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class NotificationsController : ControllerBase
     {
         private readonly INotificationService _service;

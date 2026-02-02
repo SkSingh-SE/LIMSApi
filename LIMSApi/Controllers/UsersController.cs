@@ -8,11 +8,14 @@ using Microsoft.EntityFrameworkCore;
 using LIMSApi.Data;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
+using LIMSApi.Dtos;
+using Microsoft.AspNetCore.Authorization;
 
 namespace LIMSApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class UsersController : ControllerBase
     {
         private readonly IUserService _userService;
@@ -79,5 +82,56 @@ namespace LIMSApi.Controllers
             }
             return Ok(users);
         }
+
+        [HttpGet("by-employee/{employeeId}")]
+        public async Task<ActionResult<UserAccountDto>> GetByEmployee(long employeeId)
+        {
+            return await _userService.GetByEmployee(employeeId);
+        }
+
+        [HttpPut("by-employee/{employeeId}")]
+        public async Task<IActionResult> UpdateByEmployee(long employeeId,UserAccountDto dto)
+        {
+            await _userService.UpdateByEmployee(employeeId, dto);
+            return Ok(new
+            {
+                status = "success",
+                message = $"User account for employee updated successfully."
+            });
+        }
+
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword(ResetPasswordDto dto)
+        {
+            await _userService.ResetPassword(dto);
+            return Ok(new
+            {
+                status = "success",
+                message = $"Password has been reset successfully"
+            });
+        }
+
+        [HttpPost("2fa/send-otp")]
+        public async Task<IActionResult> SendOtp(Send2FADto dto)
+        {
+            await _userService.SendTwoFactorOtp(dto);
+            return Ok(new
+            {
+                status = "success",
+                message = "OTP sent successfully"
+            });
+        }
+
+        [HttpPost("2fa/verify")]
+        public async Task<IActionResult> VerifyOtp(Verify2FADto dto)
+        {
+            await _userService.VerifyTwoFactorOtp(dto);
+            return Ok(new
+            {
+                status = "success",
+                message = "Two-factor authentication enabled"
+            });
+        }
+
     }
 }

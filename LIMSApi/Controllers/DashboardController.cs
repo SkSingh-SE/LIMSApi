@@ -106,8 +106,6 @@ namespace LIMSApi.Controllers
         {
             try
             {
-                // Initialize user context from JWT claims
-                _userProvider.Initialize();
                 var userContext = LoggedInUserProvider.CurrentUser;
 
                 if (userContext == null)
@@ -184,8 +182,6 @@ namespace LIMSApi.Controllers
         {
             try
             {
-                // Initialize user context from JWT claims
-                _userProvider.Initialize();
                 var userContext = LoggedInUserProvider.CurrentUser;
 
                 if (userContext == null)
@@ -262,8 +258,6 @@ namespace LIMSApi.Controllers
         {
             try
             {
-                // Initialize user context from JWT claims
-                _userProvider.Initialize();
                 var userContext = LoggedInUserProvider.CurrentUser;
 
                 if (userContext == null)
