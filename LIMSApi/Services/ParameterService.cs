@@ -118,6 +118,12 @@ namespace LIMSApi.Services
             return await _parameterRepository.GetAllMechanicalParameters(filter);
         }
 
+        public async Task<PagedResponse<object>> ParameterList(PageFilter filter)
+        {
+            return await _parameterRepository.ParameterList(filter);
+        }
+
+
         public async Task<List<DropdwonSelector>> GetParameterDropdown(string? searchTerm, int pageNo, int pageSize)
         {
             return await _parameterRepository.GetParameterDropdown(searchTerm, pageNo, pageSize);

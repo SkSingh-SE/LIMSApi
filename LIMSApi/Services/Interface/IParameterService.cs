@@ -11,6 +11,7 @@ namespace LIMSApi.Services.Interface
         Task<ParameterMaster> GetParameterDetails(long id);
         Task<PagedResponse<object>> FetchChemicalParameterList(PageFilter filter);
         Task<PagedResponse<object>> FetchMechanicalParameterList(PageFilter filter);
+        Task<PagedResponse<object>> ParameterList(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetParameterDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<List<DropdwonSelector>> GetChemicalParameterDropdown(string? searchTerm, int pageNo, int pageSize);

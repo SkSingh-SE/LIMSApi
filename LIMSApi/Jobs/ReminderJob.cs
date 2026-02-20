@@ -21,6 +21,7 @@ namespace LIMSApi.Jobs
             _dbContext = context;
             _logger = logger;
             _emailService = emailService;
+            _templateService = templateService;
         }
 
         [AutomaticRetry(Attempts = 3)] // Hangfire retry policy
@@ -37,14 +38,16 @@ namespace LIMSApi.Jobs
                 _logger.LogInformation("ReminderJob started at {time}", DateTime.Now);
 
                 // Send 12-hour reminders for cases with missing information (INWARD_REGISTERED status)
-                var casesNeedingReminder = await _dbContext.SampleInwards
-                    .Include(i => i.Customer)
-                    .Include(i => i.Contacts)
-                    .Where(i => i.IsActive && 
-                               i.InwardStatus == InwardStatus.INWARD_REGISTERED.ToString() &&
-                               i.ModifiedOn.HasValue &&
-                               (DateTime.UtcNow - i.ModifiedOn.Value).TotalHours >= 12)
-                    .ToListAsync();
+                var cutoffTime = DateTime.UtcNow.AddHours(-12);
+
+var casesNeedingReminder = await _dbContext.SampleInwards
+    .Include(i => i.Customer)
+    .Include(i => i.Contacts)
+    .Where(i => i.IsActive &&
+                i.InwardStatus == InwardStatus.INWARD_REGISTERED.ToString() &&
+                i.ModifiedOn.HasValue &&
+                i.ModifiedOn.Value <= cutoffTime)
+    .ToListAsync();
 
                 int reminderCount = 0;
                 foreach (var inward in casesNeedingReminder)

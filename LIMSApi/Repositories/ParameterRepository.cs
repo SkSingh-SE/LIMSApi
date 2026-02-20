@@ -122,6 +122,48 @@ namespace LIMSApi.Repositories
 
             return new PagedResponse<object>(items.Cast<object>().ToList(), totalRecords, filter.PageNumber, filter.PageSize);
         }
+        public async Task<PagedResponse<object>> ParameterList(PageFilter filter)
+        {
+            var _query = (from c in _context.ParameterMasters
+                          join u in _context.ParameterUnitMasters on c.ParameterUnitID equals u.ID
+                          where c.IsActive
+                          select new
+                          {
+                              c.ID,
+                              c.Name,
+                              c.AliasName,
+                              c.ElementType,
+                              ParameterType = c.ParameterType,
+                              UnitName = u.Name,
+                              Min = 0, // Placeholder for Min value, replace with actual value if available
+                              Max = 0, // Placeholder for Max value, replace with actual value if available
+                              Factor = u.ConversaionFactor,
+                              c.CreatedOn
+                          }).AsQueryable().ApplyFilters(filter.Filter);
+
+            if (!string.IsNullOrWhiteSpace(filter.searchTerm))
+            {
+                var search = filter.searchTerm.Trim().ToLower();
+                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+            }
+
+            if (filter.SortByColumn != null)
+            {
+                _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
+            }
+
+            // Total Records Count
+            int totalRecords = await _query.CountAsync();
+
+            // Apply Pagination
+            var items = await _query
+                .Skip((filter.PageNumber - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .ToListAsync();
+
+            return new PagedResponse<object>(items.Cast<object>().ToList(), totalRecords, filter.PageNumber, filter.PageSize);
+        }
+
 
         public async Task<List<DropdwonSelector>> GetParameterDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
         {
