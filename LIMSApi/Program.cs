@@ -182,6 +182,7 @@ builder.Services.AddScoped<IMaterialTestMappingRepository, MaterialTestMappingRe
 builder.Services.AddScoped<ISampleStatusRepository, SampleStatusRepository>();
 builder.Services.AddScoped<ICuttingRepository, CuttingRepository>();
 builder.Services.AddScoped<IProformaInvoiceRepository, ProformaInvoiceRepository>();
+builder.Services.AddScoped<INablRepository, NablRepository>();
 
 
 // Register Services
@@ -247,6 +248,7 @@ builder.Services.AddScoped<IMaterialTestMappingService, MaterialTestMappingServi
 builder.Services.AddScoped<ISampleStatusService, SampleStatusService>();
 builder.Services.AddScoped<ICuttingService, CuttingService>();
 builder.Services.AddScoped<IPriceCalculationService, PriceCalculationService>();
+builder.Services.AddScoped<INablService, NablService>();
 
 
 
