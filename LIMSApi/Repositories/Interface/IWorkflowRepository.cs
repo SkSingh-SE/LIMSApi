@@ -21,5 +21,9 @@ namespace LIMSApi.Repositories.Interface
         Task<WorkflowInstance?> GetActiveInstanceForEntityAsync(long entityId, string entityType);
         Task<List<WorkflowActionLog>> GetActionLogsForInstanceAsync(long instanceId);
         Task<WorkflowStep> GetCurrentWorkflowStepAsync(long entityId, string entityType);
+
+        // Phase 9: Batch operations
+        Task<List<WorkflowInstance>> GetActiveInstancesForEntitiesAsync(IEnumerable<long> entityIds, string entityType);
+        Task<Dictionary<long, int>> GetActionLogCountsForInstancesAsync(IEnumerable<long> instanceIds);
     }
 }

@@ -231,6 +231,12 @@ namespace LIMSApi.ServiceWORepo
                     if(header.Status == "Completed" && p.Value == 0)
                         throw new Exception("All parameters must have values greater than 0 after completion.");
                     param.Value = p.Value.HasValue ? Convert.ToDecimal(p.Value) : p.Value;
+
+                    // Save formula expression if provided
+                    if (!string.IsNullOrWhiteSpace(p.Formula))
+                    {
+                        param.FormulaExpression = p.Formula;
+                    }
                 }
 
 
@@ -266,16 +272,21 @@ namespace LIMSApi.ServiceWORepo
 
                 foreach (var param in header.Parameters)
                 {
-                    if (!string.IsNullOrWhiteSpace(param.Formula))
+                    // Use FormulaExpression first, fallback to Formula
+                    string formulaToUse = !string.IsNullOrWhiteSpace(param.FormulaExpression)
+                        ? param.FormulaExpression
+                        : param.Formula;
+
+                    if (!string.IsNullOrWhiteSpace(formulaToUse))
                     {
                         try
                         {
                             // Only evaluate when all required inputs exist
-                            double? result = _formulaEvaluator.Evaluate(param.Formula, vars);
+                            double? result = _formulaEvaluator.Evaluate(formulaToUse, vars);
 
                             if (result.HasValue)
                             {
-                                decimal newValue = (decimal)result.Value;
+                                decimal newValue = Math.Round((decimal)result.Value, 4);
 
                                 if (param.Value != newValue)
                                 {
@@ -295,20 +306,30 @@ namespace LIMSApi.ServiceWORepo
                     }
 
                     // ----------------------------------------------
-                    // CHEMICAL RANGE CHECK
+                    // RANGE CHECK (use SpecMinValue/SpecMaxValue with fallback to MinValue/MaxValue)
                     // ----------------------------------------------
-                    if (param.MinValue != null || param.MaxValue != null)
+                    decimal? specMin = param.SpecMinValue ?? param.MinValue;
+                    decimal? specMax = param.SpecMaxValue ?? param.MaxValue;
+
+                    string resultStatus = _formulaEvaluator.DetermineResultStatus(param.Value, specMin, specMax);
+                    if (resultStatus != null)
+                    {
+                        param.ResultStatus = resultStatus;
+                        param.IsWithinLimit = resultStatus != "Fail";
+                    }
+                    else if (param.MinValue != null || param.MaxValue != null)
                     {
                         if (param.Value != null)
                         {
                             bool withinMin = param.MinValue == null || param.Value >= param.MinValue;
                             bool withinMax = param.MaxValue == null || param.Value <= param.MaxValue;
-
                             param.IsWithinLimit = withinMin && withinMax;
+                            param.ResultStatus = param.IsWithinLimit == true ? "Pass" : "Fail";
                         }
                         else
                         {
                             param.IsWithinLimit = null;
+                            param.ResultStatus = null;
                         }
                     }
                 }
@@ -709,6 +730,285 @@ namespace LIMSApi.ServiceWORepo
             return header;
         }
 
+        /// <summary>
+        /// Auto-create TestResultHeaders from an approved plan (ISO 17025 compliant).
+        /// Mechanical: parameters from LaboratoryTestParameter + min/max from SpecificationLine.
+        /// Chemical: parameters from ChemicalTestElement (already specification-driven).
+        /// Each unit of Quantity = 1 independent TestResultHeader.
+        /// </summary>
+        public async Task<AutoCreateHeadersResponse> AutoCreateHeadersFromPlanAsync(long planId)
+        {
+            var response = new AutoCreateHeadersResponse();
+
+            var plan = await _db.TestPlans
+                .Include(p => p.GeneralTests)
+                    .ThenInclude(gt => gt.Methods)
+                .Include(p => p.ChemicalTests)
+                    .ThenInclude(ct => ct.Elements)
+                .FirstOrDefaultAsync(p => p.ID == planId);
+
+            if (plan == null)
+            {
+                response.Success = false;
+                response.Warnings.Add($"Plan {planId} not found.");
+                return response;
+            }
+
+            var sampleId = plan.SampleID;
+
+            // ── General (Mechanical) Tests ──
+            foreach (var generalTest in plan.GeneralTests)
+            {
+                // Collect specification IDs for this general test
+                var specIds = new List<long>();
+                if (generalTest.Specification1 > 0) specIds.Add(generalTest.Specification1);
+                if (generalTest.Specification2.HasValue && generalTest.Specification2.Value > 0)
+                    specIds.Add(generalTest.Specification2.Value);
+
+                foreach (var method in generalTest.Methods)
+                {
+                    if (method.LaboratoryTestID <= 0) continue;
+
+                    var quantity = method.Quantity > 0 ? method.Quantity : 1;
+
+                    // Count existing headers to avoid duplicates
+                    var existingCount = await _db.TestResultHeaders.CountAsync(h =>
+                        h.SampleID == sampleId &&
+                        h.LaboratoryTestID == method.LaboratoryTestID &&
+                        h.TestPlanID == planId);
+
+                    var headersToCreate = quantity - existingCount;
+                    if (headersToCreate <= 0) continue;
+
+                    // Build parameters using ISO 17025 hybrid approach
+                    var parameters = await BuildMechanicalParametersAsync(method.LaboratoryTestID, specIds, response.Warnings);
+
+                    for (int i = 0; i < headersToCreate; i++)
+                    {
+                        var header = new TestResultHeader
+                        {
+                            SampleID = sampleId,
+                            LaboratoryTestID = method.LaboratoryTestID,
+                            TestPlanID = planId,
+                            CreatedBy = loggedInUser.EmployeeID,
+                            CreatedOn = DateTime.UtcNow,
+                            Status = "Pending"
+                        };
+
+                        // Clone parameters for each header
+                        foreach (var p in parameters)
+                        {
+                            header.Parameters.Add(new TestResultParameter
+                            {
+                                ParameterID = p.ParameterID,
+                                ParameterName = p.ParameterName,
+                                Unit = p.Unit,
+                                Value = null,
+                                Formula = p.Formula,
+                                IsCalculated = p.IsCalculated,
+                                IsAdditional = false,
+                                MinValue = p.MinValue,
+                                MaxValue = p.MaxValue,
+                                SpecificationLineID = p.SpecificationLineID
+                            });
+                        }
+
+                        _db.TestResultHeaders.Add(header);
+                        response.HeadersCreated++;
+                    }
+                }
+            }
+
+            // ── Chemical Tests ──
+            foreach (var chemTest in plan.ChemicalTests)
+            {
+                // Chemical tests use ChemicalTestType for lab test IDs
+                var labTestIds = await _db.Set<ChemicalTestType>()
+                    .Where(tt => tt.ChemicalTestID == chemTest.ID && tt.IsSelected)
+                    .Select(tt => tt.LaboratoryTestID ?? 0)
+                    .Where(id => id > 0)
+                    .ToListAsync();
+
+                foreach (var labTestId in labTestIds)
+                {
+                    var exists = await _db.TestResultHeaders.AnyAsync(h =>
+                        h.SampleID == sampleId &&
+                        h.LaboratoryTestID == labTestId &&
+                        h.TestPlanID == planId);
+
+                    if (exists) continue;
+
+                    await AutoCreateChemicalHeaderAsync(sampleId, planId, chemTest, labTestId);
+                    response.HeadersCreated++;
+                }
+            }
+
+            // Check specimen quantity (Gap 6 warning)
+            await AddQuantityWarnings(plan, sampleId, response.Warnings);
+
+            await _db.SaveChangesAsync();
+            return response;
+        }
+
+        /// <summary>
+        /// Build mechanical test parameters using ISO 17025 hybrid approach:
+        /// 1. Start with LaboratoryTestParameter (test method definition)
+        /// 2. Enrich with min/max from SpecificationLine (Type="mechanical")
+        /// 3. Warn on mismatches in both directions
+        /// </summary>
+        private async Task<List<TestResultParameter>> BuildMechanicalParametersAsync(
+            long labTestId, List<long> specIds, List<string> warnings)
+        {
+            var result = new List<TestResultParameter>();
+
+            // 1. Get parameters from test method definition
+            var labTest = await _db.LaboratoryTests
+                .Include(t => t.Parameters)
+                    .ThenInclude(tp => tp.Parameter)
+                        .ThenInclude(p => p.ParameterUnit)
+                .FirstOrDefaultAsync(t => t.ID == labTestId);
+
+            var testMethodParams = labTest?.Parameters?.ToList() ?? new List<LaboratoryTestParameter>();
+            var labTestName = labTest?.Name ?? $"LabTest#{labTestId}";
+
+            // 2. Get matching specification lines (Type="mechanical") linked to this lab test
+            var specLines = new List<SpecificationLine>();
+            if (specIds.Any())
+            {
+                // Get spec line IDs linked to this lab test
+                var linkedSpecLineIds = await _db.SpecificationLineLaboratoryTests
+                    .Where(slt => slt.LaboratoryTestID == labTestId)
+                    .Select(slt => slt.SpecificationLineID)
+                    .ToListAsync();
+
+                specLines = await _db.SpecificationLines
+                    .Include(sl => sl.Parameter)
+                        .ThenInclude(p => p.ParameterUnit)
+                    .Where(sl => linkedSpecLineIds.Contains(sl.ID)
+                        && sl.Type == "mechanical"
+                        && sl.ParameterID.HasValue
+                        && sl.SpecificationGrade != null
+                        && specIds.Contains(sl.SpecificationGrade.ID))
+                    .ToListAsync();
+
+                // Alternative: if the above doesn't work due to SpecificationGrade navigation,
+                // try matching via SpecificationGradeID
+                if (!specLines.Any())
+                {
+                    specLines = await _db.SpecificationLines
+                        .Include(sl => sl.Parameter)
+                            .ThenInclude(p => p.ParameterUnit)
+                        .Where(sl => linkedSpecLineIds.Contains(sl.ID)
+                            && sl.Type == "mechanical"
+                            && sl.ParameterID.HasValue)
+                        .ToListAsync();
+
+                    // Filter by specification grade IDs matching our specIds
+                    specLines = specLines.Where(sl => sl.SpecificationGradeID.HasValue && specIds.Contains(sl.SpecificationGradeID.Value)).ToList();
+                }
+            }
+
+            // Build a lookup: ParameterID -> SpecificationLine
+            var specLookup = specLines
+                .Where(sl => sl.ParameterID.HasValue)
+                .GroupBy(sl => sl.ParameterID!.Value)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            // Track which spec line parameters have been used
+            var usedSpecParamIds = new HashSet<long>();
+
+            // 3. For each test method parameter, create TestResultParameter with spec enrichment
+            foreach (var tp in testMethodParams)
+            {
+                var pm = tp.Parameter;
+                if (pm == null) continue;
+
+                var trp = new TestResultParameter
+                {
+                    ParameterID = pm.ID,
+                    ParameterName = pm.Name,
+                    Unit = pm.ParameterUnit?.Name,
+                    Formula = pm.Formula,
+                    IsCalculated = pm.IsCalculated,
+                    Value = null,
+                    IsAdditional = false
+                };
+
+                // Enrich with specification min/max if available
+                if (specLookup.TryGetValue(pm.ID, out var matchingSpec))
+                {
+                    trp.MinValue = matchingSpec.MinValue;
+                    trp.MaxValue = matchingSpec.MaxValue;
+                    trp.SpecificationLineID = matchingSpec.ID;
+                    usedSpecParamIds.Add(pm.ID);
+                }
+                // else: parameter stays with null min/max (For Information Only)
+
+                result.Add(trp);
+            }
+
+            // 4. Reverse check: spec parameters NOT in test method → include + warn
+            foreach (var specLine in specLines.Where(sl => sl.ParameterID.HasValue))
+            {
+                var paramId = specLine.ParameterID!.Value;
+                if (usedSpecParamIds.Contains(paramId)) continue;
+
+                var pm = specLine.Parameter;
+                var paramName = pm?.Name ?? $"Parameter#{paramId}";
+
+                warnings.Add($"Specification requires '{paramName}' but test method '{labTestName}' doesn't include it. Adding from specification.");
+
+                result.Add(new TestResultParameter
+                {
+                    ParameterID = paramId,
+                    ParameterName = paramName,
+                    Unit = pm?.ParameterUnit?.Name,
+                    Formula = null,
+                    IsCalculated = false,
+                    Value = null,
+                    IsAdditional = false,
+                    MinValue = specLine.MinValue,
+                    MaxValue = specLine.MaxValue,
+                    SpecificationLineID = specLine.ID
+                });
+            }
+
+            // 5. Warn if no parameters at all
+            if (!result.Any())
+            {
+                warnings.Add($"No parameters defined for '{labTestName}'. Verify test method and specification setup.");
+            }
+            else if (!specLines.Any() && specIds.Any())
+            {
+                warnings.Add($"Specification does not define mechanical parameters for '{labTestName}'. Parameters created without acceptance criteria (min/max).");
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Gap 6: Check planned quantity vs available specimens and add warnings
+        /// </summary>
+        private async Task AddQuantityWarnings(SampleTestPlan plan, long sampleId, List<string> warnings)
+        {
+            var cuttingSample = await _db.CuttingChargeSamples
+                .Include(cs => cs.CuttingChargeDetails)
+                .FirstOrDefaultAsync(cs => cs.SampleID == sampleId);
+
+            if (cuttingSample == null) return; // No preparation yet — skip
+
+            var availableSpecimens = cuttingSample.CuttingChargeDetails?.Sum(d => d.Quantity) ?? 0;
+
+            var totalPlannedQuantity = plan.GeneralTests
+                .SelectMany(gt => gt.Methods)
+                .Sum(m => m.Quantity);
+
+            if (totalPlannedQuantity > availableSpecimens && availableSpecimens > 0)
+            {
+                warnings.Add($"Planned quantity ({totalPlannedQuantity}) exceeds available specimens ({availableSpecimens}). Verify specimen preparation.");
+            }
+        }
+
         private async Task<string> GetSpecificationNameWithGrade(long gradeId)
         {
             var grade = await (from g in _db.SpecificationGrades
@@ -746,21 +1046,48 @@ namespace LIMSApi.ServiceWORepo
         }
 
 
-        public async Task StartTest(long Id)
+        public async Task<StartTestResponse> StartTest(long Id)
         {
             var header = await _db.TestResultHeaders.FindAsync(Id);
             if (header == null)
                 throw new Exception("Test Result Header not found.");
 
+            var response = new StartTestResponse { Success = true };
+
+            // Check preparation status — warn but don't block
+            var sample = await _db.SampleDetails.FindAsync(header.SampleID);
+            if (sample != null && sample.PreparationRequired)
+            {
+                var cuttingSample = await _db.CuttingChargeSamples
+                    .FirstOrDefaultAsync(cs => cs.SampleID == header.SampleID);
+
+                if (cuttingSample == null ||
+                    (cuttingSample.PreparationStatus != "Completed" && cuttingSample.PreparationStatus != "QCVerified"))
+                {
+                    response.PreparationWarning = true;
+                    response.PreparationStatus = cuttingSample?.PreparationStatus ?? "No preparation record";
+                    response.WarningMessage = "Sample preparation data is not yet entered in the system. You can add preparation details later.";
+                }
+            }
+
+            // Allow test to start regardless of preparation status
             header.Status = "Started";
             header.StartedAt = DateTime.UtcNow;
             header.StartedBy = loggedInUser.EmployeeID;
 
             await _db.SaveChangesAsync();
+
+            // Return timing info
+            response.TestStartTime = header.StartedAt;
+            var employee = await _db.EmployeeMasters.FindAsync(loggedInUser.EmployeeID);
+            response.PerformedByName = employee?.Name ?? "";
+
+            return response;
         }
 
-        public async Task CompleteTest(long Id)
+        public async Task<CompleteTestResponse> CompleteTest(long Id)
         {
+            var response = new CompleteTestResponse();
             // begin transaction
             var trx = await _db.Database.BeginTransactionAsync();
             try
@@ -771,7 +1098,28 @@ namespace LIMSApi.ServiceWORepo
                 if (header == null)
                     throw new Exception("Test Result Header not found.");
 
-                header.Status = "Completed";
+                // --- Preparation Validation (Phase 5) ---
+                var sampleForPrep = await _db.SampleDetails.FindAsync(header.SampleID);
+                if (sampleForPrep != null && sampleForPrep.PreparationRequired)
+                {
+                    var prepExists = await _db.CuttingChargeSamples
+                        .AnyAsync(cs => cs.SampleID == header.SampleID);
+                    header.PreparationDataMissing = !prepExists;
+                }
+
+                // --- Determine final status: Verification or Completed ---
+                bool verificationWorkflowExists = await _db.Workflows
+                    .AnyAsync(w => w.EntityType == "TestResult" && w.IsActive);
+
+                if (verificationWorkflowExists)
+                {
+                    header.Status = "PendingVerification";
+                }
+                else
+                {
+                    header.Status = "Completed";
+                }
+
                 header.CompletedAt = DateTime.UtcNow;
                 header.ModifiedBy = loggedInUser.EmployeeID;
 
@@ -809,10 +1157,11 @@ namespace LIMSApi.ServiceWORepo
 
                 await _db.SaveChangesAsync();
 
+                var completedStatuses = new[] { "Completed", "PendingVerification", "Verified" };
                 bool hasPendingTests = await _db.TestResultHeaders.AnyAsync(h =>
                 h.SampleID == header.SampleID &&
                 h.IsActive &&
-                h.Status != "Completed");
+                !completedStatuses.Contains(h.Status));
 
                 // -----------------------------
                 // 🔹 LAST TEST COMPLETED | No Pending Test
@@ -830,9 +1179,14 @@ namespace LIMSApi.ServiceWORepo
 
                     await _db.SaveChangesAsync();
 
+                    // Use verification status if workflow exists, otherwise completed
+                    var sampleStatus = verificationWorkflowExists
+                        ? SampleStatus.TESTING_UNDER_VERIFICATION
+                        : SampleStatus.TESTING_COMPLETED;
+
                     await _sampleStatusService.ForceAutoStatusAsync(
                                 sample.ID,
-                                SampleStatus.TESTING_COMPLETED,
+                                sampleStatus,
                                 loggedInUser.EmployeeID
                             );
 
@@ -863,12 +1217,18 @@ namespace LIMSApi.ServiceWORepo
 
                 }
                 await trx.CommitAsync();
+
+                // Return timing info
+                response.TestEndTime = header.CompletedAt;
+                var employee = await _db.EmployeeMasters.FindAsync(loggedInUser.EmployeeID);
+                response.PerformedByName = employee?.Name ?? "";
             }
             catch (Exception)
             {
                 await trx.RollbackAsync();
                 throw;
             }
+            return response;
         }
 
         /// <summary>
@@ -1280,6 +1640,578 @@ namespace LIMSApi.ServiceWORepo
             }).ToList();
 
             return images;
+        }
+
+        // =====================================================================
+        //  CALCULATE PARAMETERS (Trigger recalculation for all derived params)
+        // =====================================================================
+        public async Task<CalculateParametersResultDto> CalculateParameters(long headerId)
+        {
+            var header = await _db.TestResultHeaders
+                .Include(h => h.Parameters)
+                .FirstOrDefaultAsync(h => h.ID == headerId);
+
+            if (header == null)
+                throw new Exception("TestResultHeader not found.");
+
+            // Build dictionary for formula vars
+            Dictionary<string, double> vars = header.Parameters
+                .Where(x => x.Value.HasValue && x.Value > 0)
+                .ToDictionary(
+                    x => $"P{x.ParameterID}",
+                    x => (double)x.Value.Value
+                );
+
+            bool changed = true;
+            int loopGuard = 0;
+            int recalcCount = 0;
+
+            while (changed && loopGuard < 10)
+            {
+                changed = false;
+                loopGuard++;
+
+                foreach (var param in header.Parameters)
+                {
+                    // Use FormulaExpression first, fallback to Formula
+                    string formulaToUse = !string.IsNullOrWhiteSpace(param.FormulaExpression)
+                        ? param.FormulaExpression
+                        : param.Formula;
+
+                    if (!string.IsNullOrWhiteSpace(formulaToUse))
+                    {
+                        try
+                        {
+                            double? result = _formulaEvaluator.Evaluate(formulaToUse, vars);
+
+                            if (result.HasValue)
+                            {
+                                decimal newValue = Math.Round((decimal)result.Value, 4);
+
+                                if (param.Value != newValue)
+                                {
+                                    param.Value = newValue;
+                                    param.IsCalculated = true;
+                                    changed = true;
+                                    recalcCount++;
+
+                                    vars[$"P{param.ParameterID}"] = (double)newValue;
+                                }
+                            }
+                        }
+                        catch
+                        {
+                            param.IsCalculated = false;
+                        }
+                    }
+
+                    // Determine ResultStatus using enhanced spec limits
+                    decimal? specMin = param.SpecMinValue ?? param.MinValue;
+                    decimal? specMax = param.SpecMaxValue ?? param.MaxValue;
+
+                    string resultStatus = _formulaEvaluator.DetermineResultStatus(param.Value, specMin, specMax);
+                    if (resultStatus != null)
+                    {
+                        param.ResultStatus = resultStatus;
+                        param.IsWithinLimit = resultStatus != "Fail";
+                    }
+                    else if (param.MinValue != null || param.MaxValue != null)
+                    {
+                        // Fallback to existing min/max check
+                        if (param.Value != null)
+                        {
+                            bool withinMin = param.MinValue == null || param.Value >= param.MinValue;
+                            bool withinMax = param.MaxValue == null || param.Value <= param.MaxValue;
+                            param.IsWithinLimit = withinMin && withinMax;
+                            param.ResultStatus = param.IsWithinLimit == true ? "Pass" : "Fail";
+                        }
+                        else
+                        {
+                            param.IsWithinLimit = null;
+                            param.ResultStatus = null;
+                        }
+                    }
+                }
+            }
+
+            // Overall Pass/Fail
+            header.IsOverallPass = EvaluateOverallPass(header);
+
+            await _db.SaveChangesAsync();
+
+            var paramResults = header.Parameters.Select(p => new ParameterCalculationResultDto
+            {
+                Id = p.ID,
+                ParameterID = p.ParameterID,
+                ParameterName = p.ParameterName,
+                Value = p.Value,
+                IsCalculated = p.IsCalculated,
+                ResultStatus = p.ResultStatus,
+                IsWithinLimit = p.IsWithinLimit
+            }).ToList();
+
+            return new CalculateParametersResultDto
+            {
+                Success = true,
+                Message = $"Recalculated {recalcCount} parameter(s).",
+                ParametersRecalculated = recalcCount,
+                IsOverallPass = header.IsOverallPass,
+                Parameters = paramResults
+            };
+        }
+
+        // =====================================================================
+        //  ADD STANDALONE PARAMETER
+        // =====================================================================
+        public async Task<object> AddStandaloneParameter(long headerId, AddStandaloneParameterDto dto)
+        {
+            var header = await _db.TestResultHeaders
+                .Include(h => h.Parameters)
+                .FirstOrDefaultAsync(h => h.ID == headerId);
+
+            if (header == null)
+                throw new Exception("TestResultHeader not found.");
+
+            var param = new TestResultParameter
+            {
+                TestResultHeaderID = headerId,
+                ParameterID = 0, // standalone — no master parameter reference
+                ParameterName = dto.ParameterName,
+                Unit = dto.Unit,
+                IsAdditional = true,
+                IsStandalone = true,
+                FormulaExpression = dto.FormulaExpression,
+                SpecMinValue = dto.SpecMinValue,
+                SpecMaxValue = dto.SpecMaxValue,
+                AcceptanceCriteria = dto.AcceptanceCriteria
+            };
+
+            _db.TestResultParameters.Add(param);
+            await _db.SaveChangesAsync();
+
+            return new
+            {
+                Success = true,
+                Message = "Standalone parameter added successfully.",
+                ParameterId = param.ID,
+                param.ParameterName,
+                param.Unit
+            };
+        }
+
+        // =====================================================================
+        //  ADD PARAMETER FROM ANOTHER TEST METHOD
+        // =====================================================================
+        public async Task<object> AddParameterFromMethod(long headerId, AddParameterFromMethodDto dto)
+        {
+            var header = await _db.TestResultHeaders
+                .Include(h => h.Parameters)
+                .FirstOrDefaultAsync(h => h.ID == headerId);
+
+            if (header == null)
+                throw new Exception("TestResultHeader not found.");
+
+            // Load the parameter from master
+            var masterParam = await _db.ParameterMasters
+                .Include(p => p.ParameterUnit)
+                .FirstOrDefaultAsync(p => p.ID == dto.ParameterID);
+
+            if (masterParam == null)
+                throw new Exception($"Parameter with ID {dto.ParameterID} not found in master.");
+
+            // Check if already added
+            var existing = header.Parameters.FirstOrDefault(p =>
+                p.ParameterID == dto.ParameterID && p.SourceTestMethodId == dto.SourceTestMethodId);
+
+            if (existing != null)
+                throw new Exception("This parameter from the specified method is already added.");
+
+            var param = new TestResultParameter
+            {
+                TestResultHeaderID = headerId,
+                ParameterID = masterParam.ID,
+                ParameterName = masterParam.Name,
+                Unit = masterParam.ParameterUnit?.Name ?? string.Empty,
+                IsAdditional = true,
+                IsStandalone = false,
+                SourceTestMethodId = dto.SourceTestMethodId,
+                Formula = masterParam.Formula,
+                IsCalculated = masterParam.IsCalculated,
+                FormulaExpression = masterParam.Formula
+            };
+
+            _db.TestResultParameters.Add(param);
+            await _db.SaveChangesAsync();
+
+            return new
+            {
+                Success = true,
+                Message = "Parameter added from test method successfully.",
+                ParameterId = param.ID,
+                param.ParameterName,
+                param.Unit,
+                SourceTestMethodId = dto.SourceTestMethodId
+            };
+        }
+
+        // =====================================================================
+        //  GET ENVIRONMENT AT TEST TIME
+        // =====================================================================
+        public async Task<EnvironmentAtTimeDto> GetEnvironmentAtTime(long headerId)
+        {
+            var header = await _db.TestResultHeaders
+                .FirstOrDefaultAsync(h => h.ID == headerId);
+
+            if (header == null)
+                throw new Exception("TestResultHeader not found.");
+
+            return new EnvironmentAtTimeDto
+            {
+                HeaderId = header.ID,
+                LabRoomId = header.LabRoomId,
+                RoomTemperature = header.RoomTemperature,
+                RoomHumidity = header.RoomHumidity,
+                EquipmentIdsJson = header.EquipmentIdsJson,
+                TestStartTime = header.TestStartTime,
+                TestEndTime = header.TestEndTime,
+                PerformedByName = header.PerformedByName,
+                PerformedById = header.PerformedById
+            };
+        }
+
+        // =====================================================================
+        //  Phase 5: Test Verification Workflow
+        // =====================================================================
+
+        public async Task SubmitForVerification(long headerId)
+        {
+            var header = await _db.TestResultHeaders.FindAsync(headerId);
+            if (header == null) throw new Exception("Header not found.");
+
+            header.Status = "PendingVerification";
+            await _db.SaveChangesAsync();
+
+            // Update sample status
+            await _sampleStatusService.ForceAutoStatusAsync(
+                header.SampleID,
+                SampleStatus.TESTING_UNDER_VERIFICATION,
+                loggedInUser.EmployeeID);
+
+            // Start workflow if configured
+            try
+            {
+                await _workflowService.StartWorkflow(headerId, "TestResult");
+            }
+            catch
+            {
+                // Workflow may not be configured — that's OK
+            }
+        }
+
+        public async Task<PagedResponse<object>> GetVerificationList(PageFilter filter)
+        {
+            var query = from h in _db.TestResultHeaders
+                        where h.IsActive && h.Status == "PendingVerification"
+                        join sample in _db.SampleDetails on h.SampleID equals sample.ID
+                        join inward in _db.SampleInwards on sample.InwardID equals inward.ID
+                        where inward.CompanyCode == loggedInUser.CompanyCode
+                        select new
+                        {
+                            h.ID,
+                            sample.SampleNo,
+                            inward.CaseNo,
+                            TestName = _db.LaboratoryTests
+                                .Where(t => t.ID == h.LaboratoryTestID)
+                                .Select(t => t.Name)
+                                .FirstOrDefault(),
+                            ParametersCount = h.Parameters.Count,
+                            h.IsOverallPass,
+                            h.IsNabl,
+                            PerformedBy = h.PerformedByName,
+                            h.CompletedAt,
+                            h.Status
+                        };
+
+            int totalRecords = await query.CountAsync();
+
+            var data = await query
+                .Skip((filter.PageNumber - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .ToListAsync();
+
+            return new PagedResponse<object>(
+                data.Cast<object>().ToList(),
+                totalRecords,
+                filter.PageNumber,
+                filter.PageSize);
+        }
+
+        public async Task VerifyTest(long headerId, string? comments)
+        {
+            var header = await _db.TestResultHeaders.FindAsync(headerId);
+            if (header == null) throw new Exception("Header not found.");
+
+            header.Status = "Verified";
+            await _db.SaveChangesAsync();
+
+            // Check if all tests for sample are verified
+            bool allVerified = !await _db.TestResultHeaders.AnyAsync(h =>
+                h.SampleID == header.SampleID &&
+                h.IsActive &&
+                h.Status != "Verified" && h.Status != "Completed");
+
+            if (allVerified)
+            {
+                await _sampleStatusService.ForceAutoStatusAsync(
+                    header.SampleID,
+                    SampleStatus.TESTING_VERIFIED,
+                    loggedInUser.EmployeeID);
+            }
+        }
+
+        public async Task RejectVerification(long headerId, string? comments)
+        {
+            var header = await _db.TestResultHeaders.FindAsync(headerId);
+            if (header == null) throw new Exception("Header not found.");
+
+            header.Status = "VerificationRejected";
+            await _db.SaveChangesAsync();
+
+            await _sampleStatusService.ForceAutoStatusAsync(
+                header.SampleID,
+                SampleStatus.TESTING_VERIFICATION_REJECTED,
+                loggedInUser.EmployeeID);
+        }
+
+        // =====================================================================
+        //  Phase 5: Preparation Status
+        // =====================================================================
+
+        public async Task<PreparationStatusDto> GetPreparationStatus(long sampleId)
+        {
+            var sample = await _db.SampleDetails.FindAsync(sampleId);
+            if (sample == null) throw new Exception("Sample not found.");
+
+            var result = new PreparationStatusDto
+            {
+                PreparationRequired = sample.PreparationRequired,
+            };
+
+            // Machining charges from MachiningChargeItems (fallback to SampleDetail.MachiningAmount)
+            var machiningItems = await _db.MachiningChargeItems
+                .Where(m => m.SampleID == sampleId && m.IsActive)
+                .ToListAsync();
+            result.MachiningCharges = machiningItems.Any()
+                ? machiningItems.Sum(m => m.Amount)
+                : sample.MachiningAmount;
+            result.MachiningBreakdown = machiningItems.Select(m => new MachiningChargeLineDto
+            {
+                Id = m.ID, Description = m.Description, Amount = m.Amount, Remark = m.Remark
+            }).ToList();
+
+            // Check if cutting charge data exists
+            var cuttingHeader = await _db.CuttingChargeHeaders
+                .Include(h => h.Samples)
+                    .ThenInclude(s => s.CuttingChargeDetails)
+                .FirstOrDefaultAsync(h => h.InwardID == sample.InwardID && h.IsActive);
+
+            if (cuttingHeader != null)
+            {
+                var cuttingSample = cuttingHeader.Samples.FirstOrDefault(s => s.SampleID == sampleId);
+                if (cuttingSample != null)
+                {
+                    result.PreparationRecorded = true;
+                    result.PreparationStatus = cuttingSample.PreparationStatus;
+                    result.CuttingCharges = cuttingSample.SampleTotal;
+                    result.CuttingEditUrl = $"/sample/cutting/edit/{cuttingHeader.ID}";
+
+                    result.Specimens = cuttingSample.CuttingChargeDetails.Select(d => (object)new
+                    {
+                        d.ID,
+                        cuttingSample.SpecimenTypeId,
+                        cuttingSample.Length,
+                        cuttingSample.Width,
+                        cuttingSample.Thickness,
+                        cuttingSample.Diameter,
+                        cuttingSample.Orientation
+                    }).ToList();
+                }
+            }
+
+            return result;
+        }
+
+        // =====================================================================
+        //  Phase 6: Unified Price Summary
+        // =====================================================================
+
+        public async Task<UnifiedPriceSummaryDto> GetUnifiedPriceSummary(long sampleId)
+        {
+            var sample = await _db.SampleDetails
+                .Include(s => s.SampleInward)
+                .FirstOrDefaultAsync(s => s.ID == sampleId);
+
+            if (sample == null) throw new Exception("Sample not found.");
+
+            // Machining line items (fallback to legacy single amount)
+            var machiningItems = await _db.MachiningChargeItems
+                .Where(m => m.SampleID == sampleId && m.IsActive)
+                .ToListAsync();
+
+            var dto = new UnifiedPriceSummaryDto
+            {
+                SampleId = sampleId,
+                InwardId = sample.InwardID,
+                MachiningCharges = machiningItems.Any()
+                    ? machiningItems.Sum(m => m.Amount)
+                    : sample.MachiningAmount,
+                OtherPreparationCharges = sample.OtherPreparationCharge,
+                BillingStatus = sample.SampleInward?.BillingStatus,
+                MachiningBreakdown = machiningItems.Select(m => new MachiningChargeLineDto
+                {
+                    Id = m.ID,
+                    Description = m.Description,
+                    Amount = m.Amount,
+                    Remark = m.Remark
+                }).ToList()
+            };
+
+            // Cutting charges
+            var cuttingHeader = await _db.CuttingChargeHeaders
+                .Include(h => h.Samples)
+                    .ThenInclude(s => s.CuttingChargeDetails)
+                .FirstOrDefaultAsync(h => h.InwardID == sample.InwardID && h.IsActive);
+
+            if (cuttingHeader != null)
+            {
+                var cuttingSample = cuttingHeader.Samples.FirstOrDefault(s => s.SampleID == sampleId);
+                if (cuttingSample != null)
+                {
+                    dto.CuttingCharges = cuttingSample.SampleTotal;
+                    dto.CuttingBreakdown = cuttingSample.CuttingChargeDetails.Select(d => new CuttingChargeLineDto
+                    {
+                        CuttingType = d.CuttingType ?? "",
+                        UnitType = d.UnitType ?? "",
+                        Rate = d.Rate,
+                        Quantity = d.Quantity,
+                        Total = d.Total
+                    }).ToList();
+                }
+            }
+
+            dto.TotalPreparationCharges = dto.CuttingCharges + dto.MachiningCharges + dto.OtherPreparationCharges;
+
+            // Test charges
+            var headers = await _db.TestResultHeaders
+                .Where(h => h.SampleID == sampleId && h.IsActive)
+                .ToListAsync();
+
+            foreach (var h in headers)
+            {
+                var testName = await _db.LaboratoryTests
+                    .Where(t => t.ID == h.LaboratoryTestID)
+                    .Select(t => t.Name)
+                    .FirstOrDefaultAsync() ?? "Unknown";
+
+                var finalPrice = h.PriceOverridden ? (h.OverridePrice ?? 0) : (h.CalculatedPrice ?? 0);
+
+                dto.TestCharges.Add(new TestChargeLineDto
+                {
+                    HeaderId = h.ID,
+                    TestName = testName,
+                    CalculatedPrice = h.CalculatedPrice ?? 0,
+                    OverridePrice = h.OverridePrice,
+                    FinalPrice = finalPrice,
+                    IsOverridden = h.PriceOverridden
+                });
+            }
+
+            dto.TotalTestCharges = dto.TestCharges.Sum(t => t.FinalPrice);
+            dto.GrandTotal = dto.TotalPreparationCharges + dto.TotalTestCharges;
+
+            return dto;
+        }
+
+        // =============================================================
+        // Machining Charge Items — simple line items per sample
+        // =============================================================
+
+        public async Task<List<MachiningChargeLineDto>> GetMachiningItems(long sampleId)
+        {
+            return await _db.MachiningChargeItems
+                .Where(m => m.SampleID == sampleId && m.IsActive)
+                .OrderBy(m => m.ID)
+                .Select(m => new MachiningChargeLineDto
+                {
+                    Id = m.ID,
+                    Description = m.Description,
+                    Amount = m.Amount,
+                    Remark = m.Remark
+                })
+                .ToListAsync();
+        }
+
+        public async Task<MachiningChargeLineDto> AddMachiningItem(long sampleId, MachiningChargeItemDto dto)
+        {
+            var sample = await _db.SampleDetails.FindAsync(sampleId);
+            if (sample == null) throw new Exception("Sample not found.");
+
+            var item = new MachiningChargeItem
+            {
+                SampleID = sampleId,
+                Description = dto.Description,
+                Amount = dto.Amount,
+                Remark = dto.Remark,
+                IsActive = true,
+                CreatedOn = DateTime.UtcNow,
+                CreatedBy = loggedInUser.EmployeeID,
+                CompanyCode = loggedInUser.CompanyCode
+            };
+
+            _db.MachiningChargeItems.Add(item);
+            await _db.SaveChangesAsync();
+
+            return new MachiningChargeLineDto
+            {
+                Id = item.ID,
+                Description = item.Description,
+                Amount = item.Amount,
+                Remark = item.Remark
+            };
+        }
+
+        public async Task<MachiningChargeLineDto> UpdateMachiningItem(long itemId, MachiningChargeItemDto dto)
+        {
+            var item = await _db.MachiningChargeItems.FindAsync(itemId);
+            if (item == null) throw new Exception("Machining charge item not found.");
+
+            item.Description = dto.Description;
+            item.Amount = dto.Amount;
+            item.Remark = dto.Remark;
+            item.ModifiedOn = DateTime.UtcNow;
+            item.ModifiedBy = loggedInUser.EmployeeID;
+
+            await _db.SaveChangesAsync();
+
+            return new MachiningChargeLineDto
+            {
+                Id = item.ID,
+                Description = item.Description,
+                Amount = item.Amount,
+                Remark = item.Remark
+            };
+        }
+
+        public async Task DeleteMachiningItem(long itemId)
+        {
+            var item = await _db.MachiningChargeItems.FindAsync(itemId);
+            if (item == null) throw new Exception("Machining charge item not found.");
+
+            item.IsActive = false;
+            item.ModifiedOn = DateTime.UtcNow;
+            item.ModifiedBy = loggedInUser.EmployeeID;
+
+            await _db.SaveChangesAsync();
         }
     }
 }

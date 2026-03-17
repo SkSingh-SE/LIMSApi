@@ -10,6 +10,9 @@ namespace LIMSApi.Dtos
         public required string Name { get; set; }
         public string? Part { get; set; }
         public bool IsDisabled { get; set; } = false;
+        public string? LinkedStandard { get; set; }
+        public string? FormulaExpression { get; set; }
+        public string? DefaultParameters { get; set; }
         public string Versions { get; set; }
     }
     public class VersionDto

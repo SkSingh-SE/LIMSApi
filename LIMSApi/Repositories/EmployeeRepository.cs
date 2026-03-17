@@ -43,6 +43,7 @@ namespace LIMSApi.Repositories
             return await _context.EmployeeMasters
            .Include(e => e.Department)
            .Include(e => e.Designation)
+               .ThenInclude(d => d.Role)
            .Include(e => e.ReportingManager)
            .Include(x => x.Qualifications)
            .Include(x => x.Documents)

@@ -256,5 +256,17 @@ namespace LIMSApi.Repositories
             return await _context.CuttingChargeHeaders
                 .AnyAsync(c => c.InwardID == inwardId && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
         }
+
+        public async Task<CuttingChargeSample?> GetSampleByIdAsync(long sampleId)
+        {
+            return await _context.CuttingChargeSamples
+                .FirstOrDefaultAsync(s => s.ID == sampleId);
+        }
+
+        public async Task UpdateSampleAsync(CuttingChargeSample sample)
+        {
+            _context.CuttingChargeSamples.Update(sample);
+            await _context.SaveChangesAsync();
+        }
     }
 }

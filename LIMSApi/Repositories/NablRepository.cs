@@ -26,6 +26,7 @@ namespace LIMSApi.Repositories
                 "JobDescription" => await GetAllTyped<NablJobDescription>(filter),
                 "ResponsibilityAuthority" => await GetAllTyped<NablResponsibilityAuthority>(filter),
                 "EmployeeCompetence" => await GetAllTyped<NablEmployeeCompetence>(filter),
+                "EmployeePerformanceRecord" => await GetAllTyped<NablEmployeePerformanceRecord>(filter),
                 "EmployeeAuthorization" => await GetAllTyped<NablEmployeeAuthorization>(filter),
                 "CompetenceRequirement" => await GetAllTyped<NablCompetenceRequirement>(filter),
                 "InductionTraining" => await GetAllTyped<NablInductionTraining>(filter),
@@ -88,6 +89,7 @@ namespace LIMSApi.Repositories
                 "JobDescription" => await GetByIdTyped<NablJobDescription>(id),
                 "ResponsibilityAuthority" => await GetByIdTyped<NablResponsibilityAuthority>(id),
                 "EmployeeCompetence" => await GetByIdTyped<NablEmployeeCompetence>(id),
+                "EmployeePerformanceRecord" => await GetByIdTyped<NablEmployeePerformanceRecord>(id),
                 "EmployeeAuthorization" => await GetByIdTyped<NablEmployeeAuthorization>(id),
                 "CompetenceRequirement" => await GetByIdTyped<NablCompetenceRequirement>(id),
                 "InductionTraining" => await GetByIdTyped<NablInductionTraining>(id),
@@ -150,6 +152,7 @@ namespace LIMSApi.Repositories
                 "JobDescription" => await AddTyped((NablJobDescription)model),
                 "ResponsibilityAuthority" => await AddTyped((NablResponsibilityAuthority)model),
                 "EmployeeCompetence" => await AddTyped((NablEmployeeCompetence)model),
+                "EmployeePerformanceRecord" => await AddTyped((NablEmployeePerformanceRecord)model),
                 "EmployeeAuthorization" => await AddTyped((NablEmployeeAuthorization)model),
                 "CompetenceRequirement" => await AddTyped((NablCompetenceRequirement)model),
                 "InductionTraining" => await AddTyped((NablInductionTraining)model),
@@ -217,6 +220,9 @@ namespace LIMSApi.Repositories
                     break;
                 case "EmployeeCompetence":
                     await UpdateTyped((NablEmployeeCompetence)model);
+                    break;
+                case "EmployeePerformanceRecord":
+                    await UpdateTyped((NablEmployeePerformanceRecord)model);
                     break;
                 case "EmployeeAuthorization":
                     await UpdateTyped((NablEmployeeAuthorization)model);
@@ -388,6 +394,9 @@ namespace LIMSApi.Repositories
                     break;
                 case "EmployeeCompetence":
                     await DeleteTyped<NablEmployeeCompetence>(id);
+                    break;
+                case "EmployeePerformanceRecord":
+                    await DeleteTyped<NablEmployeePerformanceRecord>(id);
                     break;
                 case "EmployeeAuthorization":
                     await DeleteTyped<NablEmployeeAuthorization>(id);

@@ -146,6 +146,12 @@ namespace LIMSApi.Dtos
         public long ID { get; set; }
         public string SampleNo { get; set; }
         public long SampleID { get; set; }
+        public int Version { get; set; } = 1;
+        public int ReplanCount { get; set; } = 0;
+        public string PlanStatus { get; set; } = "Draft";
+        public long? ApprovedById { get; set; }
+        public string? ApprovedByName { get; set; }
+        public DateTime? ApprovedAt { get; set; }
         public List<GeneralTestDto> GeneralTests { get; set; } = new();
         public List<ChemicalTestDto> ChemicalTests { get; set; } = new();
     }
@@ -157,7 +163,6 @@ namespace LIMSApi.Dtos
         public string? SampleNo { get; set; }
         public long Specification1 { get; set; }
         public long? Specification2 { get; set; }
-        public string? Parameter { get; set; }
         public List<GeneralTestMethodDto> Methods { get; set; } = new();
     }
 
@@ -167,9 +172,6 @@ namespace LIMSApi.Dtos
         public long GeneralTestID { get; set; }
         public long? TestMethodID { get; set; }
         public long? TestCaseID { get; set; }
-        public string? SelectionType { get; set; }
-        public decimal? Value { get; set; }
-        public long? StandardID { get; set; }
         public int Quantity { get; set; }
         public string? ReportNo { get; set; }
         public string? UlrNo { get; set; }
@@ -186,7 +188,6 @@ namespace LIMSApi.Dtos
         public Dictionary<string, bool> TestTypes { get; set; } = new();
         public long Specification1 { get; set; }
         public long? Specification2 { get; set; }
-        public long? TestMethod { get; set; }
         public List<ChemicalTestElementDto> Elements { get; set; } = new();
     }
 

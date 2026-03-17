@@ -1,6 +1,7 @@
 using System.Text.Json;
 using LIMSApi.Dtos;
 using LIMSApi.Services.Interface;
+using LIMSApi.ServiceWORepo;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LIMSApi.Controllers
@@ -10,10 +11,12 @@ namespace LIMSApi.Controllers
     public class NablController : ControllerBase
     {
         private readonly INablService _service;
+        private readonly INablAuditService _auditService;
 
-        public NablController(INablService service)
+        public NablController(INablService service, INablAuditService auditService)
         {
             _service = service;
+            _auditService = auditService;
         }
 
         // ─── CRUD ────────────────────────────────────────────────────────
@@ -96,6 +99,29 @@ namespace LIMSApi.Controllers
         {
             var logs = await _service.GetAuditLog(formType, id);
             return Ok(logs);
+        }
+
+        // ─── Dashboard & Audit Package ─────────────────────────────────
+
+        [HttpGet("dashboard")]
+        public async Task<IActionResult> Dashboard()
+        {
+            var data = await _auditService.GetNablDashboard();
+            return Ok(data);
+        }
+
+        [HttpGet("audit-summary")]
+        public async Task<IActionResult> AuditSummary()
+        {
+            var summary = await _auditService.GetAuditSummary();
+            return Ok(summary);
+        }
+
+        [HttpPost("audit-package")]
+        public async Task<IActionResult> AuditPackage([FromBody] AuditPackageRequest request)
+        {
+            var pdf = await _auditService.GenerateAuditPackage(request.FormTypes, request.From, request.To);
+            return File(pdf, "application/pdf", $"NABL_Audit_Package_{DateTime.UtcNow:yyyyMMdd_HHmmss}.pdf");
         }
     }
 

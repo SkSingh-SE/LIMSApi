@@ -25,7 +25,11 @@ namespace LIMSApi.Repositories
 
         public async Task<UserMaster> GetUserByEmail(string email)
         {
-            var user = await context.UserMasters.Include(x => x.Employee).FirstOrDefaultAsync(x => x.EmailId == email);
+            var user = await context.UserMasters
+                .Include(x => x.Employee)
+                    .ThenInclude(e => e.Designation)
+                        .ThenInclude(d => d.Role)
+                .FirstOrDefaultAsync(x => x.EmailId == email);
             return user;
         }
 

@@ -1,4 +1,5 @@
 using LIMSApi.Data;
+using LIMSApi.Dtos;
 using LIMSApi.Helpers.Enums;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
@@ -24,9 +25,29 @@ namespace LIMSApi.Services
         /// <summary>
         /// Calculate prices for a case and create ChargeEvents with DRAFT status
         /// Sets BillingStatus = PRICE_DRAFTED
+        /// Returns detailed result with per-test success/failure info
         /// </summary>
-        public async Task CalculateAndCreateChargeEventsAsync(long inwardId)
+        public async Task<PriceCalculationResultDto> CalculateAndCreateChargeEventsAsync(long inwardId)
         {
+            var result = await CalculatePricingInternalAsync(inwardId, dryRun: false);
+            return result;
+        }
+
+        /// <summary>
+        /// Validate pricing without saving — dry run that returns what would succeed/fail
+        /// </summary>
+        public async Task<PriceCalculationResultDto> ValidatePricingAsync(long inwardId)
+        {
+            return await CalculatePricingInternalAsync(inwardId, dryRun: true);
+        }
+
+        /// <summary>
+        /// Internal pricing logic shared by Calculate and Validate
+        /// </summary>
+        private async Task<PriceCalculationResultDto> CalculatePricingInternalAsync(long inwardId, bool dryRun)
+        {
+            var pricingResult = new PriceCalculationResultDto { InwardId = inwardId };
+
             var inward = await _db.SampleInwards
                 .Include(x => x.Customer)
                 .FirstOrDefaultAsync(x => x.ID == inwardId);
@@ -34,21 +55,27 @@ namespace LIMSApi.Services
             if (inward == null)
                 throw new Exception("Case not found");
 
-            // Check if ChargeEvents already exist (avoid duplicates)
-            var existingDraft = await _db.ChargeEvents
-                .AnyAsync(x => x.InwardID == inwardId && x.Status == ChargeEventStatus.DRAFT.ToString());
+            pricingResult.CaseNo = inward.CaseNo ?? "";
 
-            if (existingDraft)
+            if (!dryRun)
             {
-                _logger.LogWarning("DRAFT ChargeEvents already exist for Case {CaseNo}. Skipping recalculation.", inward.CaseNo);
-                return;
-            }
+                // Check if ChargeEvents already exist (avoid duplicates)
+                var existingDraft = await _db.ChargeEvents
+                    .AnyAsync(x => x.InwardID == inwardId && x.Status == ChargeEventStatus.DRAFT.ToString());
 
-            // Delete any existing DRAFT events if recalculation is needed
-            var existingEvents = await _db.ChargeEvents
-                .Where(x => x.InwardID == inwardId && x.Status == ChargeEventStatus.DRAFT.ToString())
-                .ToListAsync();
-            _db.ChargeEvents.RemoveRange(existingEvents);
+                if (existingDraft)
+                {
+                    pricingResult.Warnings.Add("DRAFT ChargeEvents already exist. Skipping recalculation.");
+                    _logger.LogWarning("DRAFT ChargeEvents already exist for Case {CaseNo}. Skipping recalculation.", inward.CaseNo);
+                    return pricingResult;
+                }
+
+                // Delete any existing DRAFT events if recalculation is needed
+                var existingEvents = await _db.ChargeEvents
+                    .Where(x => x.InwardID == inwardId && x.Status == ChargeEventStatus.DRAFT.ToString())
+                    .ToListAsync();
+                _db.ChargeEvents.RemoveRange(existingEvents);
+            }
 
             var chargeEvents = new List<ChargeEvent>();
 
@@ -70,6 +97,14 @@ namespace LIMSApi.Services
                     Status = ChargeEventStatus.DRAFT.ToString(),
                     CreatedOn = DateTime.UtcNow
                 });
+                pricingResult.TestResults.Add(new PriceLineResultDto
+                {
+                    ChargeType = "Cutting",
+                    TestName = "Sample Cutting Charges",
+                    Success = true,
+                    Amount = cuttingHeader.GrandTotal
+                });
+                pricingResult.SuccessCount++;
             }
 
             // 2. MACHINING / PREPARATION CHARGES
@@ -94,6 +129,16 @@ namespace LIMSApi.Services
                         Status = ChargeEventStatus.DRAFT.ToString(),
                         CreatedOn = DateTime.UtcNow
                     });
+                    pricingResult.TestResults.Add(new PriceLineResultDto
+                    {
+                        SampleId = sample.ID,
+                        SampleNo = sample.SampleNo ?? "",
+                        ChargeType = "Preparation",
+                        TestName = $"Sample Preparation - {sample.SampleNo}",
+                        Success = true,
+                        Amount = totalPrep
+                    });
+                    pricingResult.SuccessCount++;
                 }
             }
 
@@ -122,16 +167,16 @@ namespace LIMSApi.Services
                         {
                             try
                             {
-                                var result = await GetRateForGeneralTestAsync(
+                                var calcResult = await GetRateForGeneralTestAsync(
                                     method.LaboratoryTestID,
                                     gt,
                                     method,
                                     plan.ID
                                 );
-                                var rate = result.Rate;
-                                var configId = result.ConfigId;
-                                var selectionType = result.SelectionType;
-                                var usedValue = result.UsedValue;
+                                var rate = calcResult.Rate;
+                                var configId = calcResult.ConfigId;
+                                var selectionType = calcResult.SelectionType;
+                                var usedValue = calcResult.UsedValue;
 
                                 var amount = rate * method.Quantity;
 
@@ -150,10 +195,32 @@ namespace LIMSApi.Services
                                     InvoiceCaseConfigID = configId,
                                     CreatedOn = DateTime.UtcNow
                                 });
+                                pricingResult.TestResults.Add(new PriceLineResultDto
+                                {
+                                    SampleId = sd.ID,
+                                    SampleNo = sd.SampleNo ?? "",
+                                    ChargeType = "General",
+                                    TestName = $"General Test - {selectionType ?? "Default"} (Method {method.ID})",
+                                    Success = true,
+                                    Amount = amount
+                                });
+                                pricingResult.SuccessCount++;
                             }
                             catch (Exception ex)
                             {
-                                _logger.LogWarning(ex, "Failed to calculate rate for GeneralTest method {MethodID}", method.ID);
+                                var reason = ex.Message;
+                                _logger.LogWarning(ex, "Failed to calculate rate for GeneralTest method {MethodID}: {Reason}", method.ID, reason);
+                                pricingResult.TestResults.Add(new PriceLineResultDto
+                                {
+                                    SampleId = sd.ID,
+                                    SampleNo = sd.SampleNo ?? "",
+                                    ChargeType = "General",
+                                    TestName = $"General Test (Method {method.ID})",
+                                    Success = false,
+                                    FailureReason = reason
+                                });
+                                pricingResult.FailureCount++;
+                                pricingResult.Errors.Add($"Sample {sd.SampleNo} - General Test Method {method.ID}: {reason}");
                             }
                         }
                     }
@@ -167,15 +234,15 @@ namespace LIMSApi.Services
                         {
                             try
                             {
-                                var result = await GetRateForChemicalTestAsync(
-                                    tt.LaboratoryTestID.Value,
+                                var calcResult = await GetRateForChemicalTestAsync(
+                                    tt.LaboratoryTestID!.Value,
                                     ct,
                                     usedElements
                                 );
-                                var rate = result.Rate;
-                                var configId = result.ConfigId;
-                                var selectionType = result.SelectionType;
-                                var usedValue = result.UsedValue;
+                                var rate = calcResult.Rate;
+                                var configId = calcResult.ConfigId;
+                                var selectionType = calcResult.SelectionType;
+                                var usedValue = calcResult.UsedValue;
 
                                 chargeEvents.Add(new ChargeEvent
                                 {
@@ -192,30 +259,67 @@ namespace LIMSApi.Services
                                     InvoiceCaseConfigID = configId,
                                     CreatedOn = DateTime.UtcNow
                                 });
+                                pricingResult.TestResults.Add(new PriceLineResultDto
+                                {
+                                    SampleId = sd.ID,
+                                    SampleNo = sd.SampleNo ?? "",
+                                    ChargeType = "Chemical",
+                                    TestName = $"Chemical Test - {tt.Name}",
+                                    Success = true,
+                                    Amount = rate
+                                });
+                                pricingResult.SuccessCount++;
                             }
                             catch (Exception ex)
                             {
-                                _logger.LogWarning(ex, "Failed to calculate rate for ChemicalTest type {TestTypeID}", tt.ID);
+                                var reason = ex.Message;
+                                _logger.LogWarning(ex, "Failed to calculate rate for ChemicalTest type {TestTypeID}: {Reason}", tt.ID, reason);
+                                pricingResult.TestResults.Add(new PriceLineResultDto
+                                {
+                                    SampleId = sd.ID,
+                                    SampleNo = sd.SampleNo ?? "",
+                                    ChargeType = "Chemical",
+                                    TestName = $"Chemical Test - {tt.Name}",
+                                    Success = false,
+                                    FailureReason = reason
+                                });
+                                pricingResult.FailureCount++;
+                                pricingResult.Errors.Add($"Sample {sd.SampleNo} - Chemical Test {tt.Name}: {reason}");
                             }
                         }
                     }
                 }
             }
 
-            // Save all ChargeEvents
-            if (chargeEvents.Any())
+            pricingResult.TotalAmount = chargeEvents.Sum(x => x.Amount);
+
+            if (!dryRun)
             {
-                await _db.ChargeEvents.AddRangeAsync(chargeEvents);
+                // Save all ChargeEvents
+                if (chargeEvents.Any())
+                {
+                    await _db.ChargeEvents.AddRangeAsync(chargeEvents);
+                }
+
+                // Update inward billing status and total
+                inward.BillingStatus = BillingStatus.PRICE_DRAFTED.ToString();
+                inward.TotalTestCharges = pricingResult.TotalAmount;
+
+                await _db.SaveChangesAsync();
             }
 
-            // Update inward billing status and total
-            inward.BillingStatus = BillingStatus.PRICE_DRAFTED.ToString();
-            inward.TotalTestCharges = chargeEvents.Sum(x => x.Amount);
+            if (pricingResult.HasFailures)
+            {
+                _logger.LogWarning("Price calculation for Case {CaseNo}: {SuccessCount} succeeded, {FailureCount} failed. Total: {Total}",
+                    inward.CaseNo, pricingResult.SuccessCount, pricingResult.FailureCount, pricingResult.TotalAmount);
+            }
+            else
+            {
+                _logger.LogInformation("Created {Count} ChargeEvents for Case {CaseNo} with total {Total}",
+                    chargeEvents.Count, inward.CaseNo, pricingResult.TotalAmount);
+            }
 
-            await _db.SaveChangesAsync();
-
-            _logger.LogInformation("Created {Count} ChargeEvents for Case {CaseNo} with total {Total}",
-                chargeEvents.Count, inward.CaseNo, inward.TotalTestCharges);
+            return pricingResult;
         }
 
         /// <summary>
@@ -398,16 +502,17 @@ namespace LIMSApi.Services
                     .Select(a => a.Trim()));
             }
 
-            // First, try to get from TestResultParameter (actual test results)
+            // First, try to get from TestResultParameter (actual test results) — only billable ones
             if (testResultParameters != null && testResultParameters.Any())
             {
-                // Get ParameterMasters for the test result parameters
-                var parameterIds = testResultParameters.Select(trp => trp.ParameterID).Distinct().ToList();
+                // Filter only billable parameters for price matching
+                var billableParams = testResultParameters.Where(trp => trp.IsBillable).ToList();
+                var parameterIds = billableParams.Select(trp => trp.ParameterID).Distinct().ToList();
                 var parameterMasters = _db.ParameterMasters
                     .Where(pm => parameterIds.Contains(pm.ID))
                     .ToDictionary(pm => pm.ID);
 
-                foreach (var trp in testResultParameters)
+                foreach (var trp in billableParams)
                 {
                     if (!parameterMasters.TryGetValue(trp.ParameterID, out var paramMaster))
                         continue;

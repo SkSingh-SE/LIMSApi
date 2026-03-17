@@ -1,6 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.ServiceWORepo;
+using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,10 +13,17 @@ namespace LIMSApi.Controllers
     public class TestResultsController : ControllerBase
     {
         private readonly ITestResultService _service;
+        private readonly ITestPriceCalculationService _priceService;
+        private readonly INablScopeValidationService _nablService;
 
-        public TestResultsController(ITestResultService service)
+        public TestResultsController(
+            ITestResultService service,
+            ITestPriceCalculationService priceService,
+            INablScopeValidationService nablService)
         {
             _service = service;
+            _priceService = priceService;
+            _nablService = nablService;
         }
 
         // =============================================================
@@ -63,8 +71,8 @@ namespace LIMSApi.Controllers
         [HttpPost("start-test/{headerId}")]
         public async Task<IActionResult> StartTest(long headerId)
         {
-            await _service.StartTest(headerId);
-            return Ok(new { Success = true, Message = "Test started" });
+            var response = await _service.StartTest(headerId);
+            return Ok(response);
         }
 
         // =============================================================
@@ -73,8 +81,8 @@ namespace LIMSApi.Controllers
         [HttpPost("complete-test/{headerId}")]
         public async Task<IActionResult> CompleteTest(long headerId)
         {
-            await _service.CompleteTest(headerId);
-            return Ok(new { Success = true, Message = "Test completed" });
+            var response = await _service.CompleteTest(headerId);
+            return Ok(response);
         }
 
         // =============================================================
@@ -172,6 +180,204 @@ namespace LIMSApi.Controllers
             var uploadedImages = await _service.UploadedTestImages(headerId);
 
             return Ok(uploadedImages);
+        }
+
+        // =============================================================
+        // Calculate Parameters (trigger recalculation for all derived)
+        // =============================================================
+        [HttpPost("calculate-parameters/{headerId}")]
+        public async Task<IActionResult> CalculateParameters(long headerId)
+        {
+            var result = await _service.CalculateParameters(headerId);
+            return Ok(result);
+        }
+
+        // =============================================================
+        // Add Standalone Parameter
+        // =============================================================
+        [HttpPost("add-standalone-parameter/{headerId}")]
+        public async Task<IActionResult> AddStandaloneParameter(long headerId, [FromBody] AddStandaloneParameterDto dto)
+        {
+            if (dto == null)
+                return BadRequest("Invalid payload.");
+
+            var result = await _service.AddStandaloneParameter(headerId, dto);
+            return Ok(result);
+        }
+
+        // =============================================================
+        // Add Parameter from Another Test Method
+        // =============================================================
+        [HttpPost("add-parameter-from-method/{headerId}")]
+        public async Task<IActionResult> AddParameterFromMethod(long headerId, [FromBody] AddParameterFromMethodDto dto)
+        {
+            if (dto == null)
+                return BadRequest("Invalid payload.");
+
+            var result = await _service.AddParameterFromMethod(headerId, dto);
+            return Ok(result);
+        }
+
+        // =============================================================
+        // Get Environment at Test Time
+        // =============================================================
+        [HttpGet("environment-at-time/{headerId}")]
+        public async Task<IActionResult> GetEnvironmentAtTime(long headerId)
+        {
+            var result = await _service.GetEnvironmentAtTime(headerId);
+            return Ok(result);
+        }
+
+        // =============================================================
+        // Phase 2B: Test-Level Price Calculation
+        // =============================================================
+
+        /// <summary>
+        /// Calculate test price based on selected parameters × InvoiceCasePrice
+        /// </summary>
+        [HttpPost("calculate-price/{headerId}")]
+        public async Task<IActionResult> CalculatePrice(long headerId)
+        {
+            var result = await _priceService.CalculateTestPrice(headerId);
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Get price breakdown per parameter
+        /// </summary>
+        [HttpGet("price-breakdown/{headerId}")]
+        public async Task<IActionResult> GetPriceBreakdown(long headerId)
+        {
+            var result = await _priceService.GetPriceBreakdown(headerId);
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Override the calculated price with a manual amount and reason
+        /// </summary>
+        [HttpPost("override-price/{headerId}")]
+        public async Task<IActionResult> OverridePrice(long headerId, [FromBody] Dtos.PriceOverrideDto dto)
+        {
+            if (dto == null)
+                return BadRequest("Invalid payload.");
+
+            // Use logged-in user ID for override tracking
+            long overrideById = 0;
+            var userIdClaim = User.FindFirst("UserId") ?? User.FindFirst("sub");
+            if (userIdClaim != null && long.TryParse(userIdClaim.Value, out var uid))
+                overrideById = uid;
+
+            var result = await _priceService.OverridePrice(headerId, dto.Amount, dto.Reason, overrideById);
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Get price summary: calculated, override, final price
+        /// </summary>
+        [HttpGet("price-summary/{headerId}")]
+        public async Task<IActionResult> GetPriceSummary(long headerId)
+        {
+            var result = await _priceService.GetPriceSummary(headerId);
+            return Ok(result);
+        }
+
+        // =============================================================
+        // Phase 1: NABL Scope Check
+        // =============================================================
+        [HttpGet("nabl-scope-check/{headerId}")]
+        public async Task<IActionResult> GetNablScopeCheck(long headerId)
+        {
+            var result = await _nablService.CheckAllParameters(headerId);
+            return Ok(result);
+        }
+
+        // =============================================================
+        // Phase 2: Uncertainty Data
+        // =============================================================
+        [HttpGet("uncertainty/{headerId}")]
+        public async Task<IActionResult> GetUncertainty(long headerId)
+        {
+            var result = await _nablService.GetAllUncertainties(headerId);
+            return Ok(result);
+        }
+
+        // =============================================================
+        // Phase 5: Test Verification Workflow
+        // =============================================================
+        [HttpPost("submit-for-verification/{headerId}")]
+        public async Task<IActionResult> SubmitForVerification(long headerId)
+        {
+            await _service.SubmitForVerification(headerId);
+            return Ok(new { Success = true, Message = "Submitted for verification" });
+        }
+
+        [HttpPost("verification-list")]
+        public async Task<IActionResult> GetVerificationList(PageFilter filter)
+        {
+            var result = await _service.GetVerificationList(filter);
+            return Ok(result);
+        }
+
+        [HttpPost("verify/{headerId}")]
+        public async Task<IActionResult> VerifyTest(long headerId, [FromBody] VerificationActionDto dto)
+        {
+            await _service.VerifyTest(headerId, dto?.Comments);
+            return Ok(new { Success = true, Message = "Test verified successfully" });
+        }
+
+        [HttpPost("reject-verification/{headerId}")]
+        public async Task<IActionResult> RejectVerification(long headerId, [FromBody] VerificationActionDto dto)
+        {
+            await _service.RejectVerification(headerId, dto?.Comments);
+            return Ok(new { Success = true, Message = "Verification rejected" });
+        }
+
+        // =============================================================
+        // Phase 5: Preparation Status
+        // =============================================================
+        [HttpGet("preparation-status/{sampleId}")]
+        public async Task<IActionResult> GetPreparationStatus(long sampleId)
+        {
+            var result = await _service.GetPreparationStatus(sampleId);
+            return Ok(result);
+        }
+
+        // =============================================================
+        // Phase 6: Unified Price Summary
+        // =============================================================
+        [HttpGet("unified-price-summary/{sampleId}")]
+        public async Task<IActionResult> GetUnifiedPriceSummary(long sampleId)
+        {
+            var result = await _service.GetUnifiedPriceSummary(sampleId);
+            return Ok(result);
+        }
+
+        // =============================================================
+        // Machining Charge Line Items
+        // =============================================================
+        [HttpGet("machining-items/{sampleId}")]
+        public async Task<IActionResult> GetMachiningItems(long sampleId)
+        {
+            return Ok(await _service.GetMachiningItems(sampleId));
+        }
+
+        [HttpPost("machining-items/{sampleId}")]
+        public async Task<IActionResult> AddMachiningItem(long sampleId, [FromBody] MachiningChargeItemDto dto)
+        {
+            return Ok(await _service.AddMachiningItem(sampleId, dto));
+        }
+
+        [HttpPut("machining-items/{itemId}")]
+        public async Task<IActionResult> UpdateMachiningItem(long itemId, [FromBody] MachiningChargeItemDto dto)
+        {
+            return Ok(await _service.UpdateMachiningItem(itemId, dto));
+        }
+
+        [HttpDelete("machining-items/{itemId}")]
+        public async Task<IActionResult> DeleteMachiningItem(long itemId)
+        {
+            await _service.DeleteMachiningItem(itemId);
+            return NoContent();
         }
     }
 }

@@ -38,8 +38,15 @@ builder.Services.AddCors(options =>
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+    });
 builder.Services.AddDbContext<LIMSContext>(opt => opt.UseSqlServer(connectionString));
+
+// Phase 9: Memory cache for workflow definitions
+builder.Services.AddMemoryCache();
 
 // Add Logging (Optional)
 builder.Logging.AddConsole();
@@ -241,6 +248,7 @@ builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<IUserPermissionService, UserPermissionService>();
 builder.Services.AddScoped<ISampleInwardService, SampleInwardService>();
+builder.Services.AddScoped<IPlanService, PlanService>();
 builder.Services.AddScoped<IWorkflowService, WorkflowService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IPushNotificationService, PushNotificationService>();
@@ -249,12 +257,16 @@ builder.Services.AddScoped<ISampleStatusService, SampleStatusService>();
 builder.Services.AddScoped<ICuttingService, CuttingService>();
 builder.Services.AddScoped<IPriceCalculationService, PriceCalculationService>();
 builder.Services.AddScoped<INablService, NablService>();
-
-
+builder.Services.AddScoped<INablAuditService, NablAuditService>();
+builder.Services.AddScoped<IPriceDimensionTypeService, PriceDimensionTypeService>();
+builder.Services.AddScoped<IPriceDimensionTypeRepository, PriceDimensionTypeRepository>();
+builder.Services.AddScoped<ICustomerPurchaseOrderService, CustomerPurchaseOrderService>();
+builder.Services.AddScoped<ICustomerPurchaseOrderRepository, CustomerPurchaseOrderRepository>();
 
 //Service without Repo
 
 builder.Services.AddScoped<ITestResultService, TestResultService>();
+builder.Services.AddScoped<ITestPriceCalculationService, TestPriceCalculationService>();
 builder.Services.AddScoped<FormulaEvaluator>();
 builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IReportTemplateService, ReportTemplateService>();
@@ -262,6 +274,9 @@ builder.Services.AddScoped<IReportBlockGenerator, ReportBlockGenerator>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<ICustomerAmendmentService, CustomerAmendmentService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
+builder.Services.AddScoped<ICustomerLedgerService, CustomerLedgerService>();
+builder.Services.AddScoped<IMachineIntegrationService, MachineIntegrationService>();
+builder.Services.AddScoped<INablScopeValidationService, NablScopeValidationService>();
 builder.Services.AddScoped<DispatchService>();
 builder.Services.AddScoped<CaseClosureService>();
 builder.Services.AddScoped<ISettingsService,SettingsService>();
@@ -343,6 +358,16 @@ RecurringJob.AddOrUpdate<ReminderJob>(
     "ReminderJob",
     x => x.Execute(),
     "0 */12 * * *");
+
+RecurringJob.AddOrUpdate<MonthlyBillingJob>(
+    "monthly-billing",
+    job => job.ExecuteMonthly(),
+    "0 9 1 * *"); // 1st of every month at 9 AM
+
+RecurringJob.AddOrUpdate<MonthlyBillingJob>(
+    "weekly-billing",
+    job => job.ExecuteWeekly(),
+    "0 9 * * MON"); // Every Monday at 9 AM
 
 // --------------------
 // Endpoints

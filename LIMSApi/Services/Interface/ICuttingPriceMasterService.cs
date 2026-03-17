@@ -13,5 +13,6 @@ namespace LIMSApi.Services.Interface
         Task<PagedResponse<object>> FetchCuttingPriceList(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetCuttingPriceDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<CuttingPriceMaster?> GetPriceBySpecimenAndCuttingType(long? specimenTypeId, string cuttingType);
     }
 }

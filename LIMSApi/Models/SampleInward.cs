@@ -81,6 +81,10 @@ namespace LIMSApi.Models
         public bool IsAmendmentAllowed { get; set; } = true;
         
         public decimal TotalTestCharges { get; set; } = 0;
+
+        // PO linkage
+        public long? PurchaseOrderId { get; set; }
+
         // Navigation Properties
         public virtual ICollection<SampleInwardDispatchMode> DispatchModes { get; set; } = new List<SampleInwardDispatchMode>();
         public virtual ICollection<SampleInwardContactPerson> Contacts { get; set; } = new List<SampleInwardContactPerson>();
@@ -91,7 +95,10 @@ namespace LIMSApi.Models
         //public virtual ICollection<SampleTestPlan> SampleTestPlans { get; set; } = new List<SampleTestPlan>();
 
         [ForeignKey("CustomerID")]
-        public virtual Customer? Customer { get; set; } = null!;    
+        public virtual Customer? Customer { get; set; } = null!;
+
+        [ForeignKey(nameof(PurchaseOrderId))]
+        public virtual CustomerPurchaseOrder? PurchaseOrder { get; set; }
 
         [NotMapped]
        public IFormFile File { get; set; } = null!;

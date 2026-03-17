@@ -29,6 +29,12 @@ public partial class EquipmentMaster : AuditProperty
     public bool IntermediateCheckRequired { get; set; } = false;
     public string? IntermediateCheckInterval { get; set; }
 
+    // Phase 7.1: Calibration & Maintenance enhancements
+    public DateTime? LastCalibrationDate { get; set; }
+    public int? CalibrationFrequencyDays { get; set; }
+    [MaxLength(500)]
+    public string? MaintenanceSchedule { get; set; }
+
     public ICollection<EquipmentCalibration> Calibrations { get; set; } = new List<EquipmentCalibration>();
     public ICollection<EquipmentMaintenance> Maintenances { get; set; } = new List<EquipmentMaintenance>();
     public ICollection<EquipmentSOP> SOPs { get; set; } = new List<EquipmentSOP>();

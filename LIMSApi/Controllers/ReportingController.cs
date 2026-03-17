@@ -73,6 +73,33 @@ namespace LIMSApi.Controllers
             });
         }
 
+        // =============================================================
+        // Generate Enhanced PDF (professional layout)
+        // =============================================================
+        [HttpGet("{id:long}/generate-pdf")]
+        public async Task<IActionResult> GenerateEnhancedPdf(long id)
+        {
+            var filePath = await _service.GenerateEnhancedPdfAsync(id);
+
+            if (!System.IO.File.Exists(filePath))
+                return NotFound("Generated PDF file not found on disk.");
+
+            var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
+            return File(fileBytes, "application/pdf", Path.GetFileName(filePath));
+        }
+
+        // =============================================================
+        // Preview Report Data (for frontend preview before PDF)
+        // =============================================================
+        [HttpGet("{id:long}/preview-data")]
+        public async Task<IActionResult> GetReportDataPreview(long id)
+        {
+            var reportData = await _service.BuildReportDataAsync(id);
+            if (reportData == null)
+                return NotFound($"Report data for header {id} not found");
+            return Ok(reportData);
+        }
+
         [HttpPost("request-amendment")]
         public async Task<IActionResult> RequestAmendment([FromForm] AmendmentRequestDto request)
         {

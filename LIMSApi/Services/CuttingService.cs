@@ -107,5 +107,21 @@ namespace LIMSApi.Services
 
             await _cuttingRepository.UpdateAsync(model);
         }
+
+        public async Task UpdatePreparationStatusAsync(long sampleId, string status)
+        {
+            var validStatuses = new[] { "Pending", "InProgress", "Completed", "QCVerified" };
+            if (!validStatuses.Contains(status))
+                throw new Exception($"Invalid preparation status: '{status}'. Valid values: {string.Join(", ", validStatuses)}");
+
+            var sample = await _cuttingRepository.GetSampleByIdAsync(sampleId);
+            if (sample == null)
+                throw new Exception("Cutting charge sample not found.");
+
+            sample.PreparationStatus = status;
+            await _cuttingRepository.UpdateSampleAsync(sample);
+
+            _logger.LogInformation("Preparation status updated to '{Status}' for CuttingChargeSample ID: {SampleId}", status, sampleId);
+        }
     }
 }

@@ -15,6 +15,16 @@ namespace LIMSApi.Models
         public required string Name { get; set; }
         public string? Part { get; set; }
         public bool IsDisabled { get; set; } = false;
+
+        // Phase 7.3: Test method specification enhancements
+        [MaxLength(500)]
+        public string? LinkedStandard { get; set; }
+
+        [MaxLength(1000)]
+        public string? FormulaExpression { get; set; }
+
+        public string? DefaultParameters { get; set; }
+
         public ICollection<TestMethodSpecificationVersion> Versions { get; set; } = new List<TestMethodSpecificationVersion>();
 
     }

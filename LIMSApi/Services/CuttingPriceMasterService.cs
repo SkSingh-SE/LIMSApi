@@ -54,6 +54,7 @@ namespace LIMSApi.Services
             existingCuttingPriceMaster.UnitType = model.UnitType;
             existingCuttingPriceMaster.RatePerUnit = model.RatePerUnit;
             existingCuttingPriceMaster.Remark = model.Remark;
+            existingCuttingPriceMaster.SpecimenTypeId = model.SpecimenTypeId;
             existingCuttingPriceMaster.ModifiedOn = DateTime.UtcNow;
             existingCuttingPriceMaster.ModifiedBy = loggedInUser.EmployeeID;
 
@@ -97,6 +98,11 @@ namespace LIMSApi.Services
         public async Task<List<CuttingPriceMaster>> CuttingPriceList()
         {
             return await _itemRepository.GetAllCuttingPricesList();
+        }
+
+        public async Task<CuttingPriceMaster?> GetPriceBySpecimenAndCuttingType(long? specimenTypeId, string cuttingType)
+        {
+            return await _itemRepository.GetBySpecimenAndCuttingType(specimenTypeId, cuttingType);
         }
     }
 }

@@ -13,5 +13,7 @@ namespace LIMSApi.Repositories.Interface
         Task UpdateAsync(CuttingChargeHeader model);
 
         Task<bool> ExistsByInwardIdAsync(long inwardId);
+        Task<CuttingChargeSample?> GetSampleByIdAsync(long sampleId);
+        Task UpdateSampleAsync(CuttingChargeSample sample);
     }
 }

@@ -97,7 +97,16 @@ namespace LIMSApi.Services
             user.FailedLoginAttempts = 0;
             user.LastLoginDate = nowUtc;
 
-            var token = GenerateJwtToken(user);
+            // Resolve role via Designation -> Role chain; fallback to direct User.RoleName
+            var resolvedRoleName = user.RoleName;
+            var resolvedIsAdmin = user.IsAdmin;
+            if (user.Employee?.Designation?.Role != null)
+            {
+                resolvedRoleName = user.Employee.Designation.Role.Name;
+                resolvedIsAdmin = user.Employee.Designation.Role.IsAdmin;
+            }
+
+            var token = GenerateJwtToken(user, resolvedRoleName);
             _logger.LogInformation("User {Username} logged in successfully", user.UserName);
 
             await _userRepository.UpdateUser(user);
@@ -111,8 +120,8 @@ namespace LIMSApi.Services
 
                 UserName = user.UserName,
                 Email = user.EmailId!,
-                Role = user.RoleName!,
-                IsAdmin = user.IsAdmin,
+                Role = resolvedRoleName!,
+                IsAdmin = resolvedIsAdmin,
 
                 AccountStatus = string.IsNullOrEmpty(user.AccountStatus) ? user.IsActive ? "Active" : "In-Active" : user.AccountStatus,
                 LastLoginDate = user.LastLoginDate,
@@ -149,7 +158,14 @@ namespace LIMSApi.Services
                     throw new UnauthorizedAccessException($"User not found: {loggedInUserDTO.Email}");
                 }
 
-                var token = GenerateJwtToken(user);
+                // Resolve role via Designation -> Role chain; fallback to direct User.RoleName
+                var resolvedRoleName = user.RoleName;
+                if (user.Employee?.Designation?.Role != null)
+                {
+                    resolvedRoleName = user.Employee.Designation.Role.Name;
+                }
+
+                var token = GenerateJwtToken(user, resolvedRoleName);
 
                 var expireHours = Convert.ToInt32(_configuration["Jwt:ExpirationHours"]);
                 var responseObject = new
@@ -157,7 +173,7 @@ namespace LIMSApi.Services
                     token = token,
                     name = user.UserName,
                     email = user.EmailId,
-                    role = user.RoleName,
+                    role = resolvedRoleName,
                     expiresInSecond = expireHours * 60 * 60,
                     employeeId = user.EmployeeID
                 };
@@ -189,8 +205,9 @@ namespace LIMSApi.Services
             _logger.LogInformation("User {Username} registered successfully", model.UserName);
         }
 
-        private string GenerateJwtToken(UserMaster user)
+        private string GenerateJwtToken(UserMaster user, string? resolvedRoleName = null)
         {
+            var roleName = resolvedRoleName ?? user.RoleName ?? string.Empty;
             var expireHours = Convert.ToInt32(_configuration["Jwt:ExpirationHours"]);
             var tokenHandler = new JwtSecurityTokenHandler();
             var key = string.IsNullOrWhiteSpace(_jwtSecret) ? Encoding.UTF8.GetBytes(_configuration["Jwt:Secret"]) : Encoding.UTF8.GetBytes(_jwtSecret);
@@ -200,7 +217,7 @@ namespace LIMSApi.Services
                 {
                     new Claim(ClaimTypes.NameIdentifier, user.ID.ToString()),
                     new Claim(ClaimTypes.Name, user.UserName),
-                    new Claim(ClaimTypes.Role, user.RoleName),
+                    new Claim(ClaimTypes.Role, roleName),
                     new Claim(ClaimTypes.Email, user.EmailId ?? string.Empty),
                     new Claim("EmployeeID", user.EmployeeID != null ? user.EmployeeID.ToString() : "0"),
                     new Claim("CompanyCode", user.CompanyCode ?? string.Empty)

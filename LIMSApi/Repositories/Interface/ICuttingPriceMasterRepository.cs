@@ -15,5 +15,6 @@ namespace LIMSApi.Repositories.Interface
         Task<List<CuttingPriceMaster>> GetAllCuttingPricesList();
         Task<bool> ExistsByName(string name);
         Task<bool> ExistsByNameAndNotId(string name, long Id);
+        Task<CuttingPriceMaster?> GetBySpecimenAndCuttingType(long? specimenTypeId, string cuttingType);
     }
 }

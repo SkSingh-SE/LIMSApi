@@ -1,4 +1,5 @@
 ﻿using LIMSApi.Dtos;
+using LIMSApi.Services.Interface;
 using LIMSApi.ServiceWORepo;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -10,10 +11,12 @@ namespace LIMSApi.Controllers
     public class AccountController : ControllerBase
     {
         private readonly IAccountService _accountService;
+        private readonly IPriceCalculationService _priceCalculationService;
 
-        public AccountController(IAccountService accountService)
+        public AccountController(IAccountService accountService, IPriceCalculationService priceCalculationService)
         {
             _accountService = accountService;
+            _priceCalculationService = priceCalculationService;
         }
 
         // -------------------------------
@@ -92,6 +95,26 @@ namespace LIMSApi.Controllers
         {
             var invoiceId = await _accountService.GenerateProformaInvoiceAsync(inwardId);
             return Ok(new { invoiceId });
+        }
+
+        // -----------------------------------
+        // VALIDATE PRICING (dry run)
+        // -----------------------------------
+        [HttpGet("cases/{inwardId}/validate-pricing")]
+        public async Task<IActionResult> ValidatePricing(long inwardId)
+        {
+            var result = await _priceCalculationService.ValidatePricingAsync(inwardId);
+            return Ok(result);
+        }
+
+        // -----------------------------------
+        // CALCULATE PRICING
+        // -----------------------------------
+        [HttpPost("cases/{inwardId}/calculate-pricing")]
+        public async Task<IActionResult> CalculatePricing(long inwardId)
+        {
+            var result = await _priceCalculationService.CalculateAndCreateChargeEventsAsync(inwardId);
+            return Ok(result);
         }
     }
 }

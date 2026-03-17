@@ -75,6 +75,9 @@ namespace LIMSApi.Services
             existingTestMethodSpecification.StandardOrganizationID = model.StandardOrganizationID;
             existingTestMethodSpecification.TestMethodStandard = model.TestMethodStandard;
             existingTestMethodSpecification.IsDisabled = model.IsDisabled;
+            existingTestMethodSpecification.LinkedStandard = model.LinkedStandard;
+            existingTestMethodSpecification.FormulaExpression = model.FormulaExpression;
+            existingTestMethodSpecification.DefaultParameters = model.DefaultParameters;
             existingTestMethodSpecification.ModifiedOn = DateTime.UtcNow;
             existingTestMethodSpecification.ModifiedBy = loggedInUser.EmployeeID;
 

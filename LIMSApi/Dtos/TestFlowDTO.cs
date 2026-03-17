@@ -49,6 +49,9 @@
         // Extra / optional parameters
         public bool IsAdditional { get; set; }
         public long? SpecificationLineID { get; set; }
+
+        // Billable flag (observed parameters excluded from pricing)
+        public bool IsBillable { get; set; } = true;
     }
 
     public class MoveToLongTermDto
@@ -78,6 +81,155 @@
         public decimal? Value { get; set; }
         public string Remarks { get; set; }
         public DateTime RecordedAt { get; set; }
+    }
+
+    public class AddStandaloneParameterDto
+    {
+        public string ParameterName { get; set; } = string.Empty;
+        public string Unit { get; set; } = string.Empty;
+        public string? FormulaExpression { get; set; }
+        public decimal? SpecMinValue { get; set; }
+        public decimal? SpecMaxValue { get; set; }
+        public string? AcceptanceCriteria { get; set; }
+    }
+
+    public class AddParameterFromMethodDto
+    {
+        public long SourceTestMethodId { get; set; }
+        public long ParameterID { get; set; }
+    }
+
+    public class EnvironmentAtTimeDto
+    {
+        public long HeaderId { get; set; }
+        public long? LabRoomId { get; set; }
+        public decimal? RoomTemperature { get; set; }
+        public decimal? RoomHumidity { get; set; }
+        public string? EquipmentIdsJson { get; set; }
+        public DateTime? TestStartTime { get; set; }
+        public DateTime? TestEndTime { get; set; }
+        public string? PerformedByName { get; set; }
+        public long? PerformedById { get; set; }
+    }
+
+    public class CalculateParametersResultDto
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; } = string.Empty;
+        public int ParametersRecalculated { get; set; }
+        public bool? IsOverallPass { get; set; }
+        public List<ParameterCalculationResultDto> Parameters { get; set; } = new();
+    }
+
+    public class ParameterCalculationResultDto
+    {
+        public long Id { get; set; }
+        public long ParameterID { get; set; }
+        public string ParameterName { get; set; } = string.Empty;
+        public decimal? Value { get; set; }
+        public bool IsCalculated { get; set; }
+        public string? ResultStatus { get; set; }
+        public bool? IsWithinLimit { get; set; }
+    }
+
+    // StartTest response with optional preparation warning
+    public class StartTestResponse
+    {
+        public bool Success { get; set; } = true;
+        public string Message { get; set; } = "Test started";
+        public bool PreparationWarning { get; set; }
+        public string? PreparationStatus { get; set; }
+        public string? WarningMessage { get; set; }
+        public DateTime? TestStartTime { get; set; }
+        public string? PerformedByName { get; set; }
+    }
+
+    public class CompleteTestResponse
+    {
+        public bool Success { get; set; } = true;
+        public string Message { get; set; } = "Test completed";
+        public DateTime? TestEndTime { get; set; }
+        public string? PerformedByName { get; set; }
+    }
+
+    // Auto-create headers response with warnings
+    public class AutoCreateHeadersResponse
+    {
+        public bool Success { get; set; } = true;
+        public int HeadersCreated { get; set; }
+        public List<string> Warnings { get; set; } = new();
+    }
+
+    // Phase 5: Verification DTOs
+    public class VerificationActionDto
+    {
+        public string? Comments { get; set; }
+    }
+
+    public class PreparationStatusDto
+    {
+        public bool PreparationRequired { get; set; }
+        public bool PreparationRecorded { get; set; }
+        public string? PreparationStatus { get; set; }
+        public decimal CuttingCharges { get; set; }
+        public decimal MachiningCharges { get; set; }
+        public List<MachiningChargeLineDto> MachiningBreakdown { get; set; } = new();
+        public List<object> Specimens { get; set; } = new();
+        public string? CuttingEditUrl { get; set; }
+        public string? MachiningEditUrl { get; set; }
+    }
+
+    // Phase 6: Unified Price Summary DTOs
+    public class UnifiedPriceSummaryDto
+    {
+        public long SampleId { get; set; }
+        public long InwardId { get; set; }
+        public decimal CuttingCharges { get; set; }
+        public List<CuttingChargeLineDto> CuttingBreakdown { get; set; } = new();
+        public decimal MachiningCharges { get; set; }
+        public List<MachiningChargeLineDto> MachiningBreakdown { get; set; } = new();
+        public decimal OtherPreparationCharges { get; set; }
+        public decimal TotalPreparationCharges { get; set; }
+        public List<TestChargeLineDto> TestCharges { get; set; } = new();
+        public decimal TotalTestCharges { get; set; }
+        public decimal GrandTotal { get; set; }
+        public string? BillingStatus { get; set; }
+    }
+
+    public class CuttingChargeLineDto
+    {
+        public string CuttingType { get; set; } = string.Empty;
+        public string UnitType { get; set; } = string.Empty;
+        public decimal Rate { get; set; }
+        public int Quantity { get; set; }
+        public decimal Total { get; set; }
+    }
+
+    public class TestChargeLineDto
+    {
+        public long HeaderId { get; set; }
+        public string TestName { get; set; } = string.Empty;
+        public decimal CalculatedPrice { get; set; }
+        public decimal? OverridePrice { get; set; }
+        public decimal FinalPrice { get; set; }
+        public bool IsOverridden { get; set; }
+    }
+
+    // Machining Charge DTOs
+    public class MachiningChargeItemDto
+    {
+        public long Id { get; set; }
+        public string Description { get; set; } = string.Empty;
+        public decimal Amount { get; set; }
+        public string? Remark { get; set; }
+    }
+
+    public class MachiningChargeLineDto
+    {
+        public long Id { get; set; }
+        public string Description { get; set; } = string.Empty;
+        public decimal Amount { get; set; }
+        public string? Remark { get; set; }
     }
 
 }

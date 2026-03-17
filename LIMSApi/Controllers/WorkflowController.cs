@@ -79,5 +79,25 @@ namespace LIMSApi.Controllers
         {
             return Ok(await _service.GetWorkflowActionHistory(workflowId));
         }
+
+        /// <summary>
+        /// Phase 9: Batch check whether multiple entities can be updated
+        /// </summary>
+        [HttpPost("can-update-batch")]
+        public async Task<IActionResult> CanUpdateBatch([FromBody] BatchStatusCheckDto dto)
+        {
+            var result = await _service.CanUpdateEntitiesBatch(dto.EntityIds, dto.EntityType);
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Phase 9: Batch get active workflow instances for multiple entities
+        /// </summary>
+        [HttpPost("active-instances-batch")]
+        public async Task<IActionResult> GetActiveInstancesBatch([FromBody] BatchStatusCheckDto dto)
+        {
+            var result = await _service.GetActiveInstancesForEntitiesBatch(dto.EntityIds, dto.EntityType);
+            return Ok(result);
+        }
     }
 }

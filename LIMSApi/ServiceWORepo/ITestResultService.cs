@@ -34,12 +34,12 @@ namespace LIMSApi.ServiceWORepo
         // -------------------------------------------------------------
         // Start Test
         // -------------------------------------------------------------
-        Task StartTest(long headerId);
+        Task<StartTestResponse> StartTest(long headerId);
 
         // -------------------------------------------------------------
         // Complete Test
         // -------------------------------------------------------------
-        Task CompleteTest(long headerId);
+        Task<CompleteTestResponse> CompleteTest(long headerId);
 
         // -------------------------------------------------------------
         // Move Test to Long-Term Testing Queue
@@ -54,6 +54,56 @@ namespace LIMSApi.ServiceWORepo
         Task<List<TestResultImageDto>> UploadTestImagesAsync(long headerId, List<IFormFile> files, List<string>? captions);
         Task<List<TestResultImageDto>> UploadedTestImages(long headerId);
 
+        // -------------------------------------------------------------
+        // Calculation Engine
+        // -------------------------------------------------------------
+        Task<CalculateParametersResultDto> CalculateParameters(long headerId);
+
+        // -------------------------------------------------------------
+        // Standalone Parameter
+        // -------------------------------------------------------------
+        Task<object> AddStandaloneParameter(long headerId, AddStandaloneParameterDto dto);
+
+        // -------------------------------------------------------------
+        // Add Parameter from Another Test Method
+        // -------------------------------------------------------------
+        Task<object> AddParameterFromMethod(long headerId, AddParameterFromMethodDto dto);
+
+        // -------------------------------------------------------------
+        // Environment at Test Time
+        // -------------------------------------------------------------
+        Task<EnvironmentAtTimeDto> GetEnvironmentAtTime(long headerId);
+
+        // -------------------------------------------------------------
+        // Auto-create TestResultHeaders from approved plan
+        // -------------------------------------------------------------
+        Task<AutoCreateHeadersResponse> AutoCreateHeadersFromPlanAsync(long planId);
+
+        // -------------------------------------------------------------
+        // Phase 5: Test Verification Workflow
+        // -------------------------------------------------------------
+        Task SubmitForVerification(long headerId);
+        Task<PagedResponse<object>> GetVerificationList(PageFilter filter);
+        Task VerifyTest(long headerId, string? comments);
+        Task RejectVerification(long headerId, string? comments);
+
+        // -------------------------------------------------------------
+        // Phase 5: Preparation Status
+        // -------------------------------------------------------------
+        Task<PreparationStatusDto> GetPreparationStatus(long sampleId);
+
+        // -------------------------------------------------------------
+        // Phase 6: Unified Price Summary
+        // -------------------------------------------------------------
+        Task<UnifiedPriceSummaryDto> GetUnifiedPriceSummary(long sampleId);
+
+        // -------------------------------------------------------------
+        // Machining Charge Items (simple line items per sample)
+        // -------------------------------------------------------------
+        Task<List<MachiningChargeLineDto>> GetMachiningItems(long sampleId);
+        Task<MachiningChargeLineDto> AddMachiningItem(long sampleId, MachiningChargeItemDto dto);
+        Task<MachiningChargeLineDto> UpdateMachiningItem(long itemId, MachiningChargeItemDto dto);
+        Task DeleteMachiningItem(long itemId);
 
     }
 }

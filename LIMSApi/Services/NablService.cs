@@ -78,6 +78,7 @@ namespace LIMSApi.Services
             { "MasterDocument", "F-51" },
             { "MeasurementUncertainty", "F-52" },
             { "PtIlcPlan", "F-53" },
+            { "EmployeePerformanceRecord", "F-54" },
         };
 
         public NablService(INablRepository repository, LIMSContext context, ILogger<NablService> logger)
@@ -113,6 +114,7 @@ namespace LIMSApi.Services
                 "SkillMatrixDecision" => await _context.NablSkillMatrixDecisions
                     .FirstOrDefaultAsync(x => x.DesignationId == designationId && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode),
                 "EmployeeCompetence" => null,
+                "EmployeePerformanceRecord" => null,
                 "EmployeeAuthorization" => null,
                 "InductionTraining" => null,
                 _ => throw new ArgumentException($"Unknown form type: {formType}")
@@ -126,6 +128,7 @@ namespace LIMSApi.Services
                 "JobDescription" => await SaveJobDescription(body),
                 "ResponsibilityAuthority" => await SaveResponsibilityAuthority(body),
                 "EmployeeCompetence" => await SaveEmployeeCompetence(body),
+                "EmployeePerformanceRecord" => await SaveEmployeePerformanceRecord(body),
                 "EmployeeAuthorization" => await SaveEmployeeAuthorization(body),
                 "CompetenceRequirement" => await SaveCompetenceRequirement(body),
                 "InductionTraining" => await SaveInductionTraining(body),
@@ -456,6 +459,57 @@ namespace LIMSApi.Services
                 await _repository.Update("EmployeeCompetence", existing);
                 await LogAudit("EmployeeCompetence", existing.ID, "Updated", null, body.GetRawText());
                 _logger.LogInformation("EmployeeCompetence ID {Id} updated.", existing.ID);
+                return existing.ID;
+            }
+        }
+
+        private async Task<long> SaveEmployeePerformanceRecord(JsonElement body)
+        {
+            var model = JsonSerializer.Deserialize<NablEmployeePerformanceRecord>(body.GetRawText(), _jsonOptions)
+                ?? throw new ArgumentException("Invalid EmployeePerformanceRecord data.");
+
+            if (model.ID == 0)
+            {
+                model.FormCode = FormCodeMap["EmployeePerformanceRecord"];
+                await AssignDocumentNumber(model, "EmployeePerformanceRecord");
+                model.Status = "Draft";
+                model.CreatedOn = DateTime.UtcNow;
+                model.CreatedBy = loggedInUser.EmployeeID;
+                model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
+
+                var id = await _repository.Add("EmployeePerformanceRecord", model);
+                await LogAudit("EmployeePerformanceRecord", id, "Created", null, body.GetRawText());
+                _logger.LogInformation("EmployeePerformanceRecord created with ID {Id}.", id);
+                return id;
+            }
+            else
+            {
+                var existing = await _context.NablEmployeePerformanceRecords
+                    .FirstOrDefaultAsync(x => x.ID == model.ID && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+
+                if (existing == null)
+                    throw new InvalidOperationException("EmployeePerformanceRecord not found!");
+
+                await SaveRevisionSnapshot("EmployeePerformanceRecord", existing);
+
+                existing.EmployeeId = model.EmployeeId;
+                existing.EmployeeName = model.EmployeeName;
+                existing.DesignationName = model.DesignationName;
+                existing.ReviewPeriod = model.ReviewPeriod;
+                existing.TechnicalRating = model.TechnicalRating;
+                existing.BehavioralRating = model.BehavioralRating;
+                existing.OverallRating = model.OverallRating;
+                existing.ReviewerName = model.ReviewerName;
+                existing.ReviewerId = model.ReviewerId;
+                existing.ReviewDate = model.ReviewDate;
+                existing.Remarks = model.Remarks;
+                existing.Date = model.Date;
+                existing.ModifiedOn = DateTime.UtcNow;
+                existing.ModifiedBy = loggedInUser.EmployeeID;
+
+                await _repository.Update("EmployeePerformanceRecord", existing);
+                await LogAudit("EmployeePerformanceRecord", existing.ID, "Updated", null, body.GetRawText());
+                _logger.LogInformation("EmployeePerformanceRecord ID {Id} updated.", existing.ID);
                 return existing.ID;
             }
         }
@@ -3226,6 +3280,8 @@ namespace LIMSApi.Services
                 "ResponsibilityAuthority" => await _context.NablResponsibilityAuthorities
                     .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode),
                 "EmployeeCompetence" => await _context.NablEmployeeCompetences
+                    .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode),
+                "EmployeePerformanceRecord" => await _context.NablEmployeePerformanceRecords
                     .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode),
                 "EmployeeAuthorization" => await _context.NablEmployeeAuthorizations
                     .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode),

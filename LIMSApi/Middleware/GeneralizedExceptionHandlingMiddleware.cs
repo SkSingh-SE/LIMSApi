@@ -46,7 +46,7 @@ namespace LIMSApi.Middleware
 
                 var errorResponse = new ExceptionResponse
                 {
-                    Message = "An unexpected error occurred.",
+                    Message = ex.Message?.ToString(),
                     Controller = controller,
                     Action = action,
                     ExceptionType = ex.GetType().Name,

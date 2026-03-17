@@ -43,5 +43,11 @@ namespace LIMSApi.Models
 
         [MaxLength(200)]
         public string? AnalysedBy { get; set; }
+
+        // Inter-form linking: FK to CustomerFeedback
+        public long? CustomerFeedbackId { get; set; }
+
+        [ForeignKey("CustomerFeedbackId")]
+        public virtual NablCustomerFeedback? CustomerFeedback { get; set; }
     }
 }

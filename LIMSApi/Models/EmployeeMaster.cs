@@ -96,6 +96,18 @@ public partial class EmployeeMaster : AuditProperty
     public string? DigitalSignature { get; set; }
     public string? EmployeeStatus { get; set; }
 
+    // Phase 7.2: Employee competency enhancements
+    [StringLength(500)]
+    public string? QualificationSummary { get; set; }
+
+    [StringLength(500)]
+    public string? Experience { get; set; }
+
+    public string? TrainingRecordsJson { get; set; }
+
+    [StringLength(100)]
+    public string? CompetencyLevel { get; set; }
+
     // Foreign Key Relations
     [ForeignKey("DepartmentID")]
     public virtual DepartmentMaster? Department { get; set; }

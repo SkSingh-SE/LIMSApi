@@ -8,7 +8,9 @@ using LIMSApi.Models;
 using LIMSApi.Repositories;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
+using LIMSApi.ServiceWORepo;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.VisualStudio.Web.CodeGenerators.Mvc.Templates.BlazorIdentity.Pages;
 using NuGet.Protocol.Core.Types;
 
@@ -25,7 +27,13 @@ namespace LIMSApi.Services
         private readonly ISampleStatusService _statusService;
         private readonly LIMSContext context;
         private readonly IPriceCalculationService _priceCalculationService;
-        public WorkflowService(IWorkflowRepository WorkflowRepository, ILogger<WorkflowService> logger, INotificationService notification, IEmployeeService employeeService, ISampleInwardRepository sampleInwardRepo, ISampleStatusService statusService, LIMSContext context, IPriceCalculationService priceCalculationService)
+        private readonly IMemoryCache _cache;
+        private readonly IServiceProvider _serviceProvider;
+        private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(30);
+        private const string WorkflowCachePrefix = "Workflow_";
+        private const string WorkflowEntityCachePrefix = "WorkflowEntity_";
+
+        public WorkflowService(IWorkflowRepository WorkflowRepository, ILogger<WorkflowService> logger, INotificationService notification, IEmployeeService employeeService, ISampleInwardRepository sampleInwardRepo, ISampleStatusService statusService, LIMSContext context, IPriceCalculationService priceCalculationService, IMemoryCache cache, IServiceProvider serviceProvider)
         {
             _logger = logger;
             _repository = WorkflowRepository;
@@ -35,14 +43,49 @@ namespace LIMSApi.Services
             _statusService = statusService;
             this.context = context;
             _priceCalculationService = priceCalculationService;
+            _cache = cache;
+            _serviceProvider = serviceProvider;
             _loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
-        public async Task<Workflow?> GetWorkflow(long id) =>
-             await _repository.GetWorkflowByIdAsync(id);
+        public async Task<Workflow?> GetWorkflow(long id)
+        {
+            var cacheKey = $"{WorkflowCachePrefix}{id}";
+            if (_cache.TryGetValue(cacheKey, out Workflow? cached))
+                return cached;
+
+            var workflow = await _repository.GetWorkflowByIdAsync(id);
+            if (workflow != null)
+                _cache.Set(cacheKey, workflow, CacheDuration);
+            return workflow;
+        }
 
         public async Task<PagedResponse<object>> GetAllWorkflows(PageFilter filter) =>
             await _repository.GetAllWorkflowsAsync(filter);
+
+        /// <summary>
+        /// Gets a workflow definition by entity type, with 30-minute caching.
+        /// </summary>
+        private async Task<Workflow?> GetWorkflowByEntityTypeCached(string entityType)
+        {
+            var cacheKey = $"{WorkflowEntityCachePrefix}{entityType}";
+            if (_cache.TryGetValue(cacheKey, out Workflow? cached))
+                return cached;
+
+            var workflow = await _repository.GetWorkflowByEntityNameAsync(entityType);
+            if (workflow != null)
+                _cache.Set(cacheKey, workflow, CacheDuration);
+            return workflow;
+        }
+
+        /// <summary>
+        /// Invalidates workflow caches when a workflow definition is created or updated.
+        /// </summary>
+        private void InvalidateWorkflowCache(long workflowId, string entityType)
+        {
+            _cache.Remove($"{WorkflowCachePrefix}{workflowId}");
+            _cache.Remove($"{WorkflowEntityCachePrefix}{entityType}");
+        }
 
         public async Task CreateWorkflow(WorkflowDto dto)
         {
@@ -82,6 +125,7 @@ namespace LIMSApi.Services
             }
 
             await _repository.UpdateWorkflowAsync(workflow);
+            InvalidateWorkflowCache(workflow.ID, workflow.EntityType);
             _logger.LogInformation("Workflow definition created: {@Workflow}", workflow);
 
         }
@@ -198,6 +242,7 @@ namespace LIMSApi.Services
 
             // 7. Save again after ToStepID remap
             await _repository.UpdateWorkflowAsync(workflow);
+            InvalidateWorkflowCache(workflow.ID, workflow.EntityType);
 
             _logger.LogInformation("Workflow {WorkflowId} updated with smart sync.", dto.ID);
         }
@@ -217,7 +262,7 @@ namespace LIMSApi.Services
                     await _repository.UpdateWorkflowInstanceAsync(existing);
                 }
 
-                var workflow = await _repository.GetWorkflowByEntityNameAsync(entityType)
+                var workflow = await GetWorkflowByEntityTypeCached(entityType)
                     ?? throw new Exception("Workflow not found");
 
                 var firstStep = workflow.Steps
@@ -466,7 +511,40 @@ namespace LIMSApi.Services
         public async Task PerformWorkflowActionAsync(WorkflowActionRequestDto dto)
         {
             await PerformAction(dto.Id, dto.Action, _loggedInUser.EmployeeID, dto.Remarks ?? string.Empty);
+        }
 
+        // Phase 9: Batch status check — avoids N+1 queries when checking multiple entities
+        public async Task<Dictionary<long, bool>> CanUpdateEntitiesBatch(IEnumerable<long> entityIds, string entityType)
+        {
+            var instances = await _repository.GetActiveInstancesForEntitiesAsync(entityIds, entityType);
+            var result = entityIds.ToDictionary(id => id, _ => true);
+
+            if (!instances.Any())
+                return result;
+
+            var instanceIds = instances.Select(i => i.ID).ToList();
+            var logCounts = await _repository.GetActionLogCountsForInstancesAsync(instanceIds);
+
+            foreach (var instance in instances)
+            {
+                var count = logCounts.GetValueOrDefault(instance.ID, 0);
+                result[instance.EntityID] = count <= 1;
+            }
+
+            return result;
+        }
+
+        public async Task<Dictionary<long, WorkflowInstance?>> GetActiveInstancesForEntitiesBatch(IEnumerable<long> entityIds, string entityType)
+        {
+            var instances = await _repository.GetActiveInstancesForEntitiesAsync(entityIds, entityType);
+            var result = entityIds.ToDictionary(id => id, _ => (WorkflowInstance?)null);
+
+            foreach (var instance in instances)
+            {
+                result[instance.EntityID] = instance;
+            }
+
+            return result;
         }
 
         //private async Task ApplyEntityStatusUpdate(WorkflowInstance instance, string action, bool isFinal, string ActionName)
@@ -655,6 +733,9 @@ namespace LIMSApi.Services
                         inward.ID,
                         InwardStatus.REVIEW_COMPLETED,
                         _loggedInUser.EmployeeID);
+
+                    // Set plan status to Approved and auto-create TestResultHeaders
+                    await ApproveAndCreateTestHeaders(inward);
                     break;
 
                 case WorkflowActions.Back:
@@ -672,6 +753,54 @@ namespace LIMSApi.Services
                     break;
             }
         }
+
+        /// <summary>
+        /// Approve all test plans for an inward and auto-create TestResultHeaders
+        /// </summary>
+        private async Task ApproveAndCreateTestHeaders(SampleInward inward)
+        {
+            try
+            {
+                // Get all test plans for this inward's samples
+                var sampleIds = inward.SampleDetails.Select(d => d.ID).ToList();
+                var testPlans = await context.TestPlans
+                    .Where(tp => sampleIds.Contains(tp.SampleID) && tp.PlanStatus == "Submitted")
+                    .ToListAsync();
+
+                // Resolve ITestResultService lazily to avoid circular dependency
+                var testResultService = _serviceProvider.GetRequiredService<ITestResultService>();
+
+                foreach (var plan in testPlans)
+                {
+                    // Set plan status to Approved
+                    plan.PlanStatus = "Approved";
+                    plan.ApprovedById = _loggedInUser.EmployeeID;
+                    plan.ApprovedByName = _loggedInUser.Name;
+                    plan.ApprovedAt = DateTime.UtcNow;
+
+                    // Auto-create TestResultHeaders from plan
+                    var result = await testResultService.AutoCreateHeadersFromPlanAsync(plan.ID);
+
+                    if (result.Warnings.Any())
+                    {
+                        _logger.LogWarning("Plan {PlanId} auto-create warnings: {Warnings}",
+                            plan.ID, string.Join("; ", result.Warnings));
+                    }
+
+                    _logger.LogInformation("Plan {PlanId} approved. {Count} TestResultHeaders created.",
+                        plan.ID, result.HeadersCreated);
+                }
+
+                await context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during plan approval and header creation for inward {InwardId}", inward.ID);
+                // Don't throw — plan approval should succeed even if header creation fails
+                // Headers can be created on-demand during test result entry as fallback
+            }
+        }
+
         private async Task HandleReportReview(long reportHeaderId, string action)
         {
             var report = await context.ReportHeaders
@@ -747,8 +876,16 @@ namespace LIMSApi.Services
                     if (!hasExistingDraftChargeEvents)
                     {
                         // Trigger price calculation
-                        await _priceCalculationService.CalculateAndCreateChargeEventsAsync(inwardId);
-                        _logger.LogInformation("Price calculation triggered for Inward {InwardID} after all reports approved", inwardId);
+                        var priceResult = await _priceCalculationService.CalculateAndCreateChargeEventsAsync(inwardId);
+                        if (priceResult.HasFailures)
+                        {
+                            _logger.LogWarning("Price calculation for Inward {InwardID}: {SuccessCount} succeeded, {FailureCount} failed. Errors: {Errors}",
+                                inwardId, priceResult.SuccessCount, priceResult.FailureCount, string.Join("; ", priceResult.Errors));
+                        }
+                        else
+                        {
+                            _logger.LogInformation("Price calculation triggered for Inward {InwardID}: Total={Total}", inwardId, priceResult.TotalAmount);
+                        }
                     }
                     else
                     {

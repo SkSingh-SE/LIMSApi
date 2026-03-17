@@ -12,6 +12,7 @@ using LIMSApi.ServiceWORepo;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.DotNet.Scaffolding.Shared.CodeModifier.CodeChange;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace LIMSApi.Services
 {
@@ -27,8 +28,9 @@ namespace LIMSApi.Services
         private readonly LIMSContext _context;
         private readonly EmailService _emailService;
         private readonly TemplateService _templateService;
+        private readonly IPlanService _planService;
 
-        public SampleInwardService(ISampleInwardRepository SampleInwardRepo, ILogger<SampleInwardService> logger, IFileUploadService uploadService, IWorkflowService workflowService, ISampleStatusService sampleStatusService, IProformaInvoiceRepository proformaInvoiceRepository, ILaboratoryTestRepository laboratoryTestRepository, LIMSContext context, EmailService emailService, TemplateService templateService)
+        public SampleInwardService(ISampleInwardRepository SampleInwardRepo, ILogger<SampleInwardService> logger, IFileUploadService uploadService, IWorkflowService workflowService, ISampleStatusService sampleStatusService, IProformaInvoiceRepository proformaInvoiceRepository, ILaboratoryTestRepository laboratoryTestRepository, LIMSContext context, EmailService emailService, TemplateService templateService, IPlanService planService)
         {
             _SampleInwardRepository = SampleInwardRepo;
             _logger = logger;
@@ -40,6 +42,7 @@ namespace LIMSApi.Services
             _context = context;
             _emailService = emailService;
             _templateService = templateService;
+            _planService = planService;
         }
 
         public async Task CreateSampleInward(SampleInwardDto model)
@@ -892,18 +895,23 @@ namespace LIMSApi.Services
 
                     SampleTestPlan plan;
 
+                    bool isNewPlan = false;
                     if (planDto.ID > 0)
                     {
                         plan = sample.TestPlans.First(p => p.ID == planDto.ID);
                     }
                     else
                     {
+                        isNewPlan = true;
                         plan = new SampleTestPlan
                         {
                             SampleID = sample.ID,
                             SampleNo = sample.SampleNo,
                             GeneralTests = new List<GeneralTest>(),
-                            ChemicalTests = new List<ChemicalTest>()
+                            ChemicalTests = new List<ChemicalTest>(),
+                            Version = 1,
+                            ReplanCount = 0,
+                            PlanStatus = "Draft"
                         };
                         sample.TestPlans.Add(plan);
                     }
@@ -943,8 +951,7 @@ namespace LIMSApi.Services
                             general.Methods.Add(new GeneralTestMethod
                             {
                                 LaboratoryTestID = m.TestMethodID ?? 0,
-                                TestCaseID = m.TestCaseID ?? 0,
-                                StandardID = m.StandardID ?? 0,
+                                TestCaseID = m.TestCaseID,
                                 Quantity = m.Quantity,
                                 ReportNo = string.IsNullOrWhiteSpace(m.ReportNo)
                                     ? $"{sample.SampleNo}-{ulrCounter}"
@@ -989,7 +996,6 @@ namespace LIMSApi.Services
 
                         chem.Specification1 = cDto.Specification1;
                         chem.Specification2 = cDto.Specification2;
-                        chem.TestMethod = cDto.TestMethod;
                         chem.ReportNo = string.IsNullOrWhiteSpace(cDto.ReportNo)
                             ? $"{sample.SampleNo}-C"
                             : cDto.ReportNo;
@@ -1028,6 +1034,26 @@ namespace LIMSApi.Services
                     }
 
                     #endregion
+                }
+
+                await _context.SaveChangesAsync();
+
+                // Create plan history entries after save (so new plans have IDs)
+                foreach (var sampleDto in model.SampleDetails)
+                {
+                    var sample = entity.SampleDetails.First(s => s.SampleNo == sampleDto.SampleNo);
+                    foreach (var tp in sample.TestPlans)
+                    {
+                        var changeType = tp.Version == 1 && tp.PlanStatus == "Draft" ? "Created" : "Updated";
+                        await _planService.CreatePlanHistoryEntry(
+                            tp.ID,
+                            changeType,
+                            null,
+                            null,
+                            null,
+                            $"Plan {changeType.ToLower()} during planning."
+                        );
+                    }
                 }
 
                 await _context.SaveChangesAsync();
@@ -1078,6 +1104,27 @@ namespace LIMSApi.Services
                 entity.ReviewedBy = loggedInUser.EmployeeID;
                 entity.ReviewedOn = DateTime.UtcNow;
 
+                // Update PlanStatus on all test plans to Submitted
+                foreach (var sample in entity.SampleDetails)
+                {
+                    foreach (var tp in sample.TestPlans)
+                    {
+                        tp.PlanStatus = "Submitted";
+
+                        await _planService.CreatePlanHistoryEntry(
+                            tp.ID,
+                            "Submitted",
+                            null,
+                            null,
+                            JsonSerializer.Serialize(new[]
+                            {
+                                new { field = "PlanStatus", oldValue = "Draft", newValue = "Submitted" }
+                            }),
+                            "Plan submitted for review."
+                        );
+                    }
+                }
+                await _context.SaveChangesAsync();
 
                 var statusJobs = new List<Func<Task>>();
 
@@ -1433,6 +1480,12 @@ namespace LIMSApi.Services
                         ID = tp.ID,
                         SampleNo = tp.SampleNo,
                         SampleID = tp.SampleID,
+                        Version = tp.Version,
+                        ReplanCount = tp.ReplanCount,
+                        PlanStatus = tp.PlanStatus,
+                        ApprovedById = tp.ApprovedById,
+                        ApprovedByName = tp.ApprovedByName,
+                        ApprovedAt = tp.ApprovedAt,
                         GeneralTests = tp.GeneralTests.Select(gt => new GeneralTestDto
                         {
                             ID = gt.ID,
@@ -1445,7 +1498,6 @@ namespace LIMSApi.Services
                                 GeneralTestID = m.GeneralTestID,
                                 TestMethodID = m.LaboratoryTestID,
                                 TestCaseID = m.TestCaseID,
-                                StandardID = m.StandardID,
                                 Quantity = m.Quantity,
                                 ReportNo = m.ReportNo,
                                 UlrNo = m.UlrNo,
@@ -1460,7 +1512,6 @@ namespace LIMSApi.Services
                             UlrNo = ct.UlrNo,
                             Specification1 = ct.Specification1,
                             Specification2 = ct.Specification2,
-                            TestMethod = ct.TestMethod,
                             TestTypes = ct.TestTypes.ToDictionary(tt => tt.LaboratoryTestID?.ToString() ?? tt.Name, tt => tt.IsSelected),
                             Elements = ct.Elements.Select(e => new ChemicalTestElementDto
                             {

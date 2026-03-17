@@ -10,5 +10,6 @@ namespace LIMSApi.Services.Interface
         Task<CuttingChargeHeader?> GetByIdAsync(long id);
         Task<CuttingChargeHeader?> GetByInwardIdAsync(long inwardId);
         Task UpdateAsync(CuttingChargeHeader model);
+        Task UpdatePreparationStatusAsync(long sampleId, string status);
     }
 }

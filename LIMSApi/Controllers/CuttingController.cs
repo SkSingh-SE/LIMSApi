@@ -57,5 +57,16 @@ namespace LIMSApi.Controllers
                 message = $"Cutting Charge updated successfully."
             });
         }
+
+        [HttpPut("update-status/{sampleId:long}")]
+        public async Task<IActionResult> UpdatePreparationStatus(long sampleId, [FromQuery] string status)
+        {
+            await _service.UpdatePreparationStatusAsync(sampleId, status);
+            return Ok(new
+            {
+                status = "success",
+                message = $"Preparation status updated to '{status}' successfully."
+            });
+        }
     }
 }

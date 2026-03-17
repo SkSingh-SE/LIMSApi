@@ -23,7 +23,15 @@ namespace LIMSApi.Models
         public decimal GrandTotal { get; set; } = 0;
 
         public string Status { get; set; } = "Generated";
-        // Generated | Sent | Paid
+        // Generated | Sent | Paid | PartiallyPaid
+
+        // PO linkage
+        public long? PurchaseOrderId { get; set; }
+
+        [MaxLength(50)]
+        public string? PaymentTerms { get; set; } // Immediate, Net30, Net60, Net90, OnPO
+
+        public DateTime? PaymentDueDate { get; set; }
 
         // PDF
         public string? PdfPath { get; set; }
@@ -35,5 +43,8 @@ namespace LIMSApi.Models
 
         [ForeignKey(nameof(CustomerID))]
         public Customer? Customer { get; set; }
+
+        [ForeignKey(nameof(PurchaseOrderId))]
+        public CustomerPurchaseOrder? PurchaseOrder { get; set; }
     }
 }

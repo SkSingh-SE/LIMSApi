@@ -100,6 +100,9 @@ namespace LIMSApi.Repositories
         public async Task<WorkflowInstance?> GetWorkflowInstanceAsync(long id) =>
             await _context.WorkflowInstances
                 .Include(i => i.Workflow)
+                    .ThenInclude(w => w.Steps.Where(s => s.IsActive))
+                    .ThenInclude(s => s.Transitions.Where(t => t.IsActive))
+                .Include(i => i.CurrentStep)
                 .FirstOrDefaultAsync(i => i.ID == id);
 
         public async Task AddWorkflowInstanceAsync(WorkflowInstance instance)
@@ -122,6 +125,8 @@ namespace LIMSApi.Repositories
         public async Task<List<WorkflowActionLog>> GetWorkflowActionLogsAsync(long workflowId)
         {
             return await _context.WorkflowActionLogs
+                .Include(log => log.Employee)
+                .Include(log => log.WorkflowStep)
                 .Where(log => log.WorkflowID == workflowId)
                 .OrderByDescending(log => log.Timestamp)
                 .ToListAsync();
@@ -147,6 +152,25 @@ namespace LIMSApi.Repositories
             var step = await _context.WorkflowSteps.Include(x => x.Transitions)
                 .FirstOrDefaultAsync(s => s.WorkflowID == instance.WorkflowID && s.ID == instance.CurrentStepID);
             return step;
+        }
+
+        // Phase 9: Batch operations to avoid N+1 queries
+        public async Task<List<WorkflowInstance>> GetActiveInstancesForEntitiesAsync(IEnumerable<long> entityIds, string entityType)
+        {
+            var idList = entityIds.ToList();
+            return await _context.WorkflowInstances
+                .Where(w => idList.Contains(w.EntityID) && w.EntityType == entityType && w.IsActive)
+                .ToListAsync();
+        }
+
+        public async Task<Dictionary<long, int>> GetActionLogCountsForInstancesAsync(IEnumerable<long> instanceIds)
+        {
+            var idList = instanceIds.ToList();
+            return await _context.WorkflowActionLogs
+                .Where(l => idList.Contains(l.InstanceID))
+                .GroupBy(l => l.InstanceID)
+                .Select(g => new { InstanceID = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.InstanceID, x => x.Count);
         }
     }
 }

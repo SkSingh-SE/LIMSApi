@@ -84,5 +84,15 @@ namespace LIMSApi.Controllers
             return data == null ? NoContent(): Ok(data);
         }
 
+        [HttpGet("lookup")]
+        public async Task<IActionResult> GetPriceBySpecimenAndCuttingType([FromQuery] long? specimenTypeId, [FromQuery] string cuttingType)
+        {
+            if (string.IsNullOrWhiteSpace(cuttingType))
+                return BadRequest("CuttingType is required.");
+
+            var price = await _cuttingPriceService.GetPriceBySpecimenAndCuttingType(specimenTypeId, cuttingType);
+            return price == null ? NoContent() : Ok(price);
+        }
+
     }
 }

@@ -30,6 +30,10 @@ namespace LIMSApi.Models
         [MaxLength(50)]
         public string Unit { get; set; } = string.Empty;
 
+        // Dynamic Pricing Dimension (Phase 3)
+        public long? PriceDimensionTypeId { get; set; }
+        public virtual PriceDimensionType? DimensionType { get; set; }
+
         // Navigation property
         public ICollection<InvoiceCaseAliasName> AliasNames { get; set; } = new List<InvoiceCaseAliasName>();
     }

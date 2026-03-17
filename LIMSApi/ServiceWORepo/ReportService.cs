@@ -1220,6 +1220,212 @@ namespace LIMSApi.ServiceWORepo
                 throw;
             }
         }
+
+        // =====================================================
+        // BUILD REPORT DATA DTO (joins all entities)
+        // =====================================================
+        public async Task<ReportDataDto> BuildReportDataAsync(long reportHeaderId)
+        {
+            // 1. Load report header with sample chain
+            var reportHeader = await _db.ReportHeaders
+                .Include(r => r.Sample)
+                    .ThenInclude(s => s.SampleInward)
+                        .ThenInclude(i => i.Customer)
+                .Include(r => r.Sample)
+                    .ThenInclude(s => s.MetalClassification)
+                .Include(r => r.Sample)
+                    .ThenInclude(s => s.ProductCondition)
+                .FirstOrDefaultAsync(r => r.ID == reportHeaderId)
+                ?? throw new InvalidOperationException("Report header not found.");
+
+            var sample = reportHeader.Sample
+                ?? throw new InvalidOperationException("Sample not found for report header.");
+            var inward = sample.SampleInward
+                ?? throw new InvalidOperationException("Sample inward not found.");
+            var customer = inward.Customer
+                ?? throw new InvalidOperationException("Customer not found.");
+
+            // 2. Load test result headers with parameters + images
+            var testHeaders = await _db.TestResultHeaders
+                .Include(h => h.Parameters)
+                .Include(h => h.Images)
+                .Include(h => h.LaboratoryTest)
+                    .ThenInclude(lt => lt.LabDepartment)
+                .Where(h => h.SampleID == sample.ID)
+                .OrderBy(h => h.LaboratoryTest.Name)
+                .ToListAsync();
+
+            // 3. Determine tested/completed dates
+            var earliestStarted = testHeaders
+                .Where(h => h.StartedAt.HasValue)
+                .Select(h => h.StartedAt!.Value)
+                .DefaultIfEmpty(DateTime.UtcNow)
+                .Min();
+
+            var latestCompleted = testHeaders
+                .Where(h => h.CompletedAt.HasValue)
+                .Select(h => h.CompletedAt!.Value)
+                .DefaultIfEmpty(DateTime.UtcNow)
+                .Max();
+
+            // 4. Build test sections
+            var testSections = new List<ReportDataTestSection>();
+
+            foreach (var header in testHeaders)
+            {
+                var testType = DetermineTestType(header);
+
+                var section = new ReportDataTestSection
+                {
+                    TestResultHeaderId = header.ID,
+                    TestName = header.LaboratoryTest?.Name ?? "Unknown Test",
+                    TestType = testType,
+                    SpecificationName = header.LaboratoryTest?.SubGroup,
+                    Parameters = header.Parameters
+                        .OrderBy(p => p.ID)
+                        .Select(p => new ReportDataParameter
+                        {
+                            Name = p.ParameterName,
+                            Unit = p.Unit,
+                            SpecMin = (p.SpecMinValue ?? p.MinValue)?.ToString(),
+                            SpecMax = (p.SpecMaxValue ?? p.MaxValue)?.ToString(),
+                            Result = p.Value?.ToString(),
+                            Status = p.IsWithinLimit == true ? "Pass"
+                                   : p.IsWithinLimit == false ? "Fail"
+                                   : "N/A"
+                        })
+                        .ToList(),
+                    Images = header.Images
+                        .OrderBy(img => img.SortOrder)
+                        .Select(img => new ReportDataImage
+                        {
+                            Url = img.FilePath,
+                            Caption = img.Caption
+                        })
+                        .ToList()
+                };
+
+                testSections.Add(section);
+            }
+
+            // 5. Collect all remarks
+            var allRemarks = testHeaders
+                .SelectMany(h => h.Parameters)
+                .Where(p => !string.IsNullOrWhiteSpace(p.Remarks))
+                .Select(p => $"{p.ParameterName}: {p.Remarks}")
+                .ToList();
+
+            // 6. Resolve signatory names
+            var generatedByName = await ResolveEmployeeName(reportHeader.GeneratedBy);
+
+            // 7. Build DTO
+            var dto = new ReportDataDto
+            {
+                ReportId = reportHeader.Reports.FirstOrDefault()?.ID ?? 0,
+                ReportHeaderId = reportHeader.ID,
+                ReportNo = reportHeader.ReportNo,
+                CertificateNo = reportHeader.CertificateNo,
+                ReportDate = reportHeader.GeneratedAt,
+
+                CustomerName = customer.Name,
+                CustomerAddress = customer.Address,
+                CustomerGST = customer.GSTNo ?? "",
+
+                CaseNo = inward.CaseNo,
+                SampleNo = sample.SampleNo,
+                SampleDescription = sample.Details,
+                MaterialSpec = sample.MetalClassification?.Name ?? "",
+                Grade = sample.ProductCondition?.Name ?? "",
+
+                DateReceived = inward.CollectionTime.ToString("dd-MM-yyyy"),
+                DateTested = latestCompleted.ToString("dd-MM-yyyy"),
+                DateReported = reportHeader.GeneratedAt.ToString("dd-MM-yyyy"),
+
+                TestSections = testSections,
+
+                Remarks = allRemarks.Any() ? string.Join("\n", allRemarks) : null,
+
+                TestedByName = generatedByName ?? "Lab Analyst",
+                TestedByDesignation = "Lab Analyst",
+                TestedBySignaturePath = "Assets/signature.png",
+
+                ReviewedByName = "Technical Manager",
+                ReviewedByDesignation = "Technical Manager",
+                ReviewedBySignaturePath = "Assets/signature.png",
+
+                AuthorizedByName = "Authorized Signatory",
+                AuthorizedByDesignation = "Director",
+                AuthorizedBySignaturePath = "Assets/signature.png",
+
+                QrCodeData = $"{_config["PublicBaseUrl"]}/report/verify/{reportHeader.ReportNo}",
+
+                IsNabl = testHeaders.Any(h => h.IsNabl),
+                NablCertNo = testHeaders.Any(h => h.IsNabl) ? "TC-5765" : null
+            };
+
+            return dto;
+        }
+
+        // =====================================================
+        // GENERATE ENHANCED PDF
+        // =====================================================
+        public async Task<string> GenerateEnhancedPdfAsync(long reportHeaderId)
+        {
+            // 1. Build report data
+            var reportData = await BuildReportDataAsync(reportHeaderId);
+
+            // 2. Generate PDF
+            var fileName = $"report_{reportData.ReportNo}_{DateTime.UtcNow:yyyyMMddHHmmss}.pdf";
+            var filePath = fileUploadService.GetFilePath(fileName, FileType.Report, null);
+
+            var document = new EnhancedReportDocument(reportData);
+            document.GeneratePdf(filePath);
+
+            // 3. Update report header with PDF path
+            var reportHeader = await _db.ReportHeaders
+                .FirstOrDefaultAsync(r => r.ID == reportHeaderId);
+
+            if (reportHeader != null)
+            {
+                reportHeader.PdfPath = filePath;
+                await _db.SaveChangesAsync();
+            }
+
+            return filePath;
+        }
+
+        // =====================================================
+        // PRIVATE HELPERS for BuildReportData
+        // =====================================================
+
+        /// <summary>
+        /// Determines if a test is "Chemical" or "General" based on the lab department or test name.
+        /// </summary>
+        private static string DetermineTestType(TestResultHeader header)
+        {
+            var testName = header.LaboratoryTest?.Name?.ToLower() ?? "";
+            var deptName = header.LaboratoryTest?.LabDepartment?.Name?.ToLower() ?? "";
+
+            if (testName.Contains("chemical") || testName.Contains("composition") ||
+                deptName.Contains("chemical") || deptName.Contains("spectrometer"))
+                return "Chemical";
+
+            return "General";
+        }
+
+        private async Task<string?> ResolveEmployeeName(string? employeeIdStr)
+        {
+            if (string.IsNullOrWhiteSpace(employeeIdStr))
+                return null;
+
+            if (!long.TryParse(employeeIdStr, out var empId))
+                return employeeIdStr; // already a name
+
+            return await _db.EmployeeMasters
+                .Where(e => e.ID == empId)
+                .Select(e => e.Name)
+                .FirstOrDefaultAsync();
+        }
     }
 
 }

@@ -120,6 +120,7 @@ public partial class LIMSContext : DbContext
     public DbSet<CuttingChargeHeader> CuttingChargeHeaders { get; set; }
     public DbSet<CuttingChargeSample> CuttingChargeSamples { get; set; }
     public DbSet<CuttingChargeDetail> CuttingChargeDetails { get; set; }
+    public DbSet<MachiningChargeItem> MachiningChargeItems { get; set; }
     public DbSet<TestMappingLaboratoryTest> MappingLaboratoryTests { get; set; }
     public DbSet<ProformaInvoiceHeader> ProformaInvoiceHeader { get; set; }
     public DbSet<ProformaInvoiceDetail> ProformaInvoiceDetails { get; set; }
@@ -160,6 +161,7 @@ public partial class LIMSContext : DbContext
     public DbSet<NablFormAttachment> NablFormAttachments => Set<NablFormAttachment>();
     public DbSet<NablResponsibilityAuthority> NablResponsibilityAuthorities => Set<NablResponsibilityAuthority>();
     public DbSet<NablEmployeeCompetence> NablEmployeeCompetences => Set<NablEmployeeCompetence>();
+    public DbSet<NablEmployeePerformanceRecord> NablEmployeePerformanceRecords => Set<NablEmployeePerformanceRecord>();
     public DbSet<NablEmployeeAuthorization> NablEmployeeAuthorizations => Set<NablEmployeeAuthorization>();
     public DbSet<NablCompetenceRequirement> NablCompetenceRequirements => Set<NablCompetenceRequirement>();
     public DbSet<NablInductionTraining> NablInductionTrainings => Set<NablInductionTraining>();
@@ -215,6 +217,15 @@ public partial class LIMSContext : DbContext
     public DbSet<GstConfig> GstConfigs => Set<GstConfig>();
     public DbSet<FinancialYear> FinancialYears => Set<FinancialYear>();
     public DbSet<AuthorizedSignatory> AuthorizedSignatories => Set<AuthorizedSignatory>();
+
+    public DbSet<CustomerLedger> CustomerLedgers { get; set; }
+    public DbSet<PaymentReceipt> PaymentReceipts { get; set; }
+    public DbSet<CustomerPurchaseOrder> CustomerPurchaseOrders { get; set; }
+    public DbSet<PriceDimensionType> PriceDimensionTypes { get; set; }
+    public DbSet<MachineDataLog> MachineDataLogs { get; set; }
+
+    public DbSet<PlanHistory> PlanHistories { get; set; }
+    public DbSet<ReplanRequest> ReplanRequests { get; set; }
 
     //    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     //#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the BankName= syntax to read it from _configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
@@ -350,6 +361,18 @@ public partial class LIMSContext : DbContext
         .HasForeignKey(t => t.ChemicalTestID)
         .OnDelete(DeleteBehavior.Cascade);
 
+        modelBuilder.Entity<PlanHistory>()
+        .HasOne(h => h.SampleTestPlan)
+        .WithMany(p => p.Histories)
+        .HasForeignKey(h => h.PlanId)
+        .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ReplanRequest>()
+        .HasOne(r => r.SampleTestPlan)
+        .WithMany(p => p.ReplanRequests)
+        .HasForeignKey(r => r.PlanId)
+        .OnDelete(DeleteBehavior.Cascade);
+
         modelBuilder.Entity<TaxInvoice>()
     .HasOne(x => x.Inward)
     .WithMany()
@@ -373,6 +396,55 @@ public partial class LIMSContext : DbContext
     .WithMany()
     .HasForeignKey(x => x.TaxInvoiceID)
     .OnDelete(DeleteBehavior.Restrict);
+
+        // CustomerLedger relationships
+        modelBuilder.Entity<CustomerLedger>()
+            .HasOne(x => x.Customer)
+            .WithMany()
+            .HasForeignKey(x => x.CustomerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<CustomerLedger>()
+            .HasOne(x => x.Inward)
+            .WithMany()
+            .HasForeignKey(x => x.InwardId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<CustomerLedger>()
+            .HasOne(x => x.Invoice)
+            .WithMany()
+            .HasForeignKey(x => x.InvoiceId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // PaymentReceipt relationships
+        modelBuilder.Entity<PaymentReceipt>()
+            .HasOne(x => x.Customer)
+            .WithMany()
+            .HasForeignKey(x => x.CustomerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<PaymentReceipt>()
+            .HasIndex(x => x.ReceiptNo)
+            .IsUnique();
+
+        // CustomerPurchaseOrder relationships
+        modelBuilder.Entity<CustomerPurchaseOrder>()
+            .HasOne(x => x.Customer)
+            .WithMany()
+            .HasForeignKey(x => x.CustomerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<TaxInvoice>()
+            .HasOne(x => x.PurchaseOrder)
+            .WithMany(po => po.Invoices)
+            .HasForeignKey(x => x.PurchaseOrderId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<SampleInward>()
+            .HasOne(x => x.PurchaseOrder)
+            .WithMany()
+            .HasForeignKey(x => x.PurchaseOrderId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<CustomerAmendment>()
     .HasOne(x => x.Report)

@@ -1,3 +1,5 @@
+using LIMSApi.Dtos;
+
 namespace LIMSApi.Services.Interface
 {
     /// <summary>
@@ -8,9 +10,14 @@ namespace LIMSApi.Services.Interface
     {
         /// <summary>
         /// Calculate prices for a case and create ChargeEvents with DRAFT status
-        /// Sets BillingStatus = PRICE_DRAFTED
+        /// Returns detailed result with per-test success/failure info
         /// </summary>
-        Task CalculateAndCreateChargeEventsAsync(long inwardId);
+        Task<PriceCalculationResultDto> CalculateAndCreateChargeEventsAsync(long inwardId);
+
+        /// <summary>
+        /// Validate pricing without saving — dry run returning what would succeed/fail
+        /// </summary>
+        Task<PriceCalculationResultDto> ValidatePricingAsync(long inwardId);
 
         /// <summary>
         /// Get total amount from DRAFT ChargeEvents for a case
@@ -30,4 +37,3 @@ namespace LIMSApi.Services.Interface
         Task CreatePriceSnapshotAsync(long inwardId);
     }
 }
-

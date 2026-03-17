@@ -44,14 +44,28 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllCuttingPrices(PageFilter filter)
         {
-            var _query = from c in _context.CuttingPriceMasters where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c;
+            var _query = from c in _context.CuttingPriceMasters
+                         join st in _context.SpecimenTypeMasters on c.SpecimenTypeId equals st.ID into stJoin
+                         from st in stJoin.DefaultIfEmpty()
+                         where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
+                         select new
+                         {
+                             c.ID,
+                             c.CuttingType,
+                             c.UnitType,
+                             c.RatePerUnit,
+                             c.Remark,
+                             c.SpecimenTypeId,
+                             SpecimenTypeName = st != null ? st.Name : ""
+                         };
 
             _query = _query.AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.CuttingType != null && x.CuttingType.ToLower().Contains(search)));
+                _query = _query.Where(x => (x.CuttingType != null && x.CuttingType.ToLower().Contains(search))
+                    || (x.SpecimenTypeName != null && x.SpecimenTypeName.ToLower().Contains(search)));
             }
 
             if (filter.SortByColumn != null)
@@ -109,6 +123,15 @@ namespace LIMSApi.Repositories
             return await _context.CuttingPriceMasters
                 .Where(x => x.IsActive && x.CompanyCode == loggedInUser.CompanyCode)
                 .ToListAsync();
+        }
+
+        public async Task<CuttingPriceMaster?> GetBySpecimenAndCuttingType(long? specimenTypeId, string cuttingType)
+        {
+            return await _context.CuttingPriceMasters
+                .FirstOrDefaultAsync(x => x.SpecimenTypeId == specimenTypeId
+                    && x.CuttingType == cuttingType
+                    && x.IsActive
+                    && x.CompanyCode == loggedInUser.CompanyCode);
         }
     }
 }

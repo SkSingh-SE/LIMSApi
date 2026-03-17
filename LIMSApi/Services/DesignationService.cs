@@ -50,6 +50,7 @@ namespace LIMSApi.Services
 
             existingDesignation.Name = model.Name;
             existingDesignation.Description = model.Description;
+            existingDesignation.RoleID = model.RoleID;
             existingDesignation.ModifiedOn = DateTime.UtcNow;
 
             await _designationRepository.UpdateDesignation(existingDesignation);

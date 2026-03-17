@@ -40,7 +40,9 @@ namespace LIMSApi.Repositories
 
         public async Task<DesignationMaster?> GetDesignationById(long id)
         {
-            return await _context.DesignationMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.DesignationMasters
+                .Include(x => x.Role)
+                .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
         public async Task UpdateDesignation(DesignationMaster model)
@@ -55,11 +57,15 @@ namespace LIMSApi.Repositories
                           where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
                           join e in _context.EmployeeMasters on c.CreatedBy equals e.ID into emp
                           from eg in emp.DefaultIfEmpty()
+                          join r in _context.RoleMasters on c.RoleID equals r.ID into role
+                          from rg in role.DefaultIfEmpty()
                           select new
                           {
                               c.ID,
                               c.Name,
                               c.Description,
+                              c.RoleID,
+                              RoleName = rg != null ? rg.Name : null,
                               c.CreatedOn,
                               CreatedBy = eg.Name
 
