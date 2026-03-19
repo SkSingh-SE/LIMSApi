@@ -60,6 +60,11 @@ namespace LIMSApi.Repositories
                           join so in _context.StandardOrganizationMasters
                           on c.StandardOrganizationID equals so.ID into soGroup
                           from so in soGroup.DefaultIfEmpty()
+
+                          join mc in _context.MetalClassificationMasters
+                          on g.MetalClassificationID equals mc.ID into mcGroup
+                          from mc in mcGroup.DefaultIfEmpty()
+
                           where c.IsActive && c.IsCustom == false
 
                           select new
@@ -69,6 +74,7 @@ namespace LIMSApi.Repositories
                               c.Part,
                               c.StandardOrganizationID,
                               StandardOrganizationName = so.Name,
+                              MetalClassificationName = mc != null ? mc.Name : null,
                               g.UNSSteelNumber,
                               c.AliasName,
                               g.Grade,
@@ -85,6 +91,7 @@ namespace LIMSApi.Repositories
                 || (x.UNSSteelNumber != null && x.UNSSteelNumber.ToLower().Contains(search))
                 || (x.Grade != null && x.Grade.ToLower().Contains(search))
                 || (x.AliasName != null && x.AliasName.ToLower().Contains(search))
+                || (x.MetalClassificationName != null && x.MetalClassificationName.ToLower().Contains(search))
                 );
             }
 
@@ -112,6 +119,11 @@ namespace LIMSApi.Repositories
                           join so in _context.StandardOrganizationMasters
                           on c.StandardOrganizationID equals so.ID into soGroup
                           from so in soGroup.DefaultIfEmpty()
+
+                          join mc in _context.MetalClassificationMasters
+                          on g.MetalClassificationID equals mc.ID into mcGroup
+                          from mc in mcGroup.DefaultIfEmpty()
+
                           where c.IsActive && c.IsCustom == true
                           select new
                           {
@@ -120,6 +132,7 @@ namespace LIMSApi.Repositories
                               c.Part,
                               c.StandardOrganizationID,
                               StandardOrganizationName = so.Name,
+                              MetalClassificationName = mc != null ? mc.Name : null,
                               g.UNSSteelNumber,
                               c.AliasName,
                               g.Grade,
@@ -136,6 +149,7 @@ namespace LIMSApi.Repositories
                 || (x.UNSSteelNumber != null && x.UNSSteelNumber.ToLower().Contains(search))
                 || (x.Grade != null && x.Grade.ToLower().Contains(search))
                 || (x.AliasName != null && x.AliasName.ToLower().Contains(search))
+                || (x.MetalClassificationName != null && x.MetalClassificationName.ToLower().Contains(search))
                 );
             }
 
@@ -191,13 +205,13 @@ namespace LIMSApi.Repositories
             var query =
                 from a in _context.SpecificationHeaders
                 join g in _context.SpecificationGrades on a.ID equals g.SpecificationHeaderID
-                join tc in _context.TestMethodSpecifications on g.TestMethodSpecificationID equals tc.ID into tcGroup
-                from tc in tcGroup.DefaultIfEmpty()
+                join mc in _context.MetalClassificationMasters on g.MetalClassificationID equals mc.ID into mcGroup
+                from mc in mcGroup.DefaultIfEmpty()
                 where a.IsActive
                 select new
                 {
                     g.ID,
-                    AliasName = a.AliasName + "-" + g.Grade + (tc != null ? ("-" + tc.Name) : "")
+                    AliasName = a.AliasName + "-" + g.Grade + (mc != null ? ("-" + mc.Name) : "")
                 };
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
@@ -237,14 +251,14 @@ namespace LIMSApi.Repositories
                         join g in _context.SpecificationGrades on m.GradeID equals g.ID into gm
                         from g in gm.DefaultIfEmpty()
                         join h in _context.SpecificationHeaders on g.SpecificationHeaderID equals h.ID
-                        join tc in _context.TestMethodSpecifications on g.TestMethodSpecificationID equals tc.ID into tcGroup
-                        from tc in tcGroup.DefaultIfEmpty()
+                        join mc in _context.MetalClassificationMasters on g.MetalClassificationID equals mc.ID into mcGroup
+                        from mc in mcGroup.DefaultIfEmpty()
                         where m.IsActive
                         select new
                         {
                             m.GradeID,
                             Grade = g.Grade,
-                            AliasName = h.AliasName + "-" + g.Grade + (tc != null ? ("-" + tc.Name) : ""),
+                            AliasName = h.AliasName + "-" + g.Grade + (mc != null ? ("-" + mc.Name) : ""),
                             m.MetalClassificationID,
                             m.ProductConditionID
                         };

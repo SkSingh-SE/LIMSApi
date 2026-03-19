@@ -37,7 +37,11 @@ namespace LIMSApi.Repositories
 
         public async Task<ProductConditionMaster?> GetProductConditionById(long id)
         {
-            return await _context.ProductConditionMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
+            return await _context.ProductConditionMasters
+                .Include(x => x.ProductConditionCategory)
+                .Include(x => x.LinkedHeatTreatment)
+                .Include(x => x.PropertiesCaptured).ThenInclude(pc => pc.PropertyType)
+                .FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
         }
 
         public async Task UpdateProductCondition(ProductConditionMaster model)
@@ -54,7 +58,7 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)) || (x.Code != null && x.Code.ToLower().Contains(search)));
             }
 
             if (filter.SortByColumn != null)
@@ -105,6 +109,16 @@ namespace LIMSApi.Repositories
         public async Task<bool> ExistsByNameAndNotId(string name, long Id)
         {
             return await _context.ProductConditionMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive);
+        }
+
+        public async Task<bool> ExistsByCode(string code)
+        {
+            return await _context.ProductConditionMasters.AnyAsync(x => x.Code == code && x.IsActive);
+        }
+
+        public async Task<bool> ExistsByCodeAndNotId(string code, long id)
+        {
+            return await _context.ProductConditionMasters.AnyAsync(x => x.Code == code && x.ID != id && x.IsActive);
         }
     }
 }

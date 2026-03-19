@@ -38,7 +38,11 @@ namespace LIMSApi.Repositories
 
         public async Task<DimensionalFactorMaster?> GetDimensionalFactorById(long id)
         {
-            return await _context.DimensionalFactorMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
+            return await _context.DimensionalFactorMasters
+                .Include(x => x.ParameterUnit)
+                .Include(x => x.DefaultTestMethod)
+                .Include(x => x.ApplicableForms).ThenInclude(af => af.ProductForm)
+                .FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
         }
 
         public async Task UpdateDimensionalFactor(DimensionalFactorMaster model)
@@ -54,7 +58,7 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)) || (x.Code != null && x.Code.ToLower().Contains(search)));
             }
 
             if (filter.SortByColumn != null)
@@ -106,6 +110,16 @@ namespace LIMSApi.Repositories
         public async Task<bool> ExistsByNameAndNotId(string name, long Id)
         {
             return await _context.DimensionalFactorMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive);
+        }
+
+        public async Task<bool> ExistsByCode(string code)
+        {
+            return await _context.DimensionalFactorMasters.AnyAsync(x => x.Code == code && x.IsActive);
+        }
+
+        public async Task<bool> ExistsByCodeAndNotId(string code, long id)
+        {
+            return await _context.DimensionalFactorMasters.AnyAsync(x => x.Code == code && x.ID != id && x.IsActive);
         }
     }
 }

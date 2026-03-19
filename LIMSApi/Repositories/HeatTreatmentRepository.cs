@@ -37,7 +37,11 @@ namespace LIMSApi.Repositories
 
         public async Task<HeatTreatmentMaster?> GetHeatTreatmentById(long id)
         {
-            return await _context.HeatTreatmentMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
+            return await _context.HeatTreatmentMasters
+                .Include(x => x.HeatTreatmentCategory)
+                .Include(x => x.CoolingMedium)
+                .Include(x => x.ApplicableClassifications).ThenInclude(ac => ac.MetalClassification)
+                .FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
         }
 
         public async Task UpdateHeatTreatment(HeatTreatmentMaster model)
@@ -54,7 +58,7 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x =>  (x.Name != null && x.Name.ToLower().Contains(search)) );
+                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)) || (x.Code != null && x.Code.ToLower().Contains(search)));
             }
 
             if (filter.SortByColumn != null)
@@ -105,6 +109,16 @@ namespace LIMSApi.Repositories
         public async Task<bool> ExistsByNameAndNotId(string name, long Id)
         {
             return await _context.HeatTreatmentMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive);
+        }
+
+        public async Task<bool> ExistsByCode(string code)
+        {
+            return await _context.HeatTreatmentMasters.AnyAsync(x => x.Code == code && x.IsActive);
+        }
+
+        public async Task<bool> ExistsByCodeAndNotId(string code, long Id)
+        {
+            return await _context.HeatTreatmentMasters.AnyAsync(x => x.Code == code && x.ID != Id && x.IsActive);
         }
     }
 }

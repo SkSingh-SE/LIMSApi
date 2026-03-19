@@ -26,6 +26,7 @@ namespace LIMSApi.Models
         [ForeignKey("InwardID")]
         public virtual SampleInward? SampleInward { get; set; }
         public ICollection<ProformaInvoiceDetail> Details { get; set; } = new List<ProformaInvoiceDetail>();
+        public virtual ICollection<InvoiceLineItem> LineItems { get; set; } = new List<InvoiceLineItem>();
     }
 
 }

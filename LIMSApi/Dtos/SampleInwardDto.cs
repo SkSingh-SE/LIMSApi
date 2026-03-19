@@ -161,7 +161,7 @@ namespace LIMSApi.Dtos
         public long ID { get; set; }
         public long SampleTestPlanID { get; set; }
         public string? SampleNo { get; set; }
-        public long Specification1 { get; set; }
+        public long? Specification1 { get; set; }
         public long? Specification2 { get; set; }
         public List<GeneralTestMethodDto> Methods { get; set; } = new();
     }
@@ -186,7 +186,7 @@ namespace LIMSApi.Dtos
         public string? ReportNo { get; set; } = "";
         public string? UlrNo { get; set; } = "";
         public Dictionary<string, bool> TestTypes { get; set; } = new();
-        public long Specification1 { get; set; }
+        public long? Specification1 { get; set; }
         public long? Specification2 { get; set; }
         public List<ChemicalTestElementDto> Elements { get; set; } = new();
     }

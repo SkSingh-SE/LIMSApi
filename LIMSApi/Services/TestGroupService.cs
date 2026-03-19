@@ -79,7 +79,6 @@ namespace LIMSApi.Services
                     if (existingMapping != null)
                     {
                         existingMapping.TestGroupID = model.ID;
-                        existingMapping.TestID = mapping.TestID;
                         existingMapping.TestMethodID = mapping.TestMethodID;
 
                     }

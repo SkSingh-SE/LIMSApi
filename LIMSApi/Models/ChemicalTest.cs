@@ -13,7 +13,7 @@ namespace LIMSApi.Models
         public string UlrNo { get; set; } = string.Empty;
         //public Dictionary<string, bool> TestTypes { get; set; }
         public long MetalClassificationID { get; set; }
-        public long Specification1 { get; set; }
+        public long? Specification1 { get; set; }
         public long? Specification2 { get; set; }
         public long? TestMethod { get; set; } // not in use
         public List<ChemicalTestType> TestTypes { get; set; } = new();

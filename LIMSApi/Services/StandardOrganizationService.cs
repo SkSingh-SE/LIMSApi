@@ -43,6 +43,7 @@ namespace LIMSApi.Services
                 throw new InvalidOperationException("StandardOrganization not found!");
 
             existingStandardOrganization.Name = model.Name;
+            existingStandardOrganization.NumberType = model.NumberType;
             existingStandardOrganization.ModifiedOn = DateTime.UtcNow;
 
             await _standardOrganizationRepository.UpdateStandardOrganization(existingStandardOrganization);

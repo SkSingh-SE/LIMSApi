@@ -93,11 +93,12 @@ namespace LIMSApi.Controllers
         [HttpPost("create")]
         public async Task<ActionResult<SampleInward>> PostSampleInward([FromForm] SampleInwardDto model)
         {
-            await _SampleInwardService.CreateSampleInward(model);
+            var id = await _SampleInwardService.CreateSampleInward(model);
             return Ok(new
             {
                 status = "success",
-                message = $"SampleInward created successfully."
+                message = $"SampleInward created successfully.",
+                id
             });
         }
 

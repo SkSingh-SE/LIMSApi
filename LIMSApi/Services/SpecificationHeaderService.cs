@@ -72,7 +72,7 @@ namespace LIMSApi.Services
                 existingGrade.Grade = grade.Grade;
                 existingGrade.IsUNS = grade.IsUNS;
                 existingGrade.UNSSteelNumber = grade.UNSSteelNumber;
-                existingGrade.TestMethodSpecificationID = grade.TestMethodSpecificationID;
+                existingGrade.MetalClassificationID = grade.MetalClassificationID;
 
                 // Remove missing lines
                 var linesToRemove = existingGrade.SpecificationLines

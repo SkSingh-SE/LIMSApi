@@ -18,5 +18,7 @@ namespace LIMSApi.Repositories.Interface
         Task<List<DropdwonSelector>> GetMechanicalParameterDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<bool> ExistsByName(string name);
         Task<bool> ExistsByNameAndNotId(string name, long Id);
+        Task<bool> ExistsByCode(string code);
+        Task<bool> ExistsByCodeAndNotId(string code, long Id);
     }
 }

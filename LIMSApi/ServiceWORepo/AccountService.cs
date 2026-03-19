@@ -403,6 +403,129 @@ namespace LIMSApi.ServiceWORepo
             var proformaInvoiceId = await _proformaInvoiceRepository.GeneratePIAsync(inwardId);
             return proformaInvoiceId;
         }
+
+        // -----------------------------------------------
+        // LEDGER PERIOD-BASED SUMMARY (Gap #16)
+        // -----------------------------------------------
+
+        public async Task<LedgerPeriodSummaryDto> GetLedgerPeriodSummaryAsync(long customerId, DateTime periodStart, DateTime periodEnd)
+        {
+            var customer = await _db.Customers.FindAsync(customerId)
+                ?? throw new KeyNotFoundException($"Customer with ID {customerId} not found.");
+
+            // Opening balance = sum of all ledger entries BEFORE periodStart
+            var prePeriodEntries = await _db.CustomerLedgers
+                .Where(l => l.CustomerId == customerId && l.Date < periodStart && l.IsActive)
+                .ToListAsync();
+
+            decimal openingBalance = prePeriodEntries.Sum(l => l.DebitAmount - l.CreditAmount);
+
+            // Entries within the period
+            var periodEntries = await _db.CustomerLedgers
+                .Where(l => l.CustomerId == customerId && l.Date >= periodStart && l.Date <= periodEnd && l.IsActive)
+                .OrderBy(l => l.Date)
+                .ThenBy(l => l.Id)
+                .ToListAsync();
+
+            decimal totalDebit = periodEntries.Sum(l => l.DebitAmount);
+            decimal totalCredit = periodEntries.Sum(l => l.CreditAmount);
+            decimal closingBalance = openingBalance + totalDebit - totalCredit;
+
+            // Build entry list with running balance
+            decimal runningBalance = openingBalance;
+            var entries = periodEntries.Select(l =>
+            {
+                decimal amount = l.DebitAmount > 0 ? l.DebitAmount : l.CreditAmount;
+                string type = l.DebitAmount > 0 ? "Debit" : "Credit";
+                runningBalance += l.DebitAmount - l.CreditAmount;
+
+                return new LedgerEntryDto
+                {
+                    Id = l.Id,
+                    Date = l.Date,
+                    Description = l.Description ?? l.TransactionType,
+                    Type = type,
+                    Amount = amount,
+                    RunningBalance = runningBalance
+                };
+            }).ToList();
+
+            return new LedgerPeriodSummaryDto
+            {
+                CustomerId = customerId,
+                CustomerName = customer.Name,
+                PeriodStart = periodStart,
+                PeriodEnd = periodEnd,
+                OpeningBalance = openingBalance,
+                TotalDebit = totalDebit,
+                TotalCredit = totalCredit,
+                ClosingBalance = closingBalance,
+                Entries = entries
+            };
+        }
+
+        // -----------------------------------------------
+        // INVOICE LINE ITEMS (Ad-hoc / Miscellaneous Charges)
+        // -----------------------------------------------
+
+        public async Task<List<InvoiceLineItem>> GetLineItemsAsync(long proformaInvoiceHeaderId)
+        {
+            return await _db.InvoiceLineItems
+                .Where(x => x.ProformaInvoiceHeaderID == proformaInvoiceHeaderId)
+                .OrderByDescending(x => x.ID)
+                .ToListAsync();
+        }
+
+        public async Task<InvoiceLineItem> CreateLineItemAsync(InvoiceLineItemDto dto)
+        {
+            var taxAmount = dto.Amount * dto.TaxPercent / 100;
+            var lineItem = new InvoiceLineItem
+            {
+                ProformaInvoiceHeaderID = dto.ProformaInvoiceHeaderID,
+                TaxInvoiceID = dto.TaxInvoiceID,
+                SampleInwardID = dto.SampleInwardID,
+                Description = dto.Description,
+                Amount = dto.Amount,
+                TaxPercent = dto.TaxPercent,
+                TaxAmount = taxAmount,
+                TotalAmount = dto.Amount + taxAmount,
+                Remark = dto.Remark
+            };
+
+            _db.InvoiceLineItems.Add(lineItem);
+            await _db.SaveChangesAsync();
+            return lineItem;
+        }
+
+        public async Task<InvoiceLineItem> UpdateLineItemAsync(long id, InvoiceLineItemDto dto)
+        {
+            var lineItem = await _db.InvoiceLineItems.FindAsync(id)
+                ?? throw new KeyNotFoundException($"InvoiceLineItem with ID {id} not found.");
+
+            var taxAmount = dto.Amount * dto.TaxPercent / 100;
+
+            lineItem.ProformaInvoiceHeaderID = dto.ProformaInvoiceHeaderID;
+            lineItem.TaxInvoiceID = dto.TaxInvoiceID;
+            lineItem.SampleInwardID = dto.SampleInwardID;
+            lineItem.Description = dto.Description;
+            lineItem.Amount = dto.Amount;
+            lineItem.TaxPercent = dto.TaxPercent;
+            lineItem.TaxAmount = taxAmount;
+            lineItem.TotalAmount = dto.Amount + taxAmount;
+            lineItem.Remark = dto.Remark;
+
+            await _db.SaveChangesAsync();
+            return lineItem;
+        }
+
+        public async Task DeleteLineItemAsync(long id)
+        {
+            var lineItem = await _db.InvoiceLineItems.FindAsync(id)
+                ?? throw new KeyNotFoundException($"InvoiceLineItem with ID {id} not found.");
+
+            _db.InvoiceLineItems.Remove(lineItem);
+            await _db.SaveChangesAsync();
+        }
     }
 
 }

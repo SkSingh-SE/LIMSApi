@@ -21,6 +21,30 @@ public partial class ParameterMaster : AuditProperty
     public string? Formula { get; set; }
 
     public string? Note { get; set; }
+
+    [StringLength(20)]
+    public string? Code { get; set; }
+
+    [StringLength(20)]
+    public string? Symbol { get; set; }
+
+    public int DecimalPrecision { get; set; } = 2;
+
+    [Column(TypeName = "decimal(18,6)")]
+    public decimal? MinReportableLimit { get; set; }
+
+    public long? DefaultTestMethodID { get; set; }
+
+    public long? ParameterCategoryID { get; set; }
+
     [ForeignKey("ParameterUnitID")]
     public virtual ParameterUnitMaster? ParameterUnit { get; set; }
+
+    [ForeignKey("DefaultTestMethodID")]
+    public virtual TestMethodStandard? DefaultTestMethod { get; set; }
+
+    [ForeignKey("ParameterCategoryID")]
+    public virtual ParameterCategoryMaster? ParameterCategory { get; set; }
+
+    public virtual ICollection<ParameterSpecimenOrientation> AllowedOrientations { get; set; } = new List<ParameterSpecimenOrientation>();
 }

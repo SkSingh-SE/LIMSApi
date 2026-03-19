@@ -6,7 +6,7 @@ namespace LIMSApi.Services.Interface
 {
     public interface ISampleInwardService
     {
-        Task CreateSampleInward(SampleInwardDto model);
+        Task<long> CreateSampleInward(SampleInwardDto model);
         Task ModifySampleInward(SampleInwardDto model);
         Task ModifySamplePlan(PlanDto model);
         Task SubmitPlanForReview(PlanDto model);

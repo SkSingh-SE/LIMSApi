@@ -37,7 +37,10 @@ namespace LIMSApi.Repositories
 
         public async Task<MetalClassificationMaster?> GetMetalClassificationById(long id)
         {
-            return await _context.MetalClassificationMasters.Include(p => p.Parameters).FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
+            return await _context.MetalClassificationMasters
+                .Include(p => p.Parameters)
+                .Include(p => p.Parent)
+                .FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
         }
 
         public async Task UpdateMetalClassification(MetalClassificationMaster model)
@@ -54,7 +57,7 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x =>  (x.Name != null && x.Name.ToLower().Contains(search)));
+                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)) || (x.Code != null && x.Code.ToLower().Contains(search)));
             }
 
             if (filter.SortByColumn != null)
@@ -115,6 +118,16 @@ namespace LIMSApi.Repositories
         public async Task<bool> ExistsByNameAndNotId(string name, long Id)
         {
             return await _context.MetalClassificationMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive);
+        }
+
+        public async Task<bool> ExistsByCode(string code)
+        {
+            return await _context.MetalClassificationMasters.AnyAsync(x => x.Code == code && x.IsActive);
+        }
+
+        public async Task<bool> ExistsByCodeAndNotId(string code, long Id)
+        {
+            return await _context.MetalClassificationMasters.AnyAsync(x => x.Code == code && x.ID != Id && x.IsActive);
         }
     }
 }

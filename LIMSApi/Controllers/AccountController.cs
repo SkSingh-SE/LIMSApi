@@ -1,4 +1,5 @@
 ﻿using LIMSApi.Dtos;
+using LIMSApi.Models;
 using LIMSApi.Services.Interface;
 using LIMSApi.ServiceWORepo;
 using Microsoft.AspNetCore.Http;
@@ -12,11 +13,13 @@ namespace LIMSApi.Controllers
     {
         private readonly IAccountService _accountService;
         private readonly IPriceCalculationService _priceCalculationService;
+        private readonly IPaymentGatingService _paymentGatingService;
 
-        public AccountController(IAccountService accountService, IPriceCalculationService priceCalculationService)
+        public AccountController(IAccountService accountService, IPriceCalculationService priceCalculationService, IPaymentGatingService paymentGatingService)
         {
             _accountService = accountService;
             _priceCalculationService = priceCalculationService;
+            _paymentGatingService = paymentGatingService;
         }
 
         // -------------------------------
@@ -115,6 +118,73 @@ namespace LIMSApi.Controllers
         {
             var result = await _priceCalculationService.CalculateAndCreateChargeEventsAsync(inwardId);
             return Ok(result);
+        }
+
+        // -----------------------------------
+        // PAYMENT GATE CHECK (Gap #39)
+        // Checks if testing is blocked for walk-in customers pending payment
+        // -----------------------------------
+        [HttpGet("payment-gate/{sampleInwardId}")]
+        public async Task<IActionResult> CheckPaymentGate(long sampleInwardId)
+        {
+            var result = await _paymentGatingService.CheckPaymentGateAsync(sampleInwardId);
+            return Ok(result);
+        }
+
+        // -----------------------------------
+        // CREDIT LIMIT CHECK (Gap #40)
+        // Checks customer outstanding vs credit limit at inward time
+        // -----------------------------------
+        [HttpGet("credit-check/{customerId}")]
+        public async Task<IActionResult> CheckCreditLimit(long customerId)
+        {
+            var result = await _paymentGatingService.CheckCreditLimitAsync(customerId);
+            return Ok(result);
+        }
+
+        // -----------------------------------------------
+        // LEDGER PERIOD-BASED SUMMARY (Gap #16)
+        // -----------------------------------------------
+        [HttpGet("ledger-summary/{customerId}")]
+        public async Task<IActionResult> GetLedgerPeriodSummary(
+            long customerId,
+            [FromQuery] DateTime periodStart,
+            [FromQuery] DateTime periodEnd)
+        {
+            var result = await _accountService.GetLedgerPeriodSummaryAsync(customerId, periodStart, periodEnd);
+            return Ok(result);
+        }
+
+        // -----------------------------------------------
+        // INVOICE LINE ITEMS (Ad-hoc / Miscellaneous Charges)
+        // -----------------------------------------------
+
+        [HttpGet("invoice-line-items/{proformaInvoiceHeaderId}")]
+        public async Task<IActionResult> GetLineItems(long proformaInvoiceHeaderId)
+        {
+            var result = await _accountService.GetLineItemsAsync(proformaInvoiceHeaderId);
+            return Ok(result);
+        }
+
+        [HttpPost("invoice-line-items")]
+        public async Task<IActionResult> CreateLineItem([FromBody] InvoiceLineItemDto dto)
+        {
+            var result = await _accountService.CreateLineItemAsync(dto);
+            return Ok(result);
+        }
+
+        [HttpPut("invoice-line-items/{id}")]
+        public async Task<IActionResult> UpdateLineItem(long id, [FromBody] InvoiceLineItemDto dto)
+        {
+            var result = await _accountService.UpdateLineItemAsync(id, dto);
+            return Ok(result);
+        }
+
+        [HttpDelete("invoice-line-items/{id}")]
+        public async Task<IActionResult> DeleteLineItem(long id)
+        {
+            await _accountService.DeleteLineItemAsync(id);
+            return Ok(new { message = "Line item deleted successfully" });
         }
     }
 }

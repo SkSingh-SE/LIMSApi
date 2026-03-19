@@ -39,6 +39,8 @@ public partial class EquipmentMaster : AuditProperty
     public ICollection<EquipmentMaintenance> Maintenances { get; set; } = new List<EquipmentMaintenance>();
     public ICollection<EquipmentSOP> SOPs { get; set; } = new List<EquipmentSOP>();
 
+    public ICollection<EquipmentReferenceMaterial> ReferenceMaterials { get; set; } = new List<EquipmentReferenceMaterial>();
+
     [ForeignKey("EquipmentTypeID")]
     public virtual EquipmentTypeMaster? EquipmentType { get; set; }
 

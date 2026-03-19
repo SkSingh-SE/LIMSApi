@@ -205,7 +205,151 @@ namespace LIMSApi.ServiceWORepo
 
             if (dimensionalPrices.Any())
             {
-                var groups = dimensionalPrices.GroupBy(p => p.Configuration!.SelectionType);
+                // --- GROUP 2a: Quantity-based pricing (PerIndent, Location, FieldWise) ---
+                var quantitySelectionTypes = new[] { "PerIndent", "Indent", "Location", "NoOfLocations", "FieldWise", "EachField" };
+                var quantityPrices = dimensionalPrices.Where(p =>
+                    quantitySelectionTypes.Contains(p.Configuration!.SelectionType, StringComparer.OrdinalIgnoreCase)).ToList();
+
+                foreach (var qPrice in quantityPrices)
+                {
+                    decimal? qty = FindParameterValueForDimension(billableParams, qPrice.Configuration!);
+                    if (qty == null || qty <= 0) qty = 1;
+
+                    breakdown.Add(new PriceBreakdownDto
+                    {
+                        ParameterId = 0,
+                        ParameterName = $"{qPrice.Name ?? qPrice.Configuration!.Name} x {qty}",
+                        UnitPrice = qPrice.Price,
+                        Quantity = (int)qty.Value,
+                        Amount = qPrice.Price * qty.Value
+                    });
+                }
+
+                // --- GROUP 2b: Days-based slab pricing ---
+                var daysSelectionTypes = new[] { "Days", "Duration" };
+                var daysPrices = dimensionalPrices.Where(p =>
+                    daysSelectionTypes.Contains(p.Configuration!.SelectionType, StringComparer.OrdinalIgnoreCase)).ToList();
+
+                if (daysPrices.Any())
+                {
+                    decimal? daysValue = FindParameterValueForDimension(billableParams, daysPrices.First().Configuration!);
+                    if (daysValue != null)
+                    {
+                        // Slab match: find nearest slab >= days value
+                        var matched = daysPrices
+                            .Where(p => decimal.TryParse(p.Configuration!.Value, out var v) && v >= daysValue)
+                            .OrderBy(p => decimal.Parse(p.Configuration!.Value))
+                            .FirstOrDefault();
+
+                        if (matched != null)
+                        {
+                            var unit = matched.Configuration?.Unit ?? "days";
+                            breakdown.Add(new PriceBreakdownDto
+                            {
+                                ParameterId = 0,
+                                ParameterName = $"{matched.Configuration!.Name} ({daysValue} {unit})".Trim(),
+                                UnitPrice = matched.Price,
+                                Quantity = 1,
+                                Amount = matched.Price
+                            });
+                        }
+                    }
+                }
+
+                // --- GROUP 2c: Size/Load combo (two-dimensional lookup) ---
+                var sizeLoadTypes = new[] { "SizeLoad", "SizeAndLoad" };
+                var sizeLoadPrices = dimensionalPrices.Where(p =>
+                    sizeLoadTypes.Contains(p.Configuration!.SelectionType, StringComparer.OrdinalIgnoreCase)).ToList();
+
+                if (sizeLoadPrices.Any())
+                {
+                    // First dimension: use Start/End fields for size range
+                    // Second dimension: use Value field for load threshold
+                    // Both must match for a price entry to apply
+                    decimal? sizeValue = FindParameterValueByName(billableParams, "size", "diameter", "width", "thickness");
+                    decimal? loadValue = FindParameterValueByName(billableParams, "load", "force", "capacity");
+
+                    if (sizeValue != null && loadValue != null)
+                    {
+                        var matched = sizeLoadPrices.FirstOrDefault(p =>
+                        {
+                            var cfg = p.Configuration!;
+                            bool sizeMatch = decimal.TryParse(cfg.Start, out var s) &&
+                                             decimal.TryParse(cfg.End, out var e) &&
+                                             sizeValue >= s && sizeValue <= e;
+                            bool loadMatch = decimal.TryParse(cfg.Value, out var lv) && lv >= loadValue;
+                            return sizeMatch && loadMatch;
+                        });
+
+                        if (matched != null)
+                        {
+                            var unit = matched.Configuration?.Unit ?? "";
+                            breakdown.Add(new PriceBreakdownDto
+                            {
+                                ParameterId = 0,
+                                ParameterName = $"{matched.Configuration!.Name} (Size:{sizeValue}, Load:{loadValue} {unit})".Trim(),
+                                UnitPrice = matched.Price,
+                                Quantity = 1,
+                                Amount = matched.Price
+                            });
+                        }
+                    }
+                }
+
+                // --- GROUP 2d: Fixed + Algorithm pricing ---
+                var fixedAlgoTypes = new[] { "FixedWithAlgorithm" };
+                var fixedAlgoPrices = dimensionalPrices.Where(p =>
+                    fixedAlgoTypes.Contains(p.Configuration!.SelectionType, StringComparer.OrdinalIgnoreCase)).ToList();
+
+                foreach (var fap in fixedAlgoPrices)
+                {
+                    var basePrice = fap.Price;
+                    decimal additional = 0;
+
+                    // If config Value contains a formula, evaluate it using parameter values
+                    var formula = fap.Configuration!.Value;
+                    if (!string.IsNullOrWhiteSpace(formula) && !decimal.TryParse(formula, out _))
+                    {
+                        var variables = new Dictionary<string, double>();
+                        foreach (var param in billableParams)
+                        {
+                            if (param.Value.HasValue && !string.IsNullOrWhiteSpace(param.ParameterName))
+                            {
+                                var key = param.ParameterName.Trim().Replace(" ", "_");
+                                variables[key] = (double)param.Value.Value;
+                            }
+                        }
+
+                        var evaluator = new Helpers.FormulaEvaluator();
+                        var result = evaluator.Evaluate(formula, variables);
+                        if (result.HasValue)
+                            additional = (decimal)result.Value;
+                    }
+
+                    var total = basePrice + additional;
+                    breakdown.Add(new PriceBreakdownDto
+                    {
+                        ParameterId = 0,
+                        ParameterName = additional > 0
+                            ? $"{fap.Name ?? fap.Configuration!.Name} (Base:{basePrice} + Calc:{additional})"
+                            : fap.Name ?? fap.Configuration!.Name ?? "Fixed Fee",
+                        UnitPrice = total,
+                        Quantity = 1,
+                        Amount = total
+                    });
+                }
+
+                // --- GROUP 2e: Standard range/slab pricing (remaining dimensional prices) ---
+                var handledTypes = quantitySelectionTypes
+                    .Concat(daysSelectionTypes)
+                    .Concat(sizeLoadTypes)
+                    .Concat(fixedAlgoTypes)
+                    .ToArray();
+
+                var remainingDimensionalPrices = dimensionalPrices.Where(p =>
+                    !handledTypes.Contains(p.Configuration!.SelectionType, StringComparer.OrdinalIgnoreCase)).ToList();
+
+                var groups = remainingDimensionalPrices.GroupBy(p => p.Configuration!.SelectionType);
 
                 foreach (var group in groups)
                 {
@@ -286,6 +430,28 @@ namespace LIMSApi.ServiceWORepo
             }
 
             return breakdown;
+        }
+
+        /// <summary>
+        /// Find parameter value by searching for any of the given name keywords in parameter names.
+        /// Used for multi-dimensional pricing (e.g., SizeLoad) where we need to locate
+        /// specific parameters by well-known names rather than by config Name/AliasName.
+        /// </summary>
+        private decimal? FindParameterValueByName(
+            List<TestResultParameter> billableParams,
+            params string[] keywords)
+        {
+            foreach (var param in billableParams)
+            {
+                var paramName = (param.ParameterName ?? "").Trim().ToLower();
+                if (string.IsNullOrWhiteSpace(paramName)) continue;
+
+                if (keywords.Any(k => paramName.Contains(k.ToLower())))
+                {
+                    if (param.Value.HasValue) return param.Value.Value;
+                }
+            }
+            return null;
         }
 
         /// <summary>

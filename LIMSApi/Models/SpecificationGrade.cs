@@ -16,9 +16,9 @@ public partial class SpecificationGrade
 
     public string? UNSSteelNumber { get; set; }
 
-    public long? TestMethodSpecificationID { get; set; }
-    [ForeignKey("TestMethodSpecificationID")]
-    public virtual TestMethodSpecification? TestMethodSpecification { get; set; }
+    public long? MetalClassificationID { get; set; }
+    [ForeignKey("MetalClassificationID")]
+    public virtual MetalClassificationMaster? MetalClassification { get; set; }
 
     public virtual ICollection<SpecificationLine> SpecificationLines { get; set; } = new List<SpecificationLine>();
 

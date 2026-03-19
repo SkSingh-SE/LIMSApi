@@ -58,10 +58,25 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<MakerMaster> MakerMasters { get; set; }
     public virtual DbSet<MenuMaster> MenuMasters { get; set; }
     public virtual DbSet<MetalClassificationMaster> MetalClassificationMasters { get; set; }
+    public virtual DbSet<ParameterCategoryMaster> ParameterCategoryMasters { get; set; }
+    public virtual DbSet<HeatTreatmentCategoryMaster> HeatTreatmentCategoryMasters { get; set; }
+    public virtual DbSet<CoolingMediumMaster> CoolingMediumMasters { get; set; }
+    public virtual DbSet<ParameterSpecimenOrientation> ParameterSpecimenOrientations { get; set; }
+    public virtual DbSet<HeatTreatmentMetalClassification> HeatTreatmentMetalClassifications { get; set; }
+    public virtual DbSet<ProductFormMaster> ProductFormMasters { get; set; }
+    public virtual DbSet<SpecimenOrientationCategoryMaster> SpecimenOrientationCategoryMasters { get; set; }
+    public virtual DbSet<ProductConditionCategoryMaster> ProductConditionCategoryMasters { get; set; }
+    public virtual DbSet<PropertyTypeMaster> PropertyTypeMasters { get; set; }
+    public virtual DbSet<SpecimenOrientationProductForm> SpecimenOrientationProductForms { get; set; }
+    public virtual DbSet<SpecimenOrientationMetalClassification> SpecimenOrientationMetalClassifications { get; set; }
+    public virtual DbSet<DimensionalFactorProductForm> DimensionalFactorProductForms { get; set; }
+    public virtual DbSet<ProductConditionPropertyType> ProductConditionPropertyTypes { get; set; }
     public virtual DbSet<OEMMaster> OEMMasters { get; set; }
     public virtual DbSet<OrganisationMaster> OrganisationMasters { get; set; }
     public virtual DbSet<ParameterMaster> ParameterMasters { get; set; }
     public virtual DbSet<ParameterUnitMaster> ParameterUnitMasters { get; set; }
+    public virtual DbSet<HardnessEquivalence> HardnessEquivalences { get; set; }
+    public virtual DbSet<ToleranceMaster> ToleranceMasters { get; set; }
     public virtual DbSet<ProductConditionMaster> ProductConditionMasters { get; set; }
     public virtual DbSet<ProductSpecification> ProductSpecifications { get; set; }
     public virtual DbSet<RemarkMaster> RemarkMasters { get; set; }
@@ -121,6 +136,9 @@ public partial class LIMSContext : DbContext
     public DbSet<CuttingChargeSample> CuttingChargeSamples { get; set; }
     public DbSet<CuttingChargeDetail> CuttingChargeDetails { get; set; }
     public DbSet<MachiningChargeItem> MachiningChargeItems { get; set; }
+    public DbSet<SamplePreparationMaster> SamplePreparationMasters { get; set; }
+    public DbSet<ProductTestGroup> ProductTestGroups { get; set; }
+    public DbSet<ProductSpecificationGrade> ProductSpecificationGrades { get; set; }
     public DbSet<TestMappingLaboratoryTest> MappingLaboratoryTests { get; set; }
     public DbSet<ProformaInvoiceHeader> ProformaInvoiceHeader { get; set; }
     public DbSet<ProformaInvoiceDetail> ProformaInvoiceDetails { get; set; }
@@ -147,6 +165,7 @@ public partial class LIMSContext : DbContext
     public DbSet<CustomerAmendment> CustomerAmendments { get; set; }
     public DbSet<TaxInvoice> TaxInvoices { get; set; }
     public DbSet<ChargeEvent> ChargeEvents { get; set; }
+    public DbSet<InvoiceLineItem> InvoiceLineItems { get; set; }
     public DbSet<MessageTemplate> MessageTemplates { get; set; }
 
     /* ============================
@@ -226,6 +245,10 @@ public partial class LIMSContext : DbContext
 
     public DbSet<PlanHistory> PlanHistories { get; set; }
     public DbSet<ReplanRequest> ReplanRequests { get; set; }
+    public DbSet<TestUsageStats> TestUsageStats { get; set; }
+    public DbSet<TpiInspection> TpiInspections { get; set; }
+    public DbSet<PurchaseOrderItem> PurchaseOrderItems { get; set; }
+    public DbSet<EquipmentReferenceMaterial> EquipmentReferenceMaterials { get; set; }
 
     //    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     //#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the BankName= syntax to read it from _configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
@@ -237,6 +260,119 @@ public partial class LIMSContext : DbContext
       .HasKey(x => new { x.SpecificationLineID, x.LaboratoryTestID });
 
         modelBuilder.Entity<MetalClassificationParameter>().HasKey(x => new { x.MetalClassificationID, x.ParameterID });
+
+        modelBuilder.Entity<ParameterSpecimenOrientation>().HasKey(x => new { x.ParameterID, x.SpecimenOrientationID });
+
+        modelBuilder.Entity<HeatTreatmentMetalClassification>().HasKey(x => new { x.HeatTreatmentID, x.MetalClassificationID });
+
+        // MetalClassificationMaster self-referencing hierarchy
+        modelBuilder.Entity<MetalClassificationMaster>()
+            .HasOne(x => x.Parent)
+            .WithMany(x => x.Children)
+            .HasForeignKey(x => x.ParentID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<MetalClassificationMaster>()
+            .HasIndex(x => x.Code)
+            .IsUnique()
+            .HasFilter("[IsActive] = 1 AND [Code] IS NOT NULL")
+            .HasDatabaseName("IX_MetalClassificationMaster_Code");
+
+        modelBuilder.Entity<ParameterMaster>()
+            .HasIndex(x => x.Code)
+            .IsUnique()
+            .HasFilter("[IsActive] = 1 AND [Code] IS NOT NULL")
+            .HasDatabaseName("IX_ParameterMaster_Code");
+
+        modelBuilder.Entity<HeatTreatmentMaster>()
+            .HasIndex(x => x.Code)
+            .IsUnique()
+            .HasFilter("[IsActive] = 1 AND [Code] IS NOT NULL")
+            .HasDatabaseName("IX_HeatTreatmentMaster_Code");
+
+        // HeatTreatmentMaster FK configs
+        modelBuilder.Entity<HeatTreatmentMaster>()
+            .HasOne(x => x.HeatTreatmentCategory)
+            .WithMany()
+            .HasForeignKey(x => x.HeatTreatmentCategoryID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<HeatTreatmentMaster>()
+            .HasOne(x => x.CoolingMedium)
+            .WithMany()
+            .HasForeignKey(x => x.CoolingMediumID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // ParameterMaster FK configs
+        modelBuilder.Entity<ParameterMaster>()
+            .HasOne(x => x.DefaultTestMethod)
+            .WithMany()
+            .HasForeignKey(x => x.DefaultTestMethodID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<ParameterMaster>()
+            .HasOne(x => x.ParameterCategory)
+            .WithMany()
+            .HasForeignKey(x => x.ParameterCategoryID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // Phase 2: Junction table composite keys
+        modelBuilder.Entity<SpecimenOrientationProductForm>().HasKey(x => new { x.SpecimenOrientationID, x.ProductFormID });
+        modelBuilder.Entity<SpecimenOrientationMetalClassification>().HasKey(x => new { x.SpecimenOrientationID, x.MetalClassificationID });
+        modelBuilder.Entity<DimensionalFactorProductForm>().HasKey(x => new { x.DimensionalFactorID, x.ProductFormID });
+        modelBuilder.Entity<ProductConditionPropertyType>().HasKey(x => new { x.ProductConditionID, x.PropertyTypeID });
+
+        // Phase 2: Unique indexes on Code
+        modelBuilder.Entity<SpecimenOrientationMaster>()
+            .HasIndex(x => x.Code)
+            .IsUnique()
+            .HasFilter("[IsActive] = 1 AND [Code] IS NOT NULL")
+            .HasDatabaseName("IX_SpecimenOrientationMaster_Code");
+
+        modelBuilder.Entity<ProductConditionMaster>()
+            .HasIndex(x => x.Code)
+            .IsUnique()
+            .HasFilter("[IsActive] = 1 AND [Code] IS NOT NULL")
+            .HasDatabaseName("IX_ProductConditionMaster_Code");
+
+        modelBuilder.Entity<DimensionalFactorMaster>()
+            .HasIndex(x => x.Code)
+            .IsUnique()
+            .HasFilter("[IsActive] = 1 AND [Code] IS NOT NULL")
+            .HasDatabaseName("IX_DimensionalFactorMaster_Code");
+
+        // Phase 2: SpecimenOrientationMaster FK
+        modelBuilder.Entity<SpecimenOrientationMaster>()
+            .HasOne(x => x.SpecimenOrientationCategory)
+            .WithMany()
+            .HasForeignKey(x => x.SpecimenOrientationCategoryID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // Phase 2: ProductConditionMaster FKs
+        modelBuilder.Entity<ProductConditionMaster>()
+            .HasOne(x => x.ProductConditionCategory)
+            .WithMany()
+            .HasForeignKey(x => x.ProductConditionCategoryID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<ProductConditionMaster>()
+            .HasOne(x => x.LinkedHeatTreatment)
+            .WithMany()
+            .HasForeignKey(x => x.LinkedHeatTreatmentID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // Phase 2: DimensionalFactorMaster FKs
+        modelBuilder.Entity<DimensionalFactorMaster>()
+            .HasOne(x => x.DefaultTestMethod)
+            .WithMany()
+            .HasForeignKey(x => x.DefaultTestMethodID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<DimensionalFactorMaster>()
+            .HasOne(x => x.ParameterUnit)
+            .WithMany()
+            .HasForeignKey(x => x.ParameterUnitID)
+            .OnDelete(DeleteBehavior.NoAction);
 
         // MessageTemplate unique constraint
         modelBuilder.Entity<MessageTemplate>()
@@ -457,6 +593,91 @@ public partial class LIMSContext : DbContext
     .WithMany()
     .HasForeignKey(x => x.TokenID)
     .OnDelete(DeleteBehavior.Restrict);
+
+        // ProductSpecificationGrade → SpecificationGrade (no cascade)
+        modelBuilder.Entity<ProductSpecificationGrade>()
+            .HasOne(x => x.SpecificationGrade)
+            .WithMany()
+            .HasForeignKey(x => x.SpecificationGradeID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // ProductSpecificationGrade → ProductSpecification (no cascade)
+        modelBuilder.Entity<ProductSpecificationGrade>()
+            .HasOne(x => x.ProductSpecification)
+            .WithMany(p => p.ProductSpecificationGrades)
+            .HasForeignKey(x => x.ProductSpecificationID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // ProductTestGroup → ProductSpecification (no cascade)
+        modelBuilder.Entity<ProductTestGroup>()
+            .HasOne(x => x.ProductSpecification)
+            .WithMany(p => p.ProductTestGroups)
+            .HasForeignKey(x => x.ProductSpecificationID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // ProductTestGroup → LaboratoryTest (no cascade)
+        modelBuilder.Entity<ProductTestGroup>()
+            .HasOne(x => x.LaboratoryTest)
+            .WithMany()
+            .HasForeignKey(x => x.LaboratoryTestID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // TpiInspection FKs (no cascade)
+        modelBuilder.Entity<TpiInspection>()
+            .HasOne(x => x.SampleInward)
+            .WithMany()
+            .HasForeignKey(x => x.SampleInwardID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<TpiInspection>()
+            .HasOne(x => x.SampleDetail)
+            .WithMany()
+            .HasForeignKey(x => x.SampleDetailID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // InvoiceLineItem FKs (no cascade)
+        modelBuilder.Entity<InvoiceLineItem>()
+            .HasOne(x => x.ProformaInvoiceHeader)
+            .WithMany(p => p.LineItems)
+            .HasForeignKey(x => x.ProformaInvoiceHeaderID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<InvoiceLineItem>()
+            .HasOne(x => x.TaxInvoice)
+            .WithMany()
+            .HasForeignKey(x => x.TaxInvoiceID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<InvoiceLineItem>()
+            .HasOne(x => x.SampleInward)
+            .WithMany()
+            .HasForeignKey(x => x.SampleInwardID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // SamplePreparationMaster FKs (no cascade)
+        modelBuilder.Entity<SamplePreparationMaster>()
+            .HasOne(x => x.LaboratoryTest)
+            .WithMany()
+            .HasForeignKey(x => x.LaboratoryTestID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // EquipmentReferenceMaterial → EquipmentMaster (no cascade)
+        modelBuilder.Entity<EquipmentReferenceMaterial>()
+            .HasOne(x => x.Equipment)
+            .WithMany(e => e.ReferenceMaterials)
+            .HasForeignKey(x => x.EquipmentMasterID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // PurchaseOrderItem → CustomerPurchaseOrder (no cascade)
+        modelBuilder.Entity<PurchaseOrderItem>()
+            .HasOne(x => x.CustomerPurchaseOrder)
+            .WithMany(p => p.Items)
+            .HasForeignKey(x => x.CustomerPurchaseOrderID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // TestUsageStats composite index for smart auto-suggest lookups
+        modelBuilder.Entity<TestUsageStats>()
+            .HasIndex(t => new { t.LaboratoryTestID, t.MetalClassificationID, t.ProductConditionID, t.CustomerID });
 
     }
 

@@ -146,6 +146,13 @@ builder.Services.AddScoped<IEquipmentTypeRepository, EquipmentTypeRepository>();
 builder.Services.AddScoped<IFileUploadRepository, FileUploadRepository>();
 builder.Services.AddScoped<IGroupRepository, GroupRepository>();
 builder.Services.AddScoped<IHeatTreatmentRepository, HeatTreatmentRepository>();
+builder.Services.AddScoped<IHeatTreatmentCategoryRepository, HeatTreatmentCategoryRepository>();
+builder.Services.AddScoped<ICoolingMediumRepository, CoolingMediumRepository>();
+builder.Services.AddScoped<IParameterCategoryRepository, ParameterCategoryRepository>();
+builder.Services.AddScoped<IProductFormRepository, ProductFormRepository>();
+builder.Services.AddScoped<ISpecimenOrientationCategoryRepository, SpecimenOrientationCategoryRepository>();
+builder.Services.AddScoped<IProductConditionCategoryRepository, ProductConditionCategoryRepository>();
+builder.Services.AddScoped<IPropertyTypeRepository, PropertyTypeRepository>();
 builder.Services.AddScoped<IItemMasterRepository, ItemMasterRepository>();
 builder.Services.AddScoped<ILaboratoryTestRepository, LaboratoryTestRepository>();
 builder.Services.AddScoped<ILaboratoryTestRepository, LaboratoryTestRepository>();
@@ -156,6 +163,8 @@ builder.Services.AddScoped<IParameterRepository, ParameterRepository>();
 builder.Services.AddScoped<IParameterUnitRepository, ParameterUnitRepository>();
 builder.Services.AddScoped<IProductConditionRepository, ProductConditionRepository>();
 builder.Services.AddScoped<IProductSpecificationRepository, ProductSpecificationRepository>();
+builder.Services.AddScoped<IProductTestGroupRepository, ProductTestGroupRepository>();
+builder.Services.AddScoped<IProductSpecificationGradeRepository, ProductSpecificationGradeRepository>();
 builder.Services.AddScoped<IRemarkRepository, RemarkRepository>();
 builder.Services.AddScoped<ISiteActivityRepository, SiteActivityRepository>();
 builder.Services.AddScoped<ISiteErrorRepository, SiteErrorRepository>();
@@ -178,6 +187,7 @@ builder.Services.AddScoped<IVendorRepository, VendorRepository>();
 builder.Services.AddScoped<IInvoiceCaseConfigurationRepository, InvoiceCaseConfigurationRepository>();
 builder.Services.AddScoped<IInvoiceCaseRepository, InvoiceCaseRepository>();
 builder.Services.AddScoped<ICuttingPriceMasterRepository, CuttingPriceMasterRepository>();
+builder.Services.AddScoped<ISamplePreparationMasterRepository, SamplePreparationMasterRepository>();
 builder.Services.AddScoped<IConfigurationRepository, ConfigurationRepository>();
 builder.Services.AddScoped<IMenuRepository, MenuRepository>();
 builder.Services.AddScoped<IRoleRepository, RoleRepository>();
@@ -214,8 +224,16 @@ builder.Services.AddScoped<IEquipmentTypeService, EquipmentTypeService>();
 builder.Services.AddScoped<IFileUploadService, FileUploadService>();
 builder.Services.AddScoped<IGroupService, GroupService>();
 builder.Services.AddScoped<IHeatTreatmentService, HeatTreatmentService>();
+builder.Services.AddScoped<IHeatTreatmentCategoryService, HeatTreatmentCategoryService>();
+builder.Services.AddScoped<ICoolingMediumService, CoolingMediumService>();
+builder.Services.AddScoped<IParameterCategoryService, ParameterCategoryService>();
+builder.Services.AddScoped<IProductFormService, ProductFormService>();
+builder.Services.AddScoped<ISpecimenOrientationCategoryService, SpecimenOrientationCategoryService>();
+builder.Services.AddScoped<IProductConditionCategoryService, ProductConditionCategoryService>();
+builder.Services.AddScoped<IPropertyTypeService, PropertyTypeService>();
 builder.Services.AddScoped<IItemMasterService, ItemMasterService>();
 builder.Services.AddScoped<ILaboratoryTestService, LaboratoryTestService>();
+builder.Services.AddScoped<ITestMasterService, TestMasterService>();
 builder.Services.AddScoped<ILabScopeService, LabScopeService>();
 builder.Services.AddScoped<IMetalClassificationService, MetalClassificationService>();
 builder.Services.AddScoped<IOEMService, OEMService>();
@@ -223,6 +241,8 @@ builder.Services.AddScoped<IParameterService, ParameterService>();
 builder.Services.AddScoped<IParameterUnitService, ParameterUnitService>();
 builder.Services.AddScoped<IProductConditionService, ProductConditionService>();
 builder.Services.AddScoped<IProductSpecificationService, ProductSpecificationService>();
+builder.Services.AddScoped<IProductTestGroupService, ProductTestGroupService>();
+builder.Services.AddScoped<IProductSpecificationGradeService, ProductSpecificationGradeService>();
 builder.Services.AddScoped<IRemarkService, RemarkService>();
 builder.Services.AddScoped<ISiteActivityService, SiteActivityService>();
 builder.Services.AddScoped<ISiteErrorService, SiteErrorService>();
@@ -237,12 +257,14 @@ builder.Services.AddScoped<ISupplierService, SupplierService>();
 builder.Services.AddScoped<ITaxService, TaxService>();
 builder.Services.AddScoped<ITestGroupService, TestGroupService>();
 builder.Services.AddScoped<ITestMethodSpecificationService, TestMethodSpecificationService>();
+builder.Services.AddScoped<ITestMethodStandardService, TestMethodStandardService>();
 builder.Services.AddScoped<ITPIMasterService, TPIMasterService>();
 builder.Services.AddScoped<IUniversalCodeTypeService, UniversalCodeTypeService>();
 builder.Services.AddScoped<IVendorService, VendorService>();
 builder.Services.AddScoped<IInvoiceCaseConfigurationService, InvoiceCaseConfigurationService>();
 builder.Services.AddScoped<IInvoiceCaseService, InvoiceCaseService>();
 builder.Services.AddScoped<ICuttingPriceMasterService, CuttingPriceMasterService>();
+builder.Services.AddScoped<ISamplePreparationMasterService, SamplePreparationMasterService>();
 builder.Services.AddScoped<IConfigurationService, ConfigurationService>();
 builder.Services.AddScoped<IMenuService, MenuService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
@@ -274,6 +296,7 @@ builder.Services.AddScoped<IReportBlockGenerator, ReportBlockGenerator>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<ICustomerAmendmentService, CustomerAmendmentService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
+builder.Services.AddScoped<IPaymentGatingService, PaymentGatingService>();
 builder.Services.AddScoped<ICustomerLedgerService, CustomerLedgerService>();
 builder.Services.AddScoped<IMachineIntegrationService, MachineIntegrationService>();
 builder.Services.AddScoped<INablScopeValidationService, NablScopeValidationService>();
@@ -283,6 +306,12 @@ builder.Services.AddScoped<ISettingsService,SettingsService>();
 
 // Register Dashboard Service
 builder.Services.AddScoped<IDashboardService, DashboardService>();
+
+// Register Test Auto-Suggest Service
+builder.Services.AddScoped<ITestAutoSuggestService, TestAutoSuggestService>();
+
+// Register TPI Inspection Service
+builder.Services.AddScoped<ITpiService, TpiService>();
 
 // Third party services
 builder.Services.AddScoped<EmailService>();
@@ -368,6 +397,11 @@ RecurringJob.AddOrUpdate<MonthlyBillingJob>(
     "weekly-billing",
     job => job.ExecuteWeekly(),
     "0 9 * * MON"); // Every Monday at 9 AM
+
+RecurringJob.AddOrUpdate<TestUsageStatsJob>(
+    "test-usage-stats",
+    x => x.Execute(),
+    "0 2 * * *"); // Daily at 2 AM
 
 // --------------------
 // Endpoints

@@ -53,6 +53,9 @@ namespace LIMSApi.Services
             existingTestMethod.LabDepartmentID = model.LabDepartmentID;
             existingTestMethod.SubGroup = model.SubGroup;
             existingTestMethod.Equation = model.Equation;
+            existingTestMethod.TestCaption = model.TestCaption;
+            existingTestMethod.InvoiceCaption = model.InvoiceCaption;
+            existingTestMethod.TestDuration = model.TestDuration;
             existingTestMethod.ModifiedOn = DateTime.UtcNow;
             existingTestMethod.ModifiedBy = loggedInUser.EmployeeID;
 
@@ -61,13 +64,6 @@ namespace LIMSApi.Services
             {
                 invoiceCase.LabTestID = model.ID;
                 existingTestMethod.InvoiceCases.Add(invoiceCase);
-            }
-
-            existingTestMethod.Parameters.Clear();
-            foreach(var pm in model.Parameters)
-            {
-                pm.LaboratoryTestID = model.ID;
-                existingTestMethod.Parameters.Add(pm);
             }
 
             await _testMethodRepository.UpdateTestMethod(existingTestMethod);
@@ -113,6 +109,11 @@ namespace LIMSApi.Services
         public async Task<List<object>> GetTestCases(long labTestId)
         {
             return await _testMethodRepository.GetTestCases(labTestId);
+        }
+
+        public async Task<List<string>> GetDistinctTestNames(string? searchTerm, int pageSize)
+        {
+            return await _testMethodRepository.GetDistinctTestNames(searchTerm, pageSize);
         }
     }
 }

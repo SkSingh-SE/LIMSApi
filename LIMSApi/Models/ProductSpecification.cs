@@ -29,5 +29,8 @@ namespace LIMSApi.Models
         public virtual MetalClassificationMaster? MetalClassification { get; set; }
         [ForeignKey("TestMethodSpecificationID")]
         public virtual TestMethodSpecification? TestMethodSpecification { get; set; }
+
+        public virtual ICollection<ProductTestGroup> ProductTestGroups { get; set; } = new List<ProductTestGroup>();
+        public virtual ICollection<ProductSpecificationGrade> ProductSpecificationGrades { get; set; } = new List<ProductSpecificationGrade>();
     }
 }

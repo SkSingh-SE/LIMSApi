@@ -44,6 +44,12 @@ namespace LIMSApi.Services
 
             existingParameterUnit.Name = model.Name;
             existingParameterUnit.ConversaionFactor = model.ConversaionFactor;
+            existingParameterUnit.SimilarUnit1 = model.SimilarUnit1;
+            existingParameterUnit.ConversionFactor1 = model.ConversionFactor1;
+            existingParameterUnit.SimilarUnit2 = model.SimilarUnit2;
+            existingParameterUnit.ConversionFactor2 = model.ConversionFactor2;
+            existingParameterUnit.SimilarUnit3 = model.SimilarUnit3;
+            existingParameterUnit.ConversionFactor3 = model.ConversionFactor3;
             existingParameterUnit.ModifiedOn = DateTime.UtcNow;
 
             await _ParameterUnitRepository.UpdateParameterUnit(existingParameterUnit);

@@ -76,6 +76,13 @@ namespace LIMSApi.Models
         public decimal? CombinedUncertainty { get; set; }
         public long? NablMeasurementUncertaintyId { get; set; }
 
+        // ----- Parameter Type & Test Method Used -----
+        [Column(TypeName = "varchar(20)")]
+        public string? ParameterType { get; set; }  // "Qualitative" or "Quantitative"
+
+        [MaxLength(200)]
+        public string? TestMethodUsed { get; set; }  // e.g., "OES", "ICP", "Wet Chemistry"
+
         [ForeignKey(nameof(TestResultHeaderID))]
         public TestResultHeader? TestResultHeader { get; set; }
 

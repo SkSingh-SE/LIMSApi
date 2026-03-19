@@ -15,5 +15,7 @@ namespace LIMSApi.Repositories.Interface
         Task<List<ParameterMaster>> GetParameterByMetalId(long id);
         Task<bool> ExistsByName(string name);
         Task<bool> ExistsByNameAndNotId(string name, long Id);
+        Task<bool> ExistsByCode(string code);
+        Task<bool> ExistsByCodeAndNotId(string code, long Id);
     }
 }

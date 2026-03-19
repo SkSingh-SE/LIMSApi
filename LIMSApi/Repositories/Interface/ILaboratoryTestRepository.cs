@@ -16,5 +16,6 @@ namespace LIMSApi.Repositories.Interface
         Task<List<object>> GetTestCases(long labTestId);
         Task<bool> ExistsByName(string name);
         Task<bool> ExistsByNameAndNotId(string name, long Id);
+        Task<List<string>> GetDistinctTestNames(string? searchTerm, int pageSize);
     }
 }

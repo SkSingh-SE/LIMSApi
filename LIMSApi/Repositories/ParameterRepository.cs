@@ -37,7 +37,12 @@ namespace LIMSApi.Repositories
 
         public async Task<ParameterMaster?> GetParameterById(long id)
         {
-            return await _context.ParameterMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
+            return await _context.ParameterMasters
+                .Include(p => p.ParameterUnit)
+                .Include(p => p.DefaultTestMethod)
+                .Include(p => p.ParameterCategory)
+                .Include(p => p.AllowedOrientations).ThenInclude(ao => ao.SpecimenOrientation)
+                .FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
         }
 
         public async Task UpdateParameter(ParameterMaster model)
@@ -50,15 +55,21 @@ namespace LIMSApi.Repositories
         {
             var _query = (from c in _context.ParameterMasters
                           join u in _context.ParameterUnitMasters on c.ParameterUnitID equals u.ID
+                          join cat in _context.ParameterCategoryMasters on c.ParameterCategoryID equals cat.ID into catGroup
+                          from cat in catGroup.DefaultIfEmpty()
                           where c.IsActive && c.ParameterType == "Chemical"
                           select new
                           {
                               c.ID,
                               c.Name,
+                              c.Code,
+                              c.Symbol,
                               c.AliasName,
                               c.ElementType,
                               UnitName = u.Name,
                               Factor = u.ConversaionFactor,
+                              CategoryName = cat != null ? cat.Name : "",
+                              c.DecimalPrecision,
                               c.CreatedOn
                           }).AsQueryable().ApplyFilters(filter.Filter);
 
@@ -66,7 +77,7 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)) || (x.Code != null && x.Code.ToLower().Contains(search)) || (x.Symbol != null && x.Symbol.ToLower().Contains(search)));
             }
             if (filter.SortByColumn != null)
             {
@@ -88,15 +99,20 @@ namespace LIMSApi.Repositories
         {
             var _query = (from c in _context.ParameterMasters
                           join u in _context.ParameterUnitMasters on c.ParameterUnitID equals u.ID
+                          join cat in _context.ParameterCategoryMasters on c.ParameterCategoryID equals cat.ID into catGroup
+                          from cat in catGroup.DefaultIfEmpty()
                           where c.IsActive && c.ParameterType == "Mechanical"
                           select new
                           {
                               c.ID,
                               c.Name,
+                              c.Code,
                               c.AliasName,
                               c.ElementType,
                               UnitName = u.Name,
                               Factor = u.ConversaionFactor,
+                              CategoryName = cat != null ? cat.Name : "",
+                              c.DecimalPrecision,
                               c.CreatedOn
                           }).AsQueryable().ApplyFilters(filter.Filter);
 
@@ -104,7 +120,7 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)) || (x.Code != null && x.Code.ToLower().Contains(search)));
             }
             if (filter.SortByColumn != null)
             {
@@ -227,7 +243,17 @@ namespace LIMSApi.Repositories
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.ParameterMasters where a.IsActive && a.ParameterType == "Mechanical" select a;
+            var _query = from a in _context.ParameterMasters
+                         join u in _context.ParameterUnitMasters on a.ParameterUnitID equals u.ID into uGroup
+                         from u in uGroup.DefaultIfEmpty()
+                         where a.IsActive && a.ParameterType == "Mechanical"
+                         select new
+                         {
+                             a.Name,
+                             a.ID,
+                             unitID = a.ParameterUnitID,
+                             unit = u != null ? u.Name : ""
+                         };
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
@@ -241,6 +267,11 @@ namespace LIMSApi.Repositories
             {
                 Id = x.ID,
                 Name = $"{x.Name}",
+                AdditionalValues = new Dictionary<string, object>
+                {
+                    { "Unit", x.unit },
+                    { "UnitID", x.unitID }
+                }
             })).ToListAsync();
 
             return data;
@@ -254,6 +285,16 @@ namespace LIMSApi.Repositories
         public async Task<bool> ExistsByNameAndNotId(string name, long Id)
         {
             return await _context.ParameterMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive);
+        }
+
+        public async Task<bool> ExistsByCode(string code)
+        {
+            return await _context.ParameterMasters.AnyAsync(x => x.Code == code && x.IsActive);
+        }
+
+        public async Task<bool> ExistsByCodeAndNotId(string code, long Id)
+        {
+            return await _context.ParameterMasters.AnyAsync(x => x.Code == code && x.ID != Id && x.IsActive);
         }
     }
 }

@@ -61,7 +61,9 @@ namespace LIMSApi.Models
         [StringLength(255)]
         public string? ReasonForBlacklisting { get; set; }
 
-        public long? BlacklistedBy { get; set; } 
+        public long? BlacklistedBy { get; set; }
+
+        public DateTime? BlacklistDate { get; set; }
 
         public long? EvaluatedBy { get; set; } // Evaluation by GM
 

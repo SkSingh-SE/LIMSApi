@@ -45,5 +45,6 @@ namespace LIMSApi.Models
         public virtual Customer? Customer { get; set; }
 
         public virtual ICollection<TaxInvoice> Invoices { get; set; } = new List<TaxInvoice>();
+        public virtual ICollection<PurchaseOrderItem> Items { get; set; } = new List<PurchaseOrderItem>();
     }
 }

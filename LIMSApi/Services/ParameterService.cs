@@ -57,9 +57,24 @@ namespace LIMSApi.Services
             existingParameter.IsCalculated = model.IsCalculated;
             //if(model.IsCalculated) await ValidateFormula(model.Formula);
             existingParameter.Formula = model.IsCalculated ? model.Formula : null;
+            existingParameter.Code = model.Code;
+            existingParameter.Symbol = model.Symbol;
+            existingParameter.DecimalPrecision = model.DecimalPrecision;
+            existingParameter.MinReportableLimit = model.MinReportableLimit;
+            existingParameter.DefaultTestMethodID = model.DefaultTestMethodID;
+            existingParameter.ParameterCategoryID = model.ParameterCategoryID;
+
+            // Update AllowedOrientations junction
+            existingParameter.AllowedOrientations?.Clear();
+            if (model.AllowedOrientations != null)
+            {
+                foreach (var orientation in model.AllowedOrientations)
+                {
+                    existingParameter.AllowedOrientations.Add(orientation);
+                }
+            }
 
             existingParameter.ModifiedOn = DateTime.UtcNow;
-
 
             await _parameterRepository.UpdateParameter(existingParameter);
             _logger.LogInformation("Parameter '{ParameterName}' updated successfully.", model.Name);

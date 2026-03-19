@@ -1,4 +1,5 @@
 ﻿using LIMSApi.Dtos;
+using LIMSApi.Models;
 
 namespace LIMSApi.ServiceWORepo
 {
@@ -13,6 +14,15 @@ namespace LIMSApi.ServiceWORepo
         Task<long> GenerateInvoiceAsync(long inwardId);
         Task SendInvoiceAsync(long invoiceId, bool sendEmail, bool sendWhatsApp);
         Task<long> GenerateProformaInvoiceAsync(long inwardId);
+
+        // Ledger period-based summary
+        Task<LedgerPeriodSummaryDto> GetLedgerPeriodSummaryAsync(long customerId, DateTime periodStart, DateTime periodEnd);
+
+        // Invoice Line Items (ad-hoc charges)
+        Task<List<InvoiceLineItem>> GetLineItemsAsync(long proformaInvoiceHeaderId);
+        Task<InvoiceLineItem> CreateLineItemAsync(InvoiceLineItemDto dto);
+        Task<InvoiceLineItem> UpdateLineItemAsync(long id, InvoiceLineItemDto dto);
+        Task DeleteLineItemAsync(long id);
     }
 
 }

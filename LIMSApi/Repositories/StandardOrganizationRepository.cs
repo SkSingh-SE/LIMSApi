@@ -88,11 +88,14 @@ namespace LIMSApi.Repositories
 
             var skip = pageNo * pageSize;
 
-            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            var items = await _query.Skip(skip).Take(pageSize).Select(x => new { x.ID, x.Name, x.NumberType }).ToListAsync();
+
+            var data = items.Select(x => new DropdwonSelector
             {
                 Id = x.ID,
                 Name = x.Name,
-            })).ToListAsync();
+                AdditionalValues = new Dictionary<string, object> { { "numberType", x.NumberType ?? "None" } }
+            }).ToList();
 
             return data;
         }

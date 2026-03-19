@@ -45,7 +45,7 @@ namespace LIMSApi.Services
             _planService = planService;
         }
 
-        public async Task CreateSampleInward(SampleInwardDto model)
+        public async Task<long> CreateSampleInward(SampleInwardDto model)
         {
             try
             {
@@ -233,6 +233,8 @@ namespace LIMSApi.Services
                 //        await _emailService.SendEmailAsync(contact.EmailId, $"Sample Inward Acknowledgment - {entity.CaseNo}", emailBody);
                 //    }
                 //}
+
+                return entity.ID;
             }
             catch (Exception ex)
             {

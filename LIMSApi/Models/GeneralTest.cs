@@ -9,7 +9,7 @@ namespace LIMSApi.Models
         [Key]
         public long ID { get; set; }
         public long SampleTestPlanID { get; set; }
-        public long Specification1 { get; set; }
+        public long? Specification1 { get; set; }
         public long? Specification2 { get; set; }
         public ICollection<GeneralTestMethod> Methods { get; set; }
 

@@ -26,8 +26,6 @@ public partial class SpecificationHeader : AuditProperty
     [ForeignKey("StandardOrganizationID")]
     public virtual StandardOrganizationMaster? StandardOrganization { get; set; }
 
-    [ForeignKey("TestMethodSpecificationID")]
-    public virtual TestMethodSpecification? TestMethodSpecification { get; set; }  
     public virtual ICollection<SpecificationGrade> Grades { get; set; } = new List<SpecificationGrade>();
 
 }

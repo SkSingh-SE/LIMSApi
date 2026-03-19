@@ -43,6 +43,22 @@ namespace LIMSApi.Services
                 throw new InvalidOperationException("SpecimenOrientation not found!");
 
             existingSpecimenOrientation.Name = model.Name;
+            existingSpecimenOrientation.Code = model.Code;
+            existingSpecimenOrientation.SpecimenOrientationCategoryID = model.SpecimenOrientationCategoryID;
+            existingSpecimenOrientation.Description = model.Description;
+
+            // Update ApplicableForms junction
+            existingSpecimenOrientation.ApplicableForms?.Clear();
+            if (model.ApplicableForms != null)
+                foreach (var form in model.ApplicableForms)
+                    existingSpecimenOrientation.ApplicableForms.Add(form);
+
+            // Update ApplicableClassifications junction
+            existingSpecimenOrientation.ApplicableClassifications?.Clear();
+            if (model.ApplicableClassifications != null)
+                foreach (var cls in model.ApplicableClassifications)
+                    existingSpecimenOrientation.ApplicableClassifications.Add(cls);
+
             existingSpecimenOrientation.ModifiedOn = DateTime.UtcNow;
 
             await _specimenRepository.UpdateSpecimenOrientation(existingSpecimenOrientation);

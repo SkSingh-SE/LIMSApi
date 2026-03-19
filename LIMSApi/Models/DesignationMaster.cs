@@ -22,4 +22,15 @@ public partial class DesignationMaster :AuditProperty
 
     [ForeignKey("RoleID")]
     public virtual RoleMaster? Role { get; set; }
+
+    [MaxLength(500)]
+    public string? Qualification { get; set; }
+
+    public int? MinExperience { get; set; }  // in years
+
+    [MaxLength(1000)]
+    public string? PersonalityTraits { get; set; }
+
+    [MaxLength(2000)]
+    public string? RolesAndResponsibilities { get; set; }
 }

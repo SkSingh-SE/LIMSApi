@@ -24,7 +24,7 @@ namespace LIMSApi.Models
         public long LabDepartmentID { get; set; }
 
         [Required]
-        [Range(1, 365)] 
+        [Range(1, 365)]
         public int TestDuration { get; set; }
 
     }

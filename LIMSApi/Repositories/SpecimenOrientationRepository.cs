@@ -37,7 +37,11 @@ namespace LIMSApi.Repositories
 
         public async Task<SpecimenOrientationMaster?> GetSpecimenOrientationById(long id)
         {
-            return await _context.SpecimenOrientationMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
+            return await _context.SpecimenOrientationMasters
+                .Include(x => x.SpecimenOrientationCategory)
+                .Include(x => x.ApplicableForms).ThenInclude(af => af.ProductForm)
+                .Include(x => x.ApplicableClassifications).ThenInclude(ac => ac.MetalClassification)
+                .FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
         }
 
         public async Task UpdateSpecimenOrientation(SpecimenOrientationMaster model)
@@ -54,7 +58,7 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)) || x.ID.ToString().Contains(search));
+                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)) || (x.Code != null && x.Code.ToLower().Contains(search)) || x.ID.ToString().Contains(search));
             }
 
             if (filter.SortByColumn != null)
@@ -105,6 +109,16 @@ namespace LIMSApi.Repositories
         public async Task<bool> ExistsByNameAndNotId(string name, long Id)
         {
             return await _context.SpecimenOrientationMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive);
+        }
+
+        public async Task<bool> ExistsByCode(string code)
+        {
+            return await _context.SpecimenOrientationMasters.AnyAsync(x => x.Code == code && x.IsActive);
+        }
+
+        public async Task<bool> ExistsByCodeAndNotId(string code, long id)
+        {
+            return await _context.SpecimenOrientationMasters.AnyAsync(x => x.Code == code && x.ID != id && x.IsActive);
         }
     }
 }

@@ -43,6 +43,11 @@ namespace LIMSApi.Services
                 throw new InvalidOperationException("MetalClassification not found!");
 
             existingMetalClassification.Name = model.Name;
+            existingMetalClassification.Code = model.Code;
+            existingMetalClassification.ParentID = model.ParentID;
+            existingMetalClassification.HasChemicalParams = model.HasChemicalParams;
+            existingMetalClassification.HasMechanicalParams = model.HasMechanicalParams;
+            existingMetalClassification.SortOrder = model.SortOrder;
             existingMetalClassification.ModifiedOn = DateTime.UtcNow;
 
             existingMetalClassification?.Parameters?.Clear();

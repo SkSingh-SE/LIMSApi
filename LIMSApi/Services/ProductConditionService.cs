@@ -43,6 +43,18 @@ namespace LIMSApi.Services
                 throw new InvalidOperationException("ProductCondition not found!");
 
             existingProductCondition.Name = model.Name;
+            existingProductCondition.Code = model.Code;
+            existingProductCondition.ProductConditionCategoryID = model.ProductConditionCategoryID;
+            existingProductCondition.LinkedHeatTreatmentID = model.LinkedHeatTreatmentID;
+            existingProductCondition.CalibrationRequired = model.CalibrationRequired;
+            existingProductCondition.IsDestructive = model.IsDestructive;
+
+            // Update PropertiesCaptured junction
+            existingProductCondition.PropertiesCaptured?.Clear();
+            if (model.PropertiesCaptured != null)
+                foreach (var prop in model.PropertiesCaptured)
+                    existingProductCondition.PropertiesCaptured.Add(prop);
+
             existingProductCondition.ModifiedOn = DateTime.UtcNow;
 
             await _parameterRepository.UpdateProductCondition(existingProductCondition);

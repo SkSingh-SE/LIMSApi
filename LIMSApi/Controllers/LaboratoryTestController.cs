@@ -89,6 +89,13 @@ namespace LIMSApi.Controllers
             return data == null ? NoContent(): Ok(data);
         }
 
+        [HttpGet("distinct-names")]
+        public async Task<IActionResult> GetDistinctTestNames(string? searchTerm, int pageSize = 20)
+        {
+            var data = await _testMethodService.GetDistinctTestNames(searchTerm, pageSize);
+            return Ok(data);
+        }
+
         [HttpGet("test-cases/{testMethodId}")]
         public async Task<IActionResult> GetTestCases(long testMethodId)
         {

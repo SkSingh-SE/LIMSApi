@@ -43,7 +43,6 @@ namespace LIMSApi.Repositories
             return await _context.LaboratoryTests
                 .Include(y => y.InvoiceCases)
                 .ThenInclude(z => z.InvoiceCaseConfiguration)
-                .Include(x => x.Parameters)
                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
@@ -169,6 +168,22 @@ namespace LIMSApi.Repositories
         public async Task<bool> ExistsByNameAndNotId(string name, long Id)
         {
             return await _context.LaboratoryTests.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+        }
+
+        public async Task<List<string>> GetDistinctTestNames(string? searchTerm, int pageSize = 20)
+        {
+            var query = _context.LaboratoryTests
+                .Where(x => x.IsActive && x.CompanyCode == loggedInUser.CompanyCode)
+                .Select(x => x.Name)
+                .Distinct();
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var search = searchTerm.Trim().ToLower();
+                query = query.Where(n => n.ToLower().Contains(search));
+            }
+
+            return await query.OrderBy(n => n).Take(pageSize).ToListAsync();
         }
 
         public async Task<List<object>> GetTestCases(long testMethodId)

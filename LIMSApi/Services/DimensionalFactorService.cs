@@ -43,6 +43,18 @@ namespace LIMSApi.Services
                 throw new InvalidOperationException("DimensionalFactor not found!");
 
             existingDimensionalFactor.Name = model.Name;
+            existingDimensionalFactor.Code = model.Code;
+            existingDimensionalFactor.ParameterUnitID = model.ParameterUnitID;
+            existingDimensionalFactor.Instrument = model.Instrument;
+            existingDimensionalFactor.ToleranceType = model.ToleranceType;
+            existingDimensionalFactor.DefaultTestMethodID = model.DefaultTestMethodID;
+
+            // Update ApplicableForms junction
+            existingDimensionalFactor.ApplicableForms?.Clear();
+            if (model.ApplicableForms != null)
+                foreach (var form in model.ApplicableForms)
+                    existingDimensionalFactor.ApplicableForms.Add(form);
+
             existingDimensionalFactor.ModifiedOn = DateTime.UtcNow;
 
             await _dimensionalRepository.UpdateDimensionalFactor(existingDimensionalFactor);

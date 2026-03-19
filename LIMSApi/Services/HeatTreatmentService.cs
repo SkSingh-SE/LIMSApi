@@ -43,6 +43,23 @@ namespace LIMSApi.Services
                 throw new InvalidOperationException("HeatTreatment not found!");
 
             existingHeatTreatment.Name = model.Name;
+            existingHeatTreatment.Code = model.Code;
+            existingHeatTreatment.HeatTreatmentCategoryID = model.HeatTreatmentCategoryID;
+            existingHeatTreatment.TempRangeMin = model.TempRangeMin;
+            existingHeatTreatment.TempRangeMax = model.TempRangeMax;
+            existingHeatTreatment.TempRangeDescription = model.TempRangeDescription;
+            existingHeatTreatment.CoolingMediumID = model.CoolingMediumID;
+
+            // Update ApplicableClassifications junction
+            existingHeatTreatment.ApplicableClassifications?.Clear();
+            if (model.ApplicableClassifications != null)
+            {
+                foreach (var classification in model.ApplicableClassifications)
+                {
+                    existingHeatTreatment.ApplicableClassifications.Add(classification);
+                }
+            }
+
             existingHeatTreatment.ModifiedOn = DateTime.UtcNow;
 
             await _heatTreatmentRepository.UpdateHeatTreatment(existingHeatTreatment);

@@ -499,8 +499,8 @@ namespace LIMSApi.ServiceWORepo
                             reportNo = method.ReportNo,
                             specification1 = gt.Specification1,
                             specification2 = gt.Specification2,
-                            specfication1Name = await GetSpecificationNameWithGrade(gt.Specification1),
-                            specfication2Name = gt.Specification2 != null ? await GetSpecificationNameWithGrade(gt.Specification2.Value) : string.Empty,
+                            specfication1Name = gt.Specification1.HasValue ? await GetSpecificationNameWithGrade(gt.Specification1.Value) : string.Empty,
+                            specfication2Name = gt.Specification2.HasValue ? await GetSpecificationNameWithGrade(gt.Specification2.Value) : string.Empty,
                             testPlanID = plan.ID,
                             type = "General",
                             status = header.Status,
@@ -567,8 +567,8 @@ namespace LIMSApi.ServiceWORepo
                                 laboratoryTest = (await _db.LaboratoryTests.FindAsync(labTestId))?.Name ?? "Chemical Test",
                                 specification1 = ct.Specification1,
                                 specification2 = ct.Specification2,
-                                specfication1Name = await GetSpecificationNameWithGrade(ct.Specification1),
-                                specfication2Name = ct.Specification2 != null ? await GetSpecificationNameWithGrade(ct.Specification2.Value) : string.Empty,
+                                specfication1Name = ct.Specification1.HasValue ? await GetSpecificationNameWithGrade(ct.Specification1.Value) : string.Empty,
+                                specfication2Name = ct.Specification2.HasValue ? await GetSpecificationNameWithGrade(ct.Specification2.Value) : string.Empty,
                                 reportNo = ct.ReportNo,
                                 testPlanID = plan.ID,
                                 type = "Chemical",
@@ -639,7 +639,9 @@ namespace LIMSApi.ServiceWORepo
         }
 
         /// <summary>
-        /// Auto-create header for general (mechanical) test: use LaboratoryTest->Parameters mapping (ParameterMaster)
+        /// Auto-create header for general (mechanical) test.
+        /// Parameters are added from specification lines when available via AutoCreateHeadersFromPlanAsync.
+        /// This method creates a header without pre-populated parameters (they can be added manually).
         /// </summary>
         private async Task<TestResultHeader> AutoCreateHeaderForLabTestAsync(long sampleId, long planId, long labTestId)
         {
@@ -652,32 +654,6 @@ namespace LIMSApi.ServiceWORepo
                 CreatedOn = DateTime.UtcNow,
                 Status = "Pending"
             };
-
-            var labTest = await _db.LaboratoryTests
-                .Include(t => t.Parameters)
-                    .ThenInclude(tp => tp.Parameter)
-                        .ThenInclude(u => u.ParameterUnit)
-                .FirstOrDefaultAsync(t => t.ID == labTestId);
-
-            if (labTest != null)
-            {
-                foreach (var tp in labTest.Parameters)
-                {
-                    var pm = tp.Parameter;
-                    if (pm == null) continue;
-
-                    header.Parameters.Add(new TestResultParameter
-                    {
-                        ParameterID = pm.ID,
-                        ParameterName = pm.Name,
-                        Unit = pm.ParameterUnit?.Name,
-                        Value = null,
-                        IsAdditional = false,
-                        Formula = pm.Formula,
-                        IsCalculated = pm.IsCalculated,
-                    });
-                }
-            }
 
             _db.TestResultHeaders.Add(header);
             await _db.SaveChangesAsync();
@@ -732,7 +708,7 @@ namespace LIMSApi.ServiceWORepo
 
         /// <summary>
         /// Auto-create TestResultHeaders from an approved plan (ISO 17025 compliant).
-        /// Mechanical: parameters from LaboratoryTestParameter + min/max from SpecificationLine.
+        /// Mechanical: parameters from SpecificationLine (Type="mechanical") linked to lab test.
         /// Chemical: parameters from ChemicalTestElement (already specification-driven).
         /// Each unit of Quantity = 1 independent TestResultHeader.
         /// </summary>
@@ -761,7 +737,7 @@ namespace LIMSApi.ServiceWORepo
             {
                 // Collect specification IDs for this general test
                 var specIds = new List<long>();
-                if (generalTest.Specification1 > 0) specIds.Add(generalTest.Specification1);
+                if (generalTest.Specification1.HasValue && generalTest.Specification1.Value > 0) specIds.Add(generalTest.Specification1.Value);
                 if (generalTest.Specification2.HasValue && generalTest.Specification2.Value > 0)
                     specIds.Add(generalTest.Specification2.Value);
 
@@ -809,7 +785,8 @@ namespace LIMSApi.ServiceWORepo
                                 IsAdditional = false,
                                 MinValue = p.MinValue,
                                 MaxValue = p.MaxValue,
-                                SpecificationLineID = p.SpecificationLineID
+                                SpecificationLineID = p.SpecificationLineID,
+                                ParameterType = p.ParameterType,
                             });
                         }
 
@@ -851,27 +828,20 @@ namespace LIMSApi.ServiceWORepo
         }
 
         /// <summary>
-        /// Build mechanical test parameters using ISO 17025 hybrid approach:
-        /// 1. Start with LaboratoryTestParameter (test method definition)
-        /// 2. Enrich with min/max from SpecificationLine (Type="mechanical")
-        /// 3. Warn on mismatches in both directions
+        /// Build mechanical test parameters from specification lines linked to this lab test.
+        /// Parameters come from SpecificationLine (Type="mechanical") with min/max acceptance criteria.
         /// </summary>
         private async Task<List<TestResultParameter>> BuildMechanicalParametersAsync(
             long labTestId, List<long> specIds, List<string> warnings)
         {
             var result = new List<TestResultParameter>();
 
-            // 1. Get parameters from test method definition
             var labTest = await _db.LaboratoryTests
-                .Include(t => t.Parameters)
-                    .ThenInclude(tp => tp.Parameter)
-                        .ThenInclude(p => p.ParameterUnit)
                 .FirstOrDefaultAsync(t => t.ID == labTestId);
 
-            var testMethodParams = labTest?.Parameters?.ToList() ?? new List<LaboratoryTestParameter>();
             var labTestName = labTest?.Name ?? $"LabTest#{labTestId}";
 
-            // 2. Get matching specification lines (Type="mechanical") linked to this lab test
+            // Get specification lines (Type="mechanical") linked to this lab test
             var specLines = new List<SpecificationLine>();
             if (specIds.Any())
             {
@@ -908,63 +878,19 @@ namespace LIMSApi.ServiceWORepo
                 }
             }
 
-            // Build a lookup: ParameterID -> SpecificationLine
-            var specLookup = specLines
-                .Where(sl => sl.ParameterID.HasValue)
-                .GroupBy(sl => sl.ParameterID!.Value)
-                .ToDictionary(g => g.Key, g => g.First());
-
-            // Track which spec line parameters have been used
-            var usedSpecParamIds = new HashSet<long>();
-
-            // 3. For each test method parameter, create TestResultParameter with spec enrichment
-            foreach (var tp in testMethodParams)
+            // Create TestResultParameter from each specification line
+            foreach (var specLine in specLines.Where(sl => sl.ParameterID.HasValue))
             {
-                var pm = tp.Parameter;
+                var pm = specLine.Parameter;
                 if (pm == null) continue;
 
-                var trp = new TestResultParameter
+                result.Add(new TestResultParameter
                 {
                     ParameterID = pm.ID,
                     ParameterName = pm.Name,
                     Unit = pm.ParameterUnit?.Name,
                     Formula = pm.Formula,
                     IsCalculated = pm.IsCalculated,
-                    Value = null,
-                    IsAdditional = false
-                };
-
-                // Enrich with specification min/max if available
-                if (specLookup.TryGetValue(pm.ID, out var matchingSpec))
-                {
-                    trp.MinValue = matchingSpec.MinValue;
-                    trp.MaxValue = matchingSpec.MaxValue;
-                    trp.SpecificationLineID = matchingSpec.ID;
-                    usedSpecParamIds.Add(pm.ID);
-                }
-                // else: parameter stays with null min/max (For Information Only)
-
-                result.Add(trp);
-            }
-
-            // 4. Reverse check: spec parameters NOT in test method → include + warn
-            foreach (var specLine in specLines.Where(sl => sl.ParameterID.HasValue))
-            {
-                var paramId = specLine.ParameterID!.Value;
-                if (usedSpecParamIds.Contains(paramId)) continue;
-
-                var pm = specLine.Parameter;
-                var paramName = pm?.Name ?? $"Parameter#{paramId}";
-
-                warnings.Add($"Specification requires '{paramName}' but test method '{labTestName}' doesn't include it. Adding from specification.");
-
-                result.Add(new TestResultParameter
-                {
-                    ParameterID = paramId,
-                    ParameterName = paramName,
-                    Unit = pm?.ParameterUnit?.Name,
-                    Formula = null,
-                    IsCalculated = false,
                     Value = null,
                     IsAdditional = false,
                     MinValue = specLine.MinValue,
@@ -973,14 +899,10 @@ namespace LIMSApi.ServiceWORepo
                 });
             }
 
-            // 5. Warn if no parameters at all
+            // Warn if no parameters found
             if (!result.Any())
             {
-                warnings.Add($"No parameters defined for '{labTestName}'. Verify test method and specification setup.");
-            }
-            else if (!specLines.Any() && specIds.Any())
-            {
-                warnings.Add($"Specification does not define mechanical parameters for '{labTestName}'. Parameters created without acceptance criteria (min/max).");
+                warnings.Add($"No parameters defined in specification for '{labTestName}'. Verify specification setup.");
             }
 
             return result;
@@ -1014,12 +936,12 @@ namespace LIMSApi.ServiceWORepo
             var grade = await (from g in _db.SpecificationGrades
                                join h in _db.SpecificationHeaders
                                    on g.SpecificationHeaderID equals h.ID
-                               join tc in _db.TestMethodSpecifications on g.TestMethodSpecificationID equals tc.ID into tcGroup
-                               from tc in tcGroup.DefaultIfEmpty()
+                               join mc in _db.MetalClassificationMasters on g.MetalClassificationID equals mc.ID into mcGroup
+                               from mc in mcGroup.DefaultIfEmpty()
                                where g.ID == gradeId
                                select new
                                {
-                                   Grade = h.AliasName + "-" + g.Grade + (tc != null ? ("-" + tc.Name) : ""),
+                                   Grade = h.AliasName + "-" + g.Grade + (mc != null ? ("-" + mc.Name) : ""),
                                })
                     .FirstOrDefaultAsync();
 
