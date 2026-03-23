@@ -38,12 +38,28 @@ builder.Services.AddCors(options =>
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 // Add services to the container.
 
-builder.Services.AddControllers()
+// Global upload size limit — safety net for all multipart form endpoints
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 10 * 1024 * 1024; // 10 MB
+});
+
+builder.Services.AddControllers(options =>
+    {
+        // Require authentication on ALL controllers by default.
+        // Controllers that need anonymous access must use [AllowAnonymous].
+        var policy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+            .RequireAuthenticatedUser()
+            .Build();
+        options.Filters.Add(new Microsoft.AspNetCore.Mvc.Authorization.AuthorizeFilter(policy));
+    })
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
     });
-builder.Services.AddDbContext<LIMSContext>(opt => opt.UseSqlServer(connectionString));
+builder.Services.AddDbContext<LIMSContext>(opt => opt
+    .UseSqlServer(connectionString)
+    .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
 
 // Phase 9: Memory cache for workflow definitions
 builder.Services.AddMemoryCache();

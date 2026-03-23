@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using LIMSApi.Helpers.Enums;
 
 namespace LIMSApi.Models
 {
@@ -23,6 +24,28 @@ namespace LIMSApi.Models
         public int Version { get; set; } = 1;
         public bool IsLocked { get; set; } = false;
         public bool IsDefault { get; set; } = false;
+
+        // ── Multi-Format Fields ──
+        public ReportFormatType FormatType { get; set; } = ReportFormatType.TestCertificate;
+
+        [Column(TypeName = "nvarchar(max)")]
+        public string? HeaderConfigJson { get; set; }
+
+        [Column(TypeName = "nvarchar(max)")]
+        public string? SectionVisibilityJson { get; set; }
+
+        [Column(TypeName = "nvarchar(max)")]
+        public string? SignatoryConfigJson { get; set; }
+
+        [MaxLength(20)]
+        public string? PageLayout { get; set; } = "Portrait"; // Portrait | Landscape
+
+        public bool ShowCalibrationTable { get; set; } = false;
+        public bool ShowSpecificationRow { get; set; } = true;
+        public bool ShowNablColumn { get; set; } = false;
+
+        [MaxLength(50)]
+        public string? WatermarkText { get; set; } // DRAFT | AMENDED | COPY | null
 
         public ICollection<ReportTemplateBlock> Blocks { get; set; } = new List<ReportTemplateBlock>();
 

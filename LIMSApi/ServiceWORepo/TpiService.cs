@@ -1,5 +1,7 @@
+using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,6 +16,67 @@ namespace LIMSApi.ServiceWORepo
         {
             _db = db;
             _logger = logger;
+        }
+
+        public async Task<PagedResponse<TpiInspectionDto>> GetPaginatedList(PageFilter filter)
+        {
+            var query = _db.TpiInspections
+                .Include(t => t.SampleInward)
+                .Include(t => t.SampleDetail)
+                .Include(t => t.TPIMaster)
+                .AsQueryable();
+
+            // Project to DTO-like anonymous type for filtering
+            var projected = query.Select(t => new TpiInspectionDto
+            {
+                Id = t.ID,
+                SampleInwardId = t.SampleInwardID,
+                SampleInwardNumber = t.SampleInward != null ? t.SampleInward.CaseNo : null,
+                SampleDetailId = t.SampleDetailID,
+                SampleNo = t.SampleDetail != null ? t.SampleDetail.SampleNo : null,
+                TpiMasterId = t.TPIMasterID,
+                TpiName = t.TPIMaster != null ? t.TPIMaster.AgencyName : null,
+                Stage = t.Stage,
+                Status = t.Status,
+                ScheduledDate = t.ScheduledDate,
+                InspectionDate = t.InspectionDate,
+                Remarks = t.Remarks,
+                InspectorComments = t.InspectorComments,
+                DocumentPath = t.DocumentPath,
+                CreatedOn = t.CreatedOn
+            });
+
+            // Search
+            if (!string.IsNullOrWhiteSpace(filter.searchTerm))
+            {
+                var search = filter.searchTerm.Trim().ToLower();
+                projected = projected.Where(t =>
+                    (t.SampleInwardNumber != null && t.SampleInwardNumber.ToLower().Contains(search)) ||
+                    (t.TpiName != null && t.TpiName.ToLower().Contains(search)) ||
+                    (t.SampleNo != null && t.SampleNo.ToLower().Contains(search)) ||
+                    (t.Stage != null && t.Stage.ToLower().Contains(search)) ||
+                    (t.Status != null && t.Status.ToLower().Contains(search))
+                );
+            }
+
+            // Sort
+            if (!string.IsNullOrWhiteSpace(filter.SortByColumn))
+            {
+                projected = projected.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
+            }
+            else
+            {
+                projected = projected.OrderByDescending(t => t.CreatedOn);
+            }
+
+            int totalRecords = await projected.CountAsync();
+
+            var items = await projected
+                .Skip((filter.PageNumber - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .ToListAsync();
+
+            return new PagedResponse<TpiInspectionDto>(items, totalRecords, filter.PageNumber, filter.PageSize);
         }
 
         public async Task<List<TpiInspectionDto>> GetInspectionsBySampleInward(long sampleInwardId)

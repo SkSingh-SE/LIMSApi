@@ -25,6 +25,10 @@ namespace LIMSApi.Dtos
         public string? OverrideReason { get; set; }
         public string? OverrideByName { get; set; }
         public List<PriceBreakdownDto> Breakdown { get; set; } = new();
+        /// <summary>
+        /// Informational message when price could not be calculated (e.g., no Invoice Case configured)
+        /// </summary>
+        public string? Message { get; set; }
     }
 
     /// <summary>

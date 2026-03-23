@@ -1,7 +1,9 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
+using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Services
 {
@@ -9,11 +11,13 @@ namespace LIMSApi.Services
     {
         private readonly IHeatTreatmentRepository _heatTreatmentRepository;
         private readonly ILogger<HeatTreatmentService> _logger;
+        private readonly LIMSContext _context;
 
-        public HeatTreatmentService(IHeatTreatmentRepository heatTreatmentRepo, ILogger<HeatTreatmentService> logger)
+        public HeatTreatmentService(IHeatTreatmentRepository heatTreatmentRepo, ILogger<HeatTreatmentService> logger, LIMSContext context)
         {
             _heatTreatmentRepository = heatTreatmentRepo;
             _logger = logger;
+            _context = context;
         }
 
         public async Task CreateHeatTreatment(HeatTreatmentMaster model)
@@ -71,6 +75,14 @@ namespace LIMSApi.Services
             var existingHeatTreatment = await _heatTreatmentRepository.GetHeatTreatmentById(id);
             if (existingHeatTreatment == null)
                 throw new InvalidOperationException("HeatTreatment not found!");
+
+            bool hasProductConditions = await _context.ProductConditionMasters.AnyAsync(p => p.LinkedHeatTreatmentID == id && p.IsActive);
+            if (hasProductConditions)
+                throw new InvalidOperationException("Cannot delete: Heat Treatment is linked to Product Conditions.");
+
+            bool hasSpecLines = await _context.SpecificationLines.AnyAsync(s => s.HeatTreatmentID == id);
+            if (hasSpecLines)
+                throw new InvalidOperationException("Cannot delete: Heat Treatment is linked to Material Specifications.");
 
             existingHeatTreatment.IsActive = false;
             existingHeatTreatment.ModifiedOn = DateTime.UtcNow;

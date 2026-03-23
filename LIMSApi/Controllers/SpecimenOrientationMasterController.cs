@@ -1,8 +1,10 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Controllers
 {
@@ -11,10 +13,12 @@ namespace LIMSApi.Controllers
     public class SpecimenOrientationMasterController : ControllerBase
     {
         private readonly ISpecimenOrientationService _specimenService;
+        private readonly LIMSContext _context;
 
-        public SpecimenOrientationMasterController(ISpecimenOrientationService specimenRepo)
+        public SpecimenOrientationMasterController(ISpecimenOrientationService specimenRepo, LIMSContext context)
         {
             _specimenService = specimenRepo;
+            _context = context;
         }
 
         [HttpPost("list")]
@@ -77,6 +81,41 @@ namespace LIMSApi.Controllers
         {
             var data = await _specimenService.GetSpecimenOrientationDropdown(searchTerm, pageNo, pageSize);
             return data == null ? NoContent(): Ok(data);
+        }
+
+        [HttpGet("by-classification/{metalClassificationId}")]
+        public async Task<IActionResult> GetByClassification(long metalClassificationId, string? searchTerm, int pageNo = 1, int pageSize = 20)
+        {
+            // Check if any mappings exist for this metal classification
+            var hasMappings = await _context.SpecimenOrientationMetalClassifications
+                .AnyAsync(x => x.MetalClassificationID == metalClassificationId);
+
+            List<DropdwonSelector> data;
+
+            if (hasMappings)
+            {
+                // Return only orientations mapped to this classification
+                var query = _context.SpecimenOrientationMasters
+                    .Where(so => so.IsActive &&
+                        so.ApplicableClassifications.Any(ac => ac.MetalClassificationID == metalClassificationId));
+
+                if (!string.IsNullOrWhiteSpace(searchTerm))
+                    query = query.Where(so => so.Name.Contains(searchTerm));
+
+                data = await query
+                    .OrderBy(so => so.Name)
+                    .Skip((pageNo - 1) * pageSize)
+                    .Take(pageSize)
+                    .Select(so => new DropdwonSelector { Id = so.ID, Name = so.Name })
+                    .ToListAsync();
+            }
+            else
+            {
+                // No mappings — return all orientations
+                data = await _specimenService.GetSpecimenOrientationDropdown(searchTerm, pageNo, pageSize);
+            }
+
+            return data == null ? NoContent() : Ok(data);
         }
 
     }

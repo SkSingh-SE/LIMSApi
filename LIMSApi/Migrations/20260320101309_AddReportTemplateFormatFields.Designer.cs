@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20260320101309_AddReportTemplateFormatFields")]
+    partial class AddReportTemplateFormatFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -14386,12 +14389,6 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
-                    b.Property<int>("FormatType")
-                        .HasColumnType("int");
-
-                    b.Property<string>("HeaderConfigJson")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -14407,25 +14404,6 @@ namespace LIMSApi.Migrations
                     b.Property<DateTime?>("ModifiedOn")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("PageLayout")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("SectionVisibilityJson")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("ShowCalibrationTable")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("ShowNablColumn")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("ShowSpecificationRow")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("SignatoryConfigJson")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("TemplateCode")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -14440,10 +14418,6 @@ namespace LIMSApi.Migrations
 
                     b.Property<int>("Version")
                         .HasColumnType("int");
-
-                    b.Property<string>("WatermarkText")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
 
                     b.HasKey("ID");
 
@@ -14690,9 +14664,6 @@ namespace LIMSApi.Migrations
                     b.Property<string>("Specimen")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<long?>("SpecimenOrientationID")
-                        .HasColumnType("bigint");
-
                     b.Property<string>("TestInstructions")
                         .HasColumnType("nvarchar(max)");
 
@@ -14718,8 +14689,6 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("SampleNo")
                         .IsUnique();
-
-                    b.HasIndex("SpecimenOrientationID");
 
                     b.ToTable("SampleDetails");
                 });
@@ -16460,9 +16429,6 @@ namespace LIMSApi.Migrations
 
                     b.Property<DateTime?>("ModifiedOn")
                         .HasColumnType("datetime2");
-
-                    b.Property<bool>("OrientationDeviationAcknowledged")
-                        .HasColumnType("bit");
 
                     b.Property<long?>("OverrideById")
                         .HasColumnType("bigint");
@@ -19020,17 +18986,11 @@ namespace LIMSApi.Migrations
                         .WithMany()
                         .HasForeignKey("ProductConditionID");
 
-                    b.HasOne("LIMSApi.Models.SpecimenOrientationMaster", "SpecimenOrientation")
-                        .WithMany()
-                        .HasForeignKey("SpecimenOrientationID");
-
                     b.Navigation("MetalClassification");
 
                     b.Navigation("ProductCondition");
 
                     b.Navigation("SampleInward");
-
-                    b.Navigation("SpecimenOrientation");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SampleInward", b =>

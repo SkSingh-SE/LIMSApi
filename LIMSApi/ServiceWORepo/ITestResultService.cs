@@ -98,6 +98,11 @@ namespace LIMSApi.ServiceWORepo
         Task<UnifiedPriceSummaryDto> GetUnifiedPriceSummary(long sampleId);
 
         // -------------------------------------------------------------
+        // Orientation Mismatch Check
+        // -------------------------------------------------------------
+        Task<OrientationCheckResultDto> CheckOrientationMismatch(long headerId);
+
+        // -------------------------------------------------------------
         // Machining Charge Items (simple line items per sample)
         // -------------------------------------------------------------
         Task<List<MachiningChargeLineDto>> GetMachiningItems(long sampleId);

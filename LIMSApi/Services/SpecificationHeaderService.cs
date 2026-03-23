@@ -1,7 +1,9 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
+using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Services
 {
@@ -9,17 +11,37 @@ namespace LIMSApi.Services
     {
         private readonly ISpecificationHeaderRepository _specificationRepo;
         private readonly ILogger<SpecificationHeaderService> _logger;
+        private readonly LIMSContext _context;
 
-        public SpecificationHeaderService(ISpecificationHeaderRepository uomRepo, ILogger<SpecificationHeaderService> logger)
+        public SpecificationHeaderService(ISpecificationHeaderRepository uomRepo, ILogger<SpecificationHeaderService> logger, LIMSContext context)
         {
             _specificationRepo = uomRepo;
             _logger = logger;
+            _context = context;
+        }
+
+        private void ValidateSpecificationLines(SpecificationHeader model)
+        {
+            foreach (var grade in model.Grades)
+            {
+                foreach (var line in grade.SpecificationLines)
+                {
+                    if (line.ParameterID == null || line.ParameterID == 0)
+                        throw new ArgumentException($"Parameter is required for all specification lines in grade '{grade.Grade}'.");
+                    if (line.MinValue == null)
+                        throw new ArgumentException($"Min Value is required for all specification lines in grade '{grade.Grade}'.");
+                    if (line.MaxValue == null)
+                        throw new ArgumentException($"Max Value is required for all specification lines in grade '{grade.Grade}'.");
+                }
+            }
         }
 
         public async Task CreateSpecificationHeader(SpecificationHeader model)
         {
             if (string.IsNullOrWhiteSpace(model.AliasName))
                 throw new ArgumentException("SpecificationHeader name should not be empty!");
+
+            ValidateSpecificationLines(model);
 
             bool exists = await _specificationRepo.ExistsByName(model.AliasName);
             if (exists)
@@ -34,6 +56,8 @@ namespace LIMSApi.Services
         {
             if (model.ID == 0)
                 throw new ArgumentException("SpecificationHeader ID should not be empty!");
+
+            ValidateSpecificationLines(model);
 
             bool exists = await _specificationRepo.ExistsByNameAndNotId(model.AliasName, model.ID);
             if (exists)
@@ -139,6 +163,10 @@ namespace LIMSApi.Services
             var existingSpecificationHeader = await _specificationRepo.GetSpecificationHeaderById(id);
             if (existingSpecificationHeader == null)
                 throw new InvalidOperationException("SpecificationHeader not found!");
+
+            bool hasTolerances = await _context.ToleranceMasters.AnyAsync(t => t.SpecificationHeaderID == id && t.IsActive);
+            if (hasTolerances)
+                throw new InvalidOperationException("Cannot delete: Material Specification is linked to Tolerance records.");
 
             existingSpecificationHeader.IsActive = false;
             existingSpecificationHeader.ModifiedOn = DateTime.UtcNow;

@@ -15,6 +15,7 @@ namespace LIMSApi.Models
         public string Details { get; set; } = string.Empty;
         public long? MetalClassificationID { get; set; }
         public long? ProductConditionID { get; set; }
+        public long? SpecimenOrientationID { get; set; }
         public string Remarks { get; set; } = string.Empty;
         public int Quantity { get; set; }
         public bool Disabled { get; set; }
@@ -48,6 +49,8 @@ namespace LIMSApi.Models
         [ForeignKey("ProductConditionID")]
         public virtual ProductConditionMaster? ProductCondition { get; set; }
 
+        [ForeignKey("SpecimenOrientationID")]
+        public virtual SpecimenOrientationMaster? SpecimenOrientation { get; set; }
 
         [NotMapped]
         public IFormFile File { get; set; } = null!;

@@ -1,7 +1,9 @@
 using LIMSApi.Dtos;
 using LIMSApi.Models;
+using LIMSApi.Reporting;
 using LIMSApi.ServiceWORepo;
 using Microsoft.AspNetCore.Mvc;
+using QuestPDF.Fluent;
 
 namespace LIMSApi.Controllers
 {
@@ -14,6 +16,13 @@ namespace LIMSApi.Controllers
         public TpiInspectionController(ITpiService tpiService)
         {
             _tpiService = tpiService;
+        }
+
+        [HttpPost("list")]
+        public async Task<IActionResult> GetPaginatedList([FromBody] PageFilter filter)
+        {
+            var result = await _tpiService.GetPaginatedList(filter);
+            return Ok(result);
         }
 
         [HttpGet("by-inward/{sampleInwardId}")]
@@ -56,6 +65,19 @@ namespace LIMSApi.Controllers
         {
             var inspections = await _tpiService.GetPendingInspections();
             return Ok(inspections);
+        }
+
+        [HttpGet("export/{id}")]
+        public async Task<IActionResult> ExportReleaseNote(long id)
+        {
+            var inspection = await _tpiService.GetInspectionDetails(id);
+            if (inspection == null)
+                return NotFound(new { message = "TPI Inspection not found." });
+
+            var document = new InspectionReleaseNoteDocument(inspection);
+            var pdfBytes = document.GeneratePdf();
+
+            return File(pdfBytes, "application/pdf", $"IRN-TPI-{id:D6}.pdf");
         }
     }
 }

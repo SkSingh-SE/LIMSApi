@@ -58,7 +58,7 @@ namespace LIMSApi.Controllers
                 throw new InvalidOperationException("Department not found!");
             }
             await _departmentService.RemoveDepartment(id);
-            return Ok( new { message = $"Department '{entity.Name}' created successfully" });
+            return Ok( new { message = $"Department '{entity.Name}' deleted successfully" });
         }
 
         [HttpGet("dropdown")]

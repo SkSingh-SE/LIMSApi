@@ -23,8 +23,9 @@ namespace LIMSApi.ServiceWORepo
         private readonly ISampleStatusService _sampleStatusService;
         private readonly Services.Interface.IPriceCalculationService _priceCalculationService;
         private readonly ILogger<TestResultService> _logger;
+        private readonly INablScopeValidationService _nablScopeService;
 
-        public TestResultService(LIMSContext db, FormulaEvaluator formulaEvaluator, IFileUploadService fileUploadService, IWorkflowService workflowService, ISampleStatusService sampleStatusService, Services.Interface.IPriceCalculationService priceCalculationService, ILogger<TestResultService> logger)
+        public TestResultService(LIMSContext db, FormulaEvaluator formulaEvaluator, IFileUploadService fileUploadService, IWorkflowService workflowService, ISampleStatusService sampleStatusService, Services.Interface.IPriceCalculationService priceCalculationService, ILogger<TestResultService> logger, INablScopeValidationService nablScopeService)
         {
             _db = db;
             _formulaEvaluator = formulaEvaluator;
@@ -34,6 +35,7 @@ namespace LIMSApi.ServiceWORepo
             _sampleStatusService = sampleStatusService;
             _priceCalculationService = priceCalculationService;
             _logger = logger;
+            _nablScopeService = nablScopeService;
         }
 
 
@@ -167,12 +169,61 @@ namespace LIMSApi.ServiceWORepo
                 await SaveGroup(dto.SampleId, dto.PlanId, dto.ChemicalTests);
 
                 await _db.SaveChangesAsync();
+
+                // Persist NABL scope check results after save
+                await PersistNablScopeResults(dto.GeneralTests);
+                await PersistNablScopeResults(dto.ChemicalTests);
+
                 await trx.CommitAsync();
             }
             catch (Exception ex)
             {
                 await trx.RollbackAsync();
                 throw new Exception("Error saving test results: " + ex.Message);
+            }
+        }
+
+        private async Task PersistNablScopeResults(List<TestResultGroupDto> groups)
+        {
+            if (groups == null) return;
+
+            foreach (var g in groups)
+            {
+                if (g.HeaderId <= 0) continue;
+
+                try
+                {
+                    var scopeResults = await _nablScopeService.CheckAllParameters(g.HeaderId);
+                    if (!scopeResults.Any()) continue;
+
+                    var header = await _db.TestResultHeaders
+                        .Include(h => h.Parameters)
+                        .FirstOrDefaultAsync(h => h.ID == g.HeaderId);
+
+                    if (header == null) continue;
+
+                    bool allInScope = true;
+
+                    foreach (var scopeResult in scopeResults)
+                    {
+                        var param = header.Parameters.FirstOrDefault(p => p.ParameterID == scopeResult.ParameterId);
+                        if (param == null) continue;
+
+                        param.IsWithinNablScope = scopeResult.ScopeStatus == "WithinScope";
+                        param.NablScopeStatus = scopeResult.ScopeStatus;
+                        param.LabScopeSpecParamId = scopeResult.LabScopeSpecParamId;
+
+                        if (scopeResult.ScopeStatus != "WithinScope")
+                            allInScope = false;
+                    }
+
+                    header.IsNabl = allInScope;
+                    await _db.SaveChangesAsync();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "NABL scope check failed for header {HeaderId} — non-blocking", g.HeaderId);
+                }
             }
         }
         private async Task SaveGroup(long sampleId, long planId, List<TestResultGroupDto> groups)
@@ -445,6 +496,7 @@ namespace LIMSApi.ServiceWORepo
                 .Include(s => s.SampleInward) // for parent inward info
                     .ThenInclude(c => c.Customer)
                 .Include(s => s.AdditionalDetails)
+                .Include(s => s.ProductCondition)
                 .Include(s => s.TestPlans)
                     .ThenInclude(tp => tp.GeneralTests)
                         .ThenInclude(gt => gt.Methods)
@@ -514,6 +566,9 @@ namespace LIMSApi.ServiceWORepo
                                 value = p.Value,
                                 minValue = p.MinValue,
                                 maxValue = p.MaxValue,
+                                specMinValue = p.SpecMinValue ?? p.MinValue,
+                                specMaxValue = p.SpecMaxValue ?? p.MaxValue,
+                                acceptanceCriteria = p.AcceptanceCriteria,
                                 p.Remarks,
                                 p.Formula,
                                 p.IsCalculated,
@@ -582,6 +637,9 @@ namespace LIMSApi.ServiceWORepo
                                     value = p.Value,
                                     minValue = p.MinValue,
                                     maxValue = p.MaxValue,
+                                    specMinValue = p.SpecMinValue ?? p.MinValue,
+                                    specMaxValue = p.SpecMaxValue ?? p.MaxValue,
+                                    acceptanceCriteria = p.AcceptanceCriteria,
                                     p.Remarks,
                                     p.Formula,
                                     p.IsCalculated,
@@ -626,9 +684,9 @@ namespace LIMSApi.ServiceWORepo
                     sampleNo = sample.SampleNo,
                     details = sample.Details,
                     metalClassificationID = sample.MetalClassificationID,
-                    metalClassification = (await _db.MetalClassificationMasters.FindAsync(sample.MetalClassificationID))?.Name,
+                    metalClassification = sample.MetalClassificationID.HasValue ? (await _db.MetalClassificationMasters.FindAsync(sample.MetalClassificationID.Value))?.Name : null,
                     productConditionID = sample.ProductConditionID,
-                    productCondition = (await _db.ProductConditionMasters.FindAsync(sample.ProductConditionID))?.Name,
+                    productCondition = sample.ProductCondition?.Name,
                     remarks = sample.Remarks,
                     additionalDetails = sample.AdditionalDetails.Select(ad => new { ad.Label, ad.Value })
                 },
@@ -696,6 +754,8 @@ namespace LIMSApi.ServiceWORepo
                     IsAdditional = false,
                     MinValue = el.MinValue,
                     MaxValue = el.MaxValue,
+                    SpecMinValue = el.MinValue,
+                    SpecMaxValue = el.MaxValue,
                     SpecificationLineID = el.SpecificationLineID
                 });
             }
@@ -785,6 +845,9 @@ namespace LIMSApi.ServiceWORepo
                                 IsAdditional = false,
                                 MinValue = p.MinValue,
                                 MaxValue = p.MaxValue,
+                                SpecMinValue = p.SpecMinValue,
+                                SpecMaxValue = p.SpecMaxValue,
+                                AcceptanceCriteria = p.AcceptanceCriteria,
                                 SpecificationLineID = p.SpecificationLineID,
                                 ParameterType = p.ParameterType,
                             });
@@ -895,6 +958,8 @@ namespace LIMSApi.ServiceWORepo
                     IsAdditional = false,
                     MinValue = specLine.MinValue,
                     MaxValue = specLine.MaxValue,
+                    SpecMinValue = specLine.MinValue,
+                    SpecMaxValue = specLine.MaxValue,
                     SpecificationLineID = specLine.ID
                 });
             }
@@ -2134,6 +2199,80 @@ namespace LIMSApi.ServiceWORepo
             item.ModifiedBy = loggedInUser.EmployeeID;
 
             await _db.SaveChangesAsync();
+        }
+
+        // ─────────────────────────────────────────────────
+        // Orientation Mismatch Check
+        // ─────────────────────────────────────────────────
+        public async Task<OrientationCheckResultDto> CheckOrientationMismatch(long headerId)
+        {
+            var result = new OrientationCheckResultDto();
+
+            var header = await _db.TestResultHeaders
+                .Include(h => h.Parameters)
+                .Include(h => h.Sample)
+                .FirstOrDefaultAsync(h => h.ID == headerId);
+
+            if (header == null)
+                return result;
+
+            // Get the actual orientation from cutting records for this sample
+            var cuttingSample = await _db.CuttingChargeSamples
+                .Where(c => c.SampleID == header.SampleID)
+                .OrderByDescending(c => c.ID)
+                .FirstOrDefaultAsync();
+
+            var actualOrientation = cuttingSample?.Orientation;
+
+            // If no cutting data exists, no orientation to validate against
+            if (string.IsNullOrWhiteSpace(actualOrientation))
+                return result;
+
+            // Check each parameter that has a specification line with a mandated orientation
+            var paramsWithSpecLine = header.Parameters
+                .Where(p => p.SpecificationLineID.HasValue)
+                .ToList();
+
+            if (!paramsWithSpecLine.Any())
+                return result;
+
+            var specLineIds = paramsWithSpecLine
+                .Select(p => p.SpecificationLineID!.Value)
+                .Distinct()
+                .ToList();
+
+            var specLines = await _db.Set<SpecificationLine>()
+                .Where(sl => specLineIds.Contains(sl.ID) && sl.SpecimenOrientationID.HasValue)
+                .Include(sl => sl.SpecimenOrientation)
+                .ToListAsync();
+
+            foreach (var param in paramsWithSpecLine)
+            {
+                var specLine = specLines.FirstOrDefault(sl => sl.ID == param.SpecificationLineID);
+                if (specLine?.SpecimenOrientation == null) continue;
+
+                var mandatedName = specLine.SpecimenOrientation.Name ?? "";
+                var mandatedCode = specLine.SpecimenOrientation.Code ?? "";
+
+                // Compare (case-insensitive) actual vs mandated orientation
+                var isMatch = actualOrientation.Equals(mandatedName, StringComparison.OrdinalIgnoreCase)
+                           || actualOrientation.Equals(mandatedCode, StringComparison.OrdinalIgnoreCase);
+
+                if (!isMatch)
+                {
+                    result.Warnings.Add(new OrientationMismatchWarningDto
+                    {
+                        ParameterId = param.ParameterID,
+                        ParameterName = param.ParameterName,
+                        RequiredOrientation = mandatedName,
+                        ActualOrientation = actualOrientation,
+                        SpecificationLineId = param.SpecificationLineID
+                    });
+                }
+            }
+
+            result.HasMismatches = result.Warnings.Any();
+            return result;
         }
     }
 }

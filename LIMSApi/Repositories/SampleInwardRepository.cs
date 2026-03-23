@@ -61,6 +61,12 @@ namespace LIMSApi.Repositories
                                 .Include(x => x.Addresses)
                                 .Include(x => x.SampleDetails)
                                     .ThenInclude(sd => sd.AdditionalDetails)
+                                .Include(x => x.SampleDetails)
+                                    .ThenInclude(sd => sd.MetalClassification)
+                                .Include(x => x.SampleDetails)
+                                    .ThenInclude(sd => sd.ProductCondition)
+                                .Include(x => x.SampleDetails)
+                                    .ThenInclude(sd => sd.SpecimenOrientation)
                                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
             return sampleInward;
         }

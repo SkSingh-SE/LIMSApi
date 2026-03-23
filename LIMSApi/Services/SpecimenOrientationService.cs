@@ -1,7 +1,9 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
+using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Services
 {
@@ -9,11 +11,13 @@ namespace LIMSApi.Services
     {
         private readonly ISpecimenOrientationRepository _specimenRepository;
         private readonly ILogger<SpecimenOrientationService> _logger;
+        private readonly LIMSContext _context;
 
-        public SpecimenOrientationService(ISpecimenOrientationRepository specimenRepository, ILogger<SpecimenOrientationService> logger)
+        public SpecimenOrientationService(ISpecimenOrientationRepository specimenRepository, ILogger<SpecimenOrientationService> logger, LIMSContext context)
         {
             _specimenRepository = specimenRepository;
             _logger = logger;
+            _context = context;
         }
 
         public async Task CreateSpecimenOrientation(SpecimenOrientationMaster model)
@@ -70,6 +74,10 @@ namespace LIMSApi.Services
             var existingSpecimenOrientation = await _specimenRepository.GetSpecimenOrientationById(id);
             if (existingSpecimenOrientation == null)
                 throw new InvalidOperationException("SpecimenOrientation not found!");
+
+            bool hasSamples = await _context.SampleDetails.AnyAsync(s => s.SpecimenOrientationID == id);
+            if (hasSamples)
+                throw new InvalidOperationException("Cannot delete: Specimen Orientation is linked to Sample Details.");
 
             existingSpecimenOrientation.IsActive = false;
             existingSpecimenOrientation.ModifiedOn = DateTime.UtcNow;

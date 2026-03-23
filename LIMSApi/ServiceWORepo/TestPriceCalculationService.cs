@@ -38,11 +38,30 @@ namespace LIMSApi.ServiceWORepo
                 .FirstOrDefaultAsync();
 
             decimal calculatedTotal = 0;
+            string? message = null;
 
-            if (invoiceCase != null && invoiceCase.InvoiceCasePrices.Any())
+            if (invoiceCase == null)
+            {
+                // Look up the test name for a helpful message
+                var labTest = await _db.LaboratoryTests.FirstOrDefaultAsync(t => t.ID == header.LaboratoryTestID);
+                var testName = labTest?.Name ?? $"LaboratoryTestID {header.LaboratoryTestID}";
+                message = $"No pricing configuration found for test '{testName}'. Please set up Invoice Case in Configuration > Invoice Case.";
+                _logger.LogWarning("No InvoiceCase found for LaboratoryTestID {LabTestId} (Header {HeaderId})", header.LaboratoryTestID, headerId);
+            }
+            else if (!invoiceCase.InvoiceCasePrices.Any())
+            {
+                message = $"Invoice Case (FY: {invoiceCase.FinancialYear}) exists but has no price entries configured. Please add price tiers in Configuration > Invoice Case.";
+                _logger.LogWarning("InvoiceCase {CaseId} has no prices for Header {HeaderId}", invoiceCase.ID, headerId);
+            }
+            else
             {
                 var breakdown = BuildPriceBreakdown(header.Parameters, invoiceCase.InvoiceCasePrices);
                 calculatedTotal = breakdown.Sum(b => b.Amount);
+
+                if (calculatedTotal == 0)
+                {
+                    message = "Price calculation returned 0. Parameters may not match any configured pricing tier. Check Invoice Case price configuration.";
+                }
             }
 
             // Update header
@@ -53,7 +72,10 @@ namespace LIMSApi.ServiceWORepo
                 "Calculated test price for Header {HeaderId}: {Price}",
                 headerId, calculatedTotal);
 
-            return await GetPriceSummary(headerId);
+            var summary = await GetPriceSummary(headerId);
+            if (message != null)
+                summary.Message = message;
+            return summary;
         }
 
         /// <inheritdoc />
@@ -132,7 +154,19 @@ namespace LIMSApi.ServiceWORepo
                     .ThenInclude(p => p.Configuration)
                 .FirstOrDefaultAsync();
 
-            if (invoiceCase != null && invoiceCase.InvoiceCasePrices.Any())
+            string? message = null;
+
+            if (invoiceCase == null)
+            {
+                var labTest = await _db.LaboratoryTests.FirstOrDefaultAsync(t => t.ID == header.LaboratoryTestID);
+                var testName = labTest?.Name ?? $"LaboratoryTestID {header.LaboratoryTestID}";
+                message = $"No pricing configuration found for test '{testName}'. Please set up Invoice Case in Configuration > Invoice Case.";
+            }
+            else if (!invoiceCase.InvoiceCasePrices.Any())
+            {
+                message = $"Invoice Case (FY: {invoiceCase.FinancialYear}) exists but has no price entries configured. Please add price tiers in Configuration > Invoice Case.";
+            }
+            else
             {
                 breakdown = BuildPriceBreakdown(header.Parameters, invoiceCase.InvoiceCasePrices);
             }
@@ -146,7 +180,8 @@ namespace LIMSApi.ServiceWORepo
                 IsOverridden = isOverridden,
                 OverrideReason = header.OverrideReason,
                 OverrideByName = overrideByName,
-                Breakdown = breakdown
+                Breakdown = breakdown,
+                Message = message
             };
         }
 

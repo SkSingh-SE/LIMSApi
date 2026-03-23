@@ -1,4 +1,6 @@
 ﻿using LIMSApi.Dtos;
+using LIMSApi.Helpers.Enums;
+using LIMSApi.Reporting;
 using LIMSApi.ServiceWORepo;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -98,6 +100,22 @@ namespace LIMSApi.Controllers
             if (reportData == null)
                 return NotFound($"Report data for header {id} not found");
             return Ok(reportData);
+        }
+
+        // ---------------------------------------------------------
+        // REPORT FORMATS
+        // ---------------------------------------------------------
+        [HttpGet("formats")]
+        public IActionResult GetAvailableFormats()
+        {
+            return Ok(ReportDocumentFactory.GetAvailableFormats());
+        }
+
+        [HttpGet("{id:long}/generate/{formatType}")]
+        public async Task<IActionResult> GenerateByFormat(long id, ReportFormatType formatType, [FromQuery] string? watermark = null)
+        {
+            var pdfBytes = await _service.GenerateReportByFormatAsync(id, formatType, watermark);
+            return File(pdfBytes, "application/pdf", $"Report-{id}-{formatType}.pdf");
         }
 
         [HttpPost("request-amendment")]

@@ -1,4 +1,5 @@
 ﻿using LIMSApi.Dtos;
+using LIMSApi.Helpers.Enums;
 using LIMSApi.Models;
 using Microsoft.AspNetCore.Mvc;
 
@@ -24,5 +25,10 @@ namespace LIMSApi.ServiceWORepo
         Task<string> GenerateEnhancedPdfAsync(long reportHeaderId);
 
         Task RequestAmendmentAsync([FromQuery] long reportHeaderId, string reason, IFormFile file);
+
+        /// <summary>
+        /// Generates a PDF using the specified format type.
+        /// </summary>
+        Task<byte[]> GenerateReportByFormatAsync(long reportHeaderId, ReportFormatType formatType, string? watermark = null);
     }
 }

@@ -65,6 +65,9 @@ namespace LIMSApi.Models
         // ----- Verification Workflow (Phase 5) -----
         public bool PreparationDataMissing { get; set; }
 
+        // ----- Orientation Deviation -----
+        public bool OrientationDeviationAcknowledged { get; set; } = false;
+
         // Navigation Properties
         public ICollection<TestResultParameter> Parameters { get; set; } = new List<TestResultParameter>();
         public ICollection<TestResultImage> Images { get; set; } = new List<TestResultImage>();

@@ -50,27 +50,37 @@ namespace LIMSApi.ServiceWORepo
 
             // ----------------------------------------------------------
             // BASE QUERY
-            // Report → Sample → Inward → Workflow
+            // Start from SampleDetails that have at least one TestResultHeader,
+            // LEFT JOIN to ReportHeaders so we also see samples without reports.
             // ----------------------------------------------------------
-            var query = from report in _db.ReportHeaders
-
-                        join sample in _db.SampleDetails
-                            on report.SampleID equals sample.ID
+            var query = from sample in _db.SampleDetails
 
                         join inward in _db.SampleInwards
                             on sample.InwardID equals inward.ID
 
+                        // Ensure at least one TestResultHeader exists for this sample
+                        where _db.TestResultHeaders.Any(trh => trh.SampleID == sample.ID)
+                              && sample.IsActive
+                              && inward.CompanyCode == loggedInUser.CompanyCode
+
+                        // LEFT JOIN to ReportHeader
+                        join rh in _db.ReportHeaders.Where(r => r.IsActive)
+                            on sample.ID equals rh.SampleID into reportJoin
+                        from report in reportJoin.DefaultIfEmpty()
+
+                        // LEFT JOIN to AmendmentRequest (only when report exists)
                         join amendment in _db.AmendmentRequests on report.ID equals amendment.ReportHeaderID into amendmentJoin
                         from amendment in amendmentJoin
                             .Where(a => a.Status == "Pending")
                             .OrderByDescending(a => a.CreatedOn)
                             .Take(1)
                             .DefaultIfEmpty()
-                            // LEFT JOIN WorkflowInstance
+
+                        // LEFT JOIN WorkflowInstance
                         join instance in _db.WorkflowInstances
                             on new
                             {
-                                EntityID = amendment != null ? amendment.ID : report.ID,
+                                EntityID = amendment != null ? amendment.ID : (report != null ? report.ID : 0L),
                                 EntityType = amendment != null
                                     ? WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Report_Amendment)
                                     : WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Report_Review)
@@ -79,19 +89,15 @@ namespace LIMSApi.ServiceWORepo
                             into workflowJoin
                         from instance in workflowJoin.DefaultIfEmpty()
 
-
                         join step in _db.WorkflowSteps
                             on instance.CurrentStepID equals step.ID
                             into stepJoin
                         from step in stepJoin.DefaultIfEmpty()
 
-                        where report.IsActive
-                              && inward.CompanyCode == loggedInUser.CompanyCode
-
                         select new
                         {
-                            ReportHeaderId = report.ID,
-                            AmendmentRequestId = amendment != null ? amendment.ID : 0,
+                            ReportHeaderId = report != null ? report.ID : 0L,
+                            AmendmentRequestId = amendment != null ? amendment.ID : 0L,
                             sampleId = sample.ID,
                             sample.SampleNo,
                             inward.CaseNo,
@@ -114,9 +120,15 @@ namespace LIMSApi.ServiceWORepo
                                     .FirstOrDefault()
                                 : string.Empty,
 
-                            report.ReportNo,
-                            report.PdfPath,
-                            report.Status,
+                            ReportNo = report != null ? report.ReportNo : "",
+                            PdfPath = report != null ? report.PdfPath : null,
+
+                            // Derive status: if report exists use its status, else compute from test results
+                            Status = report != null
+                                ? report.Status
+                                : (sample.IsTestingCompleted
+                                    ? "Ready for Report"
+                                    : "Tests In Progress"),
 
                             WorkflowStatus = instance == null ? "Pending" : instance.Status,
                             CurrentStep = step != null ? step.Name : null,
@@ -1292,7 +1304,9 @@ namespace LIMSApi.ServiceWORepo
                             Result = p.Value?.ToString(),
                             Status = p.IsWithinLimit == true ? "Pass"
                                    : p.IsWithinLimit == false ? "Fail"
-                                   : "N/A"
+                                   : "N/A",
+                            IsWithinNablScope = p.IsWithinNablScope,
+                            NablScopeStatus = p.NablScopeStatus
                         })
                         .ToList(),
                     Images = header.Images
@@ -1359,8 +1373,22 @@ namespace LIMSApi.ServiceWORepo
 
                 QrCodeData = $"{_config["PublicBaseUrl"]}/report/verify/{reportHeader.ReportNo}",
 
-                IsNabl = testHeaders.Any(h => h.IsNabl),
+                IsNabl = testHeaders.All(h => h.IsNabl),
                 NablCertNo = testHeaders.Any(h => h.IsNabl) ? "TC-5765" : null
+            };
+
+            // Build NABL scope info for report
+            var outOfScopeParams = testSections
+                .SelectMany(s => s.Parameters)
+                .Where(p => p.NablScopeStatus == "OutsideScope")
+                .Select(p => p.Name)
+                .Distinct()
+                .ToList();
+
+            dto.NablInfo = new NablReportInfo
+            {
+                IsPartialScope = outOfScopeParams.Any() && testSections.SelectMany(s => s.Parameters).Any(p => p.NablScopeStatus == "WithinScope"),
+                OutOfScopeParameterNames = outOfScopeParams
             };
 
             return dto;
@@ -1425,6 +1453,16 @@ namespace LIMSApi.ServiceWORepo
                 .Where(e => e.ID == empId)
                 .Select(e => e.Name)
                 .FirstOrDefaultAsync();
+        }
+
+        // =====================================================
+        // GENERATE REPORT BY FORMAT TYPE
+        // =====================================================
+        public async Task<byte[]> GenerateReportByFormatAsync(long reportHeaderId, Helpers.Enums.ReportFormatType formatType, string? watermark = null)
+        {
+            var reportData = await BuildReportDataAsync(reportHeaderId);
+            var document = Reporting.ReportDocumentFactory.Create(formatType, reportData, watermark);
+            return document.GeneratePdf();
         }
     }
 

@@ -1,9 +1,11 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
+using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Services
 {
@@ -11,12 +13,14 @@ namespace LIMSApi.Services
     {
         private readonly ILaboratoryTestRepository _testMethodRepository;
         private readonly ILogger<LaboratoryTestService> _logger;
+        private readonly LIMSContext _context;
         private LoggedInUserDTO loggedInUser;
 
-        public LaboratoryTestService(ILaboratoryTestRepository testMethodRepo, ILogger<LaboratoryTestService> logger)
+        public LaboratoryTestService(ILaboratoryTestRepository testMethodRepo, ILogger<LaboratoryTestService> logger, LIMSContext context)
         {
             _testMethodRepository = testMethodRepo;
             _logger = logger;
+            _context = context;
             loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
@@ -75,6 +79,14 @@ namespace LIMSApi.Services
             var existingTestMethod = await _testMethodRepository.GetTestMethodById(id);
             if (existingTestMethod == null)
                 throw new InvalidOperationException("Laboratory Test not found!");
+
+            bool hasLabScope = await _context.LabScopeMasters.AnyAsync(s => s.LaboratoryTestID == id && s.IsActive);
+            if (hasLabScope)
+                throw new InvalidOperationException("Cannot delete: Laboratory Test is linked to Lab Scope.");
+
+            bool hasSpecLines = await _context.SpecificationLineLaboratoryTests.AnyAsync(s => s.LaboratoryTestID == id);
+            if (hasSpecLines)
+                throw new InvalidOperationException("Cannot delete: Laboratory Test is linked to Material Specifications.");
 
             existingTestMethod.IsActive = false;
             existingTestMethod.ModifiedOn = DateTime.UtcNow;

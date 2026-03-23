@@ -1,7 +1,9 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
+using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Services
 {
@@ -9,11 +11,13 @@ namespace LIMSApi.Services
     {
         private readonly IDimensionalFactorRepository _dimensionalRepository;
         private readonly ILogger<DimensionalFactorService> _logger;
+        private readonly LIMSContext _context;
 
-        public DimensionalFactorService(IDimensionalFactorRepository dimensionalRepo, ILogger<DimensionalFactorService> logger)
+        public DimensionalFactorService(IDimensionalFactorRepository dimensionalRepo, ILogger<DimensionalFactorService> logger, LIMSContext context)
         {
             _dimensionalRepository = dimensionalRepo;
             _logger = logger;
+            _context = context;
         }
 
         public async Task CreateDimensionalFactor(DimensionalFactorMaster model)
@@ -66,6 +70,10 @@ namespace LIMSApi.Services
             var existingDimensionalFactor = await _dimensionalRepository.GetDimensionalFactorById(id);
             if (existingDimensionalFactor == null)
                 throw new InvalidOperationException("DimensionalFactor not found!");
+
+            bool hasSpecLines = await _context.SpecificationLines.AnyAsync(s => s.DimensionalFactorID == id);
+            if (hasSpecLines)
+                throw new InvalidOperationException("Cannot delete: Dimensional Factor is linked to Material Specifications.");
 
             existingDimensionalFactor.IsActive = false;
             existingDimensionalFactor.ModifiedOn = DateTime.UtcNow;

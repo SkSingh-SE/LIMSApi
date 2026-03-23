@@ -3,6 +3,22 @@
     public class TestFlowDTO
     {
     }
+
+    // ----- Orientation Mismatch Warning -----
+    public class OrientationMismatchWarningDto
+    {
+        public long ParameterId { get; set; }
+        public string ParameterName { get; set; } = string.Empty;
+        public string RequiredOrientation { get; set; } = string.Empty;
+        public string ActualOrientation { get; set; } = string.Empty;
+        public long? SpecificationLineId { get; set; }
+    }
+
+    public class OrientationCheckResultDto
+    {
+        public bool HasMismatches { get; set; }
+        public List<OrientationMismatchWarningDto> Warnings { get; set; } = new();
+    }
     public class TestResultSaveDto
     {
         public long InwardId { get; set; }

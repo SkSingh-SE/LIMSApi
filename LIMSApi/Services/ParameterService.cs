@@ -1,4 +1,5 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
@@ -13,11 +14,13 @@ namespace LIMSApi.Services
     {
         private readonly IParameterRepository _parameterRepository;
         private readonly ILogger<ParameterService> _logger;
+        private readonly LIMSContext _context;
 
-        public ParameterService(IParameterRepository parameterRepo, ILogger<ParameterService> logger)
+        public ParameterService(IParameterRepository parameterRepo, ILogger<ParameterService> logger, LIMSContext context)
         {
             _parameterRepository = parameterRepo;
             _logger = logger;
+            _context = context;
         }
 
         public async Task CreateParameter(ParameterMaster model)
@@ -107,6 +110,14 @@ namespace LIMSApi.Services
             var existingParameter = await _parameterRepository.GetParameterById(id);
             if (existingParameter == null)
                 throw new InvalidOperationException("Parameter not found!");
+
+            bool hasSpecLines = await _context.SpecificationLines.AnyAsync(s => s.ParameterID == id);
+            if (hasSpecLines)
+                throw new InvalidOperationException("Cannot delete: Parameter is linked to Material Specifications.");
+
+            bool hasLabScope = await _context.LabScopeSpecificationParameters.AnyAsync(s => s.ParameterID == id);
+            if (hasLabScope)
+                throw new InvalidOperationException("Cannot delete: Parameter is linked to Lab Scope.");
 
             existingParameter.IsActive = false;
             existingParameter.ModifiedOn = DateTime.UtcNow;

@@ -101,6 +101,27 @@ namespace LIMSApi.Reporting
                         col.Item().PaddingVertical(2);
                     }
 
+                    // Section 5b: NABL Scope Note (if partial or out of scope)
+                    if (_data.NablInfo?.OutOfScopeParameterNames?.Any() == true)
+                    {
+                        col.Item().PaddingVertical(3).Border(0.5f).BorderColor(Colors.Orange.Darken2).Padding(6).Column(noteCol =>
+                        {
+                            noteCol.Item().Text("NABL Accreditation Note").Style(SectionHeadingStyle);
+                            noteCol.Item().PaddingTop(2).Text(text =>
+                            {
+                                text.Span("The following tests are NOT covered under NABL Accreditation: ").Style(ValueStyle);
+                                text.Span(string.Join(", ", _data.NablInfo.OutOfScopeParameterNames)).Style(ValueStyle).Bold();
+                                text.Span(". Results for these tests are reported in our capacity as a non-accredited laboratory.").Style(ValueStyle);
+                            });
+                            if (_data.NablInfo.IsPartialScope)
+                            {
+                                noteCol.Item().PaddingTop(2).Text("* Partial NABL accreditation — see NABL column in results table for scope details.")
+                                    .Style(SmallStyle);
+                            }
+                        });
+                        col.Item().PaddingVertical(2);
+                    }
+
                     // Section 6: Signatures
                     col.Item().Element(ComposeSignatures);
 
@@ -160,25 +181,31 @@ namespace LIMSApi.Reporting
                                 .FontSize(5.5f).FontColor(Colors.Grey.Darken1);
                         });
 
-                        // RIGHT: NABL Logo + Cert No
+                        // RIGHT: NABL Logo + Cert No (conditional on scope)
                         row.ConstantItem(80).AlignMiddle().Column(right =>
                         {
-                            var nablLogoPath = Path.Combine(_assetsPath, "nabl_logo.png");
-                            if (File.Exists(nablLogoPath))
+                            if (_data.IsNabl || _data.NablInfo?.IsPartialScope == true)
                             {
-                                right.Item()
-                                    .Height(30)
-                                    .AlignCenter()
-                                    .Image(nablLogoPath)
-                                    .FitArea();
-                            }
+                                var nablLogoPath = Path.Combine(_assetsPath, "nabl_logo.png");
+                                if (File.Exists(nablLogoPath))
+                                {
+                                    right.Item()
+                                        .Height(30)
+                                        .AlignCenter()
+                                        .Image(nablLogoPath)
+                                        .FitArea();
+                                }
 
-                            if (_data.IsNabl && !string.IsNullOrWhiteSpace(_data.NablCertNo))
-                            {
-                                right.Item()
-                                    .AlignCenter()
-                                    .Text(_data.NablCertNo)
-                                    .FontSize(5.5f).Bold();
+                                if (!string.IsNullOrWhiteSpace(_data.NablCertNo))
+                                {
+                                    var certText = _data.NablInfo?.IsPartialScope == true
+                                        ? $"{_data.NablCertNo} *"
+                                        : _data.NablCertNo;
+                                    right.Item()
+                                        .AlignCenter()
+                                        .Text(certText)
+                                        .FontSize(5.5f).Bold();
+                                }
                             }
                         });
                     });

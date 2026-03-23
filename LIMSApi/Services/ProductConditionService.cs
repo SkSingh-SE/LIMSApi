@@ -1,7 +1,9 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
+using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Services
 {
@@ -9,11 +11,13 @@ namespace LIMSApi.Services
     {
         private readonly IProductConditionRepository _parameterRepository;
         private readonly ILogger<ProductConditionService> _logger;
+        private readonly LIMSContext _context;
 
-        public ProductConditionService(IProductConditionRepository parameterRepo, ILogger<ProductConditionService> logger)
+        public ProductConditionService(IProductConditionRepository parameterRepo, ILogger<ProductConditionService> logger, LIMSContext context)
         {
             _parameterRepository = parameterRepo;
             _logger = logger;
+            _context = context;
         }
 
         public async Task CreateProductCondition(ProductConditionMaster model)
@@ -66,6 +70,10 @@ namespace LIMSApi.Services
             var existingProductCondition = await _parameterRepository.GetProductConditionById(id);
             if (existingProductCondition == null)
                 throw new InvalidOperationException("ProductCondition not found!");
+
+            bool hasSamples = await _context.SampleDetails.AnyAsync(s => s.ProductConditionID == id);
+            if (hasSamples)
+                throw new InvalidOperationException("Cannot delete: Product Condition is linked to Sample Details.");
 
             existingProductCondition.IsActive = false;
             existingProductCondition.ModifiedOn = DateTime.UtcNow;

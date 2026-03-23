@@ -1,7 +1,9 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
+using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Services
 {
@@ -9,11 +11,13 @@ namespace LIMSApi.Services
     {
         private readonly IMetalClassificationRepository _MetalClassificationRepository;
         private readonly ILogger<MetalClassificationService> _logger;
+        private readonly LIMSContext _context;
 
-        public MetalClassificationService(IMetalClassificationRepository MetalClassificationRepo, ILogger<MetalClassificationService> logger)
+        public MetalClassificationService(IMetalClassificationRepository MetalClassificationRepo, ILogger<MetalClassificationService> logger, LIMSContext context)
         {
             _MetalClassificationRepository = MetalClassificationRepo;
             _logger = logger;
+            _context = context;
         }
 
         public async Task CreateMetalClassification(MetalClassificationMaster model)
@@ -62,6 +66,18 @@ namespace LIMSApi.Services
             var existingMetalClassification = await _MetalClassificationRepository.GetMetalClassificationById(id);
             if (existingMetalClassification == null)
                 throw new InvalidOperationException("MetalClassification not found!");
+
+            bool hasSpecifications = await _context.SpecificationGrades.AnyAsync(s => s.MetalClassificationID == id);
+            if (hasSpecifications)
+                throw new InvalidOperationException("Cannot delete: Metal Classification is linked to Material Specifications.");
+
+            bool hasSamples = await _context.SampleDetails.AnyAsync(s => s.MetalClassificationID == id);
+            if (hasSamples)
+                throw new InvalidOperationException("Cannot delete: Metal Classification is linked to Sample Details.");
+
+            bool hasChildren = await _context.MetalClassificationMasters.AnyAsync(m => m.ParentID == id && m.IsActive);
+            if (hasChildren)
+                throw new InvalidOperationException("Cannot delete: Metal Classification has child classifications.");
 
             existingMetalClassification.IsActive = false;
             existingMetalClassification.ModifiedOn = DateTime.UtcNow;

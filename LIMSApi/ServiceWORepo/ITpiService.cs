@@ -5,6 +5,7 @@ namespace LIMSApi.ServiceWORepo
 {
     public interface ITpiService
     {
+        Task<PagedResponse<TpiInspectionDto>> GetPaginatedList(PageFilter filter);
         Task<List<TpiInspectionDto>> GetInspectionsBySampleInward(long sampleInwardId);
         Task<TpiInspectionDto?> GetInspectionDetails(long inspectionId);
         Task<TpiInspectionDto> CreateInspection(CreateTpiInspectionDto dto);

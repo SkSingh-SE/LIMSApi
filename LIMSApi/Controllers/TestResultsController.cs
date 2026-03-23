@@ -66,6 +66,16 @@ namespace LIMSApi.Controllers
         }
 
         // =============================================================
+        // Orientation Mismatch Check
+        // =============================================================
+        [HttpGet("orientation-check/{headerId}")]
+        public async Task<IActionResult> CheckOrientationMismatch(long headerId)
+        {
+            var result = await _service.CheckOrientationMismatch(headerId);
+            return Ok(result);
+        }
+
+        // =============================================================
         // Start Test
         // =============================================================
         [HttpPost("start-test/{headerId}")]

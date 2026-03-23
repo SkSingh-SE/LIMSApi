@@ -3,7 +3,6 @@ using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
-using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace LIMSApi.Services
 {
@@ -35,8 +34,10 @@ namespace LIMSApi.Services
         {
             try
             {
-                if (file == null || file.Length == 0)
-                    throw new ArgumentException("File cannot be empty");
+                // Centralized validation — covers all upload paths
+                var validationError = await FileUploadValidator.ValidateAsync(file);
+                if (validationError != null)
+                    throw new ArgumentException(validationError);
 
                 string originalFileName = Path.GetFileName(file.FileName);
                 string originalFileExtension = Path.GetExtension(originalFileName);

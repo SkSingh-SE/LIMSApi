@@ -1,7 +1,9 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
+using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Services
 {
@@ -9,11 +11,13 @@ namespace LIMSApi.Services
     {
         private readonly IDepartmentRepository _departmentRepository;
         private readonly ILogger<DepartmentService> _logger;
+        private readonly LIMSContext _context;
 
-        public DepartmentService(IDepartmentRepository departmentrepo, ILogger<DepartmentService> logger)
+        public DepartmentService(IDepartmentRepository departmentrepo, ILogger<DepartmentService> logger, LIMSContext context)
         {
             _departmentRepository = departmentrepo;
             _logger = logger;
+            _context = context;
         }
 
         public async Task CreateDepartment(DepartmentMaster model)
@@ -55,6 +59,10 @@ namespace LIMSApi.Services
             var existingDepartment = await _departmentRepository.GetDepartmentById(id);
             if (existingDepartment == null)
                 throw new InvalidOperationException("Department not found!");
+
+            bool hasEmployees = await _context.EmployeeMasters.AnyAsync(e => e.DepartmentID == id && e.IsActive);
+            if (hasEmployees)
+                throw new InvalidOperationException("Cannot delete: Department is linked to active employees.");
 
             existingDepartment.IsActive = false;
             existingDepartment.ModifiedOn = DateTime.UtcNow;

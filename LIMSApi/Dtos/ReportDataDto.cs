@@ -55,6 +55,7 @@ namespace LIMSApi.Dtos
         // ── NABL ──
         public bool IsNabl { get; set; }
         public string? NablCertNo { get; set; }
+        public NablReportInfo? NablInfo { get; set; }
     }
 
     /// <summary>
@@ -85,6 +86,17 @@ namespace LIMSApi.Dtos
         public string? SpecMax { get; set; }
         public string? Result { get; set; }
         public string Status { get; set; } = string.Empty; // Pass / Fail / N/A
+        public bool? IsWithinNablScope { get; set; }
+        public string? NablScopeStatus { get; set; } // WithinScope / OutsideScope / NotAccredited
+    }
+
+    /// <summary>
+    /// Carries out-of-scope parameter names for the report footer note.
+    /// </summary>
+    public class NablReportInfo
+    {
+        public bool IsPartialScope { get; set; }
+        public List<string> OutOfScopeParameterNames { get; set; } = new();
     }
 
     /// <summary>

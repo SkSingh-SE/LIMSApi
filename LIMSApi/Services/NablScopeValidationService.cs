@@ -102,12 +102,15 @@ namespace LIMSApi.Services
                 }
                 else
                 {
+                    // No value entered yet — still check if this test+parameter combo
+                    // exists in LabScopeMaster so we show scope coverage correctly
+                    bool scopeExists = await CheckParameterScopeExists(header.LaboratoryTestID, param.ParameterID);
                     results.Add(new NablScopeCheckResult
                     {
                         ParameterId = param.ParameterID,
                         ParameterName = param.ParameterName,
                         Value = null,
-                        ScopeStatus = "NotAccredited"
+                        ScopeStatus = scopeExists ? "WithinScope" : "NotAccredited"
                     });
                 }
             }
@@ -166,6 +169,19 @@ namespace LIMSApi.Services
             }
 
             return results;
+        }
+
+        /// <summary>
+        /// Checks whether a LabScopeSpecificationParameter record exists for the given
+        /// laboratoryTestId + parameterId combination, without checking value ranges.
+        /// </summary>
+        public async Task<bool> CheckParameterScopeExists(long laboratoryTestId, long parameterId)
+        {
+            return await _db.LabScopeMasters
+                .Where(ls => ls.LaboratoryTestID == laboratoryTestId)
+                .SelectMany(ls => ls.Specifications)
+                .SelectMany(s => s.Parameters)
+                .AnyAsync(p => p.ParameterID == parameterId);
         }
 
         private static decimal? ParseDecimal(string? value)
