@@ -10,10 +10,12 @@ namespace LIMSApi.ServiceWORepo
     public class CustomerLedgerService : ICustomerLedgerService
     {
         private readonly LIMSContext _db;
+        private readonly BillingSettlementService _billingSettlement;
 
-        public CustomerLedgerService(LIMSContext db)
+        public CustomerLedgerService(LIMSContext db, BillingSettlementService billingSettlement)
         {
             _db = db;
+            _billingSettlement = billingSettlement;
         }
 
         // ===== LEDGER OPERATIONS =====
@@ -312,27 +314,11 @@ namespace LIMSApi.ServiceWORepo
                 dto.InwardId
             );
 
-            // Update inward billing status if linked
+            // Unified billing settlement — single source of truth
             if (dto.InwardId.HasValue)
             {
-                var inward = await _db.SampleInwards.FindAsync(dto.InwardId.Value);
-                if (inward != null)
-                {
-                    var totalInvoiced = await _db.TaxInvoices
-                        .Where(i => i.InwardID == dto.InwardId.Value)
-                        .SumAsync(i => i.GrandTotal);
-
-                    var totalPaidForInward = await _db.CustomerLedgers
-                        .Where(l => l.InwardId == dto.InwardId.Value && l.TransactionType == "Payment" && l.IsActive)
-                        .SumAsync(l => l.CreditAmount);
-
-                    if (totalPaidForInward >= totalInvoiced && totalInvoiced > 0)
-                        inward.BillingStatus = "PAYMENT_COMPLETED";
-                    else if (totalPaidForInward > 0)
-                        inward.BillingStatus = "PAYMENT_PARTIAL";
-
-                    await _db.SaveChangesAsync();
-                }
+                var employeeId = LIMSApi.Helpers.LoggedInUserProvider.CurrentUser?.EmployeeID ?? 0;
+                await _billingSettlement.RecalculateBillingStatusAsync(dto.InwardId.Value, employeeId);
             }
 
             return new PaymentReceiptDto

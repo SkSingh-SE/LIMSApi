@@ -1,4 +1,6 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
@@ -9,14 +11,15 @@ namespace LIMSApi.Services
     {
         private readonly ISupplierRepository _supplierRepository;
         private readonly ILogger<SupplierService> _logger;
-
         private readonly IFileUploadService _uploadService;
+        private readonly LIMSContext _context;
 
-        public SupplierService(ISupplierRepository supplierRepo, ILogger<SupplierService> logger, IFileUploadService fileUploadService)
+        public SupplierService(ISupplierRepository supplierRepo, ILogger<SupplierService> logger, IFileUploadService fileUploadService, LIMSContext context)
         {
             _supplierRepository = supplierRepo;
             _logger = logger;
             _uploadService = fileUploadService;
+            _context = context;
         }
 
         public async Task CreateSupplier(SupplierMaster model)
@@ -92,6 +95,8 @@ namespace LIMSApi.Services
             var existingSupplier = await _supplierRepository.GetSupplierById(id);
             if (existingSupplier == null)
                 throw new InvalidOperationException("Supplier not found!");
+
+            await DeleteValidationHelper.ValidateDeleteAsync<SupplierMaster>(_context, id, "Supplier");
 
             existingSupplier.IsActive = false;
             existingSupplier.ModifiedOn = DateTime.UtcNow;

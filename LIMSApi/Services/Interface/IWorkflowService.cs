@@ -16,6 +16,7 @@ namespace LIMSApi.Services.Interface
 
         Task<WorkflowStep> GetCurrentWorkflowStepAsync(long entityId, string entityType);
         Task<WorkflowInstance?> GetActiveInstanceForEntityAsync(long entityId, string entityType);
+        Task<bool> WorkflowExistsForEntityType(string entityType);
 
         // Phase 9: Batch status checks
         Task<Dictionary<long, bool>> CanUpdateEntitiesBatch(IEnumerable<long> entityIds, string entityType);

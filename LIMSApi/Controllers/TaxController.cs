@@ -55,7 +55,8 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("TaxMaster not found!");
             }
-            return Ok(new { message = $"TaxMaster '{entity.Name}' created successfully" });
+            await _taxService.RemoveTax(id);
+            return Ok(new { message = $"TaxMaster '{entity.Name}' deleted successfully" });
         }
 
         [HttpGet("dropdown")]

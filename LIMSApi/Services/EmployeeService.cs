@@ -1,4 +1,6 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
@@ -13,8 +15,11 @@ namespace LIMSApi.Services
         private readonly IAuthService _authService;
         private readonly IUserRepository _userRepository;
         private readonly IRoleService _roleService;
+        private readonly IDesignationRepository _designationRepository;
+        private readonly LIMSContext _context;
+        private readonly LoggedInUserDTO loggedInUser;
 
-        public EmployeeService(IEmployeeRepository employeeRepo, ILogger<EmployeeService> logger, IFileUploadService uploadService, IAuthService authService, IUserRepository userRepository, IRoleService roleService)
+        public EmployeeService(IEmployeeRepository employeeRepo, ILogger<EmployeeService> logger, IFileUploadService uploadService, IAuthService authService, IUserRepository userRepository, IRoleService roleService, IDesignationRepository designationRepository, LIMSContext context)
         {
             _employeeRepository = employeeRepo;
             _logger = logger;
@@ -22,6 +27,9 @@ namespace LIMSApi.Services
             _authService = authService;
             _userRepository = userRepository;
             _roleService = roleService;
+            _designationRepository = designationRepository;
+            _context = context;
+            loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
         public async Task CreateEmployee(EmployeeMaster model)
@@ -33,10 +41,16 @@ namespace LIMSApi.Services
             if (exists)
                 throw new InvalidOperationException("Employee already exists!");
 
+            // Derive RoleID from Designation
+            var designation = model.DesignationID.HasValue
+                ? await _designationRepository.GetDesignationById(model.DesignationID.Value)
+                : null;
+            model.RoleID = designation?.RoleID ?? model.RoleID;
+
             var createdEmployee = await _employeeRepository.AddEmployee(model);
             _logger.LogInformation("Employee '{EmployeeName}' created successfully.", model.Name);
 
-            var role = await _roleService.GetRoleDetails(createdEmployee.RoleID);
+            var role = designation?.RoleID > 0 ? await _roleService.GetRoleDetails(designation.RoleID.Value) : null;
 
             UserMaster newUser = new UserMaster
             {
@@ -44,7 +58,7 @@ namespace LIMSApi.Services
                 UserName = model.Name,
                 Password = _authService.GetHashedPassword(model.Password),
                 EmailId = model.EmailId,
-                RoleID = model.RoleID,
+                RoleID = designation?.RoleID,
                 RoleName = role?.Name,
                 IsAdmin = role?.IsAdmin ?? false,
                 IsActive = true,
@@ -102,23 +116,29 @@ namespace LIMSApi.Services
             existingEmployee.AccountHolderName = model.AccountHolderName;
             existingEmployee.EmailId = model.EmailId;
             existingEmployee.Password = model.Password;
-            existingEmployee.RoleID = model.RoleID;
+
+            // Derive RoleID from Designation
+            var designation = model.DesignationID.HasValue
+                ? await _designationRepository.GetDesignationById(model.DesignationID.Value)
+                : null;
+            existingEmployee.RoleID = designation?.RoleID ?? existingEmployee.RoleID;
 
             existingEmployee.ModifiedOn = DateTime.UtcNow;
+            existingEmployee.ModifiedBy = loggedInUser?.EmployeeID ?? 0;
 
             await _employeeRepository.UpdateEmployee(existingEmployee);
             _logger.LogInformation("Employee '{EmployeeName}' updated successfully.", model.Name);
 
             var hashedPassword = _authService.GetHashedPassword(model.Password);
 
-            var role = await _roleService.GetRoleDetails(model.RoleID);
+            var role = designation?.RoleID > 0 ? await _roleService.GetRoleDetails(designation.RoleID.Value) : null;
             // Update user details if UserID is provided
             var user = await _userRepository.GetUserByEmail(model.EmailId);
             if (user != null)
             {
                 user.UserName = model.Name;
                 user.EmailId = model.EmailId;
-                user.RoleID = model.RoleID;
+                user.RoleID = designation?.RoleID;
                 user.RoleName = role?.Name;
                 user.IsAdmin = role?.IsAdmin ?? false;
                 user.Password = hashedPassword == user.Password ? user.Password : hashedPassword;
@@ -135,8 +155,11 @@ namespace LIMSApi.Services
             if (existingEmployee == null)
                 throw new InvalidOperationException("Employee not found!");
 
+            await DeleteValidationHelper.ValidateDeleteAsync<EmployeeMaster>(_context, id, "Employee");
+
             existingEmployee.IsActive = false;
             existingEmployee.ModifiedOn = DateTime.UtcNow;
+            existingEmployee.ModifiedBy = loggedInUser?.EmployeeID ?? 0;
 
             await _employeeRepository.UpdateEmployee(existingEmployee);
             _logger.LogInformation("Employee with ID '{EmployeeId}' deleted successfully.", id);

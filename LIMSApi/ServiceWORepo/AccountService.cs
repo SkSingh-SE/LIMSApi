@@ -19,8 +19,9 @@ namespace LIMSApi.ServiceWORepo
         private readonly IPriceCalculationService _priceCalculationService;
         private readonly IProformaInvoiceRepository _proformaInvoiceRepository;
         private readonly TemplateService _templateService;
+        private readonly ISampleStatusService _sampleStatusService;
 
-        public AccountService(LIMSContext db, EmailService emailService, WhatsAppService whatsAppService, InvoicePdfService invoicePdfService, IPriceCalculationService priceCalculationService, IProformaInvoiceRepository proformaInvoiceRepository, TemplateService templateService)
+        public AccountService(LIMSContext db, EmailService emailService, WhatsAppService whatsAppService, InvoicePdfService invoicePdfService, IPriceCalculationService priceCalculationService, IProformaInvoiceRepository proformaInvoiceRepository, TemplateService templateService, ISampleStatusService sampleStatusService)
         {
             _db = db;
             _emailService = emailService;
@@ -29,6 +30,7 @@ namespace LIMSApi.ServiceWORepo
             _priceCalculationService = priceCalculationService;
             _proformaInvoiceRepository = proformaInvoiceRepository;
             _templateService = templateService;
+            _sampleStatusService = sampleStatusService;
         }
 
         public async Task<AccountDashboardDto> GetDashboardAsync()
@@ -322,6 +324,17 @@ namespace LIMSApi.ServiceWORepo
             inward.ModifiedOn = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
+
+            // Set PAYMENT_PENDING on all active samples for this inward
+            var samples = await _db.SampleDetails
+                .Where(s => s.InwardID == inward.ID && s.IsActive)
+                .ToListAsync();
+            foreach (var sample in samples)
+            {
+                await _sampleStatusService.ForceAutoStatusAsync(
+                    sample.ID, SampleStatus.PAYMENT_PENDING, LoggedInUserProvider.CurrentUser?.EmployeeID ?? 0);
+            }
+
             return invoice.ID;
         }
 

@@ -1,4 +1,6 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
@@ -10,12 +12,14 @@ namespace LIMSApi.Services
         private readonly IRoleRepository _roleRepository;
         private readonly ILogger<RoleService> _logger;
         private readonly IUserService userService;
+        private readonly LIMSContext _context;
 
-        public RoleService(IRoleRepository roleRepo, ILogger<RoleService> logger, IUserService userService)
+        public RoleService(IRoleRepository roleRepo, ILogger<RoleService> logger, IUserService userService, LIMSContext context)
         {
             _roleRepository = roleRepo;
             _logger = logger;
             this.userService = userService;
+            _context = context;
         }
 
         public async Task CreateRole(RoleMaster model)
@@ -80,6 +84,8 @@ namespace LIMSApi.Services
             var existingRole = await _roleRepository.GetRoleById(id);
             if (existingRole == null)
                 throw new InvalidOperationException("Role not found!");
+
+            await DeleteValidationHelper.ValidateDeleteAsync<RoleMaster>(_context, id, "Role");
 
             existingRole.IsActive = false;
             existingRole.ModifiedOn = DateTime.UtcNow;

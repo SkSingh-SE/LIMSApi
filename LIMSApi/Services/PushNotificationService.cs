@@ -20,7 +20,7 @@ namespace LIMSApi.Services
 
             var vapidDetails = new VapidAuthentication(config["Vapid:PublicKey"], config["Vapid:PrivateKey"])
             {
-                Subject = "mailto:admin@yourapp.com"
+                Subject = _subject
             };
 
             _pushClient = new PushServiceClient

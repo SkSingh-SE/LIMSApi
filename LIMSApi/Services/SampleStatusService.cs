@@ -1,5 +1,7 @@
-﻿using LIMSApi.Helpers.Enums;
-using LIMSApi.Helpers.StatusFlow.Extensions;
+using LIMSApi.Data;
+using LIMSApi.Helpers;
+using LIMSApi.Helpers.Enums;
+using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
 
@@ -8,11 +10,13 @@ namespace LIMSApi.Services
     public class SampleStatusService : ISampleStatusService
     {
         private readonly ISampleStatusRepository _repo;
+        private readonly LIMSContext _db;
         private readonly ILogger<SampleStatusService> _logger;
 
-        public SampleStatusService(ISampleStatusRepository repo, ILogger<SampleStatusService> logger)
+        public SampleStatusService(ISampleStatusRepository repo, LIMSContext db, ILogger<SampleStatusService> logger)
         {
             _repo = repo;
+            _db = db;
             _logger = logger;
         }
 
@@ -65,25 +69,19 @@ namespace LIMSApi.Services
                 { SampleStatus.SAMPLE_INWARD_REGISTERED, 1 }
             };
 
-
-
-
         public async Task<(bool ok, string msg)> UpdateStatusAsync(long sampleId, SampleStatus newStatus, long empId)
         {
             var sample = await _repo.GetSample(sampleId);
             if (sample == null) return (false, "Sample not found");
 
-            //Enum.TryParse(sample.SampleStatus, out SampleStatus current);
-
-            //if (!SampleTransition.IsAllowed(current, newStatus))
-            //    return (false, $"Invalid transition: {current} → {newStatus}");
-
+            var previousStatus = sample.SampleStatus;
             sample.SampleStatus = newStatus.ToString();
             sample.ModifiedBy = empId;
             sample.ModifiedOn = DateTime.UtcNow;
 
             await _repo.Save();
 
+            await LogStatusChange("Sample", sampleId, previousStatus, newStatus.ToString(), empId, "UpdateStatusAsync");
 
             return (true, "Updated");
         }
@@ -94,32 +92,69 @@ namespace LIMSApi.Services
             var sample = await _repo.GetSample(sampleId);
             if (sample == null) return;
 
+            var previousStatus = sample.SampleStatus;
             sample.SampleStatus = newStatus.ToString();
             sample.ModifiedBy = empId;
             sample.ModifiedOn = DateTime.UtcNow;
 
             await _repo.Save();
+
+            await LogStatusChange("Sample", sampleId, previousStatus, newStatus.ToString(), empId, "ForceAutoStatusAsync");
         }
         #endregion
 
-        public async Task<bool> UpdateInwardStatus(long inwardId, InwardStatus newStaus, long empId)
+        public async Task<bool> UpdateInwardStatus(long inwardId, InwardStatus newStatus, long empId)
         {
             try
             {
                 var inward = await _repo.GetInward(inwardId);
                 if (inward == null) return false;
 
-                inward.InwardStatus = newStaus.ToString();
+                var previousStatus = inward.InwardStatus;
+                inward.InwardStatus = newStatus.ToString();
                 inward.ModifiedOn = DateTime.UtcNow;
                 inward.ModifiedBy = empId;
 
                 await _repo.Save();
+
+                await LogStatusChange("Inward", inwardId, previousStatus, newStatus.ToString(), empId, "UpdateInwardStatus");
+
                 return true;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error updating inward status for InwardID: {InwardID}", inwardId);
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Immutable audit log entry. Never updates or deletes.
+        /// Resolves employee name from LoggedInUserProvider (already available in request scope).
+        /// </summary>
+        private async Task LogStatusChange(string entityType, long entityId, string? previousStatus, string newStatus, long changedBy, string source)
+        {
+            try
+            {
+                var entry = new SampleStatusHistory
+                {
+                    EntityType = entityType,
+                    EntityID = entityId,
+                    PreviousStatus = previousStatus,
+                    NewStatus = newStatus,
+                    ChangedBy = changedBy,
+                    ChangedByName = LoggedInUserProvider.CurrentUser?.Name,
+                    ChangedOn = DateTime.UtcNow,
+                    Source = source
+                };
+
+                _db.SampleStatusHistories.Add(entry);
+                await _db.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                // Never block the main flow for audit logging failure
+                _logger.LogError(ex, "Failed to log status change: {EntityType} {EntityID} → {NewStatus}", entityType, entityId, newStatus);
             }
         }
 

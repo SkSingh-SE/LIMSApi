@@ -14,11 +14,13 @@ namespace LIMSApi.Middleware
     {
         private readonly RequestDelegate _next;
         private readonly ILogger<GeneralizedExceptionHandlingMiddleware> _logger;
+        private readonly bool _isDevelopment;
 
-        public GeneralizedExceptionHandlingMiddleware(RequestDelegate next, ILogger<GeneralizedExceptionHandlingMiddleware> logger)
+        public GeneralizedExceptionHandlingMiddleware(RequestDelegate next, ILogger<GeneralizedExceptionHandlingMiddleware> logger, IWebHostEnvironment env)
         {
             _next = next;
             _logger = logger;
+            _isDevelopment = env.IsDevelopment();
         }
 
         public async Task Invoke(
@@ -44,22 +46,31 @@ namespace LIMSApi.Middleware
 
                 var user = LoggedInUserProvider.CurrentUser;
 
+                // Show user-friendly validation messages in production too
+                var isBusinessException = ex is InvalidOperationException or ArgumentException or ArgumentNullException;
+                var isDbException = ex is SqlException or DbUpdateException;
+                var userMessage = isBusinessException
+                    ? ex.Message
+                    : isDbException
+                        ? "A database error occurred. Please check your data and try again."
+                        : _isDevelopment ? ex.Message : "Something went wrong. Please try again or contact your administrator.";
+
                 var errorResponse = new ExceptionResponse
                 {
-                    Message = ex.Message?.ToString(),
+                    Message = userMessage,
                     Controller = controller,
                     Action = action,
-                    ExceptionType = ex.GetType().Name,
+                    ExceptionType = _isDevelopment ? ex.GetType().Name : null,
                     Timestamp = DateTime.UtcNow
                 };
 
                 context.Response.StatusCode = ex switch
                 {
-                    ArgumentNullException or InvalidOperationException => StatusCodes.Status400BadRequest,
+                    ArgumentNullException or ArgumentException or InvalidOperationException => StatusCodes.Status400BadRequest,
                     UnauthorizedAccessException => StatusCodes.Status401Unauthorized,
                     KeyNotFoundException => StatusCodes.Status404NotFound,
                     InvalidCredentialException => StatusCodes.Status400BadRequest,
-                    SqlException or DbUpdateException => StatusCodes.Status500InternalServerError,
+                    SqlException or DbUpdateException => StatusCodes.Status400BadRequest,
                     _ => StatusCodes.Status500InternalServerError
                 };
 

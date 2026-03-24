@@ -1,4 +1,5 @@
 ﻿using LIMSApi.Dtos;
+using LIMSApi.Middleware;
 using LIMSApi.Models;
 using LIMSApi.ServiceWORepo;
 using LIMSApi.Services.Interface;
@@ -59,6 +60,7 @@ namespace LIMSApi.Controllers
         // Save Result (Draft / Progress)
         // =============================================================
         [HttpPost("save-test-result")]
+        [RequirePermission("TEST_RESULT_SAVE")]
         public async Task<IActionResult> SaveTestResult(TestResultSaveDto dto)
         {
             await _service.SaveTestResult(dto);
@@ -266,6 +268,7 @@ namespace LIMSApi.Controllers
         /// Override the calculated price with a manual amount and reason
         /// </summary>
         [HttpPost("override-price/{headerId}")]
+        [RequirePermission("TEST_PRICE_OVERRIDE")]
         public async Task<IActionResult> OverridePrice(long headerId, [FromBody] Dtos.PriceOverrideDto dto)
         {
             if (dto == null)
@@ -329,6 +332,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("verify/{headerId}")]
+        [RequirePermission("TEST_RESULT_VERIFY")]
         public async Task<IActionResult> VerifyTest(long headerId, [FromBody] VerificationActionDto dto)
         {
             await _service.VerifyTest(headerId, dto?.Comments);
@@ -336,6 +340,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("reject-verification/{headerId}")]
+        [RequirePermission("TEST_RESULT_VERIFY")]
         public async Task<IActionResult> RejectVerification(long headerId, [FromBody] VerificationActionDto dto)
         {
             await _service.RejectVerification(headerId, dto?.Comments);

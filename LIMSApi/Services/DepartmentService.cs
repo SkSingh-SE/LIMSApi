@@ -1,5 +1,6 @@
 ﻿using LIMSApi.Data;
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
@@ -12,12 +13,14 @@ namespace LIMSApi.Services
         private readonly IDepartmentRepository _departmentRepository;
         private readonly ILogger<DepartmentService> _logger;
         private readonly LIMSContext _context;
+        private readonly LoggedInUserDTO loggedInUser;
 
         public DepartmentService(IDepartmentRepository departmentrepo, ILogger<DepartmentService> logger, LIMSContext context)
         {
             _departmentRepository = departmentrepo;
             _logger = logger;
             _context = context;
+            loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
         public async Task CreateDepartment(DepartmentMaster model)
@@ -49,6 +52,7 @@ namespace LIMSApi.Services
             existingDepartment.Name = model.Name;
             existingDepartment.Description = model.Description;
             existingDepartment.ModifiedOn = DateTime.UtcNow;
+            existingDepartment.ModifiedBy = loggedInUser?.EmployeeID ?? 0;
 
             await _departmentRepository.UpdateDepartment(existingDepartment);
             _logger.LogInformation("Department '{DepartmentName}' updated successfully.", model.Name);
@@ -66,6 +70,7 @@ namespace LIMSApi.Services
 
             existingDepartment.IsActive = false;
             existingDepartment.ModifiedOn = DateTime.UtcNow;
+            existingDepartment.ModifiedBy = loggedInUser?.EmployeeID ?? 0;
 
             await _departmentRepository.UpdateDepartment(existingDepartment);
             _logger.LogInformation("Department with ID '{DepartmentId}' deleted successfully.", id);

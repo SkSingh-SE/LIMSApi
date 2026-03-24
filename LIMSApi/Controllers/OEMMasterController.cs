@@ -67,7 +67,7 @@ namespace LIMSApi.Controllers
             return Ok(new
             {
                 status = "success",
-                message = $"OEM '{entity.Name}' updated successfully."
+                message = $"OEM '{entity.Name}' deleted successfully."
             });
         }
 

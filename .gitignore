@@ -361,3 +361,9 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/LIMSApi/publish-selfcontained/af
+/LIMSApi/publish-selfcontained
+
+# Secrets - NEVER commit these
+**/appsettings.Secrets.json
+**/appsettings.*.Secrets.json

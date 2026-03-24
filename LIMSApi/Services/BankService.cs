@@ -1,4 +1,5 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
@@ -10,12 +11,14 @@ namespace LIMSApi.Services
     {
         private readonly IBankRepository _bankRepository;
         private readonly ILogger<BankService> _logger;
+        private readonly LIMSContext _context;
         private LoggedInUserDTO loggedInUser;
 
-        public BankService(IBankRepository BankRepo, ILogger<BankService> logger)
+        public BankService(IBankRepository BankRepo, ILogger<BankService> logger, LIMSContext context)
         {
             _bankRepository = BankRepo;
             _logger = logger;
+            _context = context;
             loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
@@ -68,6 +71,8 @@ namespace LIMSApi.Services
             var existingBank = await _bankRepository.GetBankById(id);
             if (existingBank == null)
                 throw new InvalidOperationException("Bank not found!");
+
+            await DeleteValidationHelper.ValidateDeleteAsync<BankMaster>(_context, id, "Bank");
 
             existingBank.IsActive = false;
             existingBank.ModifiedOn = DateTime.UtcNow;

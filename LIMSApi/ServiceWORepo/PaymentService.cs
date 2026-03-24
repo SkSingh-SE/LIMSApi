@@ -21,11 +21,13 @@ namespace LIMSApi.ServiceWORepo
         private readonly WhatsAppService _whatsAppService;
         private readonly INotificationService _notificationService;
         private readonly ISampleStatusService _sampleStatusService;
+        private readonly BillingSettlementService _billingSettlement;
         private readonly LoggedInUserDTO _loggedInUser;
         private readonly TemplateService _templateService;
 
         public PaymentService(LIMSContext db, IConfiguration config, EmailService emailService, WhatsAppService whatsAppService,
-        INotificationService notificationService, ISampleStatusService sampleStatusService, TemplateService templateService)
+        INotificationService notificationService, ISampleStatusService sampleStatusService, TemplateService templateService,
+        BillingSettlementService billingSettlement)
         {
             _db = db;
             _config = config;
@@ -34,6 +36,7 @@ namespace LIMSApi.ServiceWORepo
             _notificationService = notificationService;
             _sampleStatusService = sampleStatusService;
             _templateService = templateService;
+            _billingSettlement = billingSettlement;
             _loggedInUser = LoggedInUserProvider.CurrentUser;
 
             _razorpay = new RazorpayClient(
@@ -410,34 +413,11 @@ namespace LIMSApi.ServiceWORepo
                         inwardFinal!.IsReportUnlocked = true;
                     }
 
-                    // Update BillingStatus based on payment status
+                    // Unified billing settlement — single source of truth
                     if (order.InwardID.HasValue)
                     {
-                        var inward = await _db.SampleInwards
-                            .Include(i => i.ChargeEvents)
-                            .FirstOrDefaultAsync(i => i.ID == order.InwardID.Value);
-                        
-                        if (inward != null)
-                        {
-                            var totalInvoiceAmount = await _db.TaxInvoices
-                                .Where(t => t.InwardID == inward.ID)
-                                .SumAsync(t => t.GrandTotal);
-                            
-                            var totalPaid = await _db.PaymentOrders
-                                .Where(p => p.InwardID == inward.ID && 
-                                           (p.PaymentType == PaymentType.Invoice || p.PaymentType == PaymentType.AmendmentInvoice) &&
-                                           p.Status == PaymentStatus.Paid)
-                                .SumAsync(p => p.Amount);
-
-                            if (totalPaid >= totalInvoiceAmount)
-                            {
-                                inward.BillingStatus = BillingStatus.PAYMENT_COMPLETED.ToString();
-                            }
-                            else if (totalPaid > 0)
-                            {
-                                inward.BillingStatus = BillingStatus.PAYMENT_PARTIAL.ToString();
-                            }
-                        }
+                        await _billingSettlement.RecalculateBillingStatusAsync(
+                            order.InwardID.Value, _loggedInUser.EmployeeID);
                     }
                     break;
 

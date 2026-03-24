@@ -78,6 +78,12 @@ namespace LIMSApi.Services
             return workflow;
         }
 
+        public async Task<bool> WorkflowExistsForEntityType(string entityType)
+        {
+            var workflow = await GetWorkflowByEntityTypeCached(entityType);
+            return workflow != null;
+        }
+
         /// <summary>
         /// Invalidates workflow caches when a workflow definition is created or updated.
         /// </summary>

@@ -1,5 +1,6 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Helpers.Enums;
+using LIMSApi.Middleware;
 using LIMSApi.Reporting;
 using LIMSApi.ServiceWORepo;
 using Microsoft.AspNetCore.Http;
@@ -45,6 +46,7 @@ namespace LIMSApi.Controllers
         // =============================================================
         // Perform Workflow Action
         [HttpPost("perform-action")]
+        [RequirePermission("REPORT_APPROVE")]
         public async Task<IActionResult> PerformAction([FromBody] WorkflowActionRequestDto dto)
         {
             if (dto == null)

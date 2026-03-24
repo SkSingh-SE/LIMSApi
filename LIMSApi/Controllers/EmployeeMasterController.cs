@@ -83,7 +83,8 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("Employee not found!");
             }
-            return Ok(new { message = $"Employee '{entity.Name}' created successfully" });
+            await _employeeService.RemoveEmployee(id);
+            return Ok(new { message = $"Employee '{entity.Name}' deleted successfully" });
         }
 
         [HttpGet("dropdown")]

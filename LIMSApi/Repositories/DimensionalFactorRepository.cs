@@ -53,7 +53,13 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllDimensionalFactors(PageFilter filter)
         {
-            var _query = (from c in _context.DimensionalFactorMasters where c.IsActive select c).AsQueryable().ApplyFilters(filter.Filter);
+            var _query = _context.DimensionalFactorMasters
+                .Where(c => c.IsActive)
+                .Include(x => x.ParameterUnit)
+                .Include(x => x.DefaultTestMethod)
+                .Include(x => x.ApplicableForms).ThenInclude(af => af.ProductForm)
+                .AsQueryable()
+                .ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {

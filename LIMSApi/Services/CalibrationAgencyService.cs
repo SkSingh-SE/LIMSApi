@@ -1,4 +1,6 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
@@ -10,12 +12,14 @@ namespace LIMSApi.Services
         private readonly ICalibrationAgencyRepository _oemRepository;
         private readonly ILogger<CalibrationAgencyService> _logger;
         private readonly IFileUploadService _uploadService;
+        private readonly LIMSContext _context;
 
-        public CalibrationAgencyService(ICalibrationAgencyRepository oemRepo, ILogger<CalibrationAgencyService> logger, IFileUploadService fileUploadService)
+        public CalibrationAgencyService(ICalibrationAgencyRepository oemRepo, ILogger<CalibrationAgencyService> logger, IFileUploadService fileUploadService, LIMSContext context)
         {
             _oemRepository = oemRepo;
             _logger = logger;
             _uploadService = fileUploadService;
+            _context = context;
         }
 
         public async Task CreateCalibrationAgency(CalibrationAgencyMaster model)
@@ -91,6 +95,8 @@ namespace LIMSApi.Services
             var existingCalibrationAgency = await _oemRepository.GetCalibrationAgencyById(id);
             if (existingCalibrationAgency == null)
                 throw new InvalidOperationException("CalibrationAgency not found!");
+
+            await DeleteValidationHelper.ValidateDeleteAsync<CalibrationAgencyMaster>(_context, id, "Calibration Agency");
 
             existingCalibrationAgency.IsActive = false;
             existingCalibrationAgency.ModifiedOn = DateTime.UtcNow;

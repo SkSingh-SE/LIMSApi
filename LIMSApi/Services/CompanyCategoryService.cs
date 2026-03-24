@@ -1,4 +1,5 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
@@ -10,12 +11,14 @@ namespace LIMSApi.Services
     {
         private readonly ICompanyCategoryRepository _customerTypeRepository;
         private readonly ILogger<CompanyCategoryService> _logger;
+        private readonly LIMSContext _context;
         private LoggedInUserDTO loggedInUser;
 
-        public CompanyCategoryService(ICompanyCategoryRepository CustomerTypeRepo, ILogger<CompanyCategoryService> logger)
+        public CompanyCategoryService(ICompanyCategoryRepository CustomerTypeRepo, ILogger<CompanyCategoryService> logger, LIMSContext context)
         {
             _customerTypeRepository = CustomerTypeRepo;
             _logger = logger;
+            _context = context;
             loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
@@ -64,6 +67,8 @@ namespace LIMSApi.Services
             var existingCustomerType = await _customerTypeRepository.GetCustomerTypeById(id);
             if (existingCustomerType == null)
                 throw new InvalidOperationException("CustomerType not found!");
+
+            await DeleteValidationHelper.ValidateDeleteAsync<CompanyCategoryMaster>(_context, id, "Company Category");
 
             existingCustomerType.IsActive = false;
             existingCustomerType.ModifiedOn = DateTime.UtcNow;

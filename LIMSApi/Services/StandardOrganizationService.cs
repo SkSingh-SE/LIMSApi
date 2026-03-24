@@ -1,4 +1,6 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
@@ -9,11 +11,13 @@ namespace LIMSApi.Services
     {
         private readonly IStandardOrganizationRepository _standardOrganizationRepository;
         private readonly ILogger<StandardOrganizationService> _logger;
+        private readonly LIMSContext _context;
 
-        public StandardOrganizationService(IStandardOrganizationRepository standardOrganizationRepo, ILogger<StandardOrganizationService> logger)
+        public StandardOrganizationService(IStandardOrganizationRepository standardOrganizationRepo, ILogger<StandardOrganizationService> logger, LIMSContext context)
         {
             _standardOrganizationRepository = standardOrganizationRepo;
             _logger = logger;
+            _context = context;
         }
 
         public async Task CreateStandardOrganization(StandardOrganizationMaster model)
@@ -55,6 +59,8 @@ namespace LIMSApi.Services
             var existingStandardOrganization = await _standardOrganizationRepository.GetStandardOrganizationById(id);
             if (existingStandardOrganization == null)
                 throw new InvalidOperationException("StandardOrganization not found!");
+
+            await DeleteValidationHelper.ValidateDeleteAsync<StandardOrganizationMaster>(_context, id, "Standard Organization");
 
             existingStandardOrganization.IsActive = false;
             existingStandardOrganization.ModifiedOn = DateTime.UtcNow;

@@ -1,4 +1,5 @@
 ﻿using LIMSApi.Dtos;
+using LIMSApi.Middleware;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
 using LIMSApi.ServiceWORepo;
@@ -75,6 +76,7 @@ namespace LIMSApi.Controllers
         // ZONE 4: GENERATE INVOICE
         // -----------------------------------
         [HttpPost("cases/{inwardId}/generate-invoice")]
+        [RequirePermission("INVOICE_GENERATE")]
         public async Task<IActionResult> GenerateInvoice(long inwardId)
         {
             var invoiceId = await _accountService.GenerateInvoiceAsync(inwardId);
@@ -94,6 +96,7 @@ namespace LIMSApi.Controllers
         // GENERATE PROFORMA INVOICE
         // -----------------------------------
         [HttpPost("cases/{inwardId}/generate-proforma-invoice")]
+        [RequirePermission("INVOICE_GENERATE")]
         public async Task<IActionResult> GenerateProformaInvoice(long inwardId)
         {
             var invoiceId = await _accountService.GenerateProformaInvoiceAsync(inwardId);

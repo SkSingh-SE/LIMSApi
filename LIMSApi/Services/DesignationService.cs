@@ -1,4 +1,5 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
@@ -10,12 +11,14 @@ namespace LIMSApi.Services
     {
         private readonly IDesignationRepository _designationRepository;
         private readonly ILogger<DesignationService> _logger;
+        private readonly LIMSContext _context;
         private readonly LoggedInUserDTO loggedInUserDTO;
 
-        public DesignationService(IDesignationRepository designationRepo, ILogger<DesignationService> logger)
+        public DesignationService(IDesignationRepository designationRepo, ILogger<DesignationService> logger, LIMSContext context)
         {
             _designationRepository = designationRepo;
             _logger = logger;
+            _context = context;
             loggedInUserDTO = LoggedInUserProvider.CurrentUser;
         }
 
@@ -52,6 +55,7 @@ namespace LIMSApi.Services
             existingDesignation.Description = model.Description;
             existingDesignation.RoleID = model.RoleID;
             existingDesignation.ModifiedOn = DateTime.UtcNow;
+            existingDesignation.ModifiedBy = loggedInUserDTO?.EmployeeID ?? 0;
 
             await _designationRepository.UpdateDesignation(existingDesignation);
             _logger.LogInformation("Designation '{DesignationName}' updated successfully.", model.Name);
@@ -63,8 +67,11 @@ namespace LIMSApi.Services
             if (existingDesignation == null)
                 throw new InvalidOperationException("Designation not found!");
 
+            await DeleteValidationHelper.ValidateDeleteAsync<DesignationMaster>(_context, id, "Designation");
+
             existingDesignation.IsActive = false;
             existingDesignation.ModifiedOn = DateTime.UtcNow;
+            existingDesignation.ModifiedBy = loggedInUserDTO?.EmployeeID ?? 0;
 
             await _designationRepository.UpdateDesignation(existingDesignation);
             _logger.LogInformation("Designation with ID '{DesignationId}' deleted successfully.", id);

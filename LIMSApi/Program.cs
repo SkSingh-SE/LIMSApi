@@ -1,6 +1,9 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using Hangfire;
+using Hangfire.Dashboard;
 using LIMSApi.Data;
 using LIMSApi.Helpers;
 using LIMSApi.Jobs;
@@ -21,6 +24,9 @@ using QuestPDF.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Load secrets from non-committed file (overrides appsettings.json values)
+builder.Configuration.AddJsonFile("appsettings.Secrets.json", optional: true, reloadOnChange: true);
+
 string jwtSecret = builder.Configuration["Jwt:Secret"];
 
 // Add CORS Policy
@@ -28,7 +34,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAngular", policy =>
     {
-        policy.WithOrigins("http://localhost:4200") // exact Angular dev origin
+        policy.WithOrigins("http://localhost:4200", "http://192.168.1.27", "http://192.168.1.27:80", "http://192.168.1.200", "http://192.168.1.200:80") // Angular dev + production origins
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials(); // allow cookies/signalr creds
@@ -115,6 +121,20 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
     option.Events = new JwtBearerEvents
     {
+        // SignalR sends JWT via query string (?access_token=xxx) because
+        // WebSockets cannot send custom HTTP headers. This extracts it.
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+            {
+                context.Token = accessToken;
+            }
+
+            return Task.CompletedTask;
+        },
         OnChallenge = context =>
         {
             context.HandleResponse();
@@ -131,7 +151,31 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 });
 builder.Services.AddAuthorization();
 
+// ===== Rate Limiting =====
+// Global rate limit: 100 requests per minute per IP (protects all endpoints)
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddFixedWindowLimiter("GlobalLimit", opt =>
+    {
+        opt.PermitLimit = 100;
+        opt.Window = TimeSpan.FromMinutes(1);
+        opt.QueueLimit = 0;
+    });
 
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.ContentType = "application/json";
+        await context.HttpContext.Response.WriteAsJsonAsync(new
+        {
+            success = false,
+            message = "Too many requests. Please try again later."
+        }, cancellationToken);
+    };
+});
+
+// Login rate limiter (custom — supports reset on successful login)
+builder.Services.AddSingleton<LoginRateLimiter>();
 
 // Register AuthService with a parameter from _configuration
 builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
@@ -318,6 +362,7 @@ builder.Services.AddScoped<IMachineIntegrationService, MachineIntegrationService
 builder.Services.AddScoped<INablScopeValidationService, NablScopeValidationService>();
 builder.Services.AddScoped<DispatchService>();
 builder.Services.AddScoped<CaseClosureService>();
+builder.Services.AddScoped<BillingSettlementService>();
 builder.Services.AddScoped<ISettingsService,SettingsService>();
 
 // Register Dashboard Service
@@ -362,6 +407,14 @@ var app = builder.Build();
 app.UseStaticFiles();
 app.UseHttpsRedirection();
 
+// Security headers
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+    context.Response.Headers.Append("X-Frame-Options", "DENY");
+    await next();
+});
+
 // --------------------
 // Routing
 // --------------------
@@ -374,6 +427,7 @@ app.UseCors("AllowAngular");
 
 app.UseAuthentication();   // MUST exist
 app.UseAuthorization();    // MUST follow authentication
+app.UseRateLimiter();      // MUST follow authorization
 
 // --------------------
 // Global Exception Handling (AFTER auth)
@@ -383,7 +437,7 @@ app.UseMiddleware<GeneralizedExceptionHandlingMiddleware>();
 // --------------------
 // Swagger (safe after auth)
 // --------------------
-if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
+if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI(c =>
@@ -396,7 +450,10 @@ if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
 // --------------------
 // Hangfire
 // --------------------
-app.UseHangfireDashboard("/hangfire");
+app.UseHangfireDashboard("/hangfire", new Hangfire.DashboardOptions
+{
+    Authorization = new[] { new HangfireAuthFilter(app.Environment) }
+});
 
 // Jobs
 RecurringJob.AddOrUpdate<ReminderJob>(
@@ -422,8 +479,28 @@ RecurringJob.AddOrUpdate<TestUsageStatsJob>(
 // --------------------
 // Endpoints
 // --------------------
-app.MapControllers();
-app.MapHub<NotificationHub>("/hubs/notifications");
+app.MapControllers().RequireRateLimiting("GlobalLimit");
+app.MapHub<NotificationHub>("/hubs/notifications")
+    .RequireAuthorization();
 
 app.Run();
+
+// Simple Hangfire auth filter — Dev: allow all, Prod: Admin only
+public class HangfireAuthFilter : Hangfire.Dashboard.IDashboardAuthorizationFilter
+{
+    private readonly IWebHostEnvironment _env;
+    public HangfireAuthFilter(IWebHostEnvironment env) => _env = env;
+
+    public bool Authorize(Hangfire.Dashboard.DashboardContext dashboardContext)
+    {
+        if (_env.IsDevelopment()) return true;
+
+        var httpContext = dashboardContext.GetHttpContext();
+        var user = httpContext.User;
+        if (user?.Identity?.IsAuthenticated != true) return false;
+
+        var role = user.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+        return string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
+    }
+}
 

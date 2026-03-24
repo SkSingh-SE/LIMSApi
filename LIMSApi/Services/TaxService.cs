@@ -1,4 +1,5 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
@@ -10,12 +11,14 @@ namespace LIMSApi.Services
     {
         private readonly ITaxRepository _taxRepository;
         private readonly ILogger<TaxService> _logger;
+        private readonly LIMSContext _context;
         private LoggedInUserDTO loggedInUser;
 
-        public TaxService(ITaxRepository TaxRepo, ILogger<TaxService> logger)
+        public TaxService(ITaxRepository TaxRepo, ILogger<TaxService> logger, LIMSContext context)
         {
             _taxRepository = TaxRepo;
             _logger = logger;
+            _context = context;
             loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
@@ -66,6 +69,8 @@ namespace LIMSApi.Services
             var existingTax = await _taxRepository.GetTaxById(id);
             if (existingTax == null)
                 throw new InvalidOperationException("Tax not found!");
+
+            await DeleteValidationHelper.ValidateDeleteAsync<TaxMaster>(_context, id, "Tax");
 
             existingTax.IsActive = false;
             existingTax.ModifiedOn = DateTime.UtcNow;

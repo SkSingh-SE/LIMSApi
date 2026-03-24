@@ -1,4 +1,6 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
@@ -10,11 +12,13 @@ namespace LIMSApi.Services
         private readonly IOEMRepository _oemRepository;
         private readonly ILogger<OEMService> _logger;
         private readonly IFileUploadService _uploadService;
-        public OEMService(IOEMRepository oemRepo, ILogger<OEMService> logger, IFileUploadService fileUploadService)
+        private readonly LIMSContext _context;
+        public OEMService(IOEMRepository oemRepo, ILogger<OEMService> logger, IFileUploadService fileUploadService, LIMSContext context)
         {
             _oemRepository = oemRepo;
             _logger = logger;
             _uploadService = fileUploadService;
+            _context = context;
         }
 
         public async Task CreateOEM(OEMMaster model)
@@ -87,6 +91,8 @@ namespace LIMSApi.Services
             var existingOEM = await _oemRepository.GetOEMById(id);
             if (existingOEM == null)
                 throw new InvalidOperationException("OEM not found!");
+
+            await DeleteValidationHelper.ValidateDeleteAsync<OEMMaster>(_context, id, "OEM");
 
             existingOEM.IsActive = false;
             existingOEM.ModifiedOn = DateTime.UtcNow;

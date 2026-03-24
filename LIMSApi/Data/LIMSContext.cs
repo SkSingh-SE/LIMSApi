@@ -101,6 +101,7 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<SampleInwardContactPerson> InwardContacts { get; set; }
     public virtual DbSet<SampleInwardAddressInfo> InwardAddresses { get; set; }
     public virtual DbSet<SampleDetail> SampleDetails { get; set; }
+    public virtual DbSet<SampleStatusHistory> SampleStatusHistories { get; set; }
     public virtual DbSet<SampleAdditionalDetail> SampleAdditionalDetails { get; set; }
     public virtual DbSet<SampleTestPlan> TestPlans { get; set; }
     public virtual DbSet<TaxMaster> TaxMasters { get; set; }
@@ -425,6 +426,15 @@ public partial class LIMSContext : DbContext
             .HasForeignKey(trh => trh.SampleID)
             .OnDelete(DeleteBehavior.Restrict); // or NoAction
 
+        // Prevent duplicate headers for same sample + test + plan (race condition guard)
+        // Quantity > 1 creates multiple headers intentionally via AutoCreateHeadersFromPlanAsync,
+        // but the basic auto-create (from UI load) should never duplicate.
+        // Using filtered index on IsActive to allow soft-deleted duplicates.
+        modelBuilder.Entity<TestResultHeader>()
+            .HasIndex(h => new { h.SampleID, h.LaboratoryTestID, h.TestPlanID })
+            .HasFilter("[IsActive] = 1")
+            .IsUnique(false); // Non-unique because Quantity > 1 creates multiple intentionally
+
         // --------------------------------------------------
         // SampleDetail → Report
         // ❌ NO CASCADE (workflow-controlled delete)
@@ -691,6 +701,15 @@ public partial class LIMSContext : DbContext
         var ipAddress = httpContext?.Connection?.RemoteIpAddress?.ToString();
         var browser = httpContext?.Request.Headers["User-Agent"].ToString();
         var url = httpContext?.Request?.Path;
+
+        // Auto-set ModifiedBy for all AuditProperty entities on update
+        var loggedInUser = Helpers.LoggedInUserProvider.CurrentUser;
+        foreach (var auditEntry in ChangeTracker.Entries<Models.AuditProperty>()
+            .Where(e => e.State == EntityState.Modified))
+        {
+            auditEntry.Entity.ModifiedOn = DateTime.UtcNow;
+            auditEntry.Entity.ModifiedBy = loggedInUser?.EmployeeID ?? 0;
+        }
 
         var entries = ChangeTracker.Entries()
             .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified || e.State == EntityState.Deleted)

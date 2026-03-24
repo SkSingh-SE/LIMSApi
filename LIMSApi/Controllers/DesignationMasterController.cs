@@ -58,7 +58,8 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("Designation not found!");
             }
-            return Ok(new { message = $"Designation '{entity.Name}' created successfully" });
+            await _designationService.RemoveDesignation(id);
+            return Ok(new { message = $"Designation '{entity.Name}' deleted successfully" });
         }
 
         [HttpGet("dropdown")]

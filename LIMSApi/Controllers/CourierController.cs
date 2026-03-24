@@ -55,6 +55,7 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("CourierMaster not found!");
             }
+            await _courierService.RemoveCourier(id);
             return Ok(new { status = "success", message = $"CourierMaster '{entity.Name}' deleted successfully." });
         }
 

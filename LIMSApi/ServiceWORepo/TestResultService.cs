@@ -703,6 +703,17 @@ namespace LIMSApi.ServiceWORepo
         /// </summary>
         private async Task<TestResultHeader> AutoCreateHeaderForLabTestAsync(long sampleId, long planId, long labTestId)
         {
+            // Double-check: return existing header if another thread/request already created it
+            var existing = await _db.TestResultHeaders
+                .Include(h => h.Parameters)
+                .FirstOrDefaultAsync(h =>
+                    h.SampleID == sampleId &&
+                    h.LaboratoryTestID == labTestId &&
+                    h.TestPlanID == planId);
+
+            if (existing != null)
+                return existing;
+
             var header = new TestResultHeader
             {
                 SampleID = sampleId,
@@ -725,6 +736,17 @@ namespace LIMSApi.ServiceWORepo
         /// </summary>
         private async Task<TestResultHeader> AutoCreateChemicalHeaderAsync(long sampleId, long planId, ChemicalTest ct, long labTestId)
         {
+            // Double-check: return existing header if another thread/request already created it
+            var existing = await _db.TestResultHeaders
+                .Include(h => h.Parameters)
+                .FirstOrDefaultAsync(h =>
+                    h.SampleID == sampleId &&
+                    h.LaboratoryTestID == labTestId &&
+                    h.TestPlanID == planId);
+
+            if (existing != null)
+                return existing;
+
             var header = new TestResultHeader
             {
                 SampleID = sampleId,
@@ -1057,12 +1079,31 @@ namespace LIMSApi.ServiceWORepo
                 }
             }
 
+            // Status guard: only Pending or VerificationRejected tests can be started
+            if (header.Status != "Pending" && header.Status != "VerificationRejected")
+                throw new InvalidOperationException($"Cannot start test in '{header.Status}' status. Only 'Pending' or 'VerificationRejected' tests can be started.");
+
             // Allow test to start regardless of preparation status
             header.Status = "Started";
             header.StartedAt = DateTime.UtcNow;
             header.StartedBy = loggedInUser.EmployeeID;
 
             await _db.SaveChangesAsync();
+
+            // Update sample status to TESTING_IN_PROGRESS (first test started for this sample)
+            if (sample != null)
+            {
+                var anyOtherStarted = await _db.TestResultHeaders
+                    .AnyAsync(h => h.SampleID == sample.ID && h.ID != Id
+                        && h.Status != "Pending" && h.IsActive);
+
+                // Only set TESTING_IN_PROGRESS if this is the first test being started
+                if (!anyOtherStarted)
+                {
+                    await _sampleStatusService.ForceAutoStatusAsync(
+                        sample.ID, SampleStatus.TESTING_IN_PROGRESS, loggedInUser.EmployeeID);
+                }
+            }
 
             // Return timing info
             response.TestStartTime = header.StartedAt;
@@ -1084,6 +1125,10 @@ namespace LIMSApi.ServiceWORepo
                 var header = await _db.TestResultHeaders.FindAsync(Id);
                 if (header == null)
                     throw new Exception("Test Result Header not found.");
+
+                // Status guard: only Started tests can be completed
+                if (header.Status != "Started" && header.Status != "In-Progress")
+                    throw new InvalidOperationException($"Cannot complete test in '{header.Status}' status. Only 'Started' or 'In-Progress' tests can be completed.");
 
                 // --- Preparation Validation (Phase 5) ---
                 var sampleForPrep = await _db.SampleDetails.FindAsync(header.SampleID);
@@ -1938,6 +1983,9 @@ namespace LIMSApi.ServiceWORepo
             var header = await _db.TestResultHeaders.FindAsync(headerId);
             if (header == null) throw new Exception("Header not found.");
 
+            if (header.Status != "PendingVerification")
+                throw new InvalidOperationException($"Cannot verify test in '{header.Status}' status. Only 'PendingVerification' tests can be verified.");
+
             header.Status = "Verified";
             await _db.SaveChangesAsync();
 
@@ -1960,6 +2008,9 @@ namespace LIMSApi.ServiceWORepo
         {
             var header = await _db.TestResultHeaders.FindAsync(headerId);
             if (header == null) throw new Exception("Header not found.");
+
+            if (header.Status != "PendingVerification")
+                throw new InvalidOperationException($"Cannot reject test in '{header.Status}' status. Only 'PendingVerification' tests can be rejected.");
 
             header.Status = "VerificationRejected";
             await _db.SaveChangesAsync();

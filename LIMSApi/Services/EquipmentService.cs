@@ -1,5 +1,7 @@
 ﻿using System.Text.RegularExpressions;
+using LIMSApi.Data;
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
@@ -11,11 +13,13 @@ namespace LIMSApi.Services
         private readonly IEquipmentRepository _equipmentRepository;
         private readonly ILogger<EquipmentService> _logger;
         private readonly IFileUploadService _uploadService;
-        public EquipmentService(IEquipmentRepository equipment, ILogger<EquipmentService> logger, IFileUploadService uploadService)
+        private readonly LIMSContext _context;
+        public EquipmentService(IEquipmentRepository equipment, ILogger<EquipmentService> logger, IFileUploadService uploadService, LIMSContext context)
         {
             _equipmentRepository = equipment;
             _logger = logger;
             _uploadService = uploadService;
+            _context = context;
         }
 
         public async Task CreateEquipment(EquipmentMaster model)
@@ -209,6 +213,8 @@ namespace LIMSApi.Services
             var existingEquipment = await _equipmentRepository.GetEquipmentById(id);
             if (existingEquipment == null)
                 throw new InvalidOperationException("Equipment not found!");
+
+            await DeleteValidationHelper.ValidateDeleteAsync<EquipmentMaster>(_context, id, "Equipment");
 
             existingEquipment.IsActive = false;
             existingEquipment.ModifiedOn = DateTime.UtcNow;

@@ -1,4 +1,5 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
@@ -10,12 +11,14 @@ namespace LIMSApi.Services
     {
         private readonly ICourierRepository _courierRepository;
         private readonly ILogger<CourierService> _logger;
+        private readonly LIMSContext _context;
         private LoggedInUserDTO loggedInUser;
 
-        public CourierService(ICourierRepository CourierRepo, ILogger<CourierService> logger)
+        public CourierService(ICourierRepository CourierRepo, ILogger<CourierService> logger, LIMSContext context)
         {
             _courierRepository = CourierRepo;
             _logger = logger;
+            _context = context;
             loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
@@ -64,6 +67,8 @@ namespace LIMSApi.Services
             var existingCourier = await _courierRepository.GetCourierById(id);
             if (existingCourier == null)
                 throw new InvalidOperationException("Courier not found!");
+
+            await DeleteValidationHelper.ValidateDeleteAsync<CourierMaster>(_context, id, "Courier");
 
             existingCourier.IsActive = false;
             existingCourier.ModifiedOn = DateTime.UtcNow;

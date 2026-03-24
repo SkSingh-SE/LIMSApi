@@ -1093,6 +1093,15 @@ namespace LIMSApi.Services
         {
             try
             {
+                // Pre-check: Verify "Request Review" workflow exists BEFORE making any changes.
+                // Without this, plan data gets saved but workflow creation fails,
+                // leaving the system in an inconsistent state (PlanStatus="Submitted" with nothing to approve).
+                var reviewEntityType = WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Request_Review);
+                var workflowExists = await _workflowService.WorkflowExistsForEntityType(reviewEntityType);
+                if (!workflowExists)
+                    throw new InvalidOperationException(
+                        "Cannot submit for review: No 'Request Review' workflow is configured. " +
+                        "Please ask an administrator to set up the review workflow before submitting plans.");
 
                 await ModifySamplePlan(model);
 

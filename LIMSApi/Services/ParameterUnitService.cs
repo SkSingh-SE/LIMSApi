@@ -1,4 +1,6 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
@@ -9,11 +11,13 @@ namespace LIMSApi.Services
     {
         private readonly IParameterUnitRepository _ParameterUnitRepository;
         private readonly ILogger<ParameterUnitService> _logger;
+        private readonly LIMSContext _context;
 
-        public ParameterUnitService(IParameterUnitRepository ParameterUnitRepo, ILogger<ParameterUnitService> logger)
+        public ParameterUnitService(IParameterUnitRepository ParameterUnitRepo, ILogger<ParameterUnitService> logger, LIMSContext context)
         {
             _ParameterUnitRepository = ParameterUnitRepo;
             _logger = logger;
+            _context = context;
         }
 
         public async Task CreateParameterUnit(ParameterUnitMaster model)
@@ -61,6 +65,8 @@ namespace LIMSApi.Services
             var existingParameterUnit = await _ParameterUnitRepository.GetParameterUnitById(id);
             if (existingParameterUnit == null)
                 throw new InvalidOperationException("ParameterUnit not found!");
+
+            await DeleteValidationHelper.ValidateDeleteAsync<ParameterUnitMaster>(_context, id, "Parameter Unit");
 
             existingParameterUnit.IsActive = false;
             existingParameterUnit.ModifiedOn = DateTime.UtcNow;

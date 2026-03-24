@@ -32,7 +32,7 @@ namespace LIMSApi.Helpers
                 using var smtp = new SmtpClient();
                  smtp.Connect(
                     _configuration["SmtpSettings:Server"],
-                    int.Parse((_configuration["SmtpSettings:Port"]) ?? "457"),
+                    int.Parse((_configuration["SmtpSettings:Port"]) ?? "587"),
                     SecureSocketOptions.StartTls
                 );
 
@@ -87,7 +87,7 @@ namespace LIMSApi.Helpers
                 using var smtp = new SmtpClient();
                 await smtp.ConnectAsync(
                     _configuration["SmtpSettings:Server"],
-                     int.Parse((_configuration["SmtpSettings:Port"]) ?? "457"),
+                     int.Parse((_configuration["SmtpSettings:Port"]) ?? "587"),
                     SecureSocketOptions.StartTls
                 );
 
