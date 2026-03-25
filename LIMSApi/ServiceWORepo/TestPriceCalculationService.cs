@@ -312,7 +312,7 @@ namespace LIMSApi.ServiceWORepo
                             bool sizeMatch = decimal.TryParse(cfg.Start, out var s) &&
                                              decimal.TryParse(cfg.End, out var e) &&
                                              sizeValue >= s && sizeValue <= e;
-                            bool loadMatch = decimal.TryParse(cfg.Value, out var lv) && lv >= loadValue;
+                            bool loadMatch = decimal.TryParse(cfg.Value, out var lv) && loadValue >= lv;
                             return sizeMatch && loadMatch;
                         });
 
