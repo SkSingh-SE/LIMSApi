@@ -59,22 +59,30 @@ namespace LIMSApi.Services
 
             if (!dryRun)
             {
-                // Check if ChargeEvents already exist (avoid duplicates)
-                var existingDraft = await _db.ChargeEvents
-                    .AnyAsync(x => x.InwardID == inwardId && x.Status == ChargeEventStatus.DRAFT.ToString());
+                // Block recalculation if events already locked (SNAPSHOT or INVOICED)
+                var hasLockedEvents = await _db.ChargeEvents
+                    .AnyAsync(x => x.InwardID == inwardId &&
+                        (x.Status == ChargeEventStatus.SNAPSHOT.ToString() ||
+                         x.Status == ChargeEventStatus.INVOICED.ToString()));
 
-                if (existingDraft)
+                if (hasLockedEvents)
                 {
-                    pricingResult.Warnings.Add("DRAFT ChargeEvents already exist. Skipping recalculation.");
-                    _logger.LogWarning("DRAFT ChargeEvents already exist for Case {CaseNo}. Skipping recalculation.", inward.CaseNo);
+                    pricingResult.Warnings.Add("Cannot recalculate — ChargeEvents already in SNAPSHOT/INVOICED status.");
+                    _logger.LogWarning("Cannot recalculate for Case {CaseNo}: ChargeEvents already in SNAPSHOT/INVOICED status.", inward.CaseNo);
                     return pricingResult;
                 }
 
-                // Delete any existing DRAFT events if recalculation is needed
-                var existingEvents = await _db.ChargeEvents
+                // Delete existing DRAFTs for fresh recalculation
+                var existingDrafts = await _db.ChargeEvents
                     .Where(x => x.InwardID == inwardId && x.Status == ChargeEventStatus.DRAFT.ToString())
                     .ToListAsync();
-                _db.ChargeEvents.RemoveRange(existingEvents);
+
+                if (existingDrafts.Any())
+                {
+                    _db.ChargeEvents.RemoveRange(existingDrafts);
+                    pricingResult.Warnings.Add($"Recalculating: removed {existingDrafts.Count} existing DRAFT events.");
+                    _logger.LogInformation("Recalculating for Case {CaseNo}: removed {Count} existing DRAFT ChargeEvents.", inward.CaseNo, existingDrafts.Count);
+                }
             }
 
             var chargeEvents = new List<ChargeEvent>();
@@ -137,6 +145,39 @@ namespace LIMSApi.Services
                         TestName = $"Sample Preparation - {sample.SampleNo}",
                         Success = true,
                         Amount = totalPrep
+                    });
+                    pricingResult.SuccessCount++;
+                }
+            }
+
+            // 2b. CUSTOM PREPARATION CHARGES (MachiningChargeItems — free-text manual entries per sample)
+            var customPrepCharges = await _db.MachiningChargeItems
+                .Where(x => _db.SampleDetails.Any(s => s.ID == x.SampleID && s.InwardID == inwardId) && x.IsActive)
+                .ToListAsync();
+
+            foreach (var item in customPrepCharges)
+            {
+                if (item.Amount > 0)
+                {
+                    chargeEvents.Add(new ChargeEvent
+                    {
+                        InwardID = inwardId,
+                        SampleID = item.SampleID,
+                        ChargeType = "CustomPreparation",
+                        Description = $"Custom Preparation - {item.Description}",
+                        Quantity = 1,
+                        Rate = item.Amount,
+                        Amount = item.Amount,
+                        Status = ChargeEventStatus.DRAFT.ToString(),
+                        CreatedOn = DateTime.UtcNow
+                    });
+                    pricingResult.TestResults.Add(new PriceLineResultDto
+                    {
+                        SampleId = item.SampleID,
+                        ChargeType = "CustomPreparation",
+                        TestName = $"Custom Preparation - {item.Description}",
+                        Success = true,
+                        Amount = item.Amount
                     });
                     pricingResult.SuccessCount++;
                 }
