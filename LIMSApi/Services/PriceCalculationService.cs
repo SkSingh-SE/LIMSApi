@@ -15,11 +15,13 @@ namespace LIMSApi.Services
     {
         private readonly LIMSContext _db;
         private readonly ILogger<PriceCalculationService> _logger;
+        private readonly IFinancialYearService _fyService;
 
-        public PriceCalculationService(LIMSContext db, ILogger<PriceCalculationService> logger)
+        public PriceCalculationService(LIMSContext db, ILogger<PriceCalculationService> logger, IFinancialYearService fyService)
         {
             _db = db;
             _logger = logger;
+            _fyService = fyService;
         }
 
         /// <summary>
@@ -612,11 +614,25 @@ namespace LIMSApi.Services
             InvoiceCaseConfiguration config,
             decimal usedValue)
         {
-            // Get Invoice Case for this Lab Test
+            // Get Invoice Case for this Lab Test (FY-filtered with fallback)
+            var currentFY = await _fyService.GetCurrentFinancialYearAsync();
             var invoiceCase = await _db.InvoiceCases
-                .Where(x => x.LaboratoryTestID == laboratoryTestId && x.IsActive)
+                .Where(x => x.LaboratoryTestID == laboratoryTestId && x.IsActive && x.FinancialYear == currentFY)
                 .Include(x => x.InvoiceCasePrices)
                 .FirstOrDefaultAsync();
+
+            // Fallback: any active case if no FY match
+            if (invoiceCase == null)
+            {
+                invoiceCase = await _db.InvoiceCases
+                    .Where(x => x.LaboratoryTestID == laboratoryTestId && x.IsActive)
+                    .Include(x => x.InvoiceCasePrices)
+                    .FirstOrDefaultAsync();
+
+                if (invoiceCase != null)
+                    _logger.LogWarning("No InvoiceCase for FY {FY} and LabTest {LabTestId}. Using fallback FY {FallbackFY}.",
+                        currentFY, laboratoryTestId, invoiceCase.FinancialYear);
+            }
 
             if (invoiceCase == null)
                 throw new Exception($"No invoice case found for LaboratoryTest {laboratoryTestId}");

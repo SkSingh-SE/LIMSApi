@@ -5,6 +5,7 @@ using LIMSApi.Helpers;
 using LIMSApi.Helpers.Enums;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
+using LIMSApi.Services.Interface;
 using Microsoft.EntityFrameworkCore;
 using QuestPDF.Fluent;
 
@@ -13,13 +14,14 @@ namespace LIMSApi.Repositories
     public class ProformaInvoiceRepository : IProformaInvoiceRepository
     {
         private readonly LIMSContext _context;
+        private readonly IFinancialYearService _fyService;
         private LoggedInUserDTO loggedInUser;
-        //private readonly IConverter _converter;
-        public ProformaInvoiceRepository(LIMSContext context)
+
+        public ProformaInvoiceRepository(LIMSContext context, IFinancialYearService fyService)
         {
             _context = context;
+            _fyService = fyService;
             loggedInUser = LoggedInUserProvider.CurrentUser;
-            //_converter = converter;
         }
 
         public async Task<string> GeneratePINoAsync()
@@ -56,7 +58,20 @@ namespace LIMSApi.Repositories
 
                 if (inward.IsInvoiceGenerated)
                     throw new InvalidOperationException("Cannot generate PI. Invoice has already been generated for this inward.");
-                var applyGST = inward?.Customer?.GSTNA ?? false;
+
+                // ── GST from System Configuration ──
+                var gstConfig = await _context.GstConfigs.FirstOrDefaultAsync();
+                var piGstApplicable = gstConfig?.PIGstApplicable ?? true;
+                var gstRate = gstConfig?.DefaultGstRate ?? 18m;
+                var halfRate = gstRate / 2m;
+                var companyState = gstConfig?.State?.Trim().ToLower() ?? "";
+                var customerState = inward?.State?.Trim().ToLower() ?? "";
+                var customerGstExempt = inward?.Customer?.GSTNA ?? false;
+
+                // Determine inter-state from company state vs customer state
+                var isInterState = !string.IsNullOrEmpty(companyState)
+                    && !string.IsNullOrEmpty(customerState)
+                    && companyState != customerState;
                 // Check for existing TaxInvoice as additional safeguard
                 var hasInvoice = await _context.TaxInvoices
                     .AnyAsync(x => x.InwardID == inwardId);
@@ -190,10 +205,18 @@ namespace LIMSApi.Repositories
 
                 decimal cgst = 0, sgst = 0, igst = 0;
 
-                if (applyGST)
+                // Apply GST on PI only if system config allows AND customer is not GST-exempt
+                if (piGstApplicable && !customerGstExempt)
                 {
-                    cgst = subTotal * 0.09m;
-                    sgst = subTotal * 0.09m;
+                    if (isInterState)
+                    {
+                        igst = subTotal * gstRate / 100m;
+                    }
+                    else
+                    {
+                        cgst = subTotal * halfRate / 100m;
+                        sgst = subTotal * halfRate / 100m;
+                    }
                 }
 
                 var taxAmount = cgst + sgst + igst;
@@ -518,11 +541,21 @@ namespace LIMSApi.Repositories
             InvoiceCaseConfiguration config,
             decimal usedValue)
         {
-            // Get Invoice Case for this Lab Test
+            // Get Invoice Case for this Lab Test (FY-filtered with fallback)
+            var currentFY = await _fyService.GetCurrentFinancialYearAsync();
             var invoiceCase = await _context.InvoiceCases
-                .Where(x => x.LaboratoryTestID == laboratoryTestId && x.IsActive)
+                .Where(x => x.LaboratoryTestID == laboratoryTestId && x.IsActive && x.FinancialYear == currentFY)
                 .Include(x => x.InvoiceCasePrices)
                 .FirstOrDefaultAsync();
+
+            // Fallback: any active case if no FY match
+            if (invoiceCase == null)
+            {
+                invoiceCase = await _context.InvoiceCases
+                    .Where(x => x.LaboratoryTestID == laboratoryTestId && x.IsActive)
+                    .Include(x => x.InvoiceCasePrices)
+                    .FirstOrDefaultAsync();
+            }
 
             if (invoiceCase == null)
                 throw new Exception($"No invoice case found for LaboratoryTest {laboratoryTestId}");
@@ -659,6 +692,9 @@ namespace LIMSApi.Repositories
                 //var result = ConvertHtmlToPdf(html);
                 //return result;
 
+                // Fetch GST config for state code
+                var pdfGstConfig = await _context.GstConfigs.FirstOrDefaultAsync();
+
                 var model = new TaxInvoicePdfModelDto
                 {
                     InvoiceNo = pi.PINo,
@@ -667,7 +703,7 @@ namespace LIMSApi.Repositories
                     CustomerAddress = pi.SampleInward.Address,
                     CustomerGst = pi.SampleInward.GstNo,
                     State = pi.SampleInward.State,
-                    StateCode = "24", // TODO: DB se lo agar hai
+                    StateCode = pdfGstConfig?.State ?? "24",
                     RefNo = pi.SampleInward.CaseNo,
                     ReceivedDate = pi.SampleInward.CreatedOn,
                     SubTotal = pi.SubTotal,

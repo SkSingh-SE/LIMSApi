@@ -1,6 +1,7 @@
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Models;
+using LIMSApi.Services.Interface;
 using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.ServiceWORepo
@@ -13,11 +14,44 @@ namespace LIMSApi.ServiceWORepo
     {
         private readonly LIMSContext _db;
         private readonly ILogger<TestPriceCalculationService> _logger;
+        private readonly IFinancialYearService _fyService;
 
-        public TestPriceCalculationService(LIMSContext db, ILogger<TestPriceCalculationService> logger)
+        public TestPriceCalculationService(LIMSContext db, ILogger<TestPriceCalculationService> logger, IFinancialYearService fyService)
         {
             _db = db;
             _logger = logger;
+            _fyService = fyService;
+        }
+
+        /// <summary>
+        /// Get InvoiceCase for a lab test with FY filtering.
+        /// Tries current FY first, falls back to any active case if no FY match.
+        /// </summary>
+        private async Task<InvoiceCase?> GetInvoiceCaseForTestAsync(long laboratoryTestId)
+        {
+            var currentFY = await _fyService.GetCurrentFinancialYearAsync();
+
+            // Try current FY first
+            var invoiceCase = await _db.InvoiceCases
+                .Where(ic => ic.LaboratoryTestID == laboratoryTestId && ic.IsActive && ic.FinancialYear == currentFY)
+                .Include(ic => ic.InvoiceCasePrices)
+                    .ThenInclude(p => p.Configuration)
+                .FirstOrDefaultAsync();
+
+            if (invoiceCase != null) return invoiceCase;
+
+            // Fallback: any active case (log warning)
+            invoiceCase = await _db.InvoiceCases
+                .Where(ic => ic.LaboratoryTestID == laboratoryTestId && ic.IsActive)
+                .Include(ic => ic.InvoiceCasePrices)
+                    .ThenInclude(p => p.Configuration)
+                .FirstOrDefaultAsync();
+
+            if (invoiceCase != null)
+                _logger.LogWarning("No InvoiceCase for FY {FY} and LabTest {LabTestId}. Using fallback FY {FallbackFY}.",
+                    currentFY, laboratoryTestId, invoiceCase.FinancialYear);
+
+            return invoiceCase;
         }
 
         /// <inheritdoc />
@@ -30,12 +64,8 @@ namespace LIMSApi.ServiceWORepo
             if (header == null)
                 throw new Exception($"TestResultHeader {headerId} not found");
 
-            // Get InvoiceCase for this LaboratoryTest
-            var invoiceCase = await _db.InvoiceCases
-                .Where(ic => ic.LaboratoryTestID == header.LaboratoryTestID && ic.IsActive)
-                .Include(ic => ic.InvoiceCasePrices)
-                    .ThenInclude(p => p.Configuration)
-                .FirstOrDefaultAsync();
+            // Get InvoiceCase for this LaboratoryTest (FY-filtered with fallback)
+            var invoiceCase = await GetInvoiceCaseForTestAsync(header.LaboratoryTestID);
 
             decimal calculatedTotal = 0;
             string? message = null;
@@ -88,11 +118,7 @@ namespace LIMSApi.ServiceWORepo
             if (header == null)
                 throw new Exception($"TestResultHeader {headerId} not found");
 
-            var invoiceCase = await _db.InvoiceCases
-                .Where(ic => ic.LaboratoryTestID == header.LaboratoryTestID && ic.IsActive)
-                .Include(ic => ic.InvoiceCasePrices)
-                    .ThenInclude(p => p.Configuration)
-                .FirstOrDefaultAsync();
+            var invoiceCase = await GetInvoiceCaseForTestAsync(header.LaboratoryTestID);
 
             if (invoiceCase == null || !invoiceCase.InvoiceCasePrices.Any())
                 return new List<PriceBreakdownDto>();
@@ -148,11 +174,7 @@ namespace LIMSApi.ServiceWORepo
 
             // Build breakdown
             var breakdown = new List<PriceBreakdownDto>();
-            var invoiceCase = await _db.InvoiceCases
-                .Where(ic => ic.LaboratoryTestID == header.LaboratoryTestID && ic.IsActive)
-                .Include(ic => ic.InvoiceCasePrices)
-                    .ThenInclude(p => p.Configuration)
-                .FirstOrDefaultAsync();
+            var invoiceCase = await GetInvoiceCaseForTestAsync(header.LaboratoryTestID);
 
             string? message = null;
 

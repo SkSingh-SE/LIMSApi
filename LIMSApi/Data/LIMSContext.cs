@@ -87,7 +87,6 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<SpecificationHeader> SpecificationHeaders { get; set; }
     public virtual DbSet<SpecificationGrade> SpecificationGrades { get; set; }
     public virtual DbSet<SpecificationLine> SpecificationLines { get; set; }
-    public virtual DbSet<SpecificationLineLaboratoryTest> SpecificationLineLaboratoryTests { get; set; }
 
     public virtual DbSet<SpecimenOrientationMaster> SpecimenOrientationMasters { get; set; }
     public virtual DbSet<SpecimenTypeMaster> SpecimenTypeMasters { get; set; }
@@ -236,6 +235,7 @@ public partial class LIMSContext : DbContext
     public DbSet<NumberingConfig> NumberingConfigs => Set<NumberingConfig>();
     public DbSet<GstConfig> GstConfigs => Set<GstConfig>();
     public DbSet<FinancialYear> FinancialYears => Set<FinancialYear>();
+    public DbSet<FinancialYearChangeLog> FinancialYearChangeLogs => Set<FinancialYearChangeLog>();
     public DbSet<AuthorizedSignatory> AuthorizedSignatories => Set<AuthorizedSignatory>();
 
     public DbSet<CustomerLedger> CustomerLedgers { get; set; }
@@ -257,9 +257,6 @@ public partial class LIMSContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<SpecificationLineLaboratoryTest>()
-      .HasKey(x => new { x.SpecificationLineID, x.LaboratoryTestID });
-
         modelBuilder.Entity<MetalClassificationParameter>().HasKey(x => new { x.MetalClassificationID, x.ParameterID });
 
         modelBuilder.Entity<ParameterSpecimenOrientation>().HasKey(x => new { x.ParameterID, x.SpecimenOrientationID });

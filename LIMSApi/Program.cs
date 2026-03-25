@@ -338,6 +338,7 @@ builder.Services.AddScoped<IMaterialTestMappingService, MaterialTestMappingServi
 builder.Services.AddScoped<ISampleStatusService, SampleStatusService>();
 builder.Services.AddScoped<ICuttingService, CuttingService>();
 builder.Services.AddScoped<IPriceCalculationService, PriceCalculationService>();
+builder.Services.AddScoped<IFinancialYearService, FinancialYearService>();
 builder.Services.AddScoped<INablService, NablService>();
 builder.Services.AddScoped<INablAuditService, NablAuditService>();
 builder.Services.AddScoped<IPriceDimensionTypeService, PriceDimensionTypeService>();
