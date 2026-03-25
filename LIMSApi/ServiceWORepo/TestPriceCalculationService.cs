@@ -510,7 +510,22 @@ namespace LIMSApi.ServiceWORepo
                 var paramName = (param.ParameterName ?? "").Trim().ToLower();
                 if (string.IsNullOrWhiteSpace(paramName)) continue;
 
-                if (configNames.Any(cn => cn == paramName || cn.Contains(paramName) || paramName.Contains(cn)))
+                // Strict matching: exact, then token-based (no loose Contains)
+                bool matched = configNames.Any(cn => cn == paramName); // Exact match
+
+                if (!matched && paramName.Length > 2)
+                {
+                    // Token-based match for names with 3+ chars
+                    var separators = new[] { ' ', '-', '_' };
+                    var paramTokens = paramName.Split(separators, StringSplitOptions.RemoveEmptyEntries);
+                    matched = configNames.Any(cn =>
+                    {
+                        var cnTokens = cn.Split(separators, StringSplitOptions.RemoveEmptyEntries);
+                        return paramTokens.Any(pt => pt.Length >= 3 && cnTokens.Contains(pt));
+                    });
+                }
+
+                if (matched)
                 {
                     if (param.Value.HasValue) return param.Value.Value;
                 }
@@ -543,17 +558,20 @@ namespace LIMSApi.ServiceWORepo
 
         /// <summary>
         /// Check if a parameter name matches an InvoiceCasePrice Name or AliasName (case-insensitive).
+        /// Matching priority: 1) Exact match, 2) Alias exact match, 3) Token match (3+ chars only).
+        /// Short names (≤2 chars, e.g. chemical elements C, Mn, Si) only match via exact or alias.
+        /// Always returns parent Config ID reference — no confusion about which config matched.
         /// </summary>
         private bool MatchesName(string paramNameLower, string priceName, string priceAlias)
         {
             var priceNameLower = (priceName ?? "").Trim().ToLower();
             var priceAliasLower = (priceAlias ?? "").Trim().ToLower();
 
-            // Exact match
+            // 1. Exact match
             if (paramNameLower == priceNameLower)
                 return true;
 
-            // Check alias (comma-separated)
+            // 2. Alias exact match (comma-separated)
             if (!string.IsNullOrWhiteSpace(priceAliasLower))
             {
                 var aliases = priceAliasLower.Split(',', StringSplitOptions.RemoveEmptyEntries)
@@ -563,8 +581,16 @@ namespace LIMSApi.ServiceWORepo
                     return true;
             }
 
-            // Partial match (contains)
-            if (priceNameLower.Contains(paramNameLower) || paramNameLower.Contains(priceNameLower))
+            // 3. Short names (≤2 chars) — only exact/alias match, skip token matching
+            if (paramNameLower.Length <= 2 || priceNameLower.Length <= 2)
+                return false;
+
+            // 4. Token-based match (split by space/hyphen/underscore, match exact tokens)
+            var separators = new[] { ' ', '-', '_' };
+            var paramTokens = paramNameLower.Split(separators, StringSplitOptions.RemoveEmptyEntries);
+            var priceTokens = priceNameLower.Split(separators, StringSplitOptions.RemoveEmptyEntries);
+
+            if (paramTokens.Any(pt => pt.Length >= 3 && priceTokens.Contains(pt)))
                 return true;
 
             return false;
