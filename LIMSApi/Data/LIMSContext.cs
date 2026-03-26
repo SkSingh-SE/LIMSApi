@@ -87,6 +87,7 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<SpecificationHeader> SpecificationHeaders { get; set; }
     public virtual DbSet<SpecificationGrade> SpecificationGrades { get; set; }
     public virtual DbSet<SpecificationLine> SpecificationLines { get; set; }
+    public virtual DbSet<SpecificationLineLaboratoryTest> SpecificationLineLaboratoryTests { get; set; }
 
     public virtual DbSet<SpecimenOrientationMaster> SpecimenOrientationMasters { get; set; }
     public virtual DbSet<SpecimenTypeMaster> SpecimenTypeMasters { get; set; }
@@ -539,6 +540,10 @@ public partial class LIMSContext : DbContext
     .WithMany()
     .HasForeignKey(x => x.TaxInvoiceID)
     .OnDelete(DeleteBehavior.Restrict);
+
+        // SpecificationLineLaboratoryTest composite key
+        modelBuilder.Entity<SpecificationLineLaboratoryTest>()
+            .HasKey(x => new { x.SpecificationLineID, x.LaboratoryTestID });
 
         // CustomerLedger relationships
         modelBuilder.Entity<CustomerLedger>()
