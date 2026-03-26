@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
@@ -11,9 +11,13 @@ namespace LIMSApi.Models
 
         public long LabScopeID { get; set; }
         public long TestMethodSpecificationID { get; set; }
+        public long? TestMethodSpecificationVersionID { get; set; }
 
         [ForeignKey("LabScopeID"),JsonIgnore]
         public virtual LabScopeMaster? LabScope { get; set; }
+
+        [ForeignKey("TestMethodSpecificationVersionID"), JsonIgnore]
+        public virtual TestMethodSpecificationVersion? TestMethodSpecificationVersion { get; set; }
 
 
         public ICollection<LabScopeSpecificationParameter> Parameters { get; set; } = new List<LabScopeSpecificationParameter>();

@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
+using LIMSApi.Helpers.Enums;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
@@ -37,9 +38,21 @@ namespace LIMSApi.Services
 
             if (model.Versions.Any())
             {
-                foreach(var version in model.Versions)
+                var activeCount = model.Versions.Count(v => v.Status == VersionStatus.Active);
+                if (activeCount > 1)
+                    throw new InvalidOperationException("Only one version can be Active at a time!");
+
+                foreach (var version in model.Versions)
                 {
                     version.TestMethodSpecificationID = model.ID;
+                    version.CreatedBy = loggedInUser.EmployeeID;
+                    version.CreatedOn = DateTime.UtcNow;
+
+                    if (version.Status == VersionStatus.Active && version.EffectiveDate == null)
+                    {
+                        version.EffectiveDate = DateTime.UtcNow;
+                    }
+
                     if (version.file != null)
                     {
                         var fileUploadResponse = await _uploadService.UploadFileAsync(version.file, FileType.Other, null, version.StandardFile);
@@ -69,7 +82,6 @@ namespace LIMSApi.Services
             if (existingTestMethodSpecification == null)
                 throw new InvalidOperationException("TestMethodSpecification not found!");
 
-
             existingTestMethodSpecification.Name = model.Name;
             existingTestMethodSpecification.Part = model.Part;
             existingTestMethodSpecification.StandardOrganizationID = model.StandardOrganizationID;
@@ -81,11 +93,15 @@ namespace LIMSApi.Services
             existingTestMethodSpecification.ModifiedOn = DateTime.UtcNow;
             existingTestMethodSpecification.ModifiedBy = loggedInUser.EmployeeID;
 
-            
+            var activeCount = model.Versions.Count(v => v.Status == VersionStatus.Active);
+            if (activeCount > 1)
+                throw new InvalidOperationException("Only one version can be Active at a time!");
+
             var updatedVersionIds = model.Versions.Select(v => v.ID).ToHashSet();
 
-            
-            var toRemove = existingTestMethodSpecification.Versions.Where(v => !updatedVersionIds.Contains(v.ID)).ToList();
+            var toRemove = existingTestMethodSpecification.Versions
+                .Where(v => !updatedVersionIds.Contains(v.ID))
+                .ToList();
             foreach (var item in toRemove)
             {
                 existingTestMethodSpecification.Versions.Remove(item);
@@ -106,21 +122,58 @@ namespace LIMSApi.Services
 
                 if (existingVersion != null)
                 {
+                    // Lifecycle transition: activating a version that was not active before
+                    if (versionModel.Status == VersionStatus.Active && existingVersion.Status != VersionStatus.Active)
+                    {
+                        var currentActive = existingTestMethodSpecification.Versions
+                            .FirstOrDefault(v => v.Status == VersionStatus.Active && v.ID != versionModel.ID);
+                        if (currentActive != null)
+                        {
+                            currentActive.Status = VersionStatus.Superseded;
+                            currentActive.SupersededDate = DateTime.UtcNow;
+                        }
+                        versionModel.EffectiveDate = DateTime.UtcNow;
+                    }
+
                     existingVersion.Version = versionModel.Version;
                     existingVersion.StandardFile = versionModel.StandardFile;
                     existingVersion.StandardFilePath = versionModel.StandardFilePath;
-                    existingVersion.Default = versionModel.Default;
+                    existingVersion.Status = versionModel.Status;
+                    existingVersion.Year = versionModel.Year;
+                    existingVersion.EffectiveDate = versionModel.EffectiveDate;
+                    existingVersion.SupersededDate = versionModel.SupersededDate;
+                    existingVersion.ReviewDate = versionModel.ReviewDate;
+                    existingVersion.ChangeReason = versionModel.ChangeReason;
                     existingVersion.UploadReferenceID = versionModel.UploadReferenceID;
                 }
                 else
                 {
+                    if (versionModel.Status == VersionStatus.Active)
+                    {
+                        var currentActive = existingTestMethodSpecification.Versions
+                            .FirstOrDefault(v => v.Status == VersionStatus.Active);
+                        if (currentActive != null)
+                        {
+                            currentActive.Status = VersionStatus.Superseded;
+                            currentActive.SupersededDate = DateTime.UtcNow;
+                        }
+                        versionModel.EffectiveDate ??= DateTime.UtcNow;
+                    }
+
                     existingTestMethodSpecification.Versions.Add(new TestMethodSpecificationVersion
                     {
                         Version = versionModel.Version,
                         StandardFile = versionModel.StandardFile,
                         StandardFilePath = versionModel.StandardFilePath,
-                        Default = versionModel.Default,
-                        UploadReferenceID = versionModel.UploadReferenceID
+                        Status = versionModel.Status,
+                        Year = versionModel.Year,
+                        EffectiveDate = versionModel.EffectiveDate,
+                        SupersededDate = versionModel.SupersededDate,
+                        ReviewDate = versionModel.ReviewDate,
+                        ChangeReason = versionModel.ChangeReason,
+                        UploadReferenceID = versionModel.UploadReferenceID,
+                        CreatedBy = loggedInUser.EmployeeID,
+                        CreatedOn = DateTime.UtcNow
                     });
                 }
             }
@@ -142,6 +195,7 @@ namespace LIMSApi.Services
             await _TestMethodSpecificationRepository.UpdateTestMethodSpecification(existingTestMethodSpecification);
             _logger.LogInformation("TestMethodSpecification with ID '{TestMethodSpecificationId}' deleted successfully.", id);
         }
+
         public async Task EnableDisableTestMethodSpecification(long id)
         {
             var existingTestMethodSpecification = await _TestMethodSpecificationRepository.GetTestMethodSpecificationById(id);
@@ -153,7 +207,7 @@ namespace LIMSApi.Services
             existingTestMethodSpecification.ModifiedBy = loggedInUser.EmployeeID;
 
             await _TestMethodSpecificationRepository.UpdateTestMethodSpecification(existingTestMethodSpecification);
-            _logger.LogInformation("TestMethodSpecification with ID '{TestMethodSpecificationId}' deleted successfully.", id);
+            _logger.LogInformation("TestMethodSpecification with ID '{TestMethodSpecificationId}' {Action} successfully.", id, existingTestMethodSpecification.IsDisabled ? "disabled" : "enabled");
         }
 
         public async Task<TestMethodSpecification> GetTestMethodSpecificationDetails(long id)
@@ -180,5 +234,68 @@ namespace LIMSApi.Services
             return await _TestMethodSpecificationRepository.GetTestMethodSpecificationsByStandard(standardId);
         }
 
+        public async Task ActivateVersion(long specId, long versionId)
+        {
+            var spec = await _TestMethodSpecificationRepository.GetTestMethodSpecificationById(specId);
+            if (spec == null)
+                throw new InvalidOperationException("TestMethodSpecification not found!");
+
+            var targetVersion = spec.Versions.FirstOrDefault(v => v.ID == versionId);
+            if (targetVersion == null)
+                throw new InvalidOperationException("Version not found!");
+
+            if (targetVersion.Status != VersionStatus.Draft)
+                throw new InvalidOperationException("Only Draft versions can be activated!");
+
+            var currentActive = spec.Versions.FirstOrDefault(v => v.Status == VersionStatus.Active);
+            if (currentActive != null)
+            {
+                currentActive.Status = VersionStatus.Superseded;
+                currentActive.SupersededDate = DateTime.UtcNow;
+            }
+
+            targetVersion.Status = VersionStatus.Active;
+            targetVersion.EffectiveDate = DateTime.UtcNow;
+
+            spec.ModifiedOn = DateTime.UtcNow;
+            spec.ModifiedBy = loggedInUser.EmployeeID;
+
+            await _TestMethodSpecificationRepository.UpdateTestMethodSpecification(spec);
+            _logger.LogInformation("Version '{VersionId}' activated for TestMethodSpecification '{SpecId}'.", versionId, specId);
+        }
+
+        public async Task WithdrawVersion(long specId, long versionId, string reason)
+        {
+            var spec = await _TestMethodSpecificationRepository.GetTestMethodSpecificationById(specId);
+            if (spec == null)
+                throw new InvalidOperationException("TestMethodSpecification not found!");
+
+            var targetVersion = spec.Versions.FirstOrDefault(v => v.ID == versionId);
+            if (targetVersion == null)
+                throw new InvalidOperationException("Version not found!");
+
+            if (targetVersion.Status == VersionStatus.Withdrawn)
+                throw new InvalidOperationException("Version is already withdrawn!");
+
+            targetVersion.Status = VersionStatus.Withdrawn;
+            targetVersion.ChangeReason = reason;
+            targetVersion.SupersededDate = DateTime.UtcNow;
+
+            spec.ModifiedOn = DateTime.UtcNow;
+            spec.ModifiedBy = loggedInUser.EmployeeID;
+
+            await _TestMethodSpecificationRepository.UpdateTestMethodSpecification(spec);
+            _logger.LogInformation("Version '{VersionId}' withdrawn.", versionId);
+        }
+
+        public async Task<int> GetVersionImpactCount(long versionId)
+        {
+            return await _TestMethodSpecificationRepository.GetVersionImpactCount(versionId);
+        }
+
+        public async Task<List<DropdwonSelector>> GetActiveVersionsBySpecId(long specId)
+        {
+            return await _TestMethodSpecificationRepository.GetActiveVersionsBySpecId(specId);
+        }
     }
 }

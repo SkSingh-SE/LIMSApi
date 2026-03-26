@@ -622,6 +622,20 @@ public partial class LIMSContext : DbContext
             .HasForeignKey(x => x.ProductSpecificationID)
             .OnDelete(DeleteBehavior.NoAction);
 
+        // ProductSpecification → TestMethodSpecificationVersion (no cascade, nullable)
+        modelBuilder.Entity<ProductSpecification>()
+            .HasOne(x => x.TestMethodSpecificationVersion)
+            .WithMany()
+            .HasForeignKey(x => x.TestMethodSpecificationVersionID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // LabScopeSpecification → TestMethodSpecificationVersion (no cascade, nullable)
+        modelBuilder.Entity<LabScopeSpecification>()
+            .HasOne(x => x.TestMethodSpecificationVersion)
+            .WithMany()
+            .HasForeignKey(x => x.TestMethodSpecificationVersionID)
+            .OnDelete(DeleteBehavior.NoAction);
+
         // ProductTestGroup → LaboratoryTest (no cascade)
         modelBuilder.Entity<ProductTestGroup>()
             .HasOne(x => x.LaboratoryTest)

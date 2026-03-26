@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace LIMSApi.Dtos
 {
@@ -19,11 +19,28 @@ namespace LIMSApi.Dtos
     {
         public long ID { get; set; }
         public long TestMethodSpecificationID { get; set; }
-        public bool Default { get; set; }
+        public int Status { get; set; }
         public string Version { get; set; }
-        public string Year { get; set; }
-        public string StandardFile { get; set; } // match by name if needed
+        public int? Year { get; set; }
+        public DateTime? EffectiveDate { get; set; }
+        public DateTime? SupersededDate { get; set; }
+        public DateTime? ReviewDate { get; set; }
+        public string? ChangeReason { get; set; }
+        public string StandardFile { get; set; }
         public string StandardFilePath { get; set; }
         public long? UploadReferenceID { get; set; }
+    }
+
+    public class VersionActionDto
+    {
+        public long SpecificationId { get; set; }
+        public long VersionId { get; set; }
+    }
+
+    public class VersionWithdrawDto
+    {
+        public long SpecificationId { get; set; }
+        public long VersionId { get; set; }
+        public string Reason { get; set; } = string.Empty;
     }
 }

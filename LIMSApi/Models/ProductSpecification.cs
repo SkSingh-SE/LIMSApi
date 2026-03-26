@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace LIMSApi.Models
@@ -18,6 +18,7 @@ namespace LIMSApi.Models
         public long LaboratoryTestID { get; set; }
         public long MetalClassificationID { get; set; }
         public long TestMethodSpecificationID { get; set; }
+        public long? TestMethodSpecificationVersionID { get; set; }
 
         public bool IsCustom { get; set; }
         [ForeignKey("GradeID")]
@@ -29,6 +30,9 @@ namespace LIMSApi.Models
         public virtual MetalClassificationMaster? MetalClassification { get; set; }
         [ForeignKey("TestMethodSpecificationID")]
         public virtual TestMethodSpecification? TestMethodSpecification { get; set; }
+
+        [ForeignKey("TestMethodSpecificationVersionID")]
+        public virtual TestMethodSpecificationVersion? TestMethodSpecificationVersion { get; set; }
 
         public virtual ICollection<ProductTestGroup> ProductTestGroups { get; set; } = new List<ProductTestGroup>();
         public virtual ICollection<ProductSpecificationGrade> ProductSpecificationGrades { get; set; } = new List<ProductSpecificationGrade>();

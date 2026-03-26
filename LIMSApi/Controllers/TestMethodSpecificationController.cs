@@ -1,4 +1,5 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
+using LIMSApi.Helpers.Enums;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
@@ -60,7 +61,12 @@ namespace LIMSApi.Controllers
                     Version = v.Version,
                     StandardFile = v.StandardFile,
                     StandardFilePath = v.StandardFilePath,
-                    Default = v.Default,
+                    Status = (VersionStatus)v.Status,
+                    Year = v.Year,
+                    EffectiveDate = v.EffectiveDate,
+                    SupersededDate = v.SupersededDate,
+                    ReviewDate = v.ReviewDate,
+                    ChangeReason = v.ChangeReason,
                     UploadReferenceID = v.UploadReferenceID,
                     file = uploadedFiles.FirstOrDefault(f => f.FileName == v.StandardFile)
                 }).ToList();
@@ -97,7 +103,12 @@ namespace LIMSApi.Controllers
                     Version = v.Version,
                     StandardFile = v.StandardFile,
                     StandardFilePath = v.StandardFilePath,
-                    Default = v.Default,
+                    Status = (VersionStatus)v.Status,
+                    Year = v.Year,
+                    EffectiveDate = v.EffectiveDate,
+                    SupersededDate = v.SupersededDate,
+                    ReviewDate = v.ReviewDate,
+                    ChangeReason = v.ChangeReason,
                     UploadReferenceID = v.UploadReferenceID,
                     file = uploadedFiles.FirstOrDefault(f => f.FileName == v.StandardFile)
                 }).ToList();
@@ -158,6 +169,32 @@ namespace LIMSApi.Controllers
             return data == null ? NoContent() : Ok(data);
         }
 
+        [HttpPost("activate-version")]
+        public async Task<IActionResult> ActivateVersion([FromBody] VersionActionDto dto)
+        {
+            await _testMethodService.ActivateVersion(dto.SpecificationId, dto.VersionId);
+            return Ok(new { status = "success", message = "Version activated successfully." });
+        }
 
+        [HttpPost("withdraw-version")]
+        public async Task<IActionResult> WithdrawVersion([FromBody] VersionWithdrawDto dto)
+        {
+            await _testMethodService.WithdrawVersion(dto.SpecificationId, dto.VersionId, dto.Reason);
+            return Ok(new { status = "success", message = "Version withdrawn successfully." });
+        }
+
+        [HttpGet("version-impact/{versionId}")]
+        public async Task<IActionResult> GetVersionImpact(long versionId)
+        {
+            var count = await _testMethodService.GetVersionImpactCount(versionId);
+            return Ok(new { linkedRecords = count });
+        }
+
+        [HttpGet("{specId}/versions/dropdown")]
+        public async Task<IActionResult> GetActiveVersionsDropdown(long specId)
+        {
+            var data = await _testMethodService.GetActiveVersionsBySpecId(specId);
+            return Ok(data);
+        }
     }
 }

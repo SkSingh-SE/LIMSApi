@@ -1,5 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using LIMSApi.Helpers.Enums;
 
 namespace LIMSApi.Models
 {
@@ -14,17 +15,39 @@ namespace LIMSApi.Models
         [MaxLength(50)]
         public string Version { get; set; } = string.Empty;
 
+        public int? Year { get; set; }
+
+        [Required]
+        [Column(TypeName = "varchar(20)")]
+        [EnumDataType(typeof(VersionStatus))]
+        public VersionStatus Status { get; set; } = VersionStatus.Draft;
+
+        public DateTime? EffectiveDate { get; set; }
+
+        public DateTime? SupersededDate { get; set; }
+
+        public DateTime? ReviewDate { get; set; }
+
+        [MaxLength(500)]
+        public string? ChangeReason { get; set; }
+
         [MaxLength(255)]
         public string? StandardFile { get; set; }
 
         [MaxLength(500)]
         public string? StandardFilePath { get; set; }
 
-        public bool Default { get; set; }
         public long? UploadReferenceID { get; set; }
 
-        [NotMapped]
-        public IFormFile? file { get; set; } 
-    }
+        public long CreatedBy { get; set; }
 
+        public DateTime CreatedOn { get; set; } = DateTime.UtcNow;
+
+        [NotMapped]
+        public IFormFile? file { get; set; }
+
+        [ForeignKey("TestMethodSpecificationID")]
+        [System.Text.Json.Serialization.JsonIgnore]
+        public virtual TestMethodSpecification? TestMethodSpecification { get; set; }
+    }
 }

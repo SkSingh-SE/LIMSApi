@@ -478,6 +478,11 @@ RecurringJob.AddOrUpdate<TestUsageStatsJob>(
     x => x.Execute(),
     "0 2 * * *"); // Daily at 2 AM
 
+RecurringJob.AddOrUpdate<VersionReviewReminderJob>(
+    "version-review-reminder",
+    x => x.Execute(),
+    "0 9 * * MON"); // Every Monday at 9 AM
+
 // --------------------
 // Endpoints
 // --------------------
