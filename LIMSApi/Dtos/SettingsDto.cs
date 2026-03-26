@@ -37,6 +37,7 @@ namespace LIMSApi.Dtos
         public string? PanNumber { get; set; }
         public string? StateCode { get; set; }
         public int DefaultGstRate { get; set; }
+        public bool PIGstApplicable { get; set; }
     }
     public sealed class FinancialYearDto
     {

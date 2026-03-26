@@ -48,10 +48,10 @@ namespace LIMSApi.Services
 
             existingDimensionalFactor.Name = model.Name;
             existingDimensionalFactor.Code = model.Code;
-            existingDimensionalFactor.ParameterUnitID = model.ParameterUnitID;
+            existingDimensionalFactor.ParameterUnitID = (model.ParameterUnitID == null || model.ParameterUnitID == 0) ? null : model.ParameterUnitID;
             existingDimensionalFactor.Instrument = model.Instrument;
             existingDimensionalFactor.ToleranceType = model.ToleranceType;
-            existingDimensionalFactor.DefaultTestMethodID = model.DefaultTestMethodID;
+            existingDimensionalFactor.DefaultTestMethodID = (model.DefaultTestMethodID == null || model.DefaultTestMethodID == 0) ? null : model.DefaultTestMethodID;
 
             // Update ApplicableForms junction
             existingDimensionalFactor.ApplicableForms?.Clear();

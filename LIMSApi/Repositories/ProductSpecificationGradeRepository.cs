@@ -67,7 +67,7 @@ namespace LIMSApi.Repositories
                               psg.ProductSpecificationID,
                               ProductSpecificationName = ps != null ? ps.SpecificationName : string.Empty,
                               psg.SpecificationGradeID,
-                              GradeName = sg != null ? sg.Grade : string.Empty,
+                              SpecificationGradeName = sg != null ? sg.Grade : string.Empty,
                               MaterialSpecification = sh != null && sg != null ? $"{sh.AliasName}-{sg.Grade}" : string.Empty,
                               psg.AliasName
                           })
@@ -79,7 +79,7 @@ namespace LIMSApi.Repositories
                 var search = filter.searchTerm.Trim().ToLower();
                 _query = _query.Where(x =>
                     (x.ProductSpecificationName != null && x.ProductSpecificationName.ToLower().Contains(search))
-                    || (x.GradeName != null && x.GradeName.ToLower().Contains(search))
+                    || (x.SpecificationGradeName != null && x.SpecificationGradeName.ToLower().Contains(search))
                     || (x.MaterialSpecification != null && x.MaterialSpecification.ToLower().Contains(search))
                     || (x.AliasName != null && x.AliasName.ToLower().Contains(search))
                 );
@@ -116,7 +116,7 @@ namespace LIMSApi.Repositories
                                   psg.ID,
                                   psg.ProductSpecificationID,
                                   psg.SpecificationGradeID,
-                                  GradeName = sg != null ? sg.Grade : string.Empty,
+                                  SpecificationGradeName = sg != null ? sg.Grade : string.Empty,
                                   MaterialSpecification = sh != null && sg != null ? $"{sh.AliasName}-{sg.Grade}" : string.Empty,
                                   psg.AliasName
                               }).ToListAsync();

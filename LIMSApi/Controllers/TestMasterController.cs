@@ -55,7 +55,8 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("TestMaster not found!");
             }
-            return Ok($"TestMaster '{entity.Name}' created successfully");
+            await _testMasterService.RemoveTestMaster(id);
+            return Ok($"TestMaster '{entity.Name}' deleted successfully");
         }
 
         [HttpGet("dropdown")]

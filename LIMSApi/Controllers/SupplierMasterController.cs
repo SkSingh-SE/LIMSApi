@@ -29,7 +29,7 @@ namespace LIMSApi.Controllers
         {
             var entity = await _supplierService.GetSupplierDetails(id);
 
-            return entity == null ? NoContent() : Ok(entity);
+            return entity == null ? NotFound("Supplier not found!") : Ok(entity);
         }
 
 

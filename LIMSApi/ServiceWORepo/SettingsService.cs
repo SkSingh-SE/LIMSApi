@@ -286,7 +286,7 @@ namespace LIMSApi.ServiceWORepo
                 Gstin = gst?.GstNumber,
                 PanNumber = null,
                 StateCode = gst?.State,
-                DefaultGstRate = gst?.DefaultGstRate ?? 18,
+                DefaultGstRate = (int)(gst?.DefaultGstRate ?? 18),
                 PIGstApplicable = gst?.PIGstApplicable ?? true
             };
 

@@ -69,7 +69,7 @@ namespace LIMSApi.Repositories
                               ptg.LaboratoryTestID,
                               LaboratoryTestName = lt != null ? lt.Name : string.Empty,
                               ptg.TestMethodStandardID,
-                              TestMethodStandardName = tms != null ? tms.Name : string.Empty,
+                              TestMethodSpecificationName = tms != null ? tms.Name : string.Empty,
                               ptg.IsPerBatch,
                               ptg.Year,
                               ptg.Remark
@@ -83,7 +83,7 @@ namespace LIMSApi.Repositories
                 _query = _query.Where(x =>
                     (x.ProductSpecificationName != null && x.ProductSpecificationName.ToLower().Contains(search))
                     || (x.LaboratoryTestName != null && x.LaboratoryTestName.ToLower().Contains(search))
-                    || (x.TestMethodStandardName != null && x.TestMethodStandardName.ToLower().Contains(search))
+                    || (x.TestMethodSpecificationName != null && x.TestMethodSpecificationName.ToLower().Contains(search))
                 );
             }
             if (filter.SortByColumn != null)
@@ -147,7 +147,7 @@ namespace LIMSApi.Repositories
                                   ptg.LaboratoryTestID,
                                   LaboratoryTestName = lt != null ? lt.Name : string.Empty,
                                   ptg.TestMethodStandardID,
-                                  TestMethodStandardName = tms != null ? tms.Name : string.Empty,
+                                  TestMethodSpecificationName = tms != null ? tms.Name : string.Empty,
                                   ptg.IsPerBatch,
                                   ptg.Year,
                                   ptg.Remark

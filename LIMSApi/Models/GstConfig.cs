@@ -17,6 +17,8 @@ namespace LIMSApi.Models
 
         [StringLength(500)]
         public string? Address { get; set; }
+        public decimal DefaultGstRate { get; set; } = 18;
+        public bool PIGstApplicable { get; set; } = true;
         public long OrganizationId { get; set; }
     }
 }

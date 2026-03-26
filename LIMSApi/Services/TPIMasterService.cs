@@ -1,4 +1,5 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
@@ -10,12 +11,14 @@ namespace LIMSApi.Services
     {
         private readonly ITPIMasterRepository _itemRepository;
         private readonly ILogger<TPIMasterService> _logger;
+        private readonly LIMSContext _context;
         private LoggedInUserDTO loggedInUser;
 
-        public TPIMasterService(ITPIMasterRepository itemMasterRepository, ILogger<TPIMasterService> logger)
+        public TPIMasterService(ITPIMasterRepository itemMasterRepository, ILogger<TPIMasterService> logger, LIMSContext context)
         {
             _itemRepository = itemMasterRepository;
             _logger = logger;
+            _context = context;
             loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
@@ -65,6 +68,8 @@ namespace LIMSApi.Services
             var existingTPIMaster = await _itemRepository.GetTPIById(id);
             if (existingTPIMaster == null)
                 throw new InvalidOperationException("TPIMaster not found!");
+
+            await DeleteValidationHelper.ValidateDeleteAsync<TPIMaster>(_context, id, "TPI");
 
             existingTPIMaster.IsActive = false;
             existingTPIMaster.ModifiedOn = DateTime.UtcNow;
