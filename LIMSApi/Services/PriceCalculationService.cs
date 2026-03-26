@@ -339,6 +339,44 @@ namespace LIMSApi.Services
 
             pricingResult.TotalAmount = chargeEvents.Sum(x => x.Amount);
 
+            // ── MINIMUM CHARGE CHECK ──
+            // Separate minimums for test cases vs prep-only cases
+            if (pricingResult.TotalAmount > 0)
+            {
+                var hasTestCharges = chargeEvents.Any(e => e.ChargeType == "Test");
+                var hasPrepCharges = chargeEvents.Any(e =>
+                    e.ChargeType == "Cutting" || e.ChargeType == "Preparation" || e.ChargeType == "CustomPreparation");
+                var isPrepOnly = !hasTestCharges && hasPrepCharges;
+                var configKey = isPrepOnly ? "MINIMUM_CHARGE_PREP" : "MINIMUM_CHARGE_TEST";
+
+                var minConfig = await _db.Configurations
+                    .FirstOrDefaultAsync(c => c.KeyName == configKey && c.GroupName == "BILLING" && c.IsActive);
+
+                if (minConfig != null && decimal.TryParse(minConfig.Value, out var minCharge) && minCharge > 0)
+                {
+                    if (pricingResult.TotalAmount < minCharge)
+                    {
+                        var adjustment = Math.Round(minCharge - pricingResult.TotalAmount, 2, MidpointRounding.AwayFromZero);
+                        chargeEvents.Add(new ChargeEvent
+                        {
+                            InwardID = inwardId,
+                            ChargeType = "MinimumChargeAdjustment",
+                            Description = $"Minimum charge adjustment (Min: {minCharge:0.00})",
+                            Quantity = 1,
+                            Rate = adjustment,
+                            Amount = adjustment,
+                            Status = ChargeEventStatus.DRAFT.ToString(),
+                            CreatedOn = DateTime.UtcNow
+                        });
+                        pricingResult.TotalAmount = minCharge;
+                        pricingResult.Warnings.Add($"Minimum charge of {minCharge:0.00} applied (type: {(isPrepOnly ? "Prep-Only" : "Test")}). Adjustment: +{adjustment:0.00}");
+                        pricingResult.SuccessCount++;
+                        _logger.LogInformation("Minimum charge applied for Case {CaseNo}: {ConfigKey}={MinCharge}, Adjustment={Adjustment}",
+                            inward.CaseNo, configKey, minCharge, adjustment);
+                    }
+                }
+            }
+
             if (!dryRun)
             {
                 // Save all ChargeEvents
