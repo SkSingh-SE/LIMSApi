@@ -207,6 +207,17 @@ namespace LIMSApi.Helpers
                     }
 
                     Line("Sub Total", _model.SubTotal);
+
+                    // Conditional discount line
+                    if (_model.DiscountAmount > 0)
+                    {
+                        var discLabel = _model.DiscountPercentage.HasValue
+                            ? $"Discount @ {_model.DiscountPercentage.Value:0.##}%"
+                            : "Discount";
+                        Line(discLabel, -_model.DiscountAmount);
+                        Line("After Discount", _model.DiscountedSubTotal);
+                    }
+
                     Line("CGST @ 9%", _model.CGST);
                     Line("SGST @ 9%", _model.SGST);
                     Line("IGST @ 18%", _model.IGST);

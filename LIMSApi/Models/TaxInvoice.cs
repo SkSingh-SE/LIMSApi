@@ -16,11 +16,18 @@ namespace LIMSApi.Models
         public long CustomerID { get; set; }
 
         // Amounts (finalized)
-        public decimal SubTotal { get; set; } = 0;
+        public decimal SubTotal { get; set; } = 0;       // Original sum of ChargeEvents (pre-discount)
+
+        // Customer discount (applied before GST)
+        [Column(TypeName = "decimal(5,2)")]
+        public decimal? DiscountPercentage { get; set; }
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal DiscountAmount { get; set; } = 0;  // SubTotal × DiscountPercentage / 100
+
         public decimal CGST { get; set; } = 0;
         public decimal SGST { get; set; } = 0;
         public decimal IGST { get; set; } = 0;
-        public decimal GrandTotal { get; set; } = 0;
+        public decimal GrandTotal { get; set; } = 0;      // (SubTotal - DiscountAmount) + GST
 
         public string Status { get; set; } = "Generated";
         // Generated | Sent | Paid | PartiallyPaid

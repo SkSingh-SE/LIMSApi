@@ -199,28 +199,41 @@ namespace LIMSApi.Repositories
                 }
 
                 // ===========================
-                //  5. GRAND TOTAL
+                //  5. GRAND TOTAL (with customer discount)
                 // ===========================
                 var subTotal = cuttingAmount + machiningAmount + totalTestAmount;
 
+                // Customer discount (applied before GST — standard Indian taxation)
+                decimal discountPct = 0;
+                decimal discountAmt = 0;
+                if (inward!.Customer?.ConstantDiscount == true
+                    && inward.Customer.ConstantDiscountPercentage.HasValue
+                    && inward.Customer.ConstantDiscountPercentage.Value > 0
+                    && inward.Customer.ConstantDiscountPercentage.Value <= 100)
+                {
+                    discountPct = inward.Customer.ConstantDiscountPercentage.Value;
+                    discountAmt = Math.Round(subTotal * discountPct / 100m, 2, MidpointRounding.AwayFromZero);
+                }
+                var discountedSubTotal = subTotal - discountAmt;
+
                 decimal cgst = 0, sgst = 0, igst = 0;
 
-                // Apply GST on PI only if system config allows AND customer is not GST-exempt
+                // Apply GST on discounted subtotal (only if system config allows AND customer is not GST-exempt)
                 if (piGstApplicable && !customerGstExempt)
                 {
                     if (isInterState)
                     {
-                        igst = subTotal * gstRate / 100m;
+                        igst = Math.Round(discountedSubTotal * gstRate / 100m, 2, MidpointRounding.AwayFromZero);
                     }
                     else
                     {
-                        cgst = subTotal * halfRate / 100m;
-                        sgst = subTotal * halfRate / 100m;
+                        cgst = Math.Round(discountedSubTotal * halfRate / 100m, 2, MidpointRounding.AwayFromZero);
+                        sgst = Math.Round(discountedSubTotal * halfRate / 100m, 2, MidpointRounding.AwayFromZero);
                     }
                 }
 
                 var taxAmount = cgst + sgst + igst;
-                var grandTotal = subTotal + taxAmount;
+                var grandTotal = discountedSubTotal + taxAmount;
 
                 // ===========================
                 //  6. INSERT PI HEADER
@@ -232,6 +245,8 @@ namespace LIMSApi.Repositories
                     PIDate = DateTime.Now,
 
                     SubTotal = subTotal,
+                    DiscountPercentage = discountAmt > 0 ? discountPct : null,
+                    DiscountAmount = discountAmt,
                     CGST = cgst,
                     SGST = sgst,
                     IGST = igst,

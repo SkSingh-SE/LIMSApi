@@ -82,7 +82,9 @@ namespace LIMSApi.ServiceWORepo
                      CustomerType = c.CustomerType, // Walk-in / Credit
 
                      PIStatus =  i.AdvancePIRequired ? i.PIReceived ? "Completed" :  _db.ProformaInvoiceHeader.Any(x => x.InwardID == i.ID) ? "Generated" : "Pending" : "Completed",
-                     InvoiceStatus = i.IsInvoiceGenerated ? "Completed" : "Pending"
+                     InvoiceStatus = i.IsInvoiceGenerated ? "Completed" : "Pending",
+                     i.CreatedOn,
+                     i.ModifiedOn
                  })
                 .AsQueryable()
                 .ApplyFilters(filter.Filter);
@@ -95,7 +97,9 @@ namespace LIMSApi.ServiceWORepo
                 query = query.Where(x =>
                     x.CaseNo.ToLower().Contains(search) ||
                     x.CustomerName.ToLower().Contains(search) ||
-                    x.CustomerType.ToLower().Contains(search)
+                    x.CustomerType.ToLower().Contains(search) ||
+                    x.PIStatus.ToLower().Contains(search) ||
+                    x.InvoiceStatus.ToLower().Contains(search)
                 );
             }
 
@@ -263,21 +267,50 @@ namespace LIMSApi.ServiceWORepo
             // Calculate totals from SNAPSHOT ChargeEvents
             var subTotal = snapshotEvents.Sum(x => x.Amount);
 
-            // Apply GST (9% CGST + 9% SGST for same state, 18% IGST for interstate)
-            var isInterState = false; // TODO: Determine from customer state vs company state
+            // ── Customer Discount (applied before GST — standard Indian taxation) ──
+            decimal discountPct = 0;
+            decimal discountAmt = 0;
+            if (inward.Customer?.ConstantDiscount == true
+                && inward.Customer.ConstantDiscountPercentage.HasValue
+                && inward.Customer.ConstantDiscountPercentage.Value > 0
+                && inward.Customer.ConstantDiscountPercentage.Value <= 100)
+            {
+                discountPct = inward.Customer.ConstantDiscountPercentage.Value;
+                discountAmt = Math.Round(subTotal * discountPct / 100m, 2, MidpointRounding.AwayFromZero);
+            }
+            var discountedSubTotal = subTotal - discountAmt;
+
+            // ── GST from System Configuration (calculated on discounted subtotal) ──
+            var gstConfig = await _db.GstConfigs.FirstOrDefaultAsync();
+            var gstApplicable = gstConfig != null;
+            var gstRate = gstConfig?.DefaultGstRate ?? 18m;
+            var halfRate = gstRate / 2m;
+            var companyState = gstConfig?.State?.Trim().ToLower() ?? "";
+            var customerState = inward.State?.Trim().ToLower() ?? "";
+
+            var isInterState = gstApplicable
+                && !string.IsNullOrEmpty(companyState)
+                && !string.IsNullOrEmpty(customerState)
+                && companyState != customerState;
+
+            var customerGstExempt = inward.Customer?.GSTNA ?? false;
+
             decimal cgst = 0, sgst = 0, igst = 0;
 
-            if (isInterState)
+            if (gstApplicable && !customerGstExempt)
             {
-                igst = subTotal * 0.18m;
-            }
-            else
-            {
-                cgst = subTotal * 0.09m;
-                sgst = subTotal * 0.09m;
+                if (isInterState)
+                {
+                    igst = Math.Round(discountedSubTotal * gstRate / 100m, 2, MidpointRounding.AwayFromZero);
+                }
+                else
+                {
+                    cgst = Math.Round(discountedSubTotal * halfRate / 100m, 2, MidpointRounding.AwayFromZero);
+                    sgst = Math.Round(discountedSubTotal * halfRate / 100m, 2, MidpointRounding.AwayFromZero);
+                }
             }
 
-            var grandTotal = subTotal + cgst + sgst + igst;
+            var grandTotal = discountedSubTotal + cgst + sgst + igst;
 
             // ADVANCE PAYMENT ADJUSTMENT
             var advancePayment = inward.AdvancePayment;
@@ -300,6 +333,8 @@ namespace LIMSApi.ServiceWORepo
                 InwardID = inward.ID,
                 CustomerID = inward.CustomerID,
                 SubTotal = subTotal,
+                DiscountPercentage = discountAmt > 0 ? discountPct : null,
+                DiscountAmount = discountAmt,
                 CGST = cgst,
                 SGST = sgst,
                 IGST = igst,
@@ -389,7 +424,6 @@ namespace LIMSApi.ServiceWORepo
 
         private TaxInvoicePdfModelDto MapToPdfModel(TaxInvoice invoice)
         {
-            // Get advance payment from inward (inward should already be loaded in SendInvoiceAsync)
             var inward = invoice.Inward;
             var advancePayment = inward?.AdvancePayment ?? 0;
             var balancePayable = invoice.GrandTotal - advancePayment;
@@ -402,6 +436,9 @@ namespace LIMSApi.ServiceWORepo
                 CustomerAddress = invoice.Customer.Address,
                 CustomerGst = invoice.Customer.GSTNo,
                 SubTotal = invoice.SubTotal,
+                DiscountPercentage = invoice.DiscountPercentage,
+                DiscountAmount = invoice.DiscountAmount,
+                DiscountedSubTotal = invoice.SubTotal - invoice.DiscountAmount,
                 CGST = invoice.CGST,
                 SGST = invoice.SGST,
                 IGST = invoice.IGST,

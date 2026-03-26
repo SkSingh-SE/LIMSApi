@@ -14,6 +14,12 @@ namespace LIMSApi.Models
 
         public decimal SubTotal { get; set; }
 
+        // Customer discount (applied before GST)
+        [Column(TypeName = "decimal(5,2)")]
+        public decimal? DiscountPercentage { get; set; }
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal DiscountAmount { get; set; } = 0;
+
         public decimal CGST { get; set; }
         public decimal SGST { get; set; }
         public decimal IGST { get; set; }

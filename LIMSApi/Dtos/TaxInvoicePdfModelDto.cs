@@ -17,6 +17,12 @@
         public List<TaxInvoiceRow> Rows { get; set; } = new();
 
         public decimal SubTotal { get; set; }
+
+        // Customer discount
+        public decimal? DiscountPercentage { get; set; }
+        public decimal DiscountAmount { get; set; }
+        public decimal DiscountedSubTotal { get; set; }
+
         public decimal CGST { get; set; }
         public decimal SGST { get; set; }
         public decimal IGST { get; set; }
