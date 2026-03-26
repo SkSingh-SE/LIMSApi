@@ -11,12 +11,14 @@ namespace LIMSApi.ServiceWORepo
         private readonly LIMSContext _db;
         private readonly IWebHostEnvironment _env;
         private readonly IFileUploadService _fileUploadService;
+        private readonly IFinancialYearService _fyService;
 
-        public SettingsService(LIMSContext db, IWebHostEnvironment env, IFileUploadService fileUploadService)
+        public SettingsService(LIMSContext db, IWebHostEnvironment env, IFileUploadService fileUploadService, IFinancialYearService fyService)
         {
             _db = db;
             _env = env;
             _fileUploadService = fileUploadService;
+            _fyService = fyService;
         }
 
         public async Task<(Organization, NablAccreditation?, NumberingConfig[], GstConfig?, FinancialYear?, AuthorizedSignatory[])> GetAllAsync(long organizationId = 0, CancellationToken cancellationToken = default)
@@ -25,7 +27,13 @@ namespace LIMSApi.ServiceWORepo
             if (organizationId == 0)
             {
                 var firstOrg = await _db.Organizations.FirstOrDefaultAsync(cancellationToken);
-                if (firstOrg == null) throw new InvalidOperationException("Organization not found");
+                if (firstOrg == null)
+                {
+                    // Auto-create a default organization for first-time setup
+                    firstOrg = new Organization { LabName = "Default Lab", LabCode = "LAB001" };
+                    _db.Organizations.Add(firstOrg);
+                    await _db.SaveChangesAsync(cancellationToken);
+                }
                 organizationId = firstOrg.Id;
             }
 
@@ -96,6 +104,14 @@ namespace LIMSApi.ServiceWORepo
             else
                 _db.FinancialYears.Update(year);
             await _db.SaveChangesAsync(cancellationToken);
+
+            // Set as current with audit trail if IsCurrent flag is set
+            if (year.IsCurrent)
+            {
+                var currentUserId = LIMSApi.Helpers.LoggedInUserProvider.CurrentUser?.EmployeeID ?? 0;
+                await _fyService.SetCurrentFinancialYearAsync(year.Id, currentUserId, "Changed via Settings");
+            }
+
             return year;
         }
 
@@ -270,7 +286,8 @@ namespace LIMSApi.ServiceWORepo
                 Gstin = gst?.GstNumber,
                 PanNumber = null,
                 StateCode = gst?.State,
-                DefaultGstRate = 18
+                DefaultGstRate = gst?.DefaultGstRate ?? 18,
+                PIGstApplicable = gst?.PIGstApplicable ?? true
             };
 
             var fyDto = new FinancialYearDto();
@@ -352,6 +369,8 @@ namespace LIMSApi.ServiceWORepo
             model.GstNumber = gstDto.Gstin ?? string.Empty;
             model.State = gstDto.StateCode ?? string.Empty;
             model.Address = null;
+            model.DefaultGstRate = gstDto.DefaultGstRate;
+            model.PIGstApplicable = gstDto.PIGstApplicable;
             return await SaveGstAsync(model, cancellationToken);
         }
 
@@ -427,6 +446,8 @@ namespace LIMSApi.ServiceWORepo
                 gst = existingGst ?? new GstConfig { OrganizationId = org.Id };
                 gst.GstNumber = dto.GstConfig.Gstin ?? string.Empty;
                 gst.State = dto.GstConfig.StateCode ?? string.Empty;
+                gst.DefaultGstRate = dto.GstConfig.DefaultGstRate;
+                gst.PIGstApplicable = dto.GstConfig.PIGstApplicable;
             }
 
             FinancialYear? fy = null;
