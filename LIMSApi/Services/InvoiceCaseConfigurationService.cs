@@ -35,6 +35,9 @@ namespace LIMSApi.Services
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode;
 
+                // Sync comma-separated AliasName string from normalized AliasNames collection
+                SyncAliasNameString(model);
+
                 await _InvoiceCaseConfigurationRepository.AddInvoiceCaseConfiguration(model);
                 _logger.LogInformation("InvoiceCaseConfiguration '{InvoiceCaseConfigurationName}' created successfully.", model.Name);
             }
@@ -88,8 +91,25 @@ namespace LIMSApi.Services
                     }
                 }
 
+                // Sync comma-separated AliasName string from normalized AliasNames collection
+                SyncAliasNameString(existingInvoiceCaseConfiguration);
+
                 await _InvoiceCaseConfigurationRepository.UpdateInvoiceCaseConfiguration(existingInvoiceCaseConfiguration);
                 _logger.LogInformation("InvoiceCaseConfiguration '{InvoiceCaseConfigurationName}' updated successfully.", model.Name);
+            }
+        }
+
+        /// <summary>
+        /// Sync the comma-separated AliasName string field from the normalized AliasNames collection.
+        /// Keeps both in sync — normalized table is primary, string field is backward-compat.
+        /// </summary>
+        private static void SyncAliasNameString(InvoiceCaseConfiguration config)
+        {
+            if (config.AliasNames != null && config.AliasNames.Any())
+            {
+                config.AliasName = string.Join(", ", config.AliasNames
+                    .Where(a => !string.IsNullOrWhiteSpace(a.Name))
+                    .Select(a => a.Name.Trim()));
             }
         }
 
