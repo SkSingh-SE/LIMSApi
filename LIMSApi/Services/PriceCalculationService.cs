@@ -1,5 +1,6 @@
 using LIMSApi.Data;
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Helpers.Enums;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
@@ -16,12 +17,14 @@ namespace LIMSApi.Services
         private readonly LIMSContext _db;
         private readonly ILogger<PriceCalculationService> _logger;
         private readonly IFinancialYearService _fyService;
+        private readonly IPricingEngine _pricingEngine;
 
-        public PriceCalculationService(LIMSContext db, ILogger<PriceCalculationService> logger, IFinancialYearService fyService)
+        public PriceCalculationService(LIMSContext db, ILogger<PriceCalculationService> logger, IFinancialYearService fyService, IPricingEngine pricingEngine)
         {
             _db = db;
             _logger = logger;
             _fyService = fyService;
+            _pricingEngine = pricingEngine;
         }
 
         /// <summary>
@@ -528,172 +531,22 @@ namespace LIMSApi.Services
             throw new Exception($"No matching pricing configuration found for LaboratoryTest {laboratoryTestId} with available parameters");
         }
 
-        /// <summary>
-        /// Extract parameter value for a given configuration from SpecificationLine or TestResultParameter
-        /// </summary>
+        // ExtractParameterValueForConfigAsync and MatchConfigAndGetRateAsync
+        // are now delegated to the shared PricingEngine (IPricingEngine)
+        // to eliminate code duplication with ProformaInvoiceRepository.
+
         private Task<decimal?> ExtractParameterValueForConfigAsync(
             InvoiceCaseConfiguration config,
             List<SpecificationLine> specificationLines,
             ICollection<TestResultParameter>? testResultParameters,
             string parameterType)
-        {
-            // Get parameter names/aliases to match
-            var configNames = new List<string> { config.Name };
-            if (!string.IsNullOrWhiteSpace(config.AliasName))
-            {
-                configNames.AddRange(config.AliasName.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                    .Select(a => a.Trim()));
-            }
+            => _pricingEngine.ExtractParameterValueForConfigAsync(config, specificationLines, testResultParameters, parameterType);
 
-            // First, try to get from TestResultParameter (actual test results) — only billable ones
-            if (testResultParameters != null && testResultParameters.Any())
-            {
-                // Filter only billable parameters for price matching
-                var billableParams = testResultParameters.Where(trp => trp.IsBillable).ToList();
-                var parameterIds = billableParams.Select(trp => trp.ParameterID).Distinct().ToList();
-                var parameterMasters = _db.ParameterMasters
-                    .Where(pm => parameterIds.Contains(pm.ID))
-                    .ToDictionary(pm => pm.ID);
-
-                foreach (var trp in billableParams)
-                {
-                    if (!parameterMasters.TryGetValue(trp.ParameterID, out var paramMaster))
-                        continue;
-
-                    var paramName = paramMaster.Name?.ToLower() ?? "";
-                    var paramAlias = paramMaster.AliasName?.ToLower() ?? "";
-                    var trpParamName = trp.ParameterName?.ToLower() ?? "";
-
-                    foreach (var configName in configNames)
-                    {
-                        var configNameLower = configName.ToLower();
-                        if ((paramName.Contains(configNameLower) || configNameLower.Contains(paramName) ||
-                             paramAlias.Contains(configNameLower) || configNameLower.Contains(paramAlias) ||
-                             trpParamName.Contains(configNameLower) || configNameLower.Contains(trpParamName)) &&
-                            trp.Value.HasValue)
-                        {
-                            return Task.FromResult<decimal?>(trp.Value.Value);
-                        }
-                    }
-                }
-            }
-
-            // If not found in test results, try SpecificationLine
-            foreach (var specLine in specificationLines)
-            {
-                if (specLine.Parameter == null) continue;
-
-                var paramName = specLine.Parameter.Name?.ToLower() ?? "";
-                var paramAlias = specLine.Parameter.AliasName?.ToLower() ?? "";
-
-                foreach (var configName in configNames)
-                {
-                    var configNameLower = configName.ToLower();
-                    if (paramName.Contains(configNameLower) || configNameLower.Contains(paramName) ||
-                        paramAlias.Contains(configNameLower) || configNameLower.Contains(paramAlias))
-                    {
-                        // For range types, we might need to use MinValue or MaxValue
-                        // For single value types, we might need to use a default or calculated value
-                        // For now, return MinValue if available, otherwise MaxValue
-                        if (specLine.MinValue.HasValue)
-                            return Task.FromResult<decimal?>(specLine.MinValue.Value);
-                        if (specLine.MaxValue.HasValue)
-                            return Task.FromResult<decimal?>(specLine.MaxValue.Value);
-                    }
-                }
-            }
-
-            return Task.FromResult<decimal?>(null);
-        }
-
-        /// <summary>
-        /// Match configuration against parameter value and get rate
-        /// </summary>
-        private async Task<(decimal Rate, long ConfigId)> MatchConfigAndGetRateAsync(
+        private Task<(decimal Rate, long ConfigId)> MatchConfigAndGetRateAsync(
             long laboratoryTestId,
             InvoiceCaseConfiguration config,
             decimal usedValue)
-        {
-            // Get Invoice Case for this Lab Test (FY-filtered with fallback)
-            var currentFY = await _fyService.GetCurrentFinancialYearAsync();
-            var invoiceCase = await _db.InvoiceCases
-                .Where(x => x.LaboratoryTestID == laboratoryTestId && x.IsActive && x.FinancialYear == currentFY)
-                .Include(x => x.InvoiceCasePrices)
-                .FirstOrDefaultAsync();
-
-            // Fallback: any active case if no FY match
-            if (invoiceCase == null)
-            {
-                invoiceCase = await _db.InvoiceCases
-                    .Where(x => x.LaboratoryTestID == laboratoryTestId && x.IsActive)
-                    .Include(x => x.InvoiceCasePrices)
-                    .FirstOrDefaultAsync();
-
-                if (invoiceCase != null)
-                    _logger.LogWarning("No InvoiceCase for FY {FY} and LabTest {LabTestId}. Using fallback FY {FallbackFY}.",
-                        currentFY, laboratoryTestId, invoiceCase.FinancialYear);
-            }
-
-            if (invoiceCase == null)
-                throw new Exception($"No invoice case found for LaboratoryTest {laboratoryTestId}");
-
-            // Check if this config is used in the invoice case
-            var configPrice = invoiceCase.InvoiceCasePrices
-                .FirstOrDefault(p => p.InvoiceCaseConfigID == config.ID);
-
-            if (configPrice == null)
-                throw new Exception($"Configuration {config.ID} not found in invoice case prices");
-
-            // Determine if this is a range type or single value type
-            var isRangeType = config.SelectionType.EndsWith("Range", StringComparison.OrdinalIgnoreCase);
-
-            if (isRangeType)
-            {
-                // Range type: check if usedValue falls within Start and End
-                if (string.IsNullOrWhiteSpace(config.Start) || string.IsNullOrWhiteSpace(config.End))
-                    throw new Exception($"Configuration {config.ID} is a range type but Start or End is missing");
-
-                var startValue = decimal.Parse(config.Start);
-                var endValue = decimal.Parse(config.End);
-
-                if (usedValue >= startValue && usedValue <= endValue)
-                {
-                    return (configPrice.Price, config.ID);
-                }
-            }
-            else
-            {
-                // Single value type: find the nearest higher or equal slab
-                // Get all configs of the same SelectionType
-                var allConfigsForType = await _db.LaboratoryTestInvoiceCase
-                    .Where(lt => lt.LabTestID == laboratoryTestId)
-                    .Include(lt => lt.InvoiceCaseConfiguration)
-                    .Where(lt => lt.InvoiceCaseConfiguration != null 
-                                && lt.InvoiceCaseConfiguration.IsActive
-                                && lt.InvoiceCaseConfiguration.SelectionType == config.SelectionType)
-                    .Select(lt => lt.InvoiceCaseConfiguration!)
-                    .Where(c => !string.IsNullOrWhiteSpace(c.Value))
-                    .ToListAsync();
-
-                var matchingConfig = allConfigsForType
-                    .Where(c => decimal.TryParse(c.Value, out var val) && val >= usedValue)
-                    .OrderBy(c => decimal.Parse(c.Value))
-                    .FirstOrDefault();
-
-                if (matchingConfig != null)
-                {
-                    var matchingPrice = invoiceCase.InvoiceCasePrices
-                        .FirstOrDefault(p => p.InvoiceCaseConfigID == matchingConfig.ID);
-
-                    if (matchingPrice != null)
-                    {
-                        return (matchingPrice.Price, matchingConfig.ID);
-                    }
-                }
-            }
-
-            throw new Exception($"No pricing slab found for value {usedValue} under SelectionType {config.SelectionType}");
-        }
+            => _pricingEngine.MatchConfigAndGetRateAsync(laboratoryTestId, config, usedValue);
 
         public async Task<decimal> GetDraftTotalAsync(long inwardId)
         {
