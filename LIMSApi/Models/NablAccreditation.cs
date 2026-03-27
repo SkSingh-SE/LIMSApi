@@ -10,6 +10,7 @@ namespace LIMSApi.Models
         public DateTime IssueDate { get; set; }
         public DateTime ExpiryDate { get; set; }
         public string? CertificatePath { get; set; }
+        public string? LogoPath { get; set; }
         public long OrganizationId { get; set; }
     }
 }

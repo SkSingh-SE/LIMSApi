@@ -17,6 +17,10 @@ namespace LIMSApi.Models
 
         [StringLength(500)]
         public string? Address { get; set; }
+
+        [StringLength(10)]
+        public string? PanNumber { get; set; }
+
         public decimal DefaultGstRate { get; set; } = 18;
         public bool PIGstApplicable { get; set; } = true;
         public long OrganizationId { get; set; }

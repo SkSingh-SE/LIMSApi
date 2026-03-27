@@ -17,6 +17,9 @@ namespace LIMSApi.Models
 
         [StringLength(500)]
         public string? SignaturePath { get; set; }
+
+        public bool ApplicableFor { get; set; } = true;
+
         public long OrganizationId { get; set; }
     }
 }
