@@ -80,7 +80,9 @@ namespace LIMSApi.Repositories
                              e.DepartmentID,
                              DepartmentName = dp.Name,
                              e.DesignationID,
-                             DesignationName = ds.Name
+                             DesignationName = ds.Name,
+                             e.ModifiedOn,
+                             e.CreatedOn
                          }).AsQueryable().ApplyFilters(filter.Filter);
 
             

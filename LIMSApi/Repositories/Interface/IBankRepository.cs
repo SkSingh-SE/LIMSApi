@@ -14,5 +14,7 @@ namespace LIMSApi.Repositories.Interface
         Task<List<DropdwonSelector>> GetBankDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<bool> ExistsByName(string name);
         Task<bool> ExistsByNameAndNotId(string name, long Id);
+        Task<bool> ExistsByAccountNumber(string accountNumber);
+        Task<bool> ExistsByAccountNumberAndNotId(string accountNumber, long id);
     }
 }

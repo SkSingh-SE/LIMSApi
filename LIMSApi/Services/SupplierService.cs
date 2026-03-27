@@ -26,6 +26,20 @@ namespace LIMSApi.Services
         {
             if (string.IsNullOrWhiteSpace(model.Name))
                 throw new ArgumentException("Supplier name should not be empty!");
+            model.Name = model.Name.Trim();
+            if (string.IsNullOrWhiteSpace(model.ContactPerson1))
+                throw new ArgumentException("Primary contact person name is required.");
+            if (string.IsNullOrWhiteSpace(model.ContactNo1))
+                throw new ArgumentException("Primary contact number is required.");
+            var _phoneRegex = new System.Text.RegularExpressions.Regex(@"^[+]?\d{10,13}$");
+            if (!_phoneRegex.IsMatch(model.ContactNo1.Trim()))
+                throw new ArgumentException("Invalid primary contact number format. Must be 10-13 digits.");
+            if (model.IsBlacklisted && string.IsNullOrWhiteSpace(model.ReasonForBlacklisting))
+                throw new ArgumentException("Reason for blacklisting is required when supplier is blacklisted.");
+            if (model.IsBlacklisted && !model.BlacklistDate.HasValue)
+                throw new ArgumentException("Blacklist date is required when supplier is blacklisted.");
+            if (model.SupplierApproved && model.IsBlacklisted)
+                throw new ArgumentException("A supplier cannot be both approved and blacklisted.");
 
             bool exists = await _supplierRepository.ExistsByName(model.Name);
             if (exists)
@@ -48,6 +62,23 @@ namespace LIMSApi.Services
         {
             if (model.ID == 0)
                 throw new ArgumentException("Supplier ID should not be empty!");
+
+            if (string.IsNullOrWhiteSpace(model.Name))
+                throw new ArgumentException("Supplier name should not be empty!");
+            model.Name = model.Name.Trim();
+            if (string.IsNullOrWhiteSpace(model.ContactPerson1))
+                throw new ArgumentException("Primary contact person name is required.");
+            if (string.IsNullOrWhiteSpace(model.ContactNo1))
+                throw new ArgumentException("Primary contact number is required.");
+            var _phoneRegex = new System.Text.RegularExpressions.Regex(@"^[+]?\d{10,13}$");
+            if (!_phoneRegex.IsMatch(model.ContactNo1.Trim()))
+                throw new ArgumentException("Invalid primary contact number format. Must be 10-13 digits.");
+            if (model.IsBlacklisted && string.IsNullOrWhiteSpace(model.ReasonForBlacklisting))
+                throw new ArgumentException("Reason for blacklisting is required when supplier is blacklisted.");
+            if (model.IsBlacklisted && !model.BlacklistDate.HasValue)
+                throw new ArgumentException("Blacklist date is required when supplier is blacklisted.");
+            if (model.SupplierApproved && model.IsBlacklisted)
+                throw new ArgumentException("A supplier cannot be both approved and blacklisted.");
 
             bool exists = await _supplierRepository.ExistsByNameAndNotId(model.Name, model.ID);
             if (exists)

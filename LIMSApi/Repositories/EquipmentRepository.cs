@@ -73,7 +73,9 @@ namespace LIMSApi.Repositories
                              c.OEMID,
                              OEMName = o.Name,
                              c.NextCalibrationDueDate,
-                             c.NextMaintenanceDueDate
+                             c.NextMaintenanceDueDate,
+                             c.ModifiedOn,
+                             c.CreatedOn
                          };
             _query = _query.AsQueryable().ApplyFilters(filter.Filter);
 

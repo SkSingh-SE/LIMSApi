@@ -61,6 +61,9 @@ namespace LIMSApi.Services
             existingEquipment.InternalExternal = model.InternalExternal;
             existingEquipment.IntermediateCheckRequired = model.IntermediateCheckRequired;
             existingEquipment.IntermediateCheckInterval = model.IntermediateCheckInterval;
+            existingEquipment.LastCalibrationDate = model.LastCalibrationDate;
+            existingEquipment.CalibrationFrequencyDays = model.CalibrationFrequencyDays;
+            existingEquipment.MaintenanceSchedule = model.MaintenanceSchedule;
             existingEquipment.ModifiedOn = DateTime.UtcNow;
 
             await _equipmentRepository.UpdateEquipment(existingEquipment);

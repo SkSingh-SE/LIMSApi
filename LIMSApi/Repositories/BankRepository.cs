@@ -50,7 +50,11 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.BankName != null && x.BankName.ToLower().Contains(search)));
+                _query = _query.Where(x =>
+                    (x.BankName != null && x.BankName.ToLower().Contains(search)) ||
+                    (x.AccountHolderName != null && x.AccountHolderName.ToLower().Contains(search)) ||
+                    (x.AccountNumber != null && x.AccountNumber.ToLower().Contains(search)) ||
+                    (x.BranchName != null && x.BranchName.ToLower().Contains(search)));
             }
 
             if (filter.SortByColumn != null)
@@ -101,6 +105,16 @@ namespace LIMSApi.Repositories
         public async Task<bool> ExistsByNameAndNotId(string name, long Id)
         {
             return await _context.BankMasters.AnyAsync(x => x.BankName == name && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+        }
+
+        public async Task<bool> ExistsByAccountNumber(string accountNumber)
+        {
+            return await _context.BankMasters.AnyAsync(x => x.AccountNumber == accountNumber && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+        }
+
+        public async Task<bool> ExistsByAccountNumberAndNotId(string accountNumber, long id)
+        {
+            return await _context.BankMasters.AnyAsync(x => x.AccountNumber == accountNumber && x.ID != id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
     }
 }

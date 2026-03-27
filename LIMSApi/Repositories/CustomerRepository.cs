@@ -68,6 +68,8 @@ namespace LIMSApi.Repositories
                               e.Address,
                               e.GSTNo,
                               SampleReturn = e.SampleReturn ? "Yes" : "No",
+                              e.ModifiedOn,
+                              e.CreatedOn
                           }).AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))

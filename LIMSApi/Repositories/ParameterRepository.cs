@@ -70,7 +70,8 @@ namespace LIMSApi.Repositories
                               Factor = u.ConversaionFactor,
                               CategoryName = cat != null ? cat.Name : "",
                               c.DecimalPrecision,
-                              c.CreatedOn
+                              c.CreatedOn,
+                              c.ModifiedOn
                           }).AsQueryable().ApplyFilters(filter.Filter);
 
 
@@ -113,7 +114,8 @@ namespace LIMSApi.Repositories
                               Factor = u.ConversaionFactor,
                               CategoryName = cat != null ? cat.Name : "",
                               c.DecimalPrecision,
-                              c.CreatedOn
+                              c.CreatedOn,
+                              c.ModifiedOn
                           }).AsQueryable().ApplyFilters(filter.Filter);
 
 
@@ -154,7 +156,8 @@ namespace LIMSApi.Repositories
                               Min = 0, // Placeholder for Min value, replace with actual value if available
                               Max = 0, // Placeholder for Max value, replace with actual value if available
                               Factor = u.ConversaionFactor,
-                              c.CreatedOn
+                              c.CreatedOn,
+                              c.ModifiedOn
                           }).AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))

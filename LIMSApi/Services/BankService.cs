@@ -26,10 +26,31 @@ namespace LIMSApi.Services
         {
             if (string.IsNullOrWhiteSpace(model.BankName))
                 throw new ArgumentException("Bank name should not be empty!");
+            if (string.IsNullOrWhiteSpace(model.AccountHolderName))
+                throw new ArgumentException("Account holder name should not be empty!");
+            if (string.IsNullOrWhiteSpace(model.AccountNumber))
+                throw new ArgumentException("Account number should not be empty!");
+            if (string.IsNullOrWhiteSpace(model.AccountType))
+                throw new ArgumentException("Account type should not be empty!");
+            if (string.IsNullOrWhiteSpace(model.IFSCCode))
+                throw new ArgumentException("IFSC code should not be empty!");
+            var ifscRegex = new System.Text.RegularExpressions.Regex(@"^[A-Z]{4}0[A-Z0-9]{6}$");
+            if (!ifscRegex.IsMatch(model.IFSCCode.Trim().ToUpper()))
+                throw new ArgumentException("Invalid IFSC code format (e.g. SBIN0001234).");
+            if (string.IsNullOrWhiteSpace(model.BranchName))
+                throw new ArgumentException("Branch name should not be empty!");
+            model.BankName = model.BankName.Trim();
+            model.AccountHolderName = model.AccountHolderName.Trim();
+            model.IFSCCode = model.IFSCCode.Trim().ToUpper();
+            model.BranchName = model.BranchName.Trim();
 
             bool exists = await _bankRepository.ExistsByName(model.BankName);
             if (exists)
                 throw new InvalidOperationException("Bank already exists!");
+
+            bool accountExists = await _bankRepository.ExistsByAccountNumber(model.AccountNumber.Trim());
+            if (accountExists)
+                throw new InvalidOperationException("A bank with this account number already exists!");
 
             model.CreatedOn = DateTime.UtcNow;
             model.CreatedBy = loggedInUser.EmployeeID;
@@ -44,9 +65,33 @@ namespace LIMSApi.Services
             if (model.ID == 0)
                 throw new ArgumentException("Bank ID should not be empty!");
 
+            if (string.IsNullOrWhiteSpace(model.BankName))
+                throw new ArgumentException("Bank name should not be empty!");
+            if (string.IsNullOrWhiteSpace(model.AccountHolderName))
+                throw new ArgumentException("Account holder name should not be empty!");
+            if (string.IsNullOrWhiteSpace(model.AccountNumber))
+                throw new ArgumentException("Account number should not be empty!");
+            if (string.IsNullOrWhiteSpace(model.AccountType))
+                throw new ArgumentException("Account type should not be empty!");
+            if (string.IsNullOrWhiteSpace(model.IFSCCode))
+                throw new ArgumentException("IFSC code should not be empty!");
+            var ifscRegex = new System.Text.RegularExpressions.Regex(@"^[A-Z]{4}0[A-Z0-9]{6}$");
+            if (!ifscRegex.IsMatch(model.IFSCCode.Trim().ToUpper()))
+                throw new ArgumentException("Invalid IFSC code format (e.g. SBIN0001234).");
+            if (string.IsNullOrWhiteSpace(model.BranchName))
+                throw new ArgumentException("Branch name should not be empty!");
+            model.BankName = model.BankName.Trim();
+            model.AccountHolderName = model.AccountHolderName.Trim();
+            model.IFSCCode = model.IFSCCode.Trim().ToUpper();
+            model.BranchName = model.BranchName.Trim();
+
             bool exists = await _bankRepository.ExistsByNameAndNotId(model.BankName, model.ID);
             if (exists)
                 throw new InvalidOperationException("Same Bank already exists!");
+
+            bool accountExists = await _bankRepository.ExistsByAccountNumberAndNotId(model.AccountNumber.Trim(), model.ID);
+            if (accountExists)
+                throw new InvalidOperationException("A bank with this account number already exists!");
 
             var existingBank = await _bankRepository.GetBankById(model.ID);
             if (existingBank == null)

@@ -34,6 +34,8 @@ namespace LIMSApi.Services
 
             if (model.IsCalculated) ValidateFormula(model.Formula);
             model.Formula = model.IsCalculated ? model.Formula : null;
+            if (!string.IsNullOrWhiteSpace(model.ElementType))
+                model.ElementType = model.ElementType.Trim().ToLower();
 
             await _parameterRepository.AddParameter(model);
             _logger.LogInformation("Parameter '{ParameterName}' created successfully.", model.Name);
@@ -66,6 +68,9 @@ namespace LIMSApi.Services
             existingParameter.MinReportableLimit = model.MinReportableLimit;
             existingParameter.DefaultTestMethodID = model.DefaultTestMethodID;
             existingParameter.ParameterCategoryID = model.ParameterCategoryID;
+            existingParameter.ElementType = !string.IsNullOrWhiteSpace(model.ElementType)
+                ? model.ElementType.Trim().ToLower()
+                : model.ElementType;
 
             // Update AllowedOrientations junction
             existingParameter.AllowedOrientations?.Clear();

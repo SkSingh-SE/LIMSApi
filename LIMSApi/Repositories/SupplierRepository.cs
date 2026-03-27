@@ -62,7 +62,7 @@ namespace LIMSApi.Repositories
                              c.EmailId1,
                              c.Address,
                              c.BlacklistDate,
-
+                             c.ModifiedOn
                          };
             _query = _query.ApplyFilters(filter.Filter);
 

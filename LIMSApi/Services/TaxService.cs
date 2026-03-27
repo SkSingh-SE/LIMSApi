@@ -26,6 +26,11 @@ namespace LIMSApi.Services
         {
             if (string.IsNullOrWhiteSpace(model.Name))
                 throw new ArgumentException("Tax name should not be empty!");
+            model.Name = model.Name.Trim();
+            if (model.Date == default || model.Date == DateTime.MinValue)
+                throw new ArgumentException("Tax effective date is required.");
+            if (model.Rate < 0 || model.Rate > 100)
+                throw new ArgumentException("Tax rate must be between 0 and 100.");
 
             bool exists = await _taxRepository.ExistsByName(model.Name);
             if (exists)
@@ -43,6 +48,14 @@ namespace LIMSApi.Services
         {
             if (model.ID == 0)
                 throw new ArgumentException("Tax ID should not be empty!");
+
+            if (string.IsNullOrWhiteSpace(model.Name))
+                throw new ArgumentException("Tax name should not be empty!");
+            model.Name = model.Name.Trim();
+            if (model.Date == default || model.Date == DateTime.MinValue)
+                throw new ArgumentException("Tax effective date is required.");
+            if (model.Rate < 0 || model.Rate > 100)
+                throw new ArgumentException("Tax rate must be between 0 and 100.");
 
             bool exists = await _taxRepository.ExistsByNameAndNotId(model.Name, model.ID);
             if (exists)

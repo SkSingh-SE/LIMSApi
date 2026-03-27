@@ -55,6 +55,7 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("BankMaster not found!");
             }
+            await _remarkService.RemoveBank(id);
             return Ok(new { status = "success", message = $"BankMaster '{entity.BankName}' deleted successfully." });
         }
 

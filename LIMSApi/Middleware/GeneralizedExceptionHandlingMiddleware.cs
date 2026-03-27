@@ -55,6 +55,10 @@ namespace LIMSApi.Middleware
                         ? "A database error occurred. Please check your data and try again."
                         : _isDevelopment ? ex.Message : "Something went wrong. Please try again or contact your administrator.";
 
+                // For DbUpdateException, include inner exception details in dev mode
+                if (_isDevelopment && isDbException && ex.InnerException != null)
+                    userMessage = ex.InnerException.Message;
+
                 var errorResponse = new ExceptionResponse
                 {
                     Message = userMessage,
@@ -64,35 +68,50 @@ namespace LIMSApi.Middleware
                     Timestamp = DateTime.UtcNow
                 };
 
-                context.Response.StatusCode = ex switch
+                _logger.LogError(ex, "Unhandled exception in {Controller}/{Action}", controller, action);
+
+                // Log to SiteError — wrapped in try-catch so logging failure doesn't hide the original error
+                try
                 {
-                    ArgumentNullException or ArgumentException or InvalidOperationException => StatusCodes.Status400BadRequest,
-                    UnauthorizedAccessException => StatusCodes.Status401Unauthorized,
-                    KeyNotFoundException => StatusCodes.Status404NotFound,
-                    InvalidCredentialException => StatusCodes.Status400BadRequest,
-                    SqlException or DbUpdateException => StatusCodes.Status400BadRequest,
-                    _ => StatusCodes.Status500InternalServerError
-                };
-
-                var siteError = new SiteError
+                    var siteError = new SiteError
+                    {
+                        ErrorCode = controller,
+                        ExceptionMessage = ex.InnerException?.Message ?? ex.Message,
+                        ExceptionStackTrace = ex.StackTrace,
+                        Source = ex.Source,
+                        Ipaddress = context.Connection.RemoteIpAddress?.ToString(),
+                        Browser = context.Request.Headers["User-Agent"].ToString(),
+                        Description = $"Error in {controller}/{action}: {ex.Message}",
+                        WebUrl = $"{controller}/{action}",
+                        ModifiedBy = user?.UserId.ToString() ?? "Anonymous",
+                        ModifiedOn = DateTime.UtcNow,
+                        CompanyCode = user?.CompanyCode ?? "LIMS"
+                    };
+                    await siteErrorService.CreateSiteError(siteError);
+                }
+                catch (Exception logEx)
                 {
-                    ErrorCode = controller,
-                    ExceptionMessage = ex.Message,
-                    ExceptionStackTrace = ex.StackTrace,
-                    Source = ex.Source,
-                    Ipaddress = context.Connection.RemoteIpAddress?.ToString(),
-                    Browser = context.Request.Headers["User-Agent"].ToString(),
-                    Description = $"Error in {controller}/{action}: {ex.Message}",
-                    WebUrl = $"{controller}/{action}",
-                    ModifiedBy = user?.UserId.ToString() ?? "Anonymous",
-                    ModifiedOn = DateTime.UtcNow,
-                    CompanyCode = user?.CompanyCode ?? "LIMS"
-                };
+                    _logger.LogError(logEx, "Failed to log SiteError for {Controller}/{Action}", controller, action);
+                }
 
-                await siteErrorService.CreateSiteError(siteError);
-                _logger.LogError(ex, "Unhandled exception");
-
-                await context.Response.WriteAsJsonAsync(errorResponse);
+                // Only write response if headers haven't been sent yet
+                if (!context.Response.HasStarted)
+                {
+                    context.Response.StatusCode = ex switch
+                    {
+                        ArgumentNullException or ArgumentException or InvalidOperationException => StatusCodes.Status400BadRequest,
+                        UnauthorizedAccessException => StatusCodes.Status401Unauthorized,
+                        KeyNotFoundException => StatusCodes.Status404NotFound,
+                        InvalidCredentialException => StatusCodes.Status400BadRequest,
+                        SqlException or DbUpdateException => StatusCodes.Status400BadRequest,
+                        _ => StatusCodes.Status500InternalServerError
+                    };
+                    await context.Response.WriteAsJsonAsync(errorResponse);
+                }
+                else
+                {
+                    _logger.LogWarning("Response already started — cannot write error response for {Controller}/{Action}", controller, action);
+                }
             }
         }
 

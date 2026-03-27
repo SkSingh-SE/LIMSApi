@@ -36,6 +36,31 @@ namespace LIMSApi.Services
         {
             if (string.IsNullOrWhiteSpace(model.Name))
                 throw new ArgumentException("Employee name should not be empty!");
+            model.Name = model.Name.Trim();
+            if (!string.IsNullOrWhiteSpace(model.EmailId))
+            {
+                var emailRegex = new System.Text.RegularExpressions.Regex(@"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$");
+                if (!emailRegex.IsMatch(model.EmailId.Trim()))
+                    throw new ArgumentException("Invalid email address format.");
+            }
+            if (!string.IsNullOrWhiteSpace(model.MobileNo))
+            {
+                var phoneRegex = new System.Text.RegularExpressions.Regex(@"^[+]?\d{10,13}$");
+                if (!phoneRegex.IsMatch(model.MobileNo.Trim()))
+                    throw new ArgumentException("Invalid mobile number. Must be 10-13 digits.");
+            }
+            if (!string.IsNullOrWhiteSpace(model.PANNumber))
+            {
+                var panRegex = new System.Text.RegularExpressions.Regex(@"^[A-Z]{5}\d{4}[A-Z]{1}$");
+                if (!panRegex.IsMatch(model.PANNumber.Trim().ToUpper()))
+                    throw new ArgumentException("Invalid PAN number format (e.g. ABCDE1234F).");
+            }
+            if (!string.IsNullOrWhiteSpace(model.IFSCCode))
+            {
+                var ifscRegex = new System.Text.RegularExpressions.Regex(@"^[A-Z]{4}0[A-Z0-9]{6}$");
+                if (!ifscRegex.IsMatch(model.IFSCCode.Trim().ToUpper()))
+                    throw new ArgumentException("Invalid IFSC code format (e.g. SBIN0001234).");
+            }
 
             bool exists = await _employeeRepository.ExistsByEmail(model.EmailId);
             if (exists)
@@ -74,6 +99,34 @@ namespace LIMSApi.Services
         {
             if (model.ID == 0)
                 throw new ArgumentException("Employee ID should not be empty!");
+
+            if (string.IsNullOrWhiteSpace(model.Name))
+                throw new ArgumentException("Employee name should not be empty!");
+            model.Name = model.Name.Trim();
+            if (!string.IsNullOrWhiteSpace(model.EmailId))
+            {
+                var emailRegex = new System.Text.RegularExpressions.Regex(@"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$");
+                if (!emailRegex.IsMatch(model.EmailId.Trim()))
+                    throw new ArgumentException("Invalid email address format.");
+            }
+            if (!string.IsNullOrWhiteSpace(model.MobileNo))
+            {
+                var phoneRegex = new System.Text.RegularExpressions.Regex(@"^[+]?\d{10,13}$");
+                if (!phoneRegex.IsMatch(model.MobileNo.Trim()))
+                    throw new ArgumentException("Invalid mobile number. Must be 10-13 digits.");
+            }
+            if (!string.IsNullOrWhiteSpace(model.PANNumber))
+            {
+                var panRegex = new System.Text.RegularExpressions.Regex(@"^[A-Z]{5}\d{4}[A-Z]{1}$");
+                if (!panRegex.IsMatch(model.PANNumber.Trim().ToUpper()))
+                    throw new ArgumentException("Invalid PAN number format (e.g. ABCDE1234F).");
+            }
+            if (!string.IsNullOrWhiteSpace(model.IFSCCode))
+            {
+                var ifscRegex = new System.Text.RegularExpressions.Regex(@"^[A-Z]{4}0[A-Z0-9]{6}$");
+                if (!ifscRegex.IsMatch(model.IFSCCode.Trim().ToUpper()))
+                    throw new ArgumentException("Invalid IFSC code format (e.g. SBIN0001234).");
+            }
 
             bool exists = await _employeeRepository.ExistsByEmailAndNotId(model.EmailId, model.ID);
             if (exists)

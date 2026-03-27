@@ -15,6 +15,6 @@
         public required string Column { get; set; }
         public required string Type { get; set; }
         public required string Value { get; set; }
-        public required string? Value2 { get; set; }
+        public string? Value2 { get; set; }
     }
 }

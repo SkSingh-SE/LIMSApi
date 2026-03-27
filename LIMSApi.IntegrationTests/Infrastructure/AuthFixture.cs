@@ -20,6 +20,11 @@ public class AuthFixture : IAsyncLifetime
     public string UserName { get; private set; } = string.Empty;
     public bool IsAdmin { get; private set; }
 
+    // Reviewer (harsh@gmail.com) — used for plan approval workflow
+    public HttpClient ReviewerClient { get; private set; } = null!;
+    public long ReviewerUserId { get; private set; }
+    public string ReviewerUserName { get; private set; } = string.Empty;
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
@@ -90,12 +95,52 @@ public class AuthFixture : IAsyncLifetime
         IsAdmin = loginResult.GetProperty("isAdmin").GetBoolean();
 
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Token);
+
+        // ── Reviewer login (harsh@gmail.com) ──────────────────────────────
+        var reviewerEmail    = config["ReviewerCredentials:Email"];
+        var reviewerPassword = config["ReviewerCredentials:Password"];
+
+        ReviewerClient = new HttpClient(handler) { BaseAddress = new Uri(BaseUrl) };
+        ReviewerClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        ReviewerClient.Timeout = TimeSpan.FromSeconds(30);
+
+        if (!string.IsNullOrWhiteSpace(reviewerEmail) && !string.IsNullOrWhiteSpace(reviewerPassword))
+        {
+            HttpResponseMessage? reviewerLogin = null;
+            for (int attempt = 1; attempt <= 5; attempt++)
+            {
+                reviewerLogin = await ReviewerClient.PostAsJsonAsync("/api/Auth/login",
+                    new { Email = reviewerEmail, Password = reviewerPassword });
+
+                if (reviewerLogin.IsSuccessStatusCode) break;
+                if (reviewerLogin.StatusCode == HttpStatusCode.TooManyRequests)
+                {
+                    var retryAfter = reviewerLogin.Headers.RetryAfter?.Delta?.TotalSeconds ?? 30;
+                    await Task.Delay(TimeSpan.FromSeconds(Math.Max(retryAfter, 15)));
+                    continue;
+                }
+                break;
+            }
+
+            if (reviewerLogin != null && reviewerLogin.IsSuccessStatusCode)
+            {
+                var reviewerJson   = await reviewerLogin.Content.ReadAsStringAsync();
+                var reviewerResult = JsonSerializer.Deserialize<JsonElement>(reviewerJson, JsonOptions);
+                var reviewerToken  = reviewerResult.GetProperty("token").GetString()!;
+                ReviewerUserId     = reviewerResult.GetProperty("userId").GetInt64();
+                ReviewerUserName   = reviewerResult.GetProperty("userName").GetString() ?? "";
+                ReviewerClient.DefaultRequestHeaders.Authorization =
+                    new AuthenticationHeaderValue("Bearer", reviewerToken);
+            }
+            // If reviewer login fails, ReviewerUserId stays 0 — tests skip gracefully
+        }
     }
 
     public Task DisposeAsync()
     {
         Client?.Dispose();
         UnauthenticatedClient?.Dispose();
+        ReviewerClient?.Dispose();
         return Task.CompletedTask;
     }
 }

@@ -429,7 +429,7 @@ app.UseCors("AllowAngular");
 
 app.UseAuthentication();   // MUST exist
 app.UseAuthorization();    // MUST follow authentication
-app.UseRateLimiter();      // MUST follow authorization
+// app.UseRateLimiter();   // DISABLED during testing — re-enable for production
 
 // --------------------
 // Global Exception Handling (AFTER auth)

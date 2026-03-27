@@ -54,8 +54,21 @@ namespace LIMSApi.Services
             existingMetalClassification.SortOrder = model.SortOrder;
             existingMetalClassification.ModifiedOn = DateTime.UtcNow;
 
-            existingMetalClassification?.Parameters?.Clear();
-            existingMetalClassification.Parameters = model.Parameters;
+            // Replace parameters via DbContext to avoid EF NoAction cascade issue.
+            // Parameters.Clear() + reassignment loses EF tracking; instead delete/insert explicitly.
+            var existingParams = await _context.Set<MetalClassificationParameter>()
+                .Where(p => p.MetalClassificationID == model.ID)
+                .ToListAsync();
+            _context.Set<MetalClassificationParameter>().RemoveRange(existingParams);
+
+            if (model.Parameters != null)
+            {
+                foreach (var p in model.Parameters)
+                {
+                    p.MetalClassificationID = model.ID;
+                    _context.Set<MetalClassificationParameter>().Add(p);
+                }
+            }
 
             await _MetalClassificationRepository.UpdateMetalClassification(existingMetalClassification);
             _logger.LogInformation("MetalClassification '{MetalClassificationName}' updated successfully.", model.Name);

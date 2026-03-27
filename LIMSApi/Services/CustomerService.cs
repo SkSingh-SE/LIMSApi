@@ -24,6 +24,33 @@ namespace LIMSApi.Services
         {
             if (string.IsNullOrWhiteSpace(model.Name))
                 throw new ArgumentException("Customer name should not be empty!");
+            if (string.IsNullOrWhiteSpace(model.Address))
+                throw new ArgumentException("Customer address should not be empty!");
+            if (model.CityID == 0)
+                throw new ArgumentException("City is required.");
+            if (model.StateID == 0)
+                throw new ArgumentException("State is required.");
+            if (model.CountryID == 0)
+                throw new ArgumentException("Country is required.");
+            if (string.IsNullOrWhiteSpace(model.CustomerType))
+                throw new ArgumentException("Customer type is required.");
+            if (string.IsNullOrWhiteSpace(model.TallyLedgerName))
+                throw new ArgumentException("Tally ledger name is required.");
+            if (!model.GSTNA && string.IsNullOrWhiteSpace(model.GSTNo))
+                throw new ArgumentException("GST number is required (or mark as Not Applicable).");
+            if (!model.GSTNA && !string.IsNullOrWhiteSpace(model.GSTNo))
+            {
+                var gstRegex = new System.Text.RegularExpressions.Regex(@"^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$");
+                if (!gstRegex.IsMatch(model.GSTNo.Trim().ToUpper()))
+                    throw new ArgumentException("Invalid GSTIN format (e.g. 22AAAAA0000A1Z5).");
+            }
+            if (!string.IsNullOrWhiteSpace(model.PinCode))
+            {
+                var pinRegex = new System.Text.RegularExpressions.Regex(@"^\d{6}$");
+                if (!pinRegex.IsMatch(model.PinCode.Trim()))
+                    throw new ArgumentException("PIN code must be exactly 6 digits.");
+            }
+            model.Name = model.Name.Trim();
 
             bool exists = await _customerRepository.ExistsByName(model.Name);
             if (exists)
@@ -62,6 +89,36 @@ namespace LIMSApi.Services
         {
             if (model.ID == 0)
                 throw new ArgumentException("Customer ID should not be empty!");
+
+            if (string.IsNullOrWhiteSpace(model.Name))
+                throw new ArgumentException("Customer name should not be empty!");
+            if (string.IsNullOrWhiteSpace(model.Address))
+                throw new ArgumentException("Customer address should not be empty!");
+            if (model.CityID == 0)
+                throw new ArgumentException("City is required.");
+            if (model.StateID == 0)
+                throw new ArgumentException("State is required.");
+            if (model.CountryID == 0)
+                throw new ArgumentException("Country is required.");
+            if (string.IsNullOrWhiteSpace(model.CustomerType))
+                throw new ArgumentException("Customer type is required.");
+            if (string.IsNullOrWhiteSpace(model.TallyLedgerName))
+                throw new ArgumentException("Tally ledger name is required.");
+            if (!model.GSTNA && string.IsNullOrWhiteSpace(model.GSTNo))
+                throw new ArgumentException("GST number is required (or mark as Not Applicable).");
+            if (!model.GSTNA && !string.IsNullOrWhiteSpace(model.GSTNo))
+            {
+                var gstRegex = new System.Text.RegularExpressions.Regex(@"^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$");
+                if (!gstRegex.IsMatch(model.GSTNo.Trim().ToUpper()))
+                    throw new ArgumentException("Invalid GSTIN format (e.g. 22AAAAA0000A1Z5).");
+            }
+            if (!string.IsNullOrWhiteSpace(model.PinCode))
+            {
+                var pinRegex = new System.Text.RegularExpressions.Regex(@"^\d{6}$");
+                if (!pinRegex.IsMatch(model.PinCode.Trim()))
+                    throw new ArgumentException("PIN code must be exactly 6 digits.");
+            }
+            model.Name = model.Name.Trim();
 
             bool exists = await _customerRepository.ExistsByNameAndNotId(model.Name, model.ID);
             if (exists)

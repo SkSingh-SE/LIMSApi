@@ -67,6 +67,7 @@ namespace LIMSApi.Repositories
                               c.RoleID,
                               RoleName = rg != null ? rg.Name : null,
                               c.CreatedOn,
+                              c.ModifiedOn,
                               CreatedBy = eg.Name
 
                           }).AsQueryable()
