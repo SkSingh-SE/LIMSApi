@@ -44,18 +44,21 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllInvoiceCases(PageFilter filter)
         {
-            var _query = from c in _context.InvoiceCases 
-                         join p in _context.InvoiceCasePrices on c.ID equals p.InvoiceCaseID
+            var _query = from c in _context.InvoiceCases
                          join l in _context.LaboratoryTests on c.LaboratoryTestID equals l.ID into ltGroup
                          from lt in ltGroup.DefaultIfEmpty()
-                         where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode 
+                         where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
                          select new
                          {
                              c.ID,
                              c.FinancialYear,
-                             LaboratoryTest = lt.Name,
-                             p.Name,
-                             p.Price,
+                             LaboratoryTest = lt != null ? lt.Name : "",
+                             TierCount = _context.InvoiceCasePrices.Count(p => p.InvoiceCaseID == c.ID),
+                             c.ModifiedOn,
+                             Tiers = _context.InvoiceCasePrices
+                                 .Where(p => p.InvoiceCaseID == c.ID)
+                                 .Select(p => new { p.Name, p.Price, p.AliasName })
+                                 .ToList()
                          };
 
             _query = _query.AsQueryable().ApplyFilters(filter.Filter);
@@ -63,9 +66,9 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search))
-                || x.FinancialYear.Contains(search)
-                || x.Price.ToString().Contains(search));
+                _query = _query.Where(x =>
+                    x.FinancialYear.ToLower().Contains(search)
+                    || x.LaboratoryTest.ToLower().Contains(search));
             }
 
             if (filter.SortByColumn != null)
@@ -73,10 +76,8 @@ namespace LIMSApi.Repositories
                 _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
             }
 
-            // Total Records Count
             int totalRecords = await _query.CountAsync();
 
-            // Apply Pagination
             var items = await _query
                 .Skip((filter.PageNumber - 1) * filter.PageSize)
                 .Take(filter.PageSize)

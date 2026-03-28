@@ -75,16 +75,19 @@ namespace LIMSApi.Repositories
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from i in _context.InvoiceCaseConfigurations
-                         join a in _context.InvoiceCaseAliasNames on i.ID equals a.InvoiceConfigurationID
-                         where i.IsActive && i.CompanyCode == loggedInUser.CompanyCode
-                         select new
-                         {
-                             i.ID,
-                             Name = a.Name
-                         };
+            // Main config name + alias names as separate searchable entries (all point to same ID)
+            var mainQuery = from i in _context.InvoiceCaseConfigurations
+                            where i.IsActive && i.CompanyCode == loggedInUser.CompanyCode
+                            select new { i.ID, i.Name };
 
-           
+            var aliasQuery = from i in _context.InvoiceCaseConfigurations
+                             join a in _context.InvoiceCaseAliasNames on i.ID equals a.InvoiceConfigurationID
+                             where i.IsActive && i.CompanyCode == loggedInUser.CompanyCode
+                                   && a.Name != null && a.Name != ""
+                             select new { i.ID, Name = a.Name };
+
+            var _query = mainQuery.Union(aliasQuery);
+
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var search = searchTerm.Trim().ToLower();
