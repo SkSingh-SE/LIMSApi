@@ -5,7 +5,7 @@ namespace LIMSApi.Dtos
         public long LaboratoryTestID { get; set; }
         public string LaboratoryTestName { get; set; } = string.Empty;
         public string SubGroup { get; set; } = string.Empty;
-        public string Source { get; set; } = string.Empty; // "Specification", "ProductTestGroup", "MaterialTestMapping"
+        public string Source { get; set; } = string.Empty; // "Specification", "ProductTestGroup"
         public bool IsPerBatch { get; set; }
         public long? TestMethodStandardID { get; set; }
         public string? TestMethodStandardName { get; set; }

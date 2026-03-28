@@ -75,7 +75,8 @@ namespace LIMSApi.Repositories
                              po.RemainingAmount,
                              po.Status,
                              po.Terms,
-                             po.CreatedOn
+                             po.CreatedOn,
+                             po.ModifiedOn
                          };
 
             _query = _query.AsQueryable().ApplyFilters(filter.Filter);

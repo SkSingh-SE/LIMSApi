@@ -72,7 +72,8 @@ namespace LIMSApi.Repositories
                               TestMethodSpecificationName = tms != null ? tms.Name : string.Empty,
                               ptg.IsPerBatch,
                               ptg.Year,
-                              ptg.Remark
+                              ptg.Remark,
+                              ptg.ModifiedOn
                           })
                 .AsQueryable()
                 .ApplyFilters(filter.Filter);

@@ -71,7 +71,7 @@ namespace LIMSApi.Controllers
             return Ok(new
             {
                 status = "success",
-                message = $"TestMethod '{entity.Name}' updated successfully."
+                message = $"TestMethod '{entity.Name}' deleted successfully."
             });
         }
 

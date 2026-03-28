@@ -1,5 +1,6 @@
 ﻿using System.Text.RegularExpressions;
 using LIMSApi.Data;
+using Microsoft.EntityFrameworkCore;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
@@ -61,6 +62,8 @@ namespace LIMSApi.Services
             existingEquipment.InternalExternal = model.InternalExternal;
             existingEquipment.IntermediateCheckRequired = model.IntermediateCheckRequired;
             existingEquipment.IntermediateCheckInterval = model.IntermediateCheckInterval;
+            existingEquipment.NextCalibrationDueDate = model.NextCalibrationDueDate;
+            existingEquipment.NextMaintenanceDueDate = model.NextMaintenanceDueDate;
             existingEquipment.LastCalibrationDate = model.LastCalibrationDate;
             existingEquipment.CalibrationFrequencyDays = model.CalibrationFrequencyDays;
             existingEquipment.MaintenanceSchedule = model.MaintenanceSchedule;
@@ -211,6 +214,17 @@ namespace LIMSApi.Services
 
             return date;
         }
+        public async Task ReviewCalibration(long calibrationId)
+        {
+            var calibration = await _context.Set<EquipmentCalibration>().FirstOrDefaultAsync(c => c.ID == calibrationId);
+            if (calibration == null)
+                throw new KeyNotFoundException("Calibration record not found!");
+
+            calibration.IsReviewed = true;
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Calibration '{CalibrationId}' marked as reviewed.", calibrationId);
+        }
+
         public async Task RemoveEquipment(long id)
         {
             var existingEquipment = await _equipmentRepository.GetEquipmentById(id);

@@ -54,6 +54,13 @@ namespace LIMSApi.Controllers
                 message = $"Equipment '{model.Name}' created successfully."
             });
         }
+        [HttpPatch("calibration/{id}/review")]
+        public async Task<IActionResult> ReviewCalibration(long id)
+        {
+            await _equipmentTypeService.ReviewCalibration(id);
+            return Ok(new { status = "success", message = "Calibration marked as reviewed." });
+        }
+
         [HttpPost("add-calibration")]
         public async Task<IActionResult> AddCalibration([FromForm] EquipmentCalibration model)
         {

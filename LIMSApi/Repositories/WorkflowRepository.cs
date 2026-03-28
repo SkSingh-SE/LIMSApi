@@ -41,6 +41,7 @@ namespace LIMSApi.Repositories
                              c.Name,
                              c.EntityType,
                              c.CreatedOn,
+                             c.ModifiedOn,
                              CreatedBy = e.Name,
                          };
 

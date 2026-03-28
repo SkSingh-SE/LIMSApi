@@ -56,7 +56,8 @@ namespace LIMSApi.Repositories
                              c.RatePerUnit,
                              c.Remark,
                              c.SpecimenTypeId,
-                             SpecimenTypeName = st != null ? st.Name : ""
+                             SpecimenTypeName = st != null ? st.Name : "",
+                             c.ModifiedOn
                          };
 
             _query = _query.AsQueryable().ApplyFilters(filter.Filter);

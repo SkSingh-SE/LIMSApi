@@ -86,6 +86,8 @@ namespace LIMSApi.Controllers
         [HttpGet("by-classification/{metalClassificationId}")]
         public async Task<IActionResult> GetByClassification(long metalClassificationId, string? searchTerm, int pageNo = 1, int pageSize = 20)
         {
+            if (pageNo < 1) pageNo = 1;
+
             // Check if any mappings exist for this metal classification
             var hasMappings = await _context.SpecimenOrientationMetalClassifications
                 .AnyAsync(x => x.MetalClassificationID == metalClassificationId);

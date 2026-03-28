@@ -64,7 +64,8 @@ namespace LIMSApi.Repositories
                              sp.Dimensions,
                              sp.MaterialType,
                              sp.Charges,
-                             sp.Remark
+                             sp.Remark,
+                             sp.ModifiedOn
                          };
 
             _query = _query.AsQueryable().ApplyFilters(filter.Filter);

@@ -54,6 +54,10 @@ namespace LIMSApi.Services
             existingDesignation.Name = model.Name;
             existingDesignation.Description = model.Description;
             existingDesignation.RoleID = model.RoleID;
+            existingDesignation.Qualification = model.Qualification;
+            existingDesignation.MinExperience = model.MinExperience;
+            existingDesignation.PersonalityTraits = model.PersonalityTraits;
+            existingDesignation.RolesAndResponsibilities = model.RolesAndResponsibilities;
             existingDesignation.ModifiedOn = DateTime.UtcNow;
             existingDesignation.ModifiedBy = loggedInUserDTO?.EmployeeID ?? 0;
 

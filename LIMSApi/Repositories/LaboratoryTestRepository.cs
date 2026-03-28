@@ -66,6 +66,8 @@ namespace LIMSApi.Repositories
                              c.LabDepartmentID,
                              DepartmentName = ds.Name,
                              c.SubGroup,
+                             c.ModifiedOn,
+                             c.CreatedOn
                          };
 
 

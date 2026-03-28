@@ -14,6 +14,8 @@ namespace LIMSApi.Models
         public string? CertificatePath { get; set; } = string.Empty;
         public long? UploadReferenceID { get; set; }
         public long? CalibrationAgencyID { get; set; }
+        public string? Agency { get; set; }
+        public bool IsReviewed { get; set; } = false;
 
         [NotMapped]
         public IFormFile? File { get; set; }

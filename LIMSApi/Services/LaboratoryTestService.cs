@@ -88,6 +88,22 @@ namespace LIMSApi.Services
             if (hasProductSpec)
                 throw new InvalidOperationException("Cannot delete: Laboratory Test is linked to Product Specifications.");
 
+            bool hasTestResult = await _context.TestResultHeaders.AnyAsync(t => t.LaboratoryTestID == id && t.IsActive);
+            if (hasTestResult)
+                throw new InvalidOperationException("Cannot delete: Laboratory Test is linked to Test Results.");
+
+            bool hasSamplePrep = await _context.SamplePreparationMasters.AnyAsync(s => s.LaboratoryTestID == id && s.IsActive);
+            if (hasSamplePrep)
+                throw new InvalidOperationException("Cannot delete: Laboratory Test is linked to Sample Preparations.");
+
+            bool hasProductTestGroup = await _context.ProductTestGroups.AnyAsync(p => p.LaboratoryTestID == id && p.IsActive);
+            if (hasProductTestGroup)
+                throw new InvalidOperationException("Cannot delete: Laboratory Test is linked to Product Test Groups.");
+
+            bool hasGeneralTestMethod = await _context.GeneralTestMethods.AnyAsync(g => g.LaboratoryTestID == id);
+            if (hasGeneralTestMethod)
+                throw new InvalidOperationException("Cannot delete: Laboratory Test is linked to General Test Methods.");
+
             existingTestMethod.IsActive = false;
             existingTestMethod.ModifiedOn = DateTime.UtcNow;
             existingTestMethod.ModifiedBy = loggedInUser.EmployeeID;

@@ -89,8 +89,6 @@ namespace LIMSApi.Repositories
                 || x.DepartmentName != null && x.DepartmentName.ToLower().Contains(search)
                 || x.EquipmentType != null && x.EquipmentType.ToLower().Contains(search)
                 || x.OEMName != null && x.OEMName.ToLower().Contains(search)
-                || x.NextCalibrationDueDate != null && x.NextCalibrationDueDate.ToString().Contains(search, StringComparison.CurrentCultureIgnoreCase)
-                || x.NextMaintenanceDueDate != null && x.NextMaintenanceDueDate.ToString().ToLower().Contains(search)
                 );
             }
 

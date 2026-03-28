@@ -77,7 +77,8 @@ namespace LIMSApi.Repositories
                               MaterialSpecification = s != null ? $"{s.AliasName}-{g.Grade}" : string.Empty,
                               LaboratoryTestName = l != null ? l.Name : string.Empty,
                               MetalClassificationName = m != null ? m.Name : string.Empty,
-                              TestMethodSpecificationName = t != null ? t.Name : string.Empty
+                              TestMethodSpecificationName = t != null ? t.Name : string.Empty,
+                              c.ModifiedOn
                           })
               .AsQueryable()
               .ApplyFilters(filter.Filter);
@@ -120,7 +121,8 @@ namespace LIMSApi.Repositories
                               c.SpecificationName,
                               c.AliasName,
                               c.SpecificationCode,
-                              MaterialSpecification = s.AliasName
+                              MaterialSpecification = s.AliasName,
+                              c.ModifiedOn
                           }).AsQueryable().ApplyFilters(filter.Filter);
 
 

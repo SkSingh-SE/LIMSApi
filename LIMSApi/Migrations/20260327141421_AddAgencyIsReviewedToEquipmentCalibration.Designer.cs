@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20260327141421_AddAgencyIsReviewedToEquipmentCalibration")]
+    partial class AddAgencyIsReviewedToEquipmentCalibration
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3844,6 +3847,56 @@ namespace LIMSApi.Migrations
                     b.HasKey("ID");
 
                     b.ToTable("MakerMasters");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.MaterialTestMapping", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("GradeID")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<long?>("MetalClassificationID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("ProductConditionID")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("GradeID");
+
+                    b.HasIndex("MetalClassificationID");
+
+                    b.HasIndex("ProductConditionID");
+
+                    b.ToTable("MaterialTestMappings");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.MenuMaster", b =>
@@ -16187,6 +16240,32 @@ namespace LIMSApi.Migrations
                     b.ToTable("TestGroupMappings");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.TestMappingLaboratoryTest", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<long>("LaboratoryTestID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("MaterialTestMappingID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("TestMappingID")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("LaboratoryTestID");
+
+                    b.HasIndex("MaterialTestMappingID");
+
+                    b.ToTable("MappingLaboratoryTests");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.TestMaster", b =>
                 {
                     b.Property<long>("ID")
@@ -18327,6 +18406,27 @@ namespace LIMSApi.Migrations
                     b.Navigation("Sample");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.MaterialTestMapping", b =>
+                {
+                    b.HasOne("LIMSApi.Models.SpecificationGrade", "Grade")
+                        .WithMany()
+                        .HasForeignKey("GradeID");
+
+                    b.HasOne("LIMSApi.Models.MetalClassificationMaster", "MetalClassification")
+                        .WithMany()
+                        .HasForeignKey("MetalClassificationID");
+
+                    b.HasOne("LIMSApi.Models.ProductConditionMaster", "ProductCondition")
+                        .WithMany()
+                        .HasForeignKey("ProductConditionID");
+
+                    b.Navigation("Grade");
+
+                    b.Navigation("MetalClassification");
+
+                    b.Navigation("ProductCondition");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.MenuMaster", b =>
                 {
                     b.HasOne("LIMSApi.Models.MenuMaster", "Parent")
@@ -19390,6 +19490,21 @@ namespace LIMSApi.Migrations
                     b.Navigation("TestMethod");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.TestMappingLaboratoryTest", b =>
+                {
+                    b.HasOne("LIMSApi.Models.LaboratoryTest", "LaboratoryTest")
+                        .WithMany()
+                        .HasForeignKey("LaboratoryTestID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LIMSApi.Models.MaterialTestMapping", null)
+                        .WithMany("LaboratoryTests")
+                        .HasForeignKey("MaterialTestMappingID");
+
+                    b.Navigation("LaboratoryTest");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.TestMethodSpecificationVersion", b =>
                 {
                     b.HasOne("LIMSApi.Models.TestMethodSpecification", "TestMethodSpecification")
@@ -19723,6 +19838,11 @@ namespace LIMSApi.Migrations
             modelBuilder.Entity("LIMSApi.Models.LongTermTest", b =>
                 {
                     b.Navigation("Records");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.MaterialTestMapping", b =>
+                {
+                    b.Navigation("LaboratoryTests");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.MenuMaster", b =>

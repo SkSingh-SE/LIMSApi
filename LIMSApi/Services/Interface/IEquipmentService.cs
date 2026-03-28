@@ -11,6 +11,7 @@ namespace LIMSApi.Services.Interface
         Task AddEquipmentSOP(EquipmentSOP model);
 
         Task ModifyEquipment(EquipmentMaster model);
+        Task ReviewCalibration(long calibrationId);
         Task RemoveEquipment(long id);
         Task RemoveEquipmentSOP(EquipmentSOP sOP);
         Task<EquipmentMaster> GetEquipmentDetails(long id);

@@ -367,3 +367,7 @@ FodyWeavers.xsd
 # Secrets - NEVER commit these
 **/appsettings.Secrets.json
 **/appsettings.*.Secrets.json
+/LIMSApi.IntegrationTests
+/LIMSApi/wwwroot/Uploads
+*.rar
+LIMSApi/publish.rar
