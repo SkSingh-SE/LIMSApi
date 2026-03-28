@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using LIMSApi.Helpers;
 using LIMSApi.Helpers.Enums;
 using LIMSApi.Models;
+using LIMSApi.Services.Interface;
 using LIMSApi.ServiceWORepo;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,13 +16,15 @@ namespace LIMSApi.Jobs
         private readonly ILogger<ReminderJob> _logger;
         private readonly EmailService _emailService;
         private readonly TemplateService _templateService;
+        private readonly INotificationService _notificationService;
 
-        public ReminderJob(LIMSContext context, ILogger<ReminderJob> logger, EmailService emailService,TemplateService templateService)
+        public ReminderJob(LIMSContext context, ILogger<ReminderJob> logger, EmailService emailService, TemplateService templateService, INotificationService notificationService)
         {
             _dbContext = context;
             _logger = logger;
             _emailService = emailService;
             _templateService = templateService;
+            _notificationService = notificationService;
         }
 
         [AutomaticRetry(Attempts = 3)] // Hangfire retry policy
@@ -69,6 +72,27 @@ var casesNeedingReminder = await _dbContext.SampleInwards
                         
                         reminderCount++;
                         _logger.LogInformation("Sent reminder email for Case {CaseNo}", inward.CaseNo);
+                    }
+
+                    // Also create DB notification for the inward creator (bell icon + push)
+                    if (inward.CreatedBy > 0)
+                    {
+                        try
+                        {
+                            await _notificationService.CreateNotificationAsync(new Notification
+                            {
+                                UserID = inward.CreatedBy,
+                                Title = "Incomplete Inward Reminder",
+                                Message = $"Case {inward.CaseNo} still has missing information. Please complete it.",
+                                EntityID = inward.ID,
+                                EntityType = "SampleInward",
+                                Type = NotificationType.System
+                            });
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Failed to create notification for Case {CaseNo}", inward.CaseNo);
+                        }
                     }
                 }
 

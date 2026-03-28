@@ -87,8 +87,6 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<SpecificationHeader> SpecificationHeaders { get; set; }
     public virtual DbSet<SpecificationGrade> SpecificationGrades { get; set; }
     public virtual DbSet<SpecificationLine> SpecificationLines { get; set; }
-    public virtual DbSet<SpecificationLineLaboratoryTest> SpecificationLineLaboratoryTests { get; set; }
-
     public virtual DbSet<SpecimenOrientationMaster> SpecimenOrientationMasters { get; set; }
     public virtual DbSet<SpecimenTypeMaster> SpecimenTypeMasters { get; set; }
     public virtual DbSet<StandardOrganizationMaster> StandardOrganizationMasters { get; set; }
@@ -131,7 +129,7 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<Notification> Notifications { get; set; }
     public virtual DbSet<UserPushSubscription> UserPushSubscriptions { get; set; }
     public virtual DbSet<JobExecutionLog> JobExecutionLogs { get; set; }
-    public virtual DbSet<MaterialTestMapping> MaterialTestMappings { get; set; }
+
 
     public DbSet<CuttingChargeHeader> CuttingChargeHeaders { get; set; }
     public DbSet<CuttingChargeSample> CuttingChargeSamples { get; set; }
@@ -140,7 +138,7 @@ public partial class LIMSContext : DbContext
     public DbSet<SamplePreparationMaster> SamplePreparationMasters { get; set; }
     public DbSet<ProductTestGroup> ProductTestGroups { get; set; }
     public DbSet<ProductSpecificationGrade> ProductSpecificationGrades { get; set; }
-    public DbSet<TestMappingLaboratoryTest> MappingLaboratoryTests { get; set; }
+
     public DbSet<ProformaInvoiceHeader> ProformaInvoiceHeader { get; set; }
     public DbSet<ProformaInvoiceDetail> ProformaInvoiceDetails { get; set; }
     public DbSet<TestResultHeader> TestResultHeaders { get; set; }
@@ -540,10 +538,6 @@ public partial class LIMSContext : DbContext
     .WithMany()
     .HasForeignKey(x => x.TaxInvoiceID)
     .OnDelete(DeleteBehavior.Restrict);
-
-        // SpecificationLineLaboratoryTest composite key
-        modelBuilder.Entity<SpecificationLineLaboratoryTest>()
-            .HasKey(x => new { x.SpecificationLineID, x.LaboratoryTestID });
 
         // CustomerLedger relationships
         modelBuilder.Entity<CustomerLedger>()

@@ -391,6 +391,28 @@ namespace LIMSApi.ServiceWORepo
             }
         }
 
+        private async Task<int> GetStandardsDueForReviewCountAsync()
+        {
+            try
+            {
+                var cutoff = DateTime.UtcNow.AddDays(30);
+                var count = await _context.TestMethodSpecificationVersions
+                    .Where(v => v.Status == VersionStatus.Active
+                        && v.ReviewDate != null
+                        && v.ReviewDate <= cutoff
+                        && v.ReviewDate >= DateTime.UtcNow)
+                    .CountAsync();
+
+                _logger.LogDebug("Found {Count} standards due for review", count);
+                return count;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting standards due for review count");
+                return 0;
+            }
+        }
+
         private async Task<UrgentSampleInfo> GetUrgentSampleInfoAsync()
         {
             try
@@ -617,6 +639,7 @@ namespace LIMSApi.ServiceWORepo
             var samplesUnderTestingCount = await GetSamplesUnderTestingCountAsync();
             var resultsPendingReviewCount = await GetResultsPendingReviewCountAsync();
             var reportsPendingDispatchCount = await GetReportsPendingDispatchCountAsync();
+            var standardsDueForReviewCount = await GetStandardsDueForReviewCountAsync();
 
             // Check for urgent samples
             var urgentSampleInfo = await GetUrgentSampleInfoAsync();
@@ -642,9 +665,12 @@ namespace LIMSApi.ServiceWORepo
                 CreateOperationalCardWithData("results-pending-review", "Results Pending Review", 
                     resultsPendingReviewCount, urgentSampleInfo.HasUrgentPendingReview,
                     new[] { "Admin", "Technical" }),
-                CreateOperationalCardWithData("reports-pending-dispatch", "Reports Pending Dispatch", 
+                CreateOperationalCardWithData("reports-pending-dispatch", "Reports Pending Dispatch",
                     reportsPendingDispatchCount, urgentSampleInfo.HasUrgentPendingDispatch,
-                    new[] { "Admin", "FrontDesk" })
+                    new[] { "Admin", "FrontDesk" }),
+                CreateOperationalCardWithData("standards-due-review", "Standards Due for Review",
+                    standardsDueForReviewCount, standardsDueForReviewCount > 0,
+                    new[] { "Admin", "Technical", "Lab" })
             };
 
             // Filter cards based on user role

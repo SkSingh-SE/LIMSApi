@@ -29,8 +29,9 @@ namespace LIMSApi.Services
         private readonly EmailService _emailService;
         private readonly TemplateService _templateService;
         private readonly IPlanService _planService;
+        private readonly INotificationService _notificationService;
 
-        public SampleInwardService(ISampleInwardRepository SampleInwardRepo, ILogger<SampleInwardService> logger, IFileUploadService uploadService, IWorkflowService workflowService, ISampleStatusService sampleStatusService, IProformaInvoiceRepository proformaInvoiceRepository, ILaboratoryTestRepository laboratoryTestRepository, LIMSContext context, EmailService emailService, TemplateService templateService, IPlanService planService)
+        public SampleInwardService(ISampleInwardRepository SampleInwardRepo, ILogger<SampleInwardService> logger, IFileUploadService uploadService, IWorkflowService workflowService, ISampleStatusService sampleStatusService, IProformaInvoiceRepository proformaInvoiceRepository, ILaboratoryTestRepository laboratoryTestRepository, LIMSContext context, EmailService emailService, TemplateService templateService, IPlanService planService, INotificationService notificationService)
         {
             _SampleInwardRepository = SampleInwardRepo;
             _logger = logger;
@@ -43,6 +44,7 @@ namespace LIMSApi.Services
             _emailService = emailService;
             _templateService = templateService;
             _planService = planService;
+            _notificationService = notificationService;
         }
 
         public async Task<long> CreateSampleInward(SampleInwardDto model)
@@ -218,21 +220,73 @@ namespace LIMSApi.Services
                 var inwardStatus = isComplete ? InwardStatus.INWARD_COMPLETED : InwardStatus.INWARD_REGISTERED;
                 await _sampleStatusService.UpdateInwardStatus(entity.ID, inwardStatus, loggedInUser.EmployeeID);
 
-                // Send acknowledgment email if complete
-                //if (isComplete && entity.Contacts.Any())
-                //{
-                //    var emailBody = await _templateService.GetTemplateAsync(MessageTemplateKey.SAMPLE_INWARD_ACK, NotificationType.Email, new
-                //    {
-                //        CustomerName = entity.Customer.Name,
-                //        CaseNo = entity.CaseNo
-                //    });
-                //    var contact = entity.Contacts.FirstOrDefault(c => !string.IsNullOrEmpty(c.EmailId));
-                //    if (contact != null)
-                //    {
-                //        //var emailBody = $"<h3>Sample Inward Acknowledgment</h3><p>Your sample case {entity.CaseNo} has been registered successfully. All required information has been received.</p>";
-                //        await _emailService.SendEmailAsync(contact.EmailId, $"Sample Inward Acknowledgment - {entity.CaseNo}", emailBody);
-                //    }
-                //}
+                // ── Notifications (fire AFTER save — failures must not roll back inward) ──
+                try
+                {
+                    // Step 12: Notify Lab Managers about new inward
+                    var labManagers = await _context.UserMasters
+                        .Include(u => u.Role)
+                        .Where(u => u.IsActive && u.Role.Name == "LabManager" && u.CompanyCode == loggedInUser.CompanyCode)
+                        .ToListAsync();
+
+                    foreach (var mgr in labManagers)
+                    {
+                        await _notificationService.CreateNotificationAsync(new Notification
+                        {
+                            UserID = mgr.ID,
+                            Email = mgr.EmailId,
+                            Title = "New Sample Inward Registered",
+                            Message = $"Case {entity.CaseNo} registered for {model.CustomerName}.",
+                            EntityID = entity.ID,
+                            EntityType = "SampleInward",
+                            Type = NotificationType.System
+                        });
+                    }
+
+                    // Step 14: Customer email acknowledgment (if complete and has contact)
+                    if (isComplete && entity.Contacts != null && entity.Contacts.Any())
+                    {
+                        var contact = entity.Contacts.FirstOrDefault(c => !string.IsNullOrEmpty(c.EmailId));
+                        if (contact != null)
+                        {
+                            var emailBody = await _templateService.GetTemplateAsync(MessageTemplateKey.SAMPLE_INWARD_ACK, NotificationType.Email, new
+                            {
+                                CustomerName = entity.Customer?.Name ?? "",
+                                CaseNo = entity.CaseNo
+                            });
+                            await _emailService.SendEmailAsync(contact.EmailId, $"Sample Inward Acknowledgment - {entity.CaseNo}", emailBody);
+                        }
+                    }
+
+                    // Step 15: Urgent case priority alert to ALL LabManagers + LabTechnicians
+                    if (entity.Urgent)
+                    {
+                        var urgentRecipients = await _context.UserMasters
+                            .Include(u => u.Role)
+                            .Where(u => u.IsActive
+                                && (u.Role.Name == "LabManager" || u.Role.Name == "LabTechnician")
+                                && u.CompanyCode == loggedInUser.CompanyCode)
+                            .ToListAsync();
+
+                        foreach (var user in urgentRecipients)
+                        {
+                            await _notificationService.CreateNotificationAsync(new Notification
+                            {
+                                UserID = user.ID,
+                                Email = user.EmailId,
+                                Title = "URGENT Sample Inward",
+                                Message = $"URGENT: Case {entity.CaseNo} requires immediate attention.",
+                                EntityID = entity.ID,
+                                EntityType = "SampleInward",
+                                Type = NotificationType.System
+                            });
+                        }
+                    }
+                }
+                catch (Exception notifEx)
+                {
+                    _logger.LogError(notifEx, "Notification error for inward {InwardId} — inward saved OK", entity.ID);
+                }
 
                 return entity.ID;
             }

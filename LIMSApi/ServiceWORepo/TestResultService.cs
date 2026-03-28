@@ -60,7 +60,7 @@ namespace LIMSApi.ServiceWORepo
                     CustomerName = inward.Customer != null ? inward.Customer.Name : "",
                     Material = sample.MetalClassificationID != null ? _db.MetalClassificationMasters.Where(x => x.ID == sample.MetalClassificationID.Value).Select(m => m.Name).FirstOrDefault() : string.Empty,
                     Condition = sample.ProductConditionID != null ? _db.ProductConditionMasters.Where(x => x.ID == sample.ProductConditionID.Value).Select(m => m.Name).FirstOrDefault() : string.Empty,
-
+                    sample.ModifiedOn,
 
                     // Sample-level status list
                     SampleLevelStatus = _db.TestResultHeaders
@@ -381,6 +381,36 @@ namespace LIMSApi.ServiceWORepo
                         {
                             param.IsWithinLimit = null;
                             param.ResultStatus = null;
+                        }
+                    }
+                }
+            }
+
+            // --------------------------------------------------------------------
+            // MOU GUARD BAND (Step 16) — only when DecisionRule = "With MOU consideration"
+            // Shrinks acceptance range by ExpandedUncertainty: specMin+U ≤ value ≤ specMax-U
+            // --------------------------------------------------------------------
+            var decisionRule = await _db.SampleDetails
+                .Where(s => s.ID == header.SampleID)
+                .Join(_db.SampleInwards, s => s.InwardID, i => i.ID, (s, i) => i.DecisionRule)
+                .FirstOrDefaultAsync();
+
+            if (decisionRule == "With MOU consideration")
+            {
+                foreach (var param in header.Parameters)
+                {
+                    if (param.ExpandedUncertainty.HasValue && param.Value.HasValue)
+                    {
+                        decimal u = param.ExpandedUncertainty.Value;
+                        decimal? specMin = param.SpecMinValue ?? param.MinValue;
+                        decimal? specMax = param.SpecMaxValue ?? param.MaxValue;
+
+                        if (specMin.HasValue && specMax.HasValue)
+                        {
+                            bool withinMin = param.Value.Value >= (specMin.Value + u);
+                            bool withinMax = param.Value.Value <= (specMax.Value - u);
+                            param.IsWithinLimit = withinMin && withinMax;
+                            param.ResultStatus = param.IsWithinLimit == true ? "Pass" : "Fail";
                         }
                     }
                 }
@@ -926,41 +956,18 @@ namespace LIMSApi.ServiceWORepo
 
             var labTestName = labTest?.Name ?? $"LabTest#{labTestId}";
 
-            // Get specification lines (Type="mechanical") linked to this lab test
+            // Get specification lines (Type="mechanical") by grade — no join table needed
             var specLines = new List<SpecificationLine>();
             if (specIds.Any())
             {
-                // Get spec line IDs linked to this lab test
-                var linkedSpecLineIds = await _db.SpecificationLineLaboratoryTests
-                    .Where(slt => slt.LaboratoryTestID == labTestId)
-                    .Select(slt => slt.SpecificationLineID)
-                    .ToListAsync();
-
                 specLines = await _db.SpecificationLines
                     .Include(sl => sl.Parameter)
                         .ThenInclude(p => p.ParameterUnit)
-                    .Where(sl => linkedSpecLineIds.Contains(sl.ID)
+                    .Where(sl => sl.SpecificationGradeID.HasValue
+                        && specIds.Contains(sl.SpecificationGradeID.Value)
                         && sl.Type == "mechanical"
-                        && sl.ParameterID.HasValue
-                        && sl.SpecificationGrade != null
-                        && specIds.Contains(sl.SpecificationGrade.ID))
+                        && sl.ParameterID.HasValue)
                     .ToListAsync();
-
-                // Alternative: if the above doesn't work due to SpecificationGrade navigation,
-                // try matching via SpecificationGradeID
-                if (!specLines.Any())
-                {
-                    specLines = await _db.SpecificationLines
-                        .Include(sl => sl.Parameter)
-                            .ThenInclude(p => p.ParameterUnit)
-                        .Where(sl => linkedSpecLineIds.Contains(sl.ID)
-                            && sl.Type == "mechanical"
-                            && sl.ParameterID.HasValue)
-                        .ToListAsync();
-
-                    // Filter by specification grade IDs matching our specIds
-                    specLines = specLines.Where(sl => sl.SpecificationGradeID.HasValue && specIds.Contains(sl.SpecificationGradeID.Value)).ToList();
-                }
             }
 
             // Create TestResultParameter from each specification line
@@ -1761,6 +1768,33 @@ namespace LIMSApi.ServiceWORepo
                         {
                             param.IsWithinLimit = null;
                             param.ResultStatus = null;
+                        }
+                    }
+                }
+            }
+
+            // MOU Guard Band — same logic as RecalculateAllParameters
+            var decisionRule2 = await _db.SampleDetails
+                .Where(s => s.ID == header.SampleID)
+                .Join(_db.SampleInwards, s => s.InwardID, i => i.ID, (s, i) => i.DecisionRule)
+                .FirstOrDefaultAsync();
+
+            if (decisionRule2 == "With MOU consideration")
+            {
+                foreach (var param in header.Parameters)
+                {
+                    if (param.ExpandedUncertainty.HasValue && param.Value.HasValue)
+                    {
+                        decimal u = param.ExpandedUncertainty.Value;
+                        decimal? specMin = param.SpecMinValue ?? param.MinValue;
+                        decimal? specMax = param.SpecMaxValue ?? param.MaxValue;
+
+                        if (specMin.HasValue && specMax.HasValue)
+                        {
+                            bool withinMin = param.Value.Value >= (specMin.Value + u);
+                            bool withinMax = param.Value.Value <= (specMax.Value - u);
+                            param.IsWithinLimit = withinMin && withinMax;
+                            param.ResultStatus = param.IsWithinLimit == true ? "Pass" : "Fail";
                         }
                     }
                 }

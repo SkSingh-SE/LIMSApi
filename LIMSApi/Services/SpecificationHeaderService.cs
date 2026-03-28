@@ -139,17 +139,6 @@ namespace LIMSApi.Services
                         existingLine.HeatTreatmentID = line.HeatTreatmentID;
                         existingLine.ProductConditionID1 = line.ProductConditionID1;
                         existingLine.ProductConditionID2 = line.ProductConditionID2;
-
-
-                        // Laboratory Tests
-                        existingLine.LaboratoryTests.Clear();
-                        foreach (var test in line.LaboratoryTests)
-                        {
-                            if (test == null)
-                                continue;
-                            test.SpecificationLineID = existingLine.ID;
-                            existingLine.LaboratoryTests.Add(test);
-                        }
                     }
                 }
             }

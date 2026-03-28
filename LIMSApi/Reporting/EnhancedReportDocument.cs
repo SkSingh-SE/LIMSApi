@@ -122,7 +122,10 @@ namespace LIMSApi.Reporting
                         col.Item().PaddingVertical(2);
                     }
 
-                    // Section 6: Signatures
+                    // Section 6: Statement of Conformity (if applicable)
+                    col.Item().Element(ComposeConformityStatement);
+
+                    // Section 7: Signatures
                     col.Item().Element(ComposeSignatures);
 
                     col.Item().PaddingVertical(4);
@@ -550,7 +553,55 @@ namespace LIMSApi.Reporting
         }
 
         // ────────────────────────────────────────────────
-        // SECTION 6: SIGNATURES
+        // STATEMENT OF CONFORMITY
+        // ────────────────────────────────────────────────
+
+        private void ComposeConformityStatement(IContainer container)
+        {
+            if (_data.StatementOfConformity != "Applicable")
+            {
+                container.Text(""); // empty — no section rendered
+                return;
+            }
+
+            container.PaddingTop(6).Column(col =>
+            {
+                col.Item().BorderBottom(1).BorderColor(Colors.Grey.Medium)
+                    .PaddingBottom(2)
+                    .Text("Statement of Conformity")
+                    .FontSize(9).Bold();
+
+                col.Item().PaddingTop(4).Text(text =>
+                {
+                    text.Span("Decision Rule: ").FontSize(8).Bold();
+                    text.Span(_data.DecisionRule ?? "Not specified").FontSize(8);
+                });
+
+                // Overall conformity
+                var allParams = _data.TestSections.SelectMany(s => s.Parameters).ToList();
+                var hasNonConforming = allParams.Any(p => p.ConformityResult == "Does not conform");
+                var overallConformity = hasNonConforming
+                    ? "The test results do not conform to the specification requirements."
+                    : "The test results conform to the specification requirements.";
+
+                col.Item().PaddingTop(2).Text(text =>
+                {
+                    text.Span("Overall Result: ").FontSize(8).Bold();
+                    text.Span(overallConformity).FontSize(8);
+                });
+
+                // MOU note
+                if (_data.DecisionRule != null && _data.DecisionRule.Contains("With MOU"))
+                {
+                    col.Item().PaddingTop(2).Text(
+                        "Note: Expanded uncertainty (U) at 95% confidence level has been considered in the conformity assessment."
+                    ).FontSize(7).Italic().FontColor(Colors.Grey.Darken1);
+                }
+            });
+        }
+
+        // ────────────────────────────────────────────────
+        // SIGNATURES
         // ────────────────────────────────────────────────
 
         private void ComposeSignatures(IContainer container)

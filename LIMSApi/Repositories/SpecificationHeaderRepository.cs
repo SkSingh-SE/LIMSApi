@@ -42,7 +42,7 @@ namespace LIMSApi.Repositories
         {
             return await _context.SpecificationHeaders
                  .Include(x => x.Grades)
-                     .ThenInclude(sl => sl.SpecificationLines).ThenInclude(t => t.LaboratoryTests)
+                     .ThenInclude(sl => sl.SpecificationLines)
                  .FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
         }
 
@@ -78,7 +78,8 @@ namespace LIMSApi.Repositories
                               g.UNSSteelNumber,
                               c.AliasName,
                               g.Grade,
-                              c.StandardYear
+                              c.StandardYear,
+                              c.ModifiedOn
                           }).AsQueryable().ApplyFilters(filter.Filter);
 
 
@@ -136,7 +137,8 @@ namespace LIMSApi.Repositories
                               g.UNSSteelNumber,
                               c.AliasName,
                               g.Grade,
-                              c.StandardYear
+                              c.StandardYear,
+                              c.ModifiedOn
                           }).AsQueryable().ApplyFilters(filter.Filter);
 
 
@@ -247,20 +249,17 @@ namespace LIMSApi.Repositories
         {
             if (pageNo < 0) pageNo = 0;
 
-            var query = from m in _context.MaterialTestMappings
-                        join g in _context.SpecificationGrades on m.GradeID equals g.ID into gm
-                        from g in gm.DefaultIfEmpty()
+            var query = from g in _context.SpecificationGrades
                         join h in _context.SpecificationHeaders on g.SpecificationHeaderID equals h.ID
                         join mc in _context.MetalClassificationMasters on g.MetalClassificationID equals mc.ID into mcGroup
                         from mc in mcGroup.DefaultIfEmpty()
-                        where m.IsActive
+                        where h.IsActive
                         select new
                         {
-                            m.GradeID,
+                            GradeID = g.ID,
                             Grade = g.Grade,
                             AliasName = h.AliasName + "-" + g.Grade + (mc != null ? ("-" + mc.Name) : ""),
-                            m.MetalClassificationID,
-                            m.ProductConditionID
+                            MetalClassificationID = g.MetalClassificationID
                         };
 
             // Filter by MetalClassificationID (if provided)
@@ -329,18 +328,12 @@ namespace LIMSApi.Repositories
                 gradeIds.Add(gradeId2);
             }
 
-            var query = from spec in _context.SpecificationHeaders
-                        join grade in _context.SpecificationGrades
-                            on spec.ID equals grade.SpecificationHeaderID
-                        join line in _context.SpecificationLines
-                            on grade.ID equals line.SpecificationGradeID
-                        join specLineLabTest in _context.SpecificationLineLaboratoryTests
-                            on line.ID equals specLineLabTest.SpecificationLineID
+            var query = from ps in _context.ProductSpecifications
                         join test in _context.LaboratoryTests
-                            on specLineLabTest.LaboratoryTestID equals test.ID
-                        where gradeIds.Contains(grade.ID)   
-                              && spec.IsActive
-                              && spec.CompanyCode == loggedInUser.CompanyCode
+                            on ps.LaboratoryTestID equals test.ID
+                        where gradeIds.Contains(ps.GradeID)
+                              && ps.IsActive
+                              && ps.CompanyCode == loggedInUser.CompanyCode
                         select new DropdwonSelector
                         {
                             Id = test.ID,

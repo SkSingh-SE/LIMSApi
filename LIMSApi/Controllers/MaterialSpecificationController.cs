@@ -1,8 +1,10 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Controllers
 {
@@ -11,10 +13,12 @@ namespace LIMSApi.Controllers
     public class MaterialSpecificationController : ControllerBase
     {
         private readonly ISpecificationHeaderService _service;
+        private readonly LIMSContext _context;
 
-        public MaterialSpecificationController(ISpecificationHeaderService specificationHeaderService)
+        public MaterialSpecificationController(ISpecificationHeaderService specificationHeaderService, LIMSContext context)
         {
             _service = specificationHeaderService;
+            _context = context;
         }
 
         [HttpPost("list")]
@@ -124,6 +128,30 @@ namespace LIMSApi.Controllers
                 Console.WriteLine($"[GetChemicalElementsBySpecifications] Error: {ex.Message}");
                 return StatusCode(500, "Error fetching chemical parameters for specifications.");
             }
+        }
+
+        [HttpGet("GetMechanicalLimitsByGrade")]
+        public async Task<IActionResult> GetMechanicalLimitsByGrade([FromQuery] long gradeId, [FromQuery] long? gradeId2 = null)
+        {
+            var gradeIds = new List<long> { gradeId };
+            if (gradeId2.HasValue && gradeId2 > 0) gradeIds.Add(gradeId2.Value);
+
+            var lines = await _context.SpecificationLines
+                .Where(l => l.SpecificationGradeID.HasValue
+                            && gradeIds.Contains(l.SpecificationGradeID.Value)
+                            && l.Type != null && l.Type.ToLower() == "mechanical")
+                .Select(l => new {
+                    SpecificationLineID = l.ID,
+                    l.ParameterID,
+                    ParameterName = l.Parameter != null ? l.Parameter.Name : null,
+                    l.MinValue,
+                    l.MaxValue,
+                    l.MinTolerance,
+                    l.MaxTolerance,
+                    UnitName = l.ParameterUnit != null ? l.ParameterUnit.Name : null
+                })
+                .ToListAsync();
+            return Ok(lines);
         }
     }
 }

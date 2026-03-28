@@ -2,6 +2,7 @@
 using LIMSApi.Models;
 using LIMSApi.Services;
 using LIMSApi.Services.Interface;
+using LIMSApi.ServiceWORepo;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -15,10 +16,12 @@ namespace LIMSApi.Controllers
     public class SampleInwardController : ControllerBase
     {
         private readonly ISampleInwardService _SampleInwardService;
+        private readonly IPaymentGatingService _paymentGatingService;
 
-        public SampleInwardController(ISampleInwardService SampleInwardServce)
+        public SampleInwardController(ISampleInwardService SampleInwardServce, IPaymentGatingService paymentGatingService)
         {
             _SampleInwardService = SampleInwardServce;
+            _paymentGatingService = paymentGatingService;
         }
 
         [HttpPost("list")]
@@ -94,11 +97,22 @@ namespace LIMSApi.Controllers
         public async Task<ActionResult<SampleInward>> PostSampleInward([FromForm] SampleInwardDto model)
         {
             var id = await _SampleInwardService.CreateSampleInward(model);
+
+            // Advisory credit limit check — never blocks inward creation
+            string? creditWarning = null;
+            try
+            {
+                var creditCheck = await _paymentGatingService.CheckCreditLimitAsync(model.CustomerID);
+                creditWarning = creditCheck.Warning;
+            }
+            catch { /* silent — credit check failure should not affect inward */ }
+
             return Ok(new
             {
                 status = "success",
                 message = $"SampleInward created successfully.",
-                id
+                id,
+                creditWarning
             });
         }
 

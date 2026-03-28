@@ -84,9 +84,9 @@ namespace LIMSApi.Services
             if (hasLabScope)
                 throw new InvalidOperationException("Cannot delete: Laboratory Test is linked to Lab Scope.");
 
-            bool hasSpecLines = await _context.SpecificationLineLaboratoryTests.AnyAsync(s => s.LaboratoryTestID == id);
-            if (hasSpecLines)
-                throw new InvalidOperationException("Cannot delete: Laboratory Test is linked to Material Specifications.");
+            bool hasProductSpec = await _context.ProductSpecifications.AnyAsync(s => s.LaboratoryTestID == id && s.IsActive);
+            if (hasProductSpec)
+                throw new InvalidOperationException("Cannot delete: Laboratory Test is linked to Product Specifications.");
 
             existingTestMethod.IsActive = false;
             existingTestMethod.ModifiedOn = DateTime.UtcNow;

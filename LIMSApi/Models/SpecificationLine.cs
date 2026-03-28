@@ -59,5 +59,4 @@ public partial class SpecificationLine
     [ForeignKey("SpecificationGradeID"),JsonIgnore]
     public virtual SpecificationGrade? SpecificationGrade { get; set; }
 
-    public ICollection<SpecificationLineLaboratoryTest> LaboratoryTests { get; set; } = new List<SpecificationLineLaboratoryTest>();
 }

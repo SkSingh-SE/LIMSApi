@@ -1306,7 +1306,8 @@ namespace LIMSApi.ServiceWORepo
                                    : p.IsWithinLimit == false ? "Fail"
                                    : "N/A",
                             IsWithinNablScope = p.IsWithinNablScope,
-                            NablScopeStatus = p.NablScopeStatus
+                            NablScopeStatus = p.NablScopeStatus,
+                            ExpandedUncertainty = p.ExpandedUncertainty
                         })
                         .ToList(),
                     Images = header.Images
@@ -1331,6 +1332,17 @@ namespace LIMSApi.ServiceWORepo
 
             // 6. Resolve signatory names
             var generatedByName = await ResolveEmployeeName(reportHeader.GeneratedBy);
+
+            // 6b. Resolve signatories from DB (fallback to defaults if not configured)
+            var signatories = await _db.AuthorizedSignatories
+                .Where(s => s.IsActive && s.ApplicableFor && s.CompanyCode == loggedInUser.CompanyCode)
+                .OrderBy(s => s.Id)
+                .Take(3)
+                .ToListAsync();
+
+            var testedBy = signatories.ElementAtOrDefault(0);
+            var reviewedBy = signatories.ElementAtOrDefault(1);
+            var authorizedBy = signatories.ElementAtOrDefault(2);
 
             // 7. Build DTO
             var dto = new ReportDataDto
@@ -1359,17 +1371,17 @@ namespace LIMSApi.ServiceWORepo
 
                 Remarks = allRemarks.Any() ? string.Join("\n", allRemarks) : null,
 
-                TestedByName = generatedByName ?? "Lab Analyst",
-                TestedByDesignation = "Lab Analyst",
-                TestedBySignaturePath = "Assets/signature.png",
+                TestedByName = testedBy?.Name ?? generatedByName ?? "Lab Analyst",
+                TestedByDesignation = testedBy?.Designation ?? "Lab Analyst",
+                TestedBySignaturePath = testedBy?.SignaturePath ?? "Assets/signature.png",
 
-                ReviewedByName = "Technical Manager",
-                ReviewedByDesignation = "Technical Manager",
-                ReviewedBySignaturePath = "Assets/signature.png",
+                ReviewedByName = reviewedBy?.Name ?? "Technical Manager",
+                ReviewedByDesignation = reviewedBy?.Designation ?? "Technical Manager",
+                ReviewedBySignaturePath = reviewedBy?.SignaturePath ?? "Assets/signature.png",
 
-                AuthorizedByName = "Authorized Signatory",
-                AuthorizedByDesignation = "Director",
-                AuthorizedBySignaturePath = "Assets/signature.png",
+                AuthorizedByName = authorizedBy?.Name ?? "Authorized Signatory",
+                AuthorizedByDesignation = authorizedBy?.Designation ?? "Director",
+                AuthorizedBySignaturePath = authorizedBy?.SignaturePath ?? "Assets/signature.png",
 
                 QrCodeData = $"{_config["PublicBaseUrl"]}/report/verify/{reportHeader.ReportNo}",
 
@@ -1390,6 +1402,24 @@ namespace LIMSApi.ServiceWORepo
                 IsPartialScope = outOfScopeParams.Any() && testSections.SelectMany(s => s.Parameters).Any(p => p.NablScopeStatus == "WithinScope"),
                 OutOfScopeParameterNames = outOfScopeParams
             };
+
+            // ── Conformity Assessment ──
+            dto.StatementOfConformity = inward.StatementOfConformity;
+            dto.DecisionRule = inward.DecisionRule;
+
+            if (inward.StatementOfConformity == "Applicable")
+            {
+                foreach (var section in dto.TestSections)
+                {
+                    foreach (var param in section.Parameters)
+                    {
+                        if (param.Status == "Pass")
+                            param.ConformityResult = "Conforms";
+                        else if (param.Status == "Fail")
+                            param.ConformityResult = "Does not conform";
+                    }
+                }
+            }
 
             return dto;
         }

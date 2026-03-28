@@ -22,16 +22,19 @@ namespace LIMSApi.Controllers
         private readonly IConfiguration _config;
         private readonly ILogger<RazorpayWebhookController> _logger;
         private readonly IPaymentService _paymentService;
+        private readonly CaseClosureService _caseClosureService;
 
         public RazorpayWebhookController(
             LIMSContext db,
             IConfiguration config,
-            ILogger<RazorpayWebhookController> logger, IPaymentService paymentService)
+            ILogger<RazorpayWebhookController> logger, IPaymentService paymentService,
+            CaseClosureService caseClosureService)
         {
             _db = db;
             _config = config;
             _logger = logger;
             _paymentService = paymentService;
+            _caseClosureService = caseClosureService;
         }
 
         [HttpPost("razorpay")]
@@ -109,6 +112,28 @@ namespace LIMSApi.Controllers
                     "Payment captured via webhook for OrderNo {OrderNo}",
                     order.OrderNo
                 );
+
+                // Auto-close case if all conditions met
+                if (order.InwardID.HasValue)
+                {
+                    try
+                    {
+                        var (canClose, reason) = await _caseClosureService.CanCloseCaseAsync(order.InwardID.Value);
+                        if (canClose)
+                        {
+                            await _caseClosureService.CloseCaseAsync(order.InwardID.Value, 0);
+                            _logger.LogInformation("Case {InwardId} auto-closed after payment", order.InwardID.Value);
+                        }
+                        else
+                        {
+                            _logger.LogInformation("Case {InwardId} cannot auto-close: {Reason}", order.InwardID.Value, reason);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error during auto-close for InwardId {InwardId}", order.InwardID.Value);
+                    }
+                }
             }
             else if (payload.Event == "payment.failed")
             {

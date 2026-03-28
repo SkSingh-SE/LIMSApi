@@ -22,32 +22,24 @@ namespace LIMSApi.ServiceWORepo
 
         public async Task<List<SuggestedTestDto>> GetSuggestedTestsBySpecification(long specificationGradeId)
         {
-            // SpecificationGrade → SpecificationLines → SpecificationLineLaboratoryTest → LaboratoryTest
-            var tests = await _context.SpecificationLines
-                .Where(sl => sl.SpecificationGradeID == specificationGradeId)
-                .SelectMany(sl => sl.LaboratoryTests)
-                .Select(slt => new
-                {
-                    slt.LaboratoryTestID,
-                    LaboratoryTest = _context.LaboratoryTests
-                        .Where(lt => lt.ID == slt.LaboratoryTestID)
-                        .FirstOrDefault()
-                })
-                .Where(x => x.LaboratoryTest != null)
-                .Select(x => new SuggestedTestDto
-                {
-                    LaboratoryTestID = x.LaboratoryTestID,
-                    LaboratoryTestName = x.LaboratoryTest!.Name,
-                    SubGroup = x.LaboratoryTest.SubGroup,
-                    Source = "Specification",
-                    IsPerBatch = false,
-                    TestMethodStandardID = null,
-                    TestMethodStandardName = null
-                })
-                .Distinct()
+            // ProductSpecification maps Grade → LaboratoryTest (no join table needed)
+            var tests = await _context.ProductSpecifications
+                .Where(ps => ps.GradeID == specificationGradeId && ps.IsActive)
+                .Join(_context.LaboratoryTests,
+                    ps => ps.LaboratoryTestID,
+                    lt => lt.ID,
+                    (ps, lt) => new SuggestedTestDto
+                    {
+                        LaboratoryTestID = lt.ID,
+                        LaboratoryTestName = lt.Name,
+                        SubGroup = lt.SubGroup,
+                        Source = "Specification",
+                        IsPerBatch = false,
+                        TestMethodStandardID = null,
+                        TestMethodStandardName = null
+                    })
                 .ToListAsync();
 
-            // Deduplicate by LaboratoryTestID (Distinct on anonymous projection may not deduplicate)
             return tests
                 .GroupBy(t => t.LaboratoryTestID)
                 .Select(g => g.First())

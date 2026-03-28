@@ -56,6 +56,10 @@ namespace LIMSApi.Dtos
         public bool IsNabl { get; set; }
         public string? NablCertNo { get; set; }
         public NablReportInfo? NablInfo { get; set; }
+
+        // ── Conformity Assessment ──
+        public string? StatementOfConformity { get; set; }
+        public string? DecisionRule { get; set; }
     }
 
     /// <summary>
@@ -88,6 +92,8 @@ namespace LIMSApi.Dtos
         public string Status { get; set; } = string.Empty; // Pass / Fail / N/A
         public bool? IsWithinNablScope { get; set; }
         public string? NablScopeStatus { get; set; } // WithinScope / OutsideScope / NotAccredited
+        public decimal? ExpandedUncertainty { get; set; }
+        public string? ConformityResult { get; set; } // Conforms / Does not conform / null
     }
 
     /// <summary>
