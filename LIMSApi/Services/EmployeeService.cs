@@ -420,6 +420,20 @@ namespace LIMSApi.Services
             }
         }
 
+        public async Task UpdateProfileImage(long employeeId, string profileImagePath)
+        {
+            var employee = await _employeeRepository.GetEmployeeById(employeeId);
+            if (employee == null)
+                throw new InvalidOperationException("Employee not found!");
+
+            employee.ProfileImagePath = profileImagePath;
+            employee.ModifiedOn = DateTime.UtcNow;
+            employee.ModifiedBy = loggedInUser?.EmployeeID ?? 0;
+
+            await _employeeRepository.UpdateEmployee(employee);
+            _logger.LogInformation("Profile image updated for employee ID '{EmployeeId}'.", employeeId);
+        }
+
         public async Task<OrgNodeDto?> GetOrgChartAsync()
         {
             return await _employeeRepository.GetOrgChartAsync();

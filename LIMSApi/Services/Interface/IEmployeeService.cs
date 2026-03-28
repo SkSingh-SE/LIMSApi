@@ -32,5 +32,8 @@ namespace LIMSApi.Services.Interface
         // Org Chart
         Task<OrgNodeDto?> GetOrgChartAsync();
         Task<List<OrgNodeDto>> GetDirectReportsAsync(long managerId);
+
+        // Profile Image
+        Task UpdateProfileImage(long employeeId, string profileImagePath);
     }
 }

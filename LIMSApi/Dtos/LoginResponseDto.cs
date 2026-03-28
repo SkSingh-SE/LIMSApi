@@ -25,6 +25,7 @@
         public string? WorkingHours { get; set; }
 
         public int ExpiresInSeconds { get; set; }
+        public string? ProfileImagePath { get; set; }
     }
 
 }

@@ -94,6 +94,7 @@ public partial class EmployeeMaster : AuditProperty
     public bool? IsTeamHead { get; set; }
 
     public string? DigitalSignature { get; set; }
+    public string? ProfileImagePath { get; set; }
     public string? EmployeeStatus { get; set; }
 
     // Phase 7.2: Employee competency enhancements

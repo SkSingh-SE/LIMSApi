@@ -136,7 +136,8 @@ namespace LIMSApi.Services
                 IpRestriction = user.IpRestriction,
                 WorkingHours = user.WorkingHours,
 
-                ExpiresInSeconds = expireHours * 60 * 60
+                ExpiresInSeconds = expireHours * 60 * 60,
+                ProfileImagePath = user.Employee?.ProfileImagePath
             };
         }
 

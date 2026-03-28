@@ -1,4 +1,5 @@
 ﻿using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
@@ -13,10 +14,17 @@ namespace LIMSApi.Controllers
     public class EmployeeMasterController : ControllerBase
     {
         private readonly IEmployeeService _employeeService;
+        private readonly IFileUploadService _fileUploadService;
 
-        public EmployeeMasterController(IEmployeeService employeeService)
+        private static readonly HashSet<string> AllowedImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif"
+        };
+
+        public EmployeeMasterController(IEmployeeService employeeService, IFileUploadService fileUploadService)
         {
             _employeeService = employeeService;
+            _fileUploadService = fileUploadService;
         }
 
         [HttpPost("list")]
@@ -107,6 +115,44 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> GetChildren(long employeeId)
         {
             return Ok(await _employeeService.GetDirectReportsAsync(employeeId));
+        }
+
+        [HttpPost("upload-profile-image")]
+        [RequestSizeLimit(FileUploadValidator.MaxFileSizeBytes)]
+        public async Task<IActionResult> UploadProfileImage(IFormFile file)
+        {
+            var loggedInUser = LoggedInUserProvider.CurrentUser;
+            if (loggedInUser == null || loggedInUser.EmployeeID == 0)
+                throw new UnauthorizedAccessException("User is not associated with an employee.");
+
+            // Validate file is an image
+            var extension = Path.GetExtension(file.FileName)?.ToLowerInvariant();
+            if (string.IsNullOrEmpty(extension) || !AllowedImageExtensions.Contains(extension))
+                return BadRequest(new { success = false, message = $"Only image files are allowed. Supported formats: {string.Join(", ", AllowedImageExtensions)}" });
+
+            // Full file validation (size, MIME, magic bytes)
+            var validationError = await FileUploadValidator.ValidateAsync(file);
+            if (validationError != null)
+                return BadRequest(new { success = false, message = validationError });
+
+            // Upload file to /Uploads/Employee/
+            var uploadedFile = await _fileUploadService.UploadFileAsync(file, FileType.Employee, null, $"profile_{loggedInUser.EmployeeID}");
+
+            // Update employee's ProfileImagePath
+            await _employeeService.UpdateProfileImage(loggedInUser.EmployeeID, uploadedFile.FilePath);
+
+            return Ok(new { message = "Profile image uploaded successfully", filePath = uploadedFile.FilePath });
+        }
+
+        [HttpGet("profile-image")]
+        public async Task<IActionResult> GetProfileImage()
+        {
+            var loggedInUser = LoggedInUserProvider.CurrentUser;
+            if (loggedInUser == null || loggedInUser.EmployeeID == 0)
+                throw new UnauthorizedAccessException("User is not associated with an employee.");
+
+            var employee = await _employeeService.GetEmployeeDetails(loggedInUser.EmployeeID);
+            return Ok(new { profileImagePath = employee.ProfileImagePath });
         }
     }
 }
