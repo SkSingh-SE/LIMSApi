@@ -163,7 +163,13 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                _query = _query.Where(x =>
+                    (x.Name != null && x.Name.ToLower().Contains(search))
+                    || (x.AliasName != null && x.AliasName.ToLower().Contains(search))
+                    || (x.ElementType != null && x.ElementType.ToLower().Contains(search))
+                    || (x.ParameterType != null && x.ParameterType.ToLower().Contains(search))
+                    || (x.UnitName != null && x.UnitName.ToLower().Contains(search))
+                );
             }
 
             if (filter.SortByColumn != null)

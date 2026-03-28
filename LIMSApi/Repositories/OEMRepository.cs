@@ -58,7 +58,13 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                _query = _query.Where(x =>
+                    (x.Name != null && x.Name.ToLower().Contains(search))
+                    || (x.ContactPerson1 != null && x.ContactPerson1.ToLower().Contains(search))
+                    || (x.EmailId1 != null && x.EmailId1.ToLower().Contains(search))
+                    || (x.ContactNo1 != null && x.ContactNo1.ToLower().Contains(search))
+                    || (x.Address != null && x.Address.ToLower().Contains(search))
+                );
             }
 
             if (filter.SortByColumn != null)
