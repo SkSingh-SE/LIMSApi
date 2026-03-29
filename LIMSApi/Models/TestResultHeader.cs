@@ -62,6 +62,12 @@ namespace LIMSApi.Models
         public long? OverrideById { get; set; }
         public bool PriceOverridden { get; set; } = false;
 
+        [MaxLength(50)]
+        public string? SelectedPricingType { get; set; }
+
+        [Column(TypeName = "decimal(18,4)")]
+        public decimal? PricingDimensionValue { get; set; }
+
         // ----- Verification Workflow (Phase 5) -----
         public bool PreparationDataMissing { get; set; }
 

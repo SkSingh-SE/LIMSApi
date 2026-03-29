@@ -14,6 +14,9 @@ namespace LIMSApi.Models
         [ForeignKey(nameof(LaboratoryTestID))]
         public virtual LaboratoryTest? LaboratoryTest { get; set; }
 
+        [StringLength(50)]
+        public string? DefaultPricingType { get; set; }
+
         public ICollection<InvoiceCasePrice> InvoiceCasePrices { get; set; } = new List<InvoiceCasePrice>();
     }
 }

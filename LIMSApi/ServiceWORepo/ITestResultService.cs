@@ -75,6 +75,11 @@ namespace LIMSApi.ServiceWORepo
         Task<EnvironmentAtTimeDto> GetEnvironmentAtTime(long headerId);
 
         // -------------------------------------------------------------
+        // Load Parameters from Specification into existing header
+        // -------------------------------------------------------------
+        Task<object> LoadParametersFromSpecAsync(long headerId);
+
+        // -------------------------------------------------------------
         // Auto-create TestResultHeaders from approved plan
         // -------------------------------------------------------------
         Task<AutoCreateHeadersResponse> AutoCreateHeadersFromPlanAsync(long planId);

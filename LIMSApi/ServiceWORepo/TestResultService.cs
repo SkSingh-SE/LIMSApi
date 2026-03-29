@@ -279,6 +279,12 @@ namespace LIMSApi.ServiceWORepo
                     param.Remarks = p.Remarks;
                     param.MinValue = p.MinValue;
                     param.MaxValue = p.MaxValue;
+                    param.IsBillable = p.IsBillable;
+                    param.DecimalPrecision = p.DecimalPrecision;
+                    param.ConversionFactor = p.ConversionFactor;
+                    param.ConvertedValue = p.ConvertedValue;
+                    param.SelectedUnit = p.SelectedUnit;
+                    param.TestMethodUsed = p.TestMethodUsed;
                     if(header.Status == "Completed" && p.Value == 0)
                         throw new Exception("All parameters must have values greater than 0 after completion.");
                     param.Value = p.Value.HasValue ? Convert.ToDecimal(p.Value) : p.Value;
@@ -600,9 +606,20 @@ namespace LIMSApi.ServiceWORepo
                                 specMaxValue = p.SpecMaxValue ?? p.MaxValue,
                                 acceptanceCriteria = p.AcceptanceCriteria,
                                 p.Remarks,
-                                p.Formula,
+                                formulaExpression = p.Formula,
                                 p.IsCalculated,
-                                p.SpecificationLineID
+                                p.SpecificationLineID,
+                                isBillable = p.IsBillable,
+                                isWithinLimit = p.IsWithinLimit,
+                                resultStatus = p.ResultStatus,
+                                isStandalone = p.IsStandalone,
+                                sourceTestMethodId = p.SourceTestMethodId,
+                                parameterType = p.ParameterType,
+                                testMethodUsed = p.TestMethodUsed,
+                                decimalPrecision = p.DecimalPrecision,
+                                conversionFactor = p.ConversionFactor,
+                                convertedValue = p.ConvertedValue,
+                                selectedUnit = p.SelectedUnit
                             }).ToList(),
 
                             images = header.Images.Select(img => new
@@ -671,11 +688,19 @@ namespace LIMSApi.ServiceWORepo
                                     specMaxValue = p.SpecMaxValue ?? p.MaxValue,
                                     acceptanceCriteria = p.AcceptanceCriteria,
                                     p.Remarks,
-                                    p.Formula,
+                                    formulaExpression = p.Formula,
                                     p.IsCalculated,
                                     p.SpecificationLineID,
                                     p.IsAdditional,
-                                    p.IsWithinLimit
+                                    isBillable = p.IsBillable,
+                                    isWithinLimit = p.IsWithinLimit,
+                                    resultStatus = p.ResultStatus,
+                                    parameterType = p.ParameterType,
+                                    testMethodUsed = p.TestMethodUsed,
+                                    decimalPrecision = p.DecimalPrecision,
+                                    conversionFactor = p.ConversionFactor,
+                                    convertedValue = p.ConvertedValue,
+                                    selectedUnit = p.SelectedUnit
                                 }).ToList(),
 
                                 images = header.Images.Select(img => new
@@ -718,6 +743,10 @@ namespace LIMSApi.ServiceWORepo
                     productConditionID = sample.ProductConditionID,
                     productCondition = sample.ProductCondition?.Name,
                     remarks = sample.Remarks,
+                    thickness = sample.Thickness,
+                    diameter = sample.Diameter,
+                    width = sample.Width,
+                    length = sample.Length,
                     additionalDetails = sample.AdditionalDetails.Select(ad => new { ad.Label, ad.Value })
                 },
                 plans = resultPlans
@@ -822,6 +851,66 @@ namespace LIMSApi.ServiceWORepo
         /// Auto-create TestResultHeaders from an approved plan (ISO 17025 compliant).
         /// Mechanical: parameters from SpecificationLine (Type="mechanical") linked to lab test.
         /// Chemical: parameters from ChemicalTestElement (already specification-driven).
+        /// Load parameters from specification into an existing TestResultHeader.
+        /// Reuses BuildMechanicalParametersAsync to get spec lines, skips duplicates.
+        /// </summary>
+        public async Task<object> LoadParametersFromSpecAsync(long headerId)
+        {
+            var header = await _db.TestResultHeaders
+                .Include(h => h.Parameters)
+                .FirstOrDefaultAsync(h => h.ID == headerId)
+                ?? throw new KeyNotFoundException("Test header not found.");
+
+            // Get the plan's specification IDs
+            var plan = await _db.TestPlans
+                .Include(p => p.GeneralTests)
+                .FirstOrDefaultAsync(p => p.ID == header.TestPlanID);
+
+            var specIds = new List<long>();
+            if (plan != null)
+            {
+                foreach (var gt in plan.GeneralTests)
+                {
+                    if (gt.Specification1.HasValue && gt.Specification1.Value > 0) specIds.Add(gt.Specification1.Value);
+                    if (gt.Specification2.HasValue && gt.Specification2.Value > 0) specIds.Add(gt.Specification2.Value);
+                }
+            }
+
+            var warnings = new List<string>();
+            var specParams = await BuildMechanicalParametersAsync(header.LaboratoryTestID, specIds, warnings);
+
+            // Skip parameters already present
+            var existingParamIds = header.Parameters.Select(p => p.ParameterID).ToHashSet();
+            int added = 0;
+            foreach (var p in specParams)
+            {
+                if (existingParamIds.Contains(p.ParameterID)) continue;
+                header.Parameters.Add(new TestResultParameter
+                {
+                    ParameterID = p.ParameterID,
+                    ParameterName = p.ParameterName,
+                    Unit = p.Unit,
+                    Value = null,
+                    Formula = p.Formula,
+                    IsCalculated = p.IsCalculated,
+                    IsAdditional = false,
+                    MinValue = p.MinValue,
+                    MaxValue = p.MaxValue,
+                    SpecMinValue = p.SpecMinValue,
+                    SpecMaxValue = p.SpecMaxValue,
+                    AcceptanceCriteria = p.AcceptanceCriteria,
+                    SpecificationLineID = p.SpecificationLineID,
+                    ParameterType = p.ParameterType,
+                    IsBillable = true
+                });
+                added++;
+            }
+
+            await _db.SaveChangesAsync();
+            return new { added, warnings };
+        }
+
+        /// <summary>
         /// Each unit of Quantity = 1 independent TestResultHeader.
         /// </summary>
         public async Task<AutoCreateHeadersResponse> AutoCreateHeadersFromPlanAsync(long planId)

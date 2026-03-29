@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20260329065457_AddParamDisplayFields")]
+    partial class AddParamDisplayFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -14658,9 +14661,6 @@ namespace LIMSApi.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<decimal?>("Diameter")
-                        .HasColumnType("decimal(10,2)");
-
                     b.Property<bool>("Disabled")
                         .HasColumnType("bit");
 
@@ -14678,9 +14678,6 @@ namespace LIMSApi.Migrations
 
                     b.Property<bool>("IsTestingCompleted")
                         .HasColumnType("bit");
-
-                    b.Property<decimal?>("Length")
-                        .HasColumnType("decimal(10,2)");
 
                     b.Property<decimal>("MachiningAmount")
                         .HasColumnType("decimal(18,2)");
@@ -14740,9 +14737,6 @@ namespace LIMSApi.Migrations
                     b.Property<DateTime?>("TestingCompletedOn")
                         .HasColumnType("datetime2");
 
-                    b.Property<decimal?>("Thickness")
-                        .HasColumnType("decimal(10,2)");
-
                     b.Property<long?>("TpiAgencyID")
                         .HasColumnType("bigint");
 
@@ -14751,9 +14745,6 @@ namespace LIMSApi.Migrations
 
                     b.Property<long?>("UploadReferenceID")
                         .HasColumnType("bigint");
-
-                    b.Property<decimal?>("Width")
-                        .HasColumnType("decimal(10,2)");
 
                     b.HasKey("ID");
 
@@ -16571,9 +16562,6 @@ namespace LIMSApi.Migrations
 
                     b.Property<bool>("PriceOverridden")
                         .HasColumnType("bit");
-
-                    b.Property<decimal?>("PricingDimensionValue")
-                        .HasColumnType("decimal(18,4)");
 
                     b.Property<decimal?>("RoomHumidity")
                         .HasColumnType("decimal(6,2)");

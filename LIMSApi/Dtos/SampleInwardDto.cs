@@ -106,7 +106,7 @@ namespace LIMSApi.Dtos
         public string Details { get; set; }
         public long? MetalClassificationID { get; set; }
         public long? ProductConditionID { get; set; }
-        public string Remarks { get; set; }
+        public string? Remarks { get; set; }
         public int Quantity { get; set; }
         public bool Disabled { get; set; }
 
@@ -127,6 +127,12 @@ namespace LIMSApi.Dtos
         public string? FileName { get; set; }
         public IFormFile? File { get; set; }
         public long InwardID { get; set; }
+
+        // Physical Dimensions
+        public decimal? Thickness { get; set; }
+        public decimal? Diameter { get; set; }
+        public decimal? Width { get; set; }
+        public decimal? Length { get; set; }
 
         public ICollection<SampleAdditionalDetailDto> AdditionalDetails { get; set; } = new List<SampleAdditionalDetailDto>();
         public ICollection<SampleTestPlanDto> TestPlans { get; set; } = new List<SampleTestPlanDto>();

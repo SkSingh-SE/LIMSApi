@@ -28,5 +28,11 @@ namespace LIMSApi.ServiceWORepo
         /// Get price summary: calculated, override, final, and override info.
         /// </summary>
         Task<PriceSummaryDto> GetPriceSummary(long headerId);
+
+        Task SetPricingTypeAsync(long headerId, string? pricingType);
+
+        Task<PricingRecommendationDto> GetPricingRecommendation(long headerId);
+
+        Task<PriceSummaryDto> SetPricingTypeWithValueAsync(long headerId, string? pricingType, decimal? dimensionValue);
     }
 }

@@ -156,6 +156,10 @@ namespace LIMSApi.Services
                         SampleFilePath = s.SampleFilePath,
                         FileName = s.FileName,
                         File = s.File,
+                        Thickness = s.Thickness,
+                        Diameter = s.Diameter,
+                        Width = s.Width,
+                        Length = s.Length,
 
                         AdditionalDetails = model.SampleAdditionalDetails
                             .Where(a => a.SampleNo == s.SampleNo)
@@ -471,6 +475,10 @@ namespace LIMSApi.Services
                         existingSample.Quantity = s.Quantity;
                         existingSample.Specimen = s.Specimen;
                         existingSample.TestInstructions = s.TestInstructions;
+                        existingSample.Thickness = s.Thickness;
+                        existingSample.Diameter = s.Diameter;
+                        existingSample.Width = s.Width;
+                        existingSample.Length = s.Length;
 
                         if (s.File != null)
                         {
@@ -515,7 +523,11 @@ namespace LIMSApi.Services
                             MetalClassificationID = s.MetalClassificationID,
                             ProductConditionID = s.ProductConditionID,
                             Remarks = s.Remarks,
-                            Quantity = s.Quantity
+                            Quantity = s.Quantity,
+                            Thickness = s.Thickness,
+                            Diameter = s.Diameter,
+                            Width = s.Width,
+                            Length = s.Length
                         };
 
                         if (s.File != null)
@@ -1351,7 +1363,11 @@ namespace LIMSApi.Services
                         OtherPreparationCharge = s.OtherPreparationCharge,
                         TpiRequired = s.TpiRequired,
                         Specimen = s.Specimen,
-                        TestInstructions = s.TestInstructions
+                        TestInstructions = s.TestInstructions,
+                        Thickness = s.Thickness,
+                        Diameter = s.Diameter,
+                        Width = s.Width,
+                        Length = s.Length
                     }).ToList(),
 
                 SampleAdditionalDetails = sampleInward.SampleDetails
@@ -1523,7 +1539,11 @@ namespace LIMSApi.Services
                         MachiningAmount = s.MachiningAmount,
                         OtherPreparation = s.OtherPreparation,
                         OtherPreparationCharge = s.OtherPreparationCharge,
-                        TpiRequired = s.TpiRequired
+                        TpiRequired = s.TpiRequired,
+                        Thickness = s.Thickness,
+                        Diameter = s.Diameter,
+                        Width = s.Width,
+                        Length = s.Length
                     }).ToList(),
 
                 SampleAdditionalDetails = sampleInward.SampleDetails

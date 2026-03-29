@@ -83,6 +83,18 @@ namespace LIMSApi.Models
         [MaxLength(200)]
         public string? TestMethodUsed { get; set; }  // e.g., "OES", "ICP", "Wet Chemistry"
 
+        // ----- Unit Conversion & Display (for Report) -----
+        public int DecimalPrecision { get; set; } = 2;
+
+        [Column(TypeName = "decimal(18,6)")]
+        public decimal ConversionFactor { get; set; } = 1;
+
+        [Column(TypeName = "decimal(18,6)")]
+        public decimal? ConvertedValue { get; set; }
+
+        [MaxLength(50)]
+        public string? SelectedUnit { get; set; }
+
         [ForeignKey(nameof(TestResultHeaderID))]
         public TestResultHeader? TestResultHeader { get; set; }
 

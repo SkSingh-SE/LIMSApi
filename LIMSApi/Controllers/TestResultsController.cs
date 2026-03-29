@@ -37,6 +37,16 @@ namespace LIMSApi.Controllers
         }
 
         // =============================================================
+        // Load Parameters from Specification
+        // =============================================================
+        [HttpPost("load-parameters/{headerId}")]
+        public async Task<IActionResult> LoadParametersFromSpec(long headerId)
+        {
+            var result = await _service.LoadParametersFromSpecAsync(headerId);
+            return Ok(result);
+        }
+
+        // =============================================================
         // Full Result Payload (Sample-wise)
         // =============================================================
         [HttpGet("full-result-payload/{sampleId}")]
@@ -291,6 +301,29 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> GetPriceSummary(long headerId)
         {
             var result = await _priceService.GetPriceSummary(headerId);
+            return Ok(result);
+        }
+
+        [HttpPost("set-pricing-type/{headerId}")]
+        public async Task<IActionResult> SetPricingType(long headerId, [FromBody] SetPricingTypeDto dto)
+        {
+            await _priceService.SetPricingTypeAsync(headerId, dto.PricingType);
+            // Recalculate price with new pricing type (not just summary)
+            var result = await _priceService.CalculateTestPrice(headerId);
+            return Ok(result);
+        }
+
+        [HttpGet("pricing-recommendation/{headerId}")]
+        public async Task<IActionResult> GetPricingRecommendation(long headerId)
+        {
+            var result = await _priceService.GetPricingRecommendation(headerId);
+            return Ok(result);
+        }
+
+        [HttpPost("set-pricing-with-value/{headerId}")]
+        public async Task<IActionResult> SetPricingWithValue(long headerId, [FromBody] Dtos.SetPricingWithValueDto dto)
+        {
+            var result = await _priceService.SetPricingTypeWithValueAsync(headerId, dto.PricingType, dto.DimensionValue);
             return Ok(result);
         }
 

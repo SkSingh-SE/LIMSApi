@@ -57,5 +57,18 @@ namespace LIMSApi.Models
 
         public bool IsTestingCompleted { get; set; }
         public DateTime? TestingCompletedOn { get; set; }
+
+        // Physical Dimensions (captured at Inward time, used for pricing)
+        [Column(TypeName = "decimal(10,2)")]
+        public decimal? Thickness { get; set; }
+
+        [Column(TypeName = "decimal(10,2)")]
+        public decimal? Diameter { get; set; }
+
+        [Column(TypeName = "decimal(10,2)")]
+        public decimal? Width { get; set; }
+
+        [Column(TypeName = "decimal(10,2)")]
+        public decimal? Length { get; set; }
     }
 }

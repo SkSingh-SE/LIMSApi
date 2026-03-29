@@ -34,10 +34,10 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAngular", policy =>
     {
-        policy.WithOrigins("http://localhost:4200", "http://192.168.1.27", "http://192.168.1.27:80", "http://192.168.1.200", "http://192.168.1.200:80") // Angular dev + production origins
+        policy.SetIsOriginAllowed(_ => true) // Allow all origins (ngrok URLs change frequently)
               .AllowAnyHeader()
               .AllowAnyMethod()
-              .AllowCredentials(); // allow cookies/signalr creds
+              .AllowCredentials();
     });
 });
 
@@ -439,15 +439,12 @@ app.UseMiddleware<GeneralizedExceptionHandlingMiddleware>();
 // --------------------
 // Swagger (safe after auth)
 // --------------------
-if (app.Environment.IsDevelopment())
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "My API V1");
-        c.RoutePrefix = ""; // root
-    });
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "My API V1");
+    c.RoutePrefix = ""; // root
+});
 
 // --------------------
 // Hangfire

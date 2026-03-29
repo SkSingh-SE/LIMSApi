@@ -76,7 +76,8 @@ namespace LIMSApi.Repositories
                    labPara.QualitativeQuantitative,
                    labPara.IsUnderISO,
                    labPara.LowerLimit,
-                   labPara.UpperLimit
+                   labPara.UpperLimit,
+                   labScope.ModifiedOn
                };
 
             _query = _query.AsQueryable().ApplyFilters(filter.Filter);

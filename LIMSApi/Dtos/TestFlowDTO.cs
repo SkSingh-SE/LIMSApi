@@ -68,6 +68,13 @@
 
         // Billable flag (observed parameters excluded from pricing)
         public bool IsBillable { get; set; } = true;
+
+        // Unit conversion & display (for Report)
+        public int DecimalPrecision { get; set; } = 2;
+        public decimal ConversionFactor { get; set; } = 1;
+        public decimal? ConvertedValue { get; set; }
+        public string? SelectedUnit { get; set; }
+        public string? TestMethodUsed { get; set; }
     }
 
     public class MoveToLongTermDto

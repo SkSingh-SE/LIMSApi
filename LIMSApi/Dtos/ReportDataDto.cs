@@ -25,6 +25,12 @@ namespace LIMSApi.Dtos
         public string MaterialSpec { get; set; } = string.Empty;
         public string Grade { get; set; } = string.Empty;
 
+        // ── Sample Dimensions ──
+        public decimal? Thickness { get; set; }
+        public decimal? Diameter { get; set; }
+        public decimal? Width { get; set; }
+        public decimal? Length { get; set; }
+
         // ── Dates ──
         public string DateReceived { get; set; } = string.Empty;
         public string DateTested { get; set; } = string.Empty;

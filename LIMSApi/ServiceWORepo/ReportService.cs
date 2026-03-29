@@ -1363,6 +1363,11 @@ namespace LIMSApi.ServiceWORepo
                 MaterialSpec = sample.MetalClassification?.Name ?? "",
                 Grade = sample.ProductCondition?.Name ?? "",
 
+                Thickness = sample.Thickness,
+                Diameter = sample.Diameter,
+                Width = sample.Width,
+                Length = sample.Length,
+
                 DateReceived = inward.CollectionTime.ToString("dd-MM-yyyy"),
                 DateTested = latestCompleted.ToString("dd-MM-yyyy"),
                 DateReported = reportHeader.GeneratedAt.ToString("dd-MM-yyyy"),

@@ -248,7 +248,7 @@ namespace LIMSApi.ServiceWORepo
             try
             {
                 var count = await _context.SampleInwards
-                    .Where(s => s.InwardStatus == "Sample Received")
+                    .Where(s => s.InwardStatus == "INWARD_REGISTERED")
                     .CountAsync();
                 
                 _logger.LogDebug("Found {Count} pending sample inward records", count);
@@ -317,8 +317,8 @@ namespace LIMSApi.ServiceWORepo
                 // This assumes test plans need approval before testing can begin
                 var count = await _context.TestPlans
                     .Include(stp => stp.SampleDetail)
-                    .Where(stp => stp.SampleDetail!.SampleStatus == "Plan Pending" || 
-                                 stp.SampleDetail!.SampleStatus == "Pending Approval")
+                    .Where(stp => stp.SampleDetail!.SampleStatus == "UNDER_PLANNING" ||
+                                 stp.SampleDetail!.SampleStatus == "UNDER_REVIEW_REQUEST")
                     .CountAsync();
                 
                 _logger.LogDebug("Found {Count} samples with pending plan approval", count);
@@ -336,7 +336,7 @@ namespace LIMSApi.ServiceWORepo
             try
             {
                 var count = await _context.TestResultHeaders
-                    .Where(trh => trh.Status == "In Progress" || trh.Status == "Started")
+                    .Where(trh => trh.Status == "In-Progress" || trh.Status == "Started")
                     .Select(trh => trh.SampleID)
                     .Distinct()
                     .CountAsync();
@@ -356,7 +356,7 @@ namespace LIMSApi.ServiceWORepo
             try
             {
                 var count = await _context.TestResultHeaders
-                    .Where(trh => trh.Status == "Completed" && trh.CompletedAt != null)
+                    .Where(trh => (trh.Status == "Completed" || trh.Status == "PendingVerification") && trh.CompletedAt != null)
                     .Select(trh => trh.SampleID)
                     .Distinct()
                     .CountAsync();
@@ -421,7 +421,7 @@ namespace LIMSApi.ServiceWORepo
                 
                 // Check for urgent samples in pending inward
                 urgentInfo.HasUrgentPendingInward = await _context.SampleInwards
-                    .AnyAsync(s => s.InwardStatus == "Sample Received" && s.Urgent);
+                    .AnyAsync(s => s.InwardStatus == "INWARD_REGISTERED" && s.Urgent);
                 
                 // Check for urgent samples collected today
                 var today = DateTime.Today;
@@ -441,14 +441,14 @@ namespace LIMSApi.ServiceWORepo
                 urgentInfo.HasUrgentUnderTesting = await _context.TestResultHeaders
                     .Include(trh => trh.Sample)
                     .ThenInclude(s => s!.SampleInward)
-                    .AnyAsync(trh => (trh.Status == "In Progress" || trh.Status == "Started") &&
+                    .AnyAsync(trh => (trh.Status == "In-Progress" || trh.Status == "Started") &&
                                     trh.Sample!.SampleInward!.Urgent);
                 
                 // Check for urgent samples with results pending review
                 urgentInfo.HasUrgentPendingReview = await _context.TestResultHeaders
                     .Include(trh => trh.Sample)
                     .ThenInclude(s => s!.SampleInward)
-                    .AnyAsync(trh => trh.Status == "Completed" && trh.CompletedAt != null &&
+                    .AnyAsync(trh => (trh.Status == "Completed" || trh.Status == "PendingVerification") && trh.CompletedAt != null &&
                                     trh.Sample!.SampleInward!.Urgent);
                 
                 // Check for urgent reports pending dispatch
@@ -1252,7 +1252,7 @@ namespace LIMSApi.ServiceWORepo
             {
                 // Get urgent samples that are pending inward
                 var urgentPendingInward = await _context.SampleInwards
-                    .Where(s => s.Urgent && s.InwardStatus == "Sample Received")
+                    .Where(s => s.Urgent && s.InwardStatus == "INWARD_REGISTERED")
                     .Include(s => s.Customer)
                     .OrderByDescending(s => s.CollectionTime)
                     .Take(10)
@@ -1288,7 +1288,7 @@ namespace LIMSApi.ServiceWORepo
                     .ThenInclude(s => s!.SampleInward)
                     .ThenInclude(si => si!.Customer)
                     .Where(trh => trh.Sample!.SampleInward!.Urgent &&
-                                 (trh.Status == "In Progress" || trh.Status == "Started") &&
+                                 (trh.Status == "In-Progress" || trh.Status == "Started") &&
                                  trh.CreatedOn < DateTime.UtcNow.AddDays(-2)) // More than 2 days in testing
                     .OrderByDescending(trh => trh.CreatedOn)
                     .Take(10)
