@@ -33,6 +33,6 @@ namespace LIMSApi.ServiceWORepo
 
         Task<PricingRecommendationDto> GetPricingRecommendation(long headerId);
 
-        Task<PriceSummaryDto> SetPricingTypeWithValueAsync(long headerId, string? pricingType, decimal? dimensionValue);
+        Task<PriceSummaryDto> SetPricingTypeWithValueAsync(long headerId, string? pricingType, string? dimensionValue);
     }
 }

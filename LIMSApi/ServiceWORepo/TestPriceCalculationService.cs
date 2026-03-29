@@ -287,7 +287,7 @@ namespace LIMSApi.ServiceWORepo
             await _db.SaveChangesAsync();
         }
 
-        public async Task<PriceSummaryDto> SetPricingTypeWithValueAsync(long headerId, string? pricingType, decimal? dimensionValue)
+        public async Task<PriceSummaryDto> SetPricingTypeWithValueAsync(long headerId, string? pricingType, string? dimensionValue)
         {
             var header = await _db.TestResultHeaders.FirstOrDefaultAsync(h => h.ID == headerId)
                 ?? throw new KeyNotFoundException($"TestResultHeader {headerId} not found");
@@ -461,9 +461,18 @@ namespace LIMSApi.ServiceWORepo
             ICollection<InvoiceCasePrice> prices,
             string testName = "Test",
             SampleDetail? sample = null,
-            decimal? dimensionOverride = null)
+            string? dimensionOverride = null)
         {
             var breakdown = new List<PriceBreakdownDto>();
+
+            // Parse dimension override: "12" for single value, "12|500" for SizeLoad (size|load)
+            decimal? dimSize = null, dimLoad = null;
+            if (!string.IsNullOrEmpty(dimensionOverride))
+            {
+                var parts = dimensionOverride.Split('|');
+                if (parts.Length >= 1 && decimal.TryParse(parts[0].Trim(), out var p1)) dimSize = p1;
+                if (parts.Length >= 2 && decimal.TryParse(parts[1].Trim(), out var p2)) dimLoad = p2;
+            }
 
             // Only billable parameters participate in pricing
             var billableParams = parameters.Where(p => p.IsBillable).ToList();
@@ -574,10 +583,11 @@ namespace LIMSApi.ServiceWORepo
                     // Second dimension: use Value field for load threshold/range
                     // SizeLoad: Value = max load capacity (single number)
                     // SizeAndLoad: Value = "minLoad-maxLoad" (range string)
-                    decimal? sizeValue = dimensionOverride
+                    decimal? sizeValue = dimSize
                         ?? sample?.Diameter ?? sample?.Thickness ?? sample?.Width
                         ?? FindParameterValueByName(billableParams, "size", "diameter", "width", "thickness");
-                    decimal? loadValue = FindParameterValueByName(billableParams, "load", "force", "capacity");
+                    decimal? loadValue = dimLoad
+                        ?? FindParameterValueByName(billableParams, "load", "force", "capacity");
 
                     if (sizeValue != null && loadValue != null)
                     {

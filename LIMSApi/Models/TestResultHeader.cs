@@ -65,8 +65,8 @@ namespace LIMSApi.Models
         [MaxLength(50)]
         public string? SelectedPricingType { get; set; }
 
-        [Column(TypeName = "decimal(18,4)")]
-        public decimal? PricingDimensionValue { get; set; }
+        [MaxLength(200)]
+        public string? PricingDimensionValue { get; set; }
 
         // ----- Verification Workflow (Phase 5) -----
         public bool PreparationDataMissing { get; set; }

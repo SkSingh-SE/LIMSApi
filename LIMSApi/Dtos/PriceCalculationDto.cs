@@ -33,7 +33,7 @@ namespace LIMSApi.Dtos
         public string? DefaultPricingType { get; set; }
         public List<string> AvailablePricingTypes { get; set; } = new();
         public SampleDimensionsDto? SampleDimensions { get; set; }
-        public decimal? PricingDimensionValue { get; set; }
+        public string? PricingDimensionValue { get; set; }
     }
 
     /// <summary>
@@ -100,6 +100,6 @@ namespace LIMSApi.Dtos
     public class SetPricingWithValueDto
     {
         public string? PricingType { get; set; }
-        public decimal? DimensionValue { get; set; }
+        public string? DimensionValue { get; set; }  // "12" or "12|500" for SizeLoad
     }
 }
