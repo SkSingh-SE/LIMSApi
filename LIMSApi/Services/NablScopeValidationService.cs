@@ -17,11 +17,13 @@ namespace LIMSApi.Services
 
         public async Task<NablScopeCheckResult> CheckParameterScope(long laboratoryTestId, long parameterId, decimal value)
         {
-            // Find LabScopeMaster for this laboratory test
+            // Find LabScopeMaster for this laboratory test (active, with parameters)
             var labScope = await _db.LabScopeMasters
                 .Include(ls => ls.Specifications)
                     .ThenInclude(s => s.Parameters)
-                .FirstOrDefaultAsync(ls => ls.LaboratoryTestID == laboratoryTestId);
+                .Where(ls => ls.LaboratoryTestID == laboratoryTestId && ls.IsActive)
+                .OrderByDescending(ls => ls.Specifications.SelectMany(s => s.Parameters).Count())
+                .FirstOrDefaultAsync();
 
             if (labScope == null)
             {
@@ -205,7 +207,7 @@ namespace LIMSApi.Services
         public async Task<bool> CheckParameterScopeExists(long laboratoryTestId, long parameterId)
         {
             return await _db.LabScopeMasters
-                .Where(ls => ls.LaboratoryTestID == laboratoryTestId)
+                .Where(ls => ls.LaboratoryTestID == laboratoryTestId && ls.IsActive)
                 .SelectMany(ls => ls.Specifications)
                 .SelectMany(s => s.Parameters)
                 .AnyAsync(p => p.ParameterID == parameterId);
