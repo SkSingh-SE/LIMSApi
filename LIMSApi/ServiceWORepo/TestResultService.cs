@@ -592,6 +592,12 @@ namespace LIMSApi.ServiceWORepo
                             testPlanID = plan.ID,
                             type = "General",
                             status = header.Status,
+                            // Timing & Equipment
+                            testStartTime = header.TestStartTime ?? header.StartedAt,
+                            testEndTime = header.TestEndTime ?? header.CompletedAt,
+                            performedByName = header.PerformedByName,
+                            equipmentIdsJson = header.EquipmentIdsJson,
+                            equipmentId = header.EquipmentID,
 
                             parameters = header.Parameters.Select(p => new
                             {
@@ -675,6 +681,12 @@ namespace LIMSApi.ServiceWORepo
                                 testPlanID = plan.ID,
                                 type = "Chemical",
                                 status = header.Status,
+                                // Timing & Equipment
+                                testStartTime = header.TestStartTime ?? header.StartedAt,
+                                testEndTime = header.TestEndTime ?? header.CompletedAt,
+                                performedByName = header.PerformedByName,
+                                equipmentIdsJson = header.EquipmentIdsJson,
+                                equipmentId = header.EquipmentID,
                                 parameters = header.Parameters.Select(p => new
                                 {
                                     p.ID,
@@ -1182,7 +1194,9 @@ namespace LIMSApi.ServiceWORepo
             // Allow test to start regardless of preparation status
             header.Status = "Started";
             header.StartedAt = DateTime.UtcNow;
+            header.TestStartTime = DateTime.UtcNow;
             header.StartedBy = loggedInUser.EmployeeID;
+            header.PerformedById = loggedInUser.EmployeeID;
 
             await _db.SaveChangesAsync();
 
@@ -1201,10 +1215,13 @@ namespace LIMSApi.ServiceWORepo
                 }
             }
 
-            // Return timing info
-            response.TestStartTime = header.StartedAt;
+            // Return timing info + save performed by name
             var employee = await _db.EmployeeMasters.FindAsync(loggedInUser.EmployeeID);
-            response.PerformedByName = employee?.Name ?? "";
+            header.PerformedByName = employee?.Name ?? "";
+            await _db.SaveChangesAsync();
+
+            response.TestStartTime = header.TestStartTime;
+            response.PerformedByName = header.PerformedByName;
 
             return response;
         }
@@ -1249,6 +1266,7 @@ namespace LIMSApi.ServiceWORepo
                 }
 
                 header.CompletedAt = DateTime.UtcNow;
+                header.TestEndTime = DateTime.UtcNow;
                 header.ModifiedBy = loggedInUser.EmployeeID;
 
                 // ---------------------------------
@@ -1347,7 +1365,7 @@ namespace LIMSApi.ServiceWORepo
                 await trx.CommitAsync();
 
                 // Return timing info
-                response.TestEndTime = header.CompletedAt;
+                response.TestEndTime = header.TestEndTime ?? header.CompletedAt;
                 var employee = await _db.EmployeeMasters.FindAsync(loggedInUser.EmployeeID);
                 response.PerformedByName = employee?.Name ?? "";
             }

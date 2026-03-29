@@ -16,6 +16,12 @@ namespace LIMSApi.Models
         [ForeignKey("LabScopeID"),JsonIgnore]
         public virtual LabScopeMaster? LabScope { get; set; }
 
+        [ForeignKey("TestMethodSpecificationID"), JsonIgnore]
+        public virtual TestMethodSpecification? TestMethodSpecification { get; set; }
+
+        [NotMapped]
+        public string? TestMethodSpecificationName => TestMethodSpecification?.Name;
+
         [ForeignKey("TestMethodSpecificationVersionID"), JsonIgnore]
         public virtual TestMethodSpecificationVersion? TestMethodSpecificationVersion { get; set; }
 

@@ -33,46 +33,73 @@ namespace LIMSApi.Services
                 };
             }
 
-            // Search across all specifications for the matching parameter
+            // Search ALL specifications — if value is within ANY spec's range, it's in scope
+            // Track the widest range across all specs for display
+            NablScopeCheckResult? bestMatch = null;
+            decimal? widestLower = null;
+            decimal? widestUpper = null;
+
             foreach (var spec in labScope.Specifications)
             {
                 var scopeParam = spec.Parameters.FirstOrDefault(p => p.ParameterID == parameterId);
-                if (scopeParam != null)
+                if (scopeParam == null) continue;
+
+                decimal? lower = scopeParam.LowerLimitValue ?? ParseDecimal(scopeParam.LowerLimit);
+                decimal? upper = scopeParam.UpperLimitValue ?? ParseDecimal(scopeParam.UpperLimit);
+
+                // Track widest range for display
+                if (widestLower == null || (lower.HasValue && lower < widestLower)) widestLower = lower;
+                if (widestUpper == null || (upper.HasValue && upper > widestUpper)) widestUpper = upper;
+
+                // If both limits are null, treat as accredited but unchecked
+                if (!lower.HasValue && !upper.HasValue)
                 {
-                    decimal? lower = ParseDecimal(scopeParam.LowerLimit);
-                    decimal? upper = ParseDecimal(scopeParam.UpperLimit);
-
-                    bool withinScope = true;
-                    if (lower.HasValue) withinScope = withinScope && value >= lower.Value;
-                    if (upper.HasValue) withinScope = withinScope && value <= upper.Value;
-
-                    // If both limits are null, we can't check scope — treat as accredited but unchecked
-                    if (!lower.HasValue && !upper.HasValue)
+                    return new NablScopeCheckResult
                     {
-                        return new NablScopeCheckResult
-                        {
-                            ParameterId = parameterId,
-                            Value = value,
-                            NablLowerLimit = lower,
-                            NablUpperLimit = upper,
-                            ScopeStatus = "WithinScope",
-                            IsUnderISO = scopeParam.IsUnderISO,
-                            LabScopeSpecParamId = scopeParam.ID
-                        };
-                    }
+                        ParameterId = parameterId,
+                        Value = value,
+                        ScopeStatus = "WithinScope",
+                        IsUnderISO = scopeParam.IsUnderISO,
+                        LabScopeSpecParamId = scopeParam.ID
+                    };
+                }
 
+                bool withinScope = true;
+                if (lower.HasValue)
+                    withinScope = withinScope && (scopeParam.LowerLimit == ">" ? value > lower.Value : value >= lower.Value);
+                if (upper.HasValue)
+                    withinScope = withinScope && (scopeParam.UpperLimit == "<" ? value < upper.Value : value <= upper.Value);
+
+                // If within THIS spec's range, immediately return success
+                if (withinScope)
+                {
                     return new NablScopeCheckResult
                     {
                         ParameterId = parameterId,
                         Value = value,
                         NablLowerLimit = lower,
                         NablUpperLimit = upper,
-                        ScopeStatus = withinScope ? "WithinScope" : "OutsideScope",
+                        ScopeStatus = "WithinScope",
                         IsUnderISO = scopeParam.IsUnderISO,
                         LabScopeSpecParamId = scopeParam.ID
                     };
                 }
+
+                // Keep track of best match for "OutsideScope" result
+                bestMatch = new NablScopeCheckResult
+                {
+                    ParameterId = parameterId,
+                    Value = value,
+                    NablLowerLimit = widestLower,
+                    NablUpperLimit = widestUpper,
+                    ScopeStatus = "OutsideScope",
+                    IsUnderISO = scopeParam.IsUnderISO,
+                    LabScopeSpecParamId = scopeParam.ID
+                };
             }
+
+            // Parameter was found in scope but value is outside ALL specs' ranges
+            if (bestMatch != null) return bestMatch;
 
             return new NablScopeCheckResult
             {

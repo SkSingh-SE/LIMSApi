@@ -89,7 +89,9 @@ namespace LIMSApi.Services
                             existingParam.QualitativeQuantitative = incomingParam.QualitativeQuantitative;
                             existingParam.IsUnderISO = incomingParam.IsUnderISO;
                             existingParam.LowerLimit = incomingParam.LowerLimit;
+                            existingParam.LowerLimitValue = incomingParam.LowerLimitValue;
                             existingParam.UpperLimit = incomingParam.UpperLimit;
+                            existingParam.UpperLimitValue = incomingParam.UpperLimitValue;
                             existingParam.DisciplineID = incomingParam.DisciplineID;
                             existingParam.GroupID = incomingParam.GroupID;
                             existingParam.SubGroupID = incomingParam.SubGroupID;

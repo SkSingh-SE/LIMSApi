@@ -208,6 +208,11 @@ namespace LIMSApi.Repositories
             {
                 Id = x.ID,
                 Name = $"{x.Name} - ({x.ParameterType})",
+                AdditionalValues = new Dictionary<string, object>
+                {
+                    { "UnitID", x.ParameterUnitID },
+                    { "ParameterType", x.ParameterType ?? "" }
+                }
             })).ToListAsync();
 
             return data;
