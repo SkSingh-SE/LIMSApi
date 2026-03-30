@@ -216,13 +216,12 @@ namespace LIMSApi.Reporting
                     col.Item().PaddingVertical(2);
                 }
 
-                // 9. Signatures
-                col.Item().Element(ComposeSignatures);
-
-                col.Item().PaddingVertical(4);
-
-                // 10. QR Code
-                col.Item().Element(ComposeQrCode);
+                // 9. Signatures + QR Code (side by side to avoid page break)
+                col.Item().Row(row =>
+                {
+                    row.RelativeItem(3).Element(ComposeSignatures);
+                    row.RelativeItem(1).Element(ComposeQrCode);
+                });
             });
         }
 
@@ -515,15 +514,13 @@ namespace LIMSApi.Reporting
                 });
 
                 // Header
-                table.Header(h =>
-                {
-                    AddHeaderCell(h, "Sr.");
-                    AddHeaderCell(h, "Parameter");
-                    AddHeaderCell(h, "Unit");
-                    AddHeaderCell(h, "Spec Min");
-                    AddHeaderCell(h, "Spec Max");
-                    AddHeaderCell(h, "Result");
-                });
+                // Header row
+                AddHeaderCell(table, "Sr.");
+                AddHeaderCell(table, "Parameter");
+                AddHeaderCell(table, "Unit");
+                AddHeaderCell(table, "Spec Min");
+                AddHeaderCell(table, "Spec Max");
+                AddHeaderCell(table, "Result");
 
                 // Rows
                 for (int i = 0; i < parameters.Count; i++)
@@ -580,14 +577,12 @@ namespace LIMSApi.Reporting
                     c.RelativeColumn(1.5f); // Result
                 });
 
-                table.Header(h =>
-                {
-                    AddHeaderCell(h, "Element");
-                    AddHeaderCell(h, "Unit");
-                    AddHeaderCell(h, "Spec Min");
-                    AddHeaderCell(h, "Spec Max");
-                    AddHeaderCell(h, "Result");
-                });
+                // Header row
+                AddHeaderCell(table, "Element");
+                AddHeaderCell(table, "Unit");
+                AddHeaderCell(table, "Spec Min");
+                AddHeaderCell(table, "Spec Max");
+                AddHeaderCell(table, "Result");
 
                 for (int i = 0; i < parameters.Count; i++)
                 {
@@ -628,13 +623,11 @@ namespace LIMSApi.Reporting
                         c.RelativeColumn(1.5f); // One column per subgroup
                 });
 
-                table.Header(h =>
-                {
-                    AddHeaderCell(h, "Element");
-                    AddHeaderCell(h, "Unit");
-                    foreach (var group in subGroups)
-                        AddHeaderCell(h, group);
-                });
+                // Header row
+                AddHeaderCell(table, "Element");
+                AddHeaderCell(table, "Unit");
+                foreach (var group in subGroups)
+                    AddHeaderCell(table, group);
 
                 for (int i = 0; i < elementNames.Count; i++)
                 {
@@ -1060,16 +1053,15 @@ namespace LIMSApi.Reporting
         // TABLE CELL HELPERS
         // ────────────────────────────────────────────────
 
-        private static void AddHeaderCell(dynamic header, string text)
+        private static void AddHeaderCell(TableDescriptor table, string text)
         {
-            header.Cell()
-                .Element(new Action<IContainer>(c =>
-                    c.Background(PrimaryColor)
-                     .Border(CellBorderWidth).BorderColor(BorderColor)
-                     .Padding(CellPadding)
-                     .AlignCenter()
-                     .Text(text)
-                     .FontSize(FontTableHeader).Bold().FontColor(Colors.White)));
+            table.Cell()
+                .Background(PrimaryColor)
+                .Border(CellBorderWidth).BorderColor(BorderColor)
+                .Padding(CellPadding)
+                .AlignCenter()
+                .Text(text)
+                .FontSize(FontTableHeader).Bold().FontColor(Colors.White);
         }
 
         private static void AddDataCell(TableDescriptor table, string text, string bgColor,

@@ -26,5 +26,14 @@ namespace LIMSApi.Models
 
         [StringLength(500)]
         public string? OrganizationLogo { get; set; }
+
+        [StringLength(100)]
+        public string? CIN { get; set; }
+
+        [StringLength(100)]
+        public string? Website { get; set; }
+
+        [StringLength(50)]
+        public string? MobileNo { get; set; }
     }
 }

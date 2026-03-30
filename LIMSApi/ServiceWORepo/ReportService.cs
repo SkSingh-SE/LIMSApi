@@ -459,11 +459,22 @@ namespace LIMSApi.ServiceWORepo
             // -------------------------------------------------
             // 1. Load Report Header + Sample + Inward
             // -------------------------------------------------
+            // Try finding by ReportHeader ID first, then by SampleID (frontend may send either)
             var reportHeader = await _db.ReportHeaders
                 .Include(r => r.Sample)
                     .ThenInclude(s => s.SampleInward)
                         .ThenInclude(i => i.Customer)
                 .FirstOrDefaultAsync(r => r.ID == reportHeaderId);
+
+            // Fallback: treat the ID as a SampleID
+            if (reportHeader == null)
+            {
+                reportHeader = await _db.ReportHeaders
+                    .Include(r => r.Sample)
+                        .ThenInclude(s => s.SampleInward)
+                            .ThenInclude(i => i.Customer)
+                    .FirstOrDefaultAsync(r => r.SampleID == reportHeaderId && r.IsActive);
+            }
 
             if (reportHeader == null)
                 throw new Exception("Report header not found");
@@ -713,92 +724,49 @@ namespace LIMSApi.ServiceWORepo
         public async Task<string> GeneratePdfForSampleAsync(long sampleId)
         {
             // -------------------------------------------------
-            // 1️⃣ Get Report for Sample
+            // 1️⃣ Get Report Header for Sample
             // -------------------------------------------------
             var reportHeader = await _db.ReportHeaders
                 .Include(x => x.Sample).ThenInclude(s => s.SampleInward).ThenInclude(c => c.Customer)
                 .FirstOrDefaultAsync(r => r.SampleID == sampleId);
 
-            Report report;
-
-            // -------------------------------------------------
-            // 2️⃣ If report not generated → generate it
-            // -------------------------------------------------
-            if (reportHeader == null || reportHeader.Status != "Final")
+            // If no report header exists, create one via GenerateReportAsync
+            if (reportHeader == null)
             {
-                // this internally creates Report + Report if needed
                 var reportId = await GenerateReportAsync(sampleId);
-
-                report = await _db.Reports
-                    .Include(r => r.Blocks)
-                    .FirstAsync(r => r.ID == reportId);
-            }
-            else
-            {
-                // -------------------------------------------------
-                // 3️⃣ Fetch latest final report
-                // -------------------------------------------------
-                report = await _db.Reports
-                    .Include(r => r.Blocks)
-                    .Where(r => r.ReportHeaderID == reportHeader.ID
-                                && r.Status == "Final")
-                    .OrderByDescending(r => r.Version)
-                    .FirstOrDefaultAsync()
-                    ?? throw new Exception("Final report not found");
+                var report = await _db.Reports.Include(r => r.Blocks).FirstAsync(r => r.ID == reportId);
+                reportHeader = await _db.ReportHeaders.FindAsync(report.ReportHeaderID);
             }
 
+            if (reportHeader == null)
+                throw new InvalidOperationException("Failed to create report header.");
+
             // -------------------------------------------------
-            // 4️⃣ Generate PDF (idempotent)
+            // 2️⃣ Generate PDF using EnhancedReportDocument
             // -------------------------------------------------
-            var pdfPath = await GeneratePdfAsync(report.ID);
+            var reportData = await BuildReportDataAsync(reportHeader.ID);
+            var document = Reporting.ReportDocumentFactory.Create(
+                Helpers.Enums.ReportFormatType.TestCertificate, reportData);
+            var pdfBytes = document.GeneratePdf();
 
-            var token = Guid.NewGuid();
+            // Save PDF to disk
+            var uploadsDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "Uploads", "Report");
+            Directory.CreateDirectory(uploadsDir);
+            var fileName = $"Report-{reportHeader.ReportNo}-{DateTime.UtcNow:yyyyMMddHHmmss}.pdf";
+            var filePath = Path.Combine(uploadsDir, fileName);
+            await File.WriteAllBytesAsync(filePath, pdfBytes);
 
-            var amendmentToken = new ReportAmendmentToken
-            {
-                Token = token,
-                SampleID = sampleId,
-                ReportID = reportHeader.ID,
-                LinkExpiryOn = DateTime.UtcNow.AddDays(7),  // secure link
-                FreeUntil = DateTime.UtcNow.AddDays(1),
-                IsUsed = false,
-                CreatedOn = DateTime.UtcNow
-            };
-
-            _db.ReportAmendmentTokens.Add(amendmentToken);
+            // Update report header
+            reportHeader.PdfPath = $"Uploads/Report/{fileName}";
+            if (reportHeader.Status == "Pending" || string.IsNullOrEmpty(reportHeader.Status))
+                reportHeader.Status = "Report Generated";
+            reportHeader.GeneratedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
 
-            // -------------------------------------------------
-            // 5️⃣ Build Public Amendment Link
-            // -------------------------------------------------
-            var amendmentLink = GenerateReportLink(token.ToString());
+            return filePath;
 
-            // -------------------------------------------------
-            // 6️⃣ Email Template Model (MATCHES TEMPLATE)
-            // -------------------------------------------------
-            var emailModel = new
-            {
-                CustomerName = reportHeader.Sample?.SampleInward?.Customer?.Name,
-                ReportNo = reportHeader.ReportNo,
-                AmendmentLink = amendmentLink
-            };
-            var email = reportHeader.Sample?.SampleInward?.Contacts?.FirstOrDefault(x => x.Selected)?.EmailId;
-            // -------------------------------------------------
-            // 7️⃣ Send Email with PDF + Link
-            // -------------------------------------------------
-            var body = await _templateService.GetTemplateAsync(MessageTemplateKey.AMENDED_REPORT_READY, NotificationType.Email, emailModel);
-            if (email != null)
-            {
-                await _emailService.SendEmailWithAttachment(
-                    toEmail: email,
-                    subject: $"Your Test Report {reportHeader.ReportNo}",
-                    body: body,
-                    attachmentPath: pdfPath,
-                    attachmentName: $"Report_{reportHeader.ReportNo}.pdf"
-                );
-            }
-
-            return pdfPath;
+            // Email notification and amendment token creation will be handled
+            // when report is sent for approval (separate workflow)
         }
         public string GenerateReportLink(string token)
         {
@@ -1324,15 +1292,16 @@ namespace LIMSApi.ServiceWORepo
                         {
                             Name = p.ParameterName,
                             Unit = p.Unit,
-                            SpecMin = (p.SpecMinValue ?? p.MinValue)?.ToString(),
-                            SpecMax = (p.SpecMaxValue ?? p.MaxValue)?.ToString(),
-                            Result = p.Value?.ToString(),
+                            SpecMin = FormatDecimal(p.SpecMinValue ?? p.MinValue),
+                            SpecMax = FormatDecimal(p.SpecMaxValue ?? p.MaxValue),
+                            Result = FormatDecimal(p.Value),
                             Status = p.IsWithinLimit == true ? "Pass"
                                    : p.IsWithinLimit == false ? "Fail"
                                    : "N/A",
                             IsWithinNablScope = p.IsWithinNablScope,
                             NablScopeStatus = p.NablScopeStatus,
-                            ExpandedUncertainty = p.ExpandedUncertainty
+                            ExpandedUncertainty = p.ExpandedUncertainty,
+                            SubGroup = testType == "Chemical" ? (header.LaboratoryTest?.TestCaption ?? header.LaboratoryTest?.Name) : null
                         })
                         .ToList(),
                     Images = header.Images
@@ -1382,7 +1351,7 @@ namespace LIMSApi.ServiceWORepo
                 : null;
 
             // 6e. Fetch configuration values
-            var configKeys = new[] { "CIN", "REPORT_CONDITIONS", "COMPANY_STAMP_PATH" };
+            var configKeys = new[] { "REPORT_CONDITIONS", "COMPANY_STAMP_PATH" };
             var configs = await _db.Configurations
                 .Where(c => configKeys.Contains(c.KeyName) && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode)
                 .ToDictionaryAsync(c => c.KeyName, c => c.Value);
@@ -1407,7 +1376,7 @@ namespace LIMSApi.ServiceWORepo
                 LabPhone = org?.ContactPhone ?? "",
                 LabEmail = org?.ContactEmail ?? "",
                 LabLogoPath = org?.OrganizationLogo,
-                CIN = configs.GetValueOrDefault("CIN"),
+                CIN = org?.CIN,
                 NablLogoPath = nablAccred?.LogoPath,
                 CompanyStampPath = configs.GetValueOrDefault("COMPANY_STAMP_PATH"),
 
@@ -1551,6 +1520,15 @@ namespace LIMSApi.ServiceWORepo
             return "General";
         }
 
+        /// <summary>Format decimal: removes trailing zeros (545.0000 → 545, 600.50 → 600.5)</summary>
+        private static string? FormatDecimal(decimal? value)
+        {
+            if (!value.HasValue) return null;
+            return value.Value % 1 == 0
+                ? value.Value.ToString("0")
+                : value.Value.ToString("0.##");
+        }
+
         private static string DetermineTestCategory(TestResultHeader header, string testType)
         {
             if (testType == "Chemical") return "CHEMICAL";
@@ -1581,6 +1559,13 @@ namespace LIMSApi.ServiceWORepo
         public async Task<byte[]> GenerateReportByFormatAsync(long reportHeaderId, Helpers.Enums.ReportFormatType formatType, string? watermark = null)
         {
             var reportData = await BuildReportDataAsync(reportHeaderId);
+
+            // Filter test sections based on format type
+            if (formatType == Helpers.Enums.ReportFormatType.MechanicalTest)
+                reportData.TestSections = reportData.TestSections.Where(s => s.TestType == "General").ToList();
+            else if (formatType == Helpers.Enums.ReportFormatType.ChemicalAnalysis)
+                reportData.TestSections = reportData.TestSections.Where(s => s.TestType == "Chemical").ToList();
+
             var document = Reporting.ReportDocumentFactory.Create(formatType, reportData, watermark);
             return document.GeneratePdf();
         }

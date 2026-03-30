@@ -14,6 +14,9 @@ namespace LIMSApi.Dtos
         public string ContactEmail { get; set; } = string.Empty;
         public string ContactPhone { get; set; } = string.Empty;
         public string? OrganizationLogo { get; set; }
+        public string? CIN { get; set; }
+        public string? Website { get; set; }
+        public string? MobileNo { get; set; }
     }
     public sealed class NablDto
     {
