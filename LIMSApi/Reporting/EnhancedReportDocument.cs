@@ -6,13 +6,35 @@ using QuestPDF.Infrastructure;
 namespace LIMSApi.Reporting
 {
     /// <summary>
-    /// Professional PDF report renderer using QuestPDF Fluent API.
-    /// Layout: Company Header -> Customer/Sample Info -> Test Results -> Images -> Remarks -> Signatures -> QR -> Footer.
+    /// Professional metallurgical lab Test Certificate PDF renderer using QuestPDF Fluent API.
+    /// Layout: Header (every page) -> Certificate Title -> Identity Grid -> Customer Info
+    ///       -> Test Sections (Chemical pivot / General) -> Images -> End of Report
+    ///       -> NABL Scope Note -> Conformity -> Signatures -> QR -> Footer (every page).
+    /// All data sourced from ReportDataDto — no hardcoded company information.
     /// </summary>
     public class EnhancedReportDocument : IDocument
     {
         private readonly ReportDataDto _data;
         private readonly string _assetsPath;
+
+        // ────────────────────────────────────────────────
+        // STYLE CONSTANTS
+        // ────────────────────────────────────────────────
+
+        private const string PrimaryColor = "#B71C1C";
+        private const string BorderColor = "#333333";
+        private const string HeaderBg = "#F5F5F5";
+        private const float CellBorderWidth = 0.5f;
+        private const float CellPadding = 3f;
+
+        // Font sizes
+        private const float FontCompanyName = 11f;
+        private const float FontSectionHeader = 8f;
+        private const float FontTableHeader = 7f;
+        private const float FontTableCell = 7f;
+        private const float FontFooter = 5.5f;
+        private const float FontSmall = 6f;
+        private const float FontLabel = 7f;
 
         public EnhancedReportDocument(ReportDataDto data)
         {
@@ -23,44 +45,12 @@ namespace LIMSApi.Reporting
         public DocumentMetadata GetMetadata() => new()
         {
             Title = _data.ReportNo,
-            Author = "Divine Metallurgical Services Pvt. Ltd.",
+            Author = _data.LabName,
             Creator = "LIMS Report Engine"
         };
 
         // ────────────────────────────────────────────────
-        // GLOBAL STYLES
-        // ────────────────────────────────────────────────
-
-        private static readonly string PrimaryColor = "#B71C1C"; // deep red
-        private static readonly string HeaderBg = "#F5F5F5";
-        private static readonly string BorderColor = "#BDBDBD";
-
-        private static TextStyle TitleStyle =>
-            TextStyle.Default.FontSize(12).Bold().FontColor(PrimaryColor);
-
-        private static TextStyle SubTitleStyle =>
-            TextStyle.Default.FontSize(9).Bold();
-
-        private static TextStyle LabelStyle =>
-            TextStyle.Default.FontSize(7.5f).FontColor(Colors.Grey.Darken2).Bold();
-
-        private static TextStyle ValueStyle =>
-            TextStyle.Default.FontSize(8);
-
-        private static TextStyle SmallStyle =>
-            TextStyle.Default.FontSize(6).FontColor(Colors.Grey.Darken1);
-
-        private static TextStyle TableHeaderStyle =>
-            TextStyle.Default.FontSize(7).Bold().FontColor(Colors.White);
-
-        private static TextStyle TableCellStyle =>
-            TextStyle.Default.FontSize(7);
-
-        private static TextStyle SectionHeadingStyle =>
-            TextStyle.Default.FontSize(9).Bold().FontColor(PrimaryColor);
-
-        // ────────────────────────────────────────────────
-        // COMPOSE
+        // COMPOSE — MAIN ENTRY
         // ────────────────────────────────────────────────
 
         public void Compose(IDocumentContainer container)
@@ -70,133 +60,87 @@ namespace LIMSApi.Reporting
                 page.Size(PageSizes.A4);
                 page.MarginVertical(15);
                 page.MarginHorizontal(20);
+                page.DefaultTextStyle(x => x.FontFamily("Arial"));
 
                 page.Header().Element(ComposeHeader);
-
-                page.Content().PaddingVertical(4).Column(col =>
-                {
-                    // Section 2: Customer & Sample Info
-                    col.Item().Element(ComposeCustomerSampleInfo);
-
-                    col.Item().PaddingVertical(2);
-
-                    // Section 3: Test Results (one per test section)
-                    foreach (var section in _data.TestSections)
-                    {
-                        col.Item().Element(c => ComposeTestResults(c, section));
-                        col.Item().PaddingVertical(2);
-                    }
-
-                    // Section 4: Test Images
-                    foreach (var section in _data.TestSections.Where(s => s.Images.Any()))
-                    {
-                        col.Item().Element(c => ComposeTestImages(c, section));
-                        col.Item().PaddingVertical(2);
-                    }
-
-                    // Section 5: Remarks
-                    if (!string.IsNullOrWhiteSpace(_data.Remarks))
-                    {
-                        col.Item().Element(ComposeRemarks);
-                        col.Item().PaddingVertical(2);
-                    }
-
-                    // Section 5b: NABL Scope Note (if partial or out of scope)
-                    if (_data.NablInfo?.OutOfScopeParameterNames?.Any() == true)
-                    {
-                        col.Item().PaddingVertical(3).Border(0.5f).BorderColor(Colors.Orange.Darken2).Padding(6).Column(noteCol =>
-                        {
-                            noteCol.Item().Text("NABL Accreditation Note").Style(SectionHeadingStyle);
-                            noteCol.Item().PaddingTop(2).Text(text =>
-                            {
-                                text.Span("The following tests are NOT covered under NABL Accreditation: ").Style(ValueStyle);
-                                text.Span(string.Join(", ", _data.NablInfo.OutOfScopeParameterNames)).Style(ValueStyle).Bold();
-                                text.Span(". Results for these tests are reported in our capacity as a non-accredited laboratory.").Style(ValueStyle);
-                            });
-                            if (_data.NablInfo.IsPartialScope)
-                            {
-                                noteCol.Item().PaddingTop(2).Text("* Partial NABL accreditation — see NABL column in results table for scope details.")
-                                    .Style(SmallStyle);
-                            }
-                        });
-                        col.Item().PaddingVertical(2);
-                    }
-
-                    // Section 6: Statement of Conformity (if applicable)
-                    col.Item().Element(ComposeConformityStatement);
-
-                    // Section 7: Signatures
-                    col.Item().Element(ComposeSignatures);
-
-                    col.Item().PaddingVertical(4);
-
-                    // Section 7: QR Code
-                    col.Item().Element(ComposeQrCode);
-                });
-
+                page.Content().Element(ComposeContent);
                 page.Footer().Element(ComposeFooter);
             });
         }
 
         // ────────────────────────────────────────────────
-        // SECTION 1: COMPANY HEADER
+        // HEADER (every page)
         // ────────────────────────────────────────────────
 
         private void ComposeHeader(IContainer container)
         {
             container.Column(col =>
             {
-                // Top bar with logo, company name, NABL
                 col.Item()
-                    .BorderBottom(2).BorderColor(PrimaryColor)
+                    .BorderBottom(1).BorderColor(PrimaryColor)
                     .PaddingBottom(4)
                     .Row(row =>
                     {
                         // LEFT: Company Logo
-                        var logoPath = Path.Combine(_assetsPath, "logo.png");
-                        if (File.Exists(logoPath))
+                        row.ConstantItem(55).AlignMiddle().Column(logoCol =>
                         {
-                            row.ConstantItem(50)
-                                .AlignMiddle()
-                                .Image(logoPath)
-                                .FitArea();
-                        }
-                        else
-                        {
-                            row.ConstantItem(50);
-                        }
+                            var logoPath = ResolveImagePath(_data.LabLogoPath, "logo.png");
+                            if (logoPath != null)
+                            {
+                                try
+                                {
+                                    logoCol.Item().Height(45).Image(logoPath).FitArea();
+                                }
+                                catch
+                                {
+                                    logoCol.Item().Height(45).AlignCenter().AlignMiddle()
+                                        .Text("LOGO").FontSize(FontSmall).FontColor(Colors.Grey.Medium);
+                                }
+                            }
+                        });
 
                         row.ConstantItem(6); // spacer
 
-                        // CENTER: Company Info
+                        // CENTER: Company name + address + phone/email + CIN
                         row.RelativeItem().AlignMiddle().Column(center =>
                         {
-                            center.Item().Text("DIVINE METALLURGICAL SERVICES PVT. LTD.")
-                                .Style(TitleStyle);
+                            center.Item().AlignCenter()
+                                .Text(Safe(_data.LabName))
+                                .FontSize(FontCompanyName).Bold().FontColor(PrimaryColor);
 
-                            center.Item().Text("14, Gopal Industrial Estate, Vallabhnagar, BRTS, Odhav, Ahmedabad - 382415")
+                            center.Item().AlignCenter()
+                                .Text(Safe(_data.LabAddress))
                                 .FontSize(6.5f).FontColor(Colors.Grey.Darken2);
 
-                            center.Item().Text("Ph: +91 79 2289 2804 / 1013 | Email: divinelab_nhp@rediffmail.com")
-                                .FontSize(6).FontColor(Colors.Grey.Darken1);
+                            center.Item().AlignCenter()
+                                .Text($"Ph: {Safe(_data.LabPhone)} | Email: {Safe(_data.LabEmail)}")
+                                .FontSize(FontSmall).FontColor(Colors.Grey.Darken1);
 
-                            center.Item().Text("CIN: U74900GJ2012PTC069436")
-                                .FontSize(5.5f).FontColor(Colors.Grey.Darken1);
+                            if (!string.IsNullOrWhiteSpace(_data.CIN))
+                            {
+                                center.Item().AlignCenter()
+                                    .Text($"CIN: {_data.CIN}")
+                                    .FontSize(FontFooter).FontColor(Colors.Grey.Darken1);
+                            }
                         });
 
-                        // RIGHT: NABL Logo + Cert No (conditional on scope)
+                        // RIGHT: NABL Logo + Cert Number
                         row.ConstantItem(80).AlignMiddle().Column(right =>
                         {
                             if (_data.IsNabl || _data.NablInfo?.IsPartialScope == true)
                             {
-                                var nablLogoPath = Path.Combine(_assetsPath, "nabl_logo.png");
-                                if (File.Exists(nablLogoPath))
+                                var nablLogoPath = ResolveImagePath(_data.NablLogoPath, "nabl_logo.png");
+                                if (nablLogoPath != null)
                                 {
-                                    right.Item()
-                                        .Height(30)
-                                        .AlignCenter()
-                                        .Image(nablLogoPath)
-                                        .FitArea();
+                                    try
+                                    {
+                                        right.Item().Height(32).AlignCenter().Image(nablLogoPath).FitArea();
+                                    }
+                                    catch
+                                    {
+                                        right.Item().Height(32).AlignCenter().AlignMiddle()
+                                            .Text("NABL").FontSize(FontSmall).Bold();
+                                    }
                                 }
 
                                 if (!string.IsNullOrWhiteSpace(_data.NablCertNo))
@@ -204,169 +148,357 @@ namespace LIMSApi.Reporting
                                     var certText = _data.NablInfo?.IsPartialScope == true
                                         ? $"{_data.NablCertNo} *"
                                         : _data.NablCertNo;
-                                    right.Item()
-                                        .AlignCenter()
-                                        .Text(certText)
-                                        .FontSize(5.5f).Bold();
+                                    right.Item().AlignCenter()
+                                        .Text(certText).FontSize(FontFooter).Bold();
                                 }
                             }
-                        });
-                    });
-
-                // Report No / Date / Page line
-                col.Item()
-                    .PaddingTop(3)
-                    .Row(row =>
-                    {
-                        row.RelativeItem().Text(t =>
-                        {
-                            t.Span("Report No: ").Style(LabelStyle);
-                            t.Span(_data.ReportNo).Style(ValueStyle);
-                        });
-
-                        if (!string.IsNullOrWhiteSpace(_data.CertificateNo))
-                        {
-                            row.RelativeItem().AlignCenter().Text(t =>
-                            {
-                                t.Span("Certificate No: ").Style(LabelStyle);
-                                t.Span(_data.CertificateNo).Style(ValueStyle);
-                            });
-                        }
-
-                        row.RelativeItem().AlignRight().Text(t =>
-                        {
-                            t.Span("Date: ").Style(LabelStyle);
-                            t.Span(_data.ReportDate.ToString("dd-MM-yyyy")).Style(ValueStyle);
-                            t.Span("   Page ").Style(SmallStyle);
-                            t.CurrentPageNumber().Style(SmallStyle);
-                            t.Span(" of ").Style(SmallStyle);
-                            t.TotalPages().Style(SmallStyle);
                         });
                     });
             });
         }
 
         // ────────────────────────────────────────────────
-        // SECTION 2: CUSTOMER & SAMPLE INFO TABLE
+        // CONTENT
         // ────────────────────────────────────────────────
 
-        private void ComposeCustomerSampleInfo(IContainer container)
+        private void ComposeContent(IContainer container)
+        {
+            container.PaddingVertical(4).Column(col =>
+            {
+                // 1. Certificate Title
+                col.Item().Element(ComposeCertificateTitle);
+
+                col.Item().PaddingVertical(2);
+
+                // 2. Certificate Identity Grid
+                col.Item().Element(ComposeCertificateIdentityGrid);
+
+                col.Item().PaddingVertical(2);
+
+                // 3. Customer Provided Info
+                col.Item().Element(ComposeCustomerProvidedInfo);
+
+                col.Item().PaddingVertical(2);
+
+                // 4. Test Sections
+                if (_data.TestSections?.Any() == true)
+                {
+                    foreach (var section in _data.TestSections)
+                    {
+                        col.Item().Element(c => ComposeTestSection(c, section));
+                        col.Item().PaddingVertical(2);
+                    }
+                }
+
+                // 5. End of Report
+                col.Item().Element(ComposeEndOfReport);
+
+                col.Item().PaddingVertical(2);
+
+                // 6. NABL Scope Note
+                if (_data.NablInfo?.OutOfScopeParameterNames?.Any() == true)
+                {
+                    col.Item().Element(ComposeNablScopeNote);
+                    col.Item().PaddingVertical(2);
+                }
+
+                // 7. Conformity Statement
+                if (_data.StatementOfConformity == "Applicable")
+                {
+                    col.Item().Element(ComposeConformityStatement);
+                    col.Item().PaddingVertical(2);
+                }
+
+                // 8. Remarks
+                if (!string.IsNullOrWhiteSpace(_data.Remarks))
+                {
+                    col.Item().Element(ComposeRemarks);
+                    col.Item().PaddingVertical(2);
+                }
+
+                // 9. Signatures
+                col.Item().Element(ComposeSignatures);
+
+                col.Item().PaddingVertical(4);
+
+                // 10. QR Code
+                col.Item().Element(ComposeQrCode);
+            });
+        }
+
+        // ────────────────────────────────────────────────
+        // 1. CERTIFICATE TITLE
+        // ────────────────────────────────────────────────
+
+        private void ComposeCertificateTitle(IContainer container)
         {
             container
-                .Border(0.5f).BorderColor(BorderColor)
-                .Column(col =>
-                {
-                    // Section title
-                    col.Item()
-                        .Background(PrimaryColor)
-                        .Padding(3)
-                        .Text("TEST CERTIFICATE")
-                        .FontSize(9).Bold().FontColor(Colors.White)
-                        .AlignCenter();
+                .Background(HeaderBg)
+                .Border(CellBorderWidth).BorderColor(BorderColor)
+                .PaddingVertical(5)
+                .AlignCenter()
+                .Text("Test Certificate")
+                .FontSize(12).Bold().FontColor(PrimaryColor);
+        }
 
-                    // Two-column key-value table
-                    col.Item().Padding(4).Table(table =>
+        // ────────────────────────────────────────────────
+        // 2. CERTIFICATE IDENTITY GRID
+        // ────────────────────────────────────────────────
+
+        private void ComposeCertificateIdentityGrid(IContainer container)
+        {
+            container.Border(CellBorderWidth).BorderColor(BorderColor).Table(table =>
+            {
+                table.ColumnsDefinition(c =>
+                {
+                    c.RelativeColumn(1.2f); // Label left
+                    c.RelativeColumn(2f);   // Value left
+                    c.RelativeColumn(1.2f); // Label right
+                    c.RelativeColumn(2f);   // Value right
+                });
+
+                AddIdentityRow(table, "ULR No", Safe(_data.UlrNo), "Date of Issue", Safe(_data.DateOfIssue));
+                AddIdentityRow(table, "Certificate No", Safe(_data.CertificateNo), "Page", null, isPageNumber: true);
+                AddIdentityRow(table, "Customer Name", Safe(_data.CustomerName), "Sample Received", Safe(_data.SampleReceivedDate));
+                AddIdentityRow(table, "Customer Address", Safe(_data.CustomerAddress), "Test Performed At", Safe(_data.TestPerformedAt));
+            });
+        }
+
+        private static void AddIdentityRow(TableDescriptor table, string label1, string value1,
+            string label2, string? value2, bool isPageNumber = false)
+        {
+            // Label 1
+            table.Cell()
+                .Border(CellBorderWidth).BorderColor(BorderColor)
+                .Background(HeaderBg)
+                .Padding(CellPadding)
+                .Text(label1).FontSize(FontLabel).Bold();
+
+            // Value 1
+            table.Cell()
+                .Border(CellBorderWidth).BorderColor(BorderColor)
+                .Padding(CellPadding)
+                .Text(value1).FontSize(FontTableCell);
+
+            // Label 2
+            table.Cell()
+                .Border(CellBorderWidth).BorderColor(BorderColor)
+                .Background(HeaderBg)
+                .Padding(CellPadding)
+                .Text(label2).FontSize(FontLabel).Bold();
+
+            // Value 2 — or page number
+            if (isPageNumber)
+            {
+                table.Cell()
+                    .Border(CellBorderWidth).BorderColor(BorderColor)
+                    .Padding(CellPadding)
+                    .Text(t =>
                     {
-                        table.ColumnsDefinition(c =>
+                        t.CurrentPageNumber().FontSize(FontTableCell);
+                        t.Span(" of ").FontSize(FontTableCell);
+                        t.TotalPages().FontSize(FontTableCell);
+                    });
+            }
+            else
+            {
+                table.Cell()
+                    .Border(CellBorderWidth).BorderColor(BorderColor)
+                    .Padding(CellPadding)
+                    .Text(value2 ?? "-").FontSize(FontTableCell);
+            }
+        }
+
+        // ────────────────────────────────────────────────
+        // 3. CUSTOMER PROVIDED INFORMATION
+        // ────────────────────────────────────────────────
+
+        private void ComposeCustomerProvidedInfo(IContainer container)
+        {
+            container.Border(CellBorderWidth).BorderColor(BorderColor).Column(col =>
+            {
+                // Section header
+                col.Item()
+                    .Background(PrimaryColor)
+                    .Padding(CellPadding)
+                    .AlignCenter()
+                    .Text("INFORMATION PROVIDED BY THE CUSTOMER")
+                    .FontSize(FontSectionHeader).Bold().FontColor(Colors.White);
+
+                col.Item().Table(table =>
+                {
+                    table.ColumnsDefinition(c =>
+                    {
+                        c.RelativeColumn(1.2f); // Label left
+                        c.RelativeColumn(2f);   // Value left
+                        c.RelativeColumn(1.2f); // Label right
+                        c.RelativeColumn(2f);   // Value right
+                    });
+
+                    // Reference (full width value)
+                    AddCustomerInfoFullRow(table, "Reference", Safe(_data.CustomerReference));
+
+                    // Description (full width value)
+                    AddCustomerInfoFullRow(table, "Description", Safe(_data.SampleDescription));
+
+                    // Stamped As + Sample Drawn By
+                    AddCustomerInfoRow(table, "Stamped As", Safe(_data.StampedAs),
+                        "Sample Drawn By", Safe(_data.SampleDrawnBy));
+
+                    // Nature of Sample (full width value)
+                    AddCustomerInfoFullRow(table, "Nature", Safe(_data.NatureOfSample));
+
+                    // Specification
+                    var specValue = !string.IsNullOrWhiteSpace(_data.MaterialSpec)
+                        ? $"{_data.MaterialSpec}{(!string.IsNullOrWhiteSpace(_data.Grade) ? $" - {_data.Grade}" : "")}"
+                        : Safe(_data.Grade);
+                    AddCustomerInfoFullRow(table, "Specification", specValue);
+
+                    // Dimensions (if any provided)
+                    var dimensions = BuildDimensionString();
+                    if (!string.IsNullOrWhiteSpace(dimensions))
+                    {
+                        AddCustomerInfoFullRow(table, "Dimensions", dimensions);
+                    }
+                });
+            });
+        }
+
+        private static void AddCustomerInfoRow(TableDescriptor table,
+            string label1, string value1, string label2, string value2)
+        {
+            table.Cell()
+                .Border(CellBorderWidth).BorderColor(BorderColor)
+                .Background(HeaderBg)
+                .Padding(CellPadding)
+                .Text(label1).FontSize(FontLabel).Bold();
+
+            table.Cell()
+                .Border(CellBorderWidth).BorderColor(BorderColor)
+                .Padding(CellPadding)
+                .Text(value1).FontSize(FontTableCell);
+
+            table.Cell()
+                .Border(CellBorderWidth).BorderColor(BorderColor)
+                .Background(HeaderBg)
+                .Padding(CellPadding)
+                .Text(label2).FontSize(FontLabel).Bold();
+
+            table.Cell()
+                .Border(CellBorderWidth).BorderColor(BorderColor)
+                .Padding(CellPadding)
+                .Text(value2).FontSize(FontTableCell);
+        }
+
+        private static void AddCustomerInfoFullRow(TableDescriptor table, string label, string value)
+        {
+            table.Cell()
+                .Border(CellBorderWidth).BorderColor(BorderColor)
+                .Background(HeaderBg)
+                .Padding(CellPadding)
+                .Text(label).FontSize(FontLabel).Bold();
+
+            table.Cell().ColumnSpan(3)
+                .Border(CellBorderWidth).BorderColor(BorderColor)
+                .Padding(CellPadding)
+                .Text(value).FontSize(FontTableCell);
+        }
+
+        // ────────────────────────────────────────────────
+        // 4. TEST SECTIONS
+        // ────────────────────────────────────────────────
+
+        private void ComposeTestSection(IContainer container, ReportDataTestSection section)
+        {
+            container.Border(CellBorderWidth).BorderColor(BorderColor).Column(col =>
+            {
+                // Section category banner
+                col.Item()
+                    .Background(PrimaryColor)
+                    .Padding(CellPadding)
+                    .Row(bannerRow =>
+                    {
+                        bannerRow.RelativeItem().Text(
+                            !string.IsNullOrWhiteSpace(section.TestCategory)
+                                ? section.TestCategory
+                                : "TEST RESULTS")
+                            .FontSize(FontSectionHeader).Bold().FontColor(Colors.White);
+
+                        bannerRow.RelativeItem().AlignRight()
+                            .Text("METALS & ALLOYS")
+                            .FontSize(FontSectionHeader).Bold().FontColor(Colors.White);
+                    });
+
+                // Sub-header: Test Name | Test Method | Date of Testing
+                col.Item()
+                    .Background(HeaderBg)
+                    .BorderBottom(CellBorderWidth).BorderColor(BorderColor)
+                    .Padding(CellPadding)
+                    .Row(subRow =>
+                    {
+                        subRow.RelativeItem().Text(t =>
                         {
-                            c.ConstantColumn(100); // Label left
-                            c.RelativeColumn();    // Value left
-                            c.ConstantColumn(100); // Label right
-                            c.RelativeColumn();    // Value right
+                            t.Span("Test Name: ").FontSize(FontLabel).Bold();
+                            t.Span(Safe(section.TestName)).FontSize(FontTableCell);
                         });
 
-                        // Row 1: Customer Name + Case No
-                        AddInfoRow(table, "Customer Name", _data.CustomerName, "Case No.", _data.CaseNo);
-                        // Row 2: Customer Address + Sample No
-                        AddInfoRow(table, "Customer Address", _data.CustomerAddress, "Sample No.", _data.SampleNo);
-                        // Row 3: GST + Description
-                        AddInfoRow(table, "GST No.", _data.CustomerGST, "Description", _data.SampleDescription);
-                        // Row 4: Material Spec + Grade
-                        AddInfoRow(table, "Material Spec.", _data.MaterialSpec, "Grade", _data.Grade);
-                        // Row 5: Date Received + Date Tested
-                        AddInfoRow(table, "Date Received", _data.DateReceived, "Date Tested", _data.DateTested);
-                        // Row 6: Date Reported
-                        AddInfoRow(table, "Date Reported", _data.DateReported, "", "");
-                    });
-                });
-        }
-
-        private static void AddInfoRow(TableDescriptor table,
-            string label1, string value1,
-            string label2, string value2)
-        {
-            // Left side
-            table.Cell()
-                .BorderBottom(0.25f).BorderColor(Colors.Grey.Lighten2)
-                .PaddingVertical(2).PaddingHorizontal(3)
-                .Text(label1).Style(LabelStyle);
-
-            table.Cell()
-                .BorderBottom(0.25f).BorderColor(Colors.Grey.Lighten2)
-                .PaddingVertical(2).PaddingHorizontal(3)
-                .Text(value1).Style(ValueStyle);
-
-            // Right side
-            table.Cell()
-                .BorderBottom(0.25f).BorderColor(Colors.Grey.Lighten2)
-                .PaddingVertical(2).PaddingHorizontal(3)
-                .Text(label2).Style(LabelStyle);
-
-            table.Cell()
-                .BorderBottom(0.25f).BorderColor(Colors.Grey.Lighten2)
-                .PaddingVertical(2).PaddingHorizontal(3)
-                .Text(value2).Style(ValueStyle);
-        }
-
-        // ────────────────────────────────────────────────
-        // SECTION 3: TEST RESULTS TABLE (Dynamic)
-        // ────────────────────────────────────────────────
-
-        private void ComposeTestResults(IContainer container, ReportDataTestSection section)
-        {
-            container
-                .Border(0.5f).BorderColor(BorderColor)
-                .Column(col =>
-                {
-                    // Test name header
-                    col.Item()
-                        .Background(HeaderBg)
-                        .BorderBottom(0.5f).BorderColor(BorderColor)
-                        .Padding(4)
-                        .Text(section.TestName)
-                        .Style(SectionHeadingStyle);
-
-                    if (!string.IsNullOrWhiteSpace(section.SpecificationName))
-                    {
-                        col.Item()
-                            .PaddingHorizontal(4).PaddingVertical(1)
-                            .Text(t =>
+                        if (!string.IsNullOrWhiteSpace(section.TestMethod))
+                        {
+                            subRow.RelativeItem().AlignCenter().Text(t =>
                             {
-                                t.Span("Specification: ").Style(LabelStyle);
-                                t.Span(section.SpecificationName).Style(ValueStyle);
+                                t.Span("Test Method: ").FontSize(FontLabel).Bold();
+                                t.Span(section.TestMethod).FontSize(FontTableCell);
                             });
-                    }
+                        }
 
-                    if (!section.Parameters.Any())
-                    {
-                        col.Item().Padding(6).Text("No parameters recorded.").Style(SmallStyle);
-                        return;
-                    }
+                        if (!string.IsNullOrWhiteSpace(section.DateOfTesting))
+                        {
+                            subRow.RelativeItem().AlignRight().Text(t =>
+                            {
+                                t.Span("Dt. of Testing: ").FontSize(FontLabel).Bold();
+                                t.Span(section.DateOfTesting).FontSize(FontTableCell);
+                            });
+                        }
+                    });
 
-                    // Render different table depending on test type
-                    if (section.TestType == "Chemical")
-                    {
-                        col.Item().Element(c => ComposeChemicalTable(c, section.Parameters));
-                    }
-                    else
-                    {
-                        col.Item().Element(c => ComposeGeneralTable(c, section.Parameters));
-                    }
-                });
+                // Specification name (if present)
+                if (!string.IsNullOrWhiteSpace(section.SpecificationName))
+                {
+                    col.Item()
+                        .PaddingHorizontal(CellPadding).PaddingVertical(1)
+                        .Text(t =>
+                        {
+                            t.Span("Specification: ").FontSize(FontLabel).Bold();
+                            t.Span(section.SpecificationName).FontSize(FontTableCell);
+                        });
+                }
+
+                // Parameters table
+                if (!section.Parameters.Any())
+                {
+                    col.Item().Padding(6)
+                        .Text("No parameters recorded.")
+                        .FontSize(FontSmall).FontColor(Colors.Grey.Darken1);
+                }
+                else if (section.TestType == "Chemical")
+                {
+                    col.Item().Element(c => ComposeChemicalTable(c, section.Parameters));
+                }
+                else
+                {
+                    col.Item().Element(c => ComposeGeneralTable(c, section.Parameters));
+                }
+
+                // Images (if any, 2 per row)
+                if (section.Images?.Any() == true)
+                {
+                    col.Item().Element(c => ComposeTestImages(c, section));
+                }
+            });
         }
 
         /// <summary>
-        /// General / Mechanical test table: Sr.No | Parameter | Unit | Spec Limit | Result | Status
+        /// General / Mechanical test table: Sr. | Parameter | Unit | Spec Min | Spec Max | Result
         /// </summary>
         private void ComposeGeneralTable(IContainer container, List<ReportDataParameter> parameters)
         {
@@ -374,12 +506,12 @@ namespace LIMSApi.Reporting
             {
                 table.ColumnsDefinition(c =>
                 {
-                    c.ConstantColumn(25);  // Sr.No
-                    c.RelativeColumn(3);   // Parameter
-                    c.RelativeColumn(1);   // Unit
-                    c.RelativeColumn(2);   // Specification Limit
-                    c.RelativeColumn(1.5f);// Result
-                    c.RelativeColumn(1);   // Status
+                    c.ConstantColumn(25);   // Sr.
+                    c.RelativeColumn(3f);   // Parameter
+                    c.RelativeColumn(1f);   // Unit
+                    c.RelativeColumn(1.2f); // Spec Min
+                    c.RelativeColumn(1.2f); // Spec Max
+                    c.RelativeColumn(1.5f); // Result
                 });
 
                 // Header
@@ -388,45 +520,66 @@ namespace LIMSApi.Reporting
                     AddHeaderCell(h, "Sr.");
                     AddHeaderCell(h, "Parameter");
                     AddHeaderCell(h, "Unit");
-                    AddHeaderCell(h, "Specification Limit");
+                    AddHeaderCell(h, "Spec Min");
+                    AddHeaderCell(h, "Spec Max");
                     AddHeaderCell(h, "Result");
-                    AddHeaderCell(h, "Status");
                 });
 
                 // Rows
                 for (int i = 0; i < parameters.Count; i++)
                 {
                     var p = parameters[i];
-                    string bgColor = i % 2 == 0 ? "#FFFFFF" : "#FAFAFA";
+                    var bgColor = i % 2 == 0 ? "#FFFFFF" : "#FAFAFA";
 
-                    AddTableCell(table, (i + 1).ToString(), bgColor);
-                    AddTableCell(table, p.Name, bgColor);
-                    AddTableCell(table, p.Unit, bgColor);
-                    AddTableCell(table, FormatSpecLimit(p.SpecMin, p.SpecMax), bgColor);
-                    AddTableCell(table, p.Result ?? "-", bgColor);
-                    AddStatusCell(table, p.Status, bgColor);
+                    AddDataCell(table, (i + 1).ToString(), bgColor, HorizontalAlignment.Center);
+                    AddDataCell(table, Safe(p.Name), bgColor);
+                    AddDataCell(table, Safe(p.Unit), bgColor, HorizontalAlignment.Center);
+                    AddDataCell(table, Safe(p.SpecMin), bgColor, HorizontalAlignment.Center);
+                    AddDataCell(table, Safe(p.SpecMax), bgColor, HorizontalAlignment.Center);
+                    AddResultCell(table, Safe(p.Result), p.Status, bgColor);
                 }
             });
         }
 
         /// <summary>
-        /// Chemical test table: Element | Unit | Spec Min | Spec Max | Result | Status
+        /// Chemical test table with multi-column pivot by SubGroup.
+        /// If all SubGroup values are null/empty, renders single-column: Element | Unit | Spec Min | Spec Max | Result.
+        /// If multiple SubGroups exist, pivots: Element | Unit | Group1 | Group2 | ...
         /// </summary>
         private void ComposeChemicalTable(IContainer container, List<ReportDataParameter> parameters)
+        {
+            var subGroups = parameters
+                .Where(p => !string.IsNullOrWhiteSpace(p.SubGroup))
+                .Select(p => p.SubGroup!)
+                .Distinct()
+                .OrderBy(g => g)
+                .ToList();
+
+            if (subGroups.Count <= 1)
+            {
+                // Single group or no SubGroup — flat table
+                ComposeChemicalTableFlat(container, parameters);
+            }
+            else
+            {
+                // Multi-group pivot
+                ComposeChemicalTablePivot(container, parameters, subGroups);
+            }
+        }
+
+        private void ComposeChemicalTableFlat(IContainer container, List<ReportDataParameter> parameters)
         {
             container.Padding(2).Table(table =>
             {
                 table.ColumnsDefinition(c =>
                 {
-                    c.RelativeColumn(2);   // Element
-                    c.RelativeColumn(1);   // Unit
-                    c.RelativeColumn(1);   // Spec Min
-                    c.RelativeColumn(1);   // Spec Max
-                    c.RelativeColumn(1.5f);// Result
-                    c.RelativeColumn(1);   // Status
+                    c.RelativeColumn(2f);   // Element
+                    c.RelativeColumn(1f);   // Unit
+                    c.RelativeColumn(1.2f); // Spec Min
+                    c.RelativeColumn(1.2f); // Spec Max
+                    c.RelativeColumn(1.5f); // Result
                 });
 
-                // Header
                 table.Header(h =>
                 {
                     AddHeaderCell(h, "Element");
@@ -434,280 +587,413 @@ namespace LIMSApi.Reporting
                     AddHeaderCell(h, "Spec Min");
                     AddHeaderCell(h, "Spec Max");
                     AddHeaderCell(h, "Result");
-                    AddHeaderCell(h, "Status");
                 });
 
-                // Rows
                 for (int i = 0; i < parameters.Count; i++)
                 {
                     var p = parameters[i];
-                    string bgColor = i % 2 == 0 ? "#FFFFFF" : "#FAFAFA";
+                    var bgColor = i % 2 == 0 ? "#FFFFFF" : "#FAFAFA";
 
-                    AddTableCell(table, p.Name, bgColor);
-                    AddTableCell(table, p.Unit, bgColor);
-                    AddTableCell(table, p.SpecMin ?? "-", bgColor);
-                    AddTableCell(table, p.SpecMax ?? "-", bgColor);
-                    AddTableCell(table, p.Result ?? "-", bgColor);
-                    AddStatusCell(table, p.Status, bgColor);
+                    AddDataCell(table, Safe(p.Name), bgColor);
+                    AddDataCell(table, Safe(p.Unit), bgColor, HorizontalAlignment.Center);
+                    AddDataCell(table, Safe(p.SpecMin), bgColor, HorizontalAlignment.Center);
+                    AddDataCell(table, Safe(p.SpecMax), bgColor, HorizontalAlignment.Center);
+                    AddResultCell(table, Safe(p.Result), p.Status, bgColor);
+                }
+            });
+        }
+
+        private void ComposeChemicalTablePivot(IContainer container,
+            List<ReportDataParameter> parameters, List<string> subGroups)
+        {
+            // Get unique element names preserving original order
+            var elementNames = parameters
+                .Select(p => p.Name)
+                .Distinct()
+                .ToList();
+
+            // Build lookup: (Element, SubGroup) -> parameter
+            var lookup = parameters
+                .GroupBy(p => (p.Name, p.SubGroup ?? ""))
+                .ToDictionary(g => g.Key, g => g.First());
+
+            container.Padding(2).Table(table =>
+            {
+                // Columns: Element | Unit | SubGroup1 | SubGroup2 | ...
+                table.ColumnsDefinition(c =>
+                {
+                    c.RelativeColumn(2f);  // Element
+                    c.RelativeColumn(1f);  // Unit
+                    foreach (var _ in subGroups)
+                        c.RelativeColumn(1.5f); // One column per subgroup
+                });
+
+                table.Header(h =>
+                {
+                    AddHeaderCell(h, "Element");
+                    AddHeaderCell(h, "Unit");
+                    foreach (var group in subGroups)
+                        AddHeaderCell(h, group);
+                });
+
+                for (int i = 0; i < elementNames.Count; i++)
+                {
+                    var elementName = elementNames[i];
+                    var bgColor = i % 2 == 0 ? "#FFFFFF" : "#FAFAFA";
+
+                    // Find any parameter for this element to get the unit
+                    var anyParam = parameters.First(p => p.Name == elementName);
+
+                    AddDataCell(table, elementName, bgColor);
+                    AddDataCell(table, Safe(anyParam.Unit), bgColor, HorizontalAlignment.Center);
+
+                    foreach (var group in subGroups)
+                    {
+                        if (lookup.TryGetValue((elementName, group), out var param))
+                        {
+                            AddResultCell(table, Safe(param.Result), param.Status, bgColor);
+                        }
+                        else
+                        {
+                            AddDataCell(table, "-", bgColor, HorizontalAlignment.Center);
+                        }
+                    }
                 }
             });
         }
 
         // ────────────────────────────────────────────────
-        // SECTION 4: TEST IMAGES
+        // TEST IMAGES (within a section)
         // ────────────────────────────────────────────────
 
         private void ComposeTestImages(IContainer container, ReportDataTestSection section)
         {
-            container
-                .Border(0.5f).BorderColor(BorderColor)
-                .Column(col =>
+            container.PaddingVertical(4).PaddingHorizontal(6).Column(imgCol =>
+            {
+                imgCol.Item().PaddingBottom(2)
+                    .Text($"Test Images — {section.TestName}")
+                    .FontSize(FontLabel).Bold().FontColor(PrimaryColor);
+
+                const int ImagesPerRow = 2;
+                const float ImageHeight = 140;
+
+                for (int i = 0; i < section.Images.Count; i += ImagesPerRow)
                 {
-                    col.Item()
-                        .Background(HeaderBg)
-                        .BorderBottom(0.5f).BorderColor(BorderColor)
-                        .Padding(4)
-                        .Text($"Test Images - {section.TestName}")
-                        .Style(SectionHeadingStyle);
+                    var rowImages = section.Images.Skip(i).Take(ImagesPerRow).ToList();
 
-                    const float ImageSize = 140;
-                    const int ImagesPerRow = 2;
-
-                    col.Item().Padding(6).Column(imgCol =>
+                    imgCol.Item().Row(row =>
                     {
-                        for (int i = 0; i < section.Images.Count; i += ImagesPerRow)
+                        foreach (var img in rowImages)
                         {
-                            var rowImages = section.Images
-                                .Skip(i)
-                                .Take(ImagesPerRow)
-                                .ToList();
-
-                            imgCol.Item().Row(row =>
+                            row.RelativeItem().Padding(2).Column(c =>
                             {
-                                foreach (var img in rowImages)
+                                var imgPath = GetImageFullPath(img.Url);
+                                if (imgPath != null && File.Exists(imgPath))
                                 {
-                                    row.RelativeItem().Column(c =>
+                                    try
                                     {
-                                        var imgPath = GetImageFullPath(img.Url);
-                                        if (File.Exists(imgPath))
-                                        {
-                                            c.Item()
-                                                .Height(ImageSize)
-                                                .AlignCenter()
-                                                .Image(imgPath)
-                                                .FitArea();
-                                        }
-                                        else
-                                        {
-                                            c.Item()
-                                                .Height(ImageSize)
-                                                .AlignCenter()
-                                                .Background(Colors.Grey.Lighten3)
-                                                .Text("Image not found")
-                                                .FontSize(7).FontColor(Colors.Grey.Darken1);
-                                        }
-
-                                        if (!string.IsNullOrWhiteSpace(img.Caption))
-                                        {
-                                            c.Item()
-                                                .PaddingTop(2)
-                                                .AlignCenter()
-                                                .Text(img.Caption)
-                                                .FontSize(6.5f).Italic();
-                                        }
-                                    });
+                                        c.Item().Height(ImageHeight).AlignCenter()
+                                            .Image(imgPath).FitArea();
+                                    }
+                                    catch
+                                    {
+                                        c.Item().Height(ImageHeight).AlignCenter().AlignMiddle()
+                                            .Background(Colors.Grey.Lighten3)
+                                            .Text("Image could not be loaded")
+                                            .FontSize(FontSmall).FontColor(Colors.Grey.Darken1);
+                                    }
+                                }
+                                else
+                                {
+                                    c.Item().Height(ImageHeight).AlignCenter().AlignMiddle()
+                                        .Background(Colors.Grey.Lighten3)
+                                        .Text("Image not found")
+                                        .FontSize(FontSmall).FontColor(Colors.Grey.Darken1);
                                 }
 
-                                // Fill remaining columns
-                                for (int j = rowImages.Count; j < ImagesPerRow; j++)
-                                    row.RelativeItem();
+                                if (!string.IsNullOrWhiteSpace(img.Caption))
+                                {
+                                    c.Item().PaddingTop(2).AlignCenter()
+                                        .Text(img.Caption).FontSize(6.5f).Italic();
+                                }
                             });
                         }
+
+                        // Fill empty columns
+                        for (int j = rowImages.Count; j < ImagesPerRow; j++)
+                            row.RelativeItem();
                     });
+                }
+            });
+        }
+
+        // ────────────────────────────────────────────────
+        // 5. END OF REPORT
+        // ────────────────────────────────────────────────
+
+        private void ComposeEndOfReport(IContainer container)
+        {
+            container.Column(col =>
+            {
+                col.Item().PaddingVertical(4).AlignCenter()
+                    .Text("——— End of Report ———")
+                    .FontSize(FontSectionHeader).Bold().FontColor(Colors.Grey.Darken2);
+
+                if (!string.IsNullOrWhiteSpace(_data.TestPerformedAt) &&
+                    _data.TestPerformedAt.Contains("Witness", StringComparison.OrdinalIgnoreCase))
+                {
+                    col.Item().AlignCenter()
+                        .Text($"Test Witnessed By: {Safe(_data.TestPerformedAt)}")
+                        .FontSize(FontTableCell).Italic();
+                }
+            });
+        }
+
+        // ────────────────────────────────────────────────
+        // 6. NABL SCOPE NOTE
+        // ────────────────────────────────────────────────
+
+        private void ComposeNablScopeNote(IContainer container)
+        {
+            container
+                .Border(1f).BorderColor("#E65100") // orange border
+                .Background("#FFF3E0")
+                .Padding(6)
+                .Column(noteCol =>
+                {
+                    noteCol.Item().Text("NABL Accreditation Note")
+                        .FontSize(FontSectionHeader).Bold().FontColor("#E65100");
+
+                    noteCol.Item().PaddingTop(2).Text(text =>
+                    {
+                        text.Span("The following parameters are NOT covered under NABL Accreditation: ")
+                            .FontSize(FontTableCell);
+                        text.Span(string.Join(", ", _data.NablInfo!.OutOfScopeParameterNames))
+                            .FontSize(FontTableCell).Bold();
+                        text.Span(". Results for these parameters are reported in our capacity as a non-accredited laboratory.")
+                            .FontSize(FontTableCell);
+                    });
+
+                    if (_data.NablInfo.IsPartialScope)
+                    {
+                        noteCol.Item().PaddingTop(2)
+                            .Text("* Partial NABL accreditation — see NABL column in results table for scope details.")
+                            .FontSize(FontSmall).Italic().FontColor(Colors.Grey.Darken2);
+                    }
                 });
         }
 
         // ────────────────────────────────────────────────
-        // SECTION 5: REMARKS & OBSERVATIONS
+        // 7. CONFORMITY STATEMENT
+        // ────────────────────────────────────────────────
+
+        private void ComposeConformityStatement(IContainer container)
+        {
+            container.Border(CellBorderWidth).BorderColor(BorderColor).Column(col =>
+            {
+                col.Item()
+                    .Background(HeaderBg)
+                    .BorderBottom(CellBorderWidth).BorderColor(BorderColor)
+                    .Padding(CellPadding)
+                    .Text("Statement of Conformity")
+                    .FontSize(FontSectionHeader).Bold();
+
+                col.Item().Padding(6).Column(inner =>
+                {
+                    inner.Item().Text(t =>
+                    {
+                        t.Span("Decision Rule: ").FontSize(FontTableCell).Bold();
+                        t.Span(Safe(_data.DecisionRule, "Not specified")).FontSize(FontTableCell);
+                    });
+
+                    // Overall conformity assessment
+                    var allParams = _data.TestSections?.SelectMany(s => s.Parameters).ToList() ?? new();
+                    var hasNonConforming = allParams.Any(p =>
+                        p.ConformityResult != null &&
+                        p.ConformityResult.Contains("not conform", StringComparison.OrdinalIgnoreCase));
+
+                    var overallConformity = hasNonConforming
+                        ? "The test results do not conform to the specification requirements."
+                        : "The test results conform to the specification requirements.";
+
+                    var conformityColor = hasNonConforming ? "#C62828" : "#2E7D32";
+
+                    inner.Item().PaddingTop(3).Text(t =>
+                    {
+                        t.Span("Overall Result: ").FontSize(FontTableCell).Bold();
+                        t.Span(overallConformity).FontSize(FontTableCell).FontColor(conformityColor).Bold();
+                    });
+
+                    // Measurement uncertainty note
+                    if (_data.DecisionRule != null &&
+                        _data.DecisionRule.Contains("MOU", StringComparison.OrdinalIgnoreCase))
+                    {
+                        inner.Item().PaddingTop(2)
+                            .Text("Note: Expanded uncertainty (U) at 95% confidence level has been considered in the conformity assessment.")
+                            .FontSize(FontSmall).Italic().FontColor(Colors.Grey.Darken1);
+                    }
+                });
+            });
+        }
+
+        // ────────────────────────────────────────────────
+        // 8. REMARKS
         // ────────────────────────────────────────────────
 
         private void ComposeRemarks(IContainer container)
         {
             container
-                .Border(0.5f).BorderColor(BorderColor)
+                .Border(CellBorderWidth).BorderColor(BorderColor)
                 .Column(col =>
                 {
                     col.Item()
                         .Background(HeaderBg)
-                        .BorderBottom(0.5f).BorderColor(BorderColor)
-                        .Padding(4)
+                        .BorderBottom(CellBorderWidth).BorderColor(BorderColor)
+                        .Padding(CellPadding)
                         .Text("Remarks & Observations")
-                        .Style(SectionHeadingStyle);
+                        .FontSize(FontSectionHeader).Bold();
 
                     col.Item()
                         .Padding(6)
-                        .Text(_data.Remarks)
-                        .Style(ValueStyle)
+                        .Text(_data.Remarks!)
+                        .FontSize(FontTableCell)
                         .LineHeight(1.3f);
                 });
         }
 
         // ────────────────────────────────────────────────
-        // STATEMENT OF CONFORMITY
-        // ────────────────────────────────────────────────
-
-        private void ComposeConformityStatement(IContainer container)
-        {
-            if (_data.StatementOfConformity != "Applicable")
-            {
-                container.Text(""); // empty — no section rendered
-                return;
-            }
-
-            container.PaddingTop(6).Column(col =>
-            {
-                col.Item().BorderBottom(1).BorderColor(Colors.Grey.Medium)
-                    .PaddingBottom(2)
-                    .Text("Statement of Conformity")
-                    .FontSize(9).Bold();
-
-                col.Item().PaddingTop(4).Text(text =>
-                {
-                    text.Span("Decision Rule: ").FontSize(8).Bold();
-                    text.Span(_data.DecisionRule ?? "Not specified").FontSize(8);
-                });
-
-                // Overall conformity
-                var allParams = _data.TestSections.SelectMany(s => s.Parameters).ToList();
-                var hasNonConforming = allParams.Any(p => p.ConformityResult == "Does not conform");
-                var overallConformity = hasNonConforming
-                    ? "The test results do not conform to the specification requirements."
-                    : "The test results conform to the specification requirements.";
-
-                col.Item().PaddingTop(2).Text(text =>
-                {
-                    text.Span("Overall Result: ").FontSize(8).Bold();
-                    text.Span(overallConformity).FontSize(8);
-                });
-
-                // MOU note
-                if (_data.DecisionRule != null && _data.DecisionRule.Contains("With MOU"))
-                {
-                    col.Item().PaddingTop(2).Text(
-                        "Note: Expanded uncertainty (U) at 95% confidence level has been considered in the conformity assessment."
-                    ).FontSize(7).Italic().FontColor(Colors.Grey.Darken1);
-                }
-            });
-        }
-
-        // ────────────────────────────────────────────────
-        // SIGNATURES
+        // 9. SIGNATURES
         // ────────────────────────────────────────────────
 
         private void ComposeSignatures(IContainer container)
         {
-            container.PaddingTop(6).Column(col =>
+            container.PaddingTop(8).Row(row =>
             {
-                col.Item().LineHorizontal(0.5f).LineColor(BorderColor);
+                // LEFT: Tested By
+                row.RelativeItem().Element(c => RenderSignatureBlock(c,
+                    "Tested By",
+                    _data.TestedByName,
+                    _data.TestedByDesignation,
+                    _data.TestedBySignaturePath,
+                    showStamp: false));
 
-                col.Item().PaddingTop(6).Row(row =>
-                {
-                    RenderSignatureBlock(row.RelativeItem(),
-                        "Tested By",
-                        _data.TestedByName,
-                        _data.TestedByDesignation,
-                        _data.TestedBySignaturePath);
+                row.ConstantItem(20); // spacer
 
-                    row.ConstantItem(10);
-
-                    RenderSignatureBlock(row.RelativeItem(),
-                        "Reviewed By",
-                        _data.ReviewedByName,
-                        _data.ReviewedByDesignation,
-                        _data.ReviewedBySignaturePath);
-
-                    row.ConstantItem(10);
-
-                    RenderSignatureBlock(row.RelativeItem(),
-                        "Authorized Signatory",
-                        _data.AuthorizedByName,
-                        _data.AuthorizedByDesignation,
-                        _data.AuthorizedBySignaturePath);
-                });
+                // RIGHT: Reviewed & Authorized By
+                row.RelativeItem().Element(c => RenderSignatureBlock(c,
+                    "Reviewed & Authorized By",
+                    !string.IsNullOrWhiteSpace(_data.AuthorizedByName) ? _data.AuthorizedByName : _data.ReviewedByName,
+                    !string.IsNullOrWhiteSpace(_data.AuthorizedByDesignation) ? _data.AuthorizedByDesignation : _data.ReviewedByDesignation,
+                    !string.IsNullOrWhiteSpace(_data.AuthorizedBySignaturePath) ? _data.AuthorizedBySignaturePath : _data.ReviewedBySignaturePath,
+                    showStamp: true));
             });
         }
 
-        private void RenderSignatureBlock(IContainer container,
-            string title, string name, string? designation, string? signaturePath)
+        private void RenderSignatureBlock(IContainer container, string title,
+            string name, string? designation, string? signaturePath, bool showStamp)
         {
-            container.Border(0.5f).BorderColor(BorderColor).Padding(4).Column(c =>
+            container.Column(c =>
             {
-                // Signature image
-                c.Item().Height(30).AlignCenter().Column(sigCol =>
+                // Signature image area
+                c.Item().Height(40).AlignCenter().Column(sigCol =>
                 {
                     if (!string.IsNullOrWhiteSpace(signaturePath))
                     {
                         var fullPath = GetImageFullPath(signaturePath);
-                        if (File.Exists(fullPath))
+                        if (fullPath != null && File.Exists(fullPath))
                         {
-                            sigCol.Item()
-                                .Height(28)
-                                .AlignCenter()
-                                .Image(fullPath)
-                                .FitArea();
+                            try
+                            {
+                                sigCol.Item().Height(38).AlignCenter()
+                                    .Image(fullPath).FitArea();
+                            }
+                            catch
+                            {
+                                // Signature image failed to load — leave blank
+                            }
                         }
                     }
                 });
 
-                c.Item().LineHorizontal(0.25f).LineColor(Colors.Grey.Lighten1);
+                // Signature line
+                c.Item().LineHorizontal(0.5f).LineColor(Colors.Grey.Darken1);
 
+                // Title
                 c.Item().PaddingTop(2).AlignCenter()
                     .Text(title).FontSize(6.5f).Bold().FontColor(PrimaryColor);
 
+                // Name
                 if (!string.IsNullOrWhiteSpace(name))
                 {
-                    c.Item().AlignCenter().Text(name).FontSize(7);
+                    c.Item().AlignCenter()
+                        .Text(name).FontSize(FontTableCell);
                 }
 
+                // Designation
                 if (!string.IsNullOrWhiteSpace(designation))
                 {
-                    c.Item().AlignCenter().Text(designation).FontSize(6).FontColor(Colors.Grey.Darken1);
+                    c.Item().AlignCenter()
+                        .Text(designation).FontSize(FontSmall).FontColor(Colors.Grey.Darken1);
+                }
+
+                // Company stamp (right block only)
+                if (showStamp && !string.IsNullOrWhiteSpace(_data.CompanyStampPath))
+                {
+                    var stampPath = GetImageFullPath(_data.CompanyStampPath);
+                    if (stampPath != null && File.Exists(stampPath))
+                    {
+                        try
+                        {
+                            c.Item().PaddingTop(3).Height(35).AlignCenter()
+                                .Image(stampPath).FitArea();
+                        }
+                        catch
+                        {
+                            // Stamp image failed to load
+                        }
+                    }
                 }
             });
         }
 
         // ────────────────────────────────────────────────
-        // SECTION 7: QR CODE
+        // 10. QR CODE
         // ────────────────────────────────────────────────
 
         private void ComposeQrCode(IContainer container)
         {
+            if (string.IsNullOrWhiteSpace(_data.QrCodeData))
+                return;
+
+            // Try QR code image from assets
             var qrPath = Path.Combine(_assetsPath, "qr_code.png");
             if (!File.Exists(qrPath))
                 return;
 
             container.AlignRight().Row(row =>
             {
-                row.RelativeItem(); // push QR to right
+                row.RelativeItem(); // push to right
 
                 row.ConstantItem(60).Column(col =>
                 {
-                    col.Item()
-                        .Height(55)
-                        .Image(qrPath)
-                        .FitArea();
+                    try
+                    {
+                        col.Item().Height(55).Image(qrPath).FitArea();
+                    }
+                    catch
+                    {
+                        col.Item().Height(55).AlignCenter().AlignMiddle()
+                            .Text("QR").FontSize(FontSmall);
+                    }
 
-                    col.Item()
-                        .AlignCenter()
-                        .Text("Scan to verify\nreport authenticity")
-                        .FontSize(5).FontColor(Colors.Grey.Darken1)
-                        .AlignCenter();
+                    col.Item().AlignCenter()
+                        .Text("Scan to verify").FontSize(5f).FontColor(Colors.Grey.Darken1);
                 });
             });
         }
 
         // ────────────────────────────────────────────────
-        // SECTION 8: FOOTER
+        // FOOTER (every page)
         // ────────────────────────────────────────────────
 
         private void ComposeFooter(IContainer container)
@@ -716,103 +1002,176 @@ namespace LIMSApi.Reporting
             {
                 col.Item().LineHorizontal(0.8f).LineColor(PrimaryColor);
 
-                col.Item().PaddingTop(2).PaddingHorizontal(4).Row(row =>
+                col.Item().PaddingTop(2).PaddingHorizontal(4).Column(footerContent =>
                 {
-                    row.RelativeItem().Column(c =>
+                    // Report Conditions (numbered list)
+                    if (_data.ReportConditions?.Any() == true)
                     {
-                        c.Item().Text(
-                            "This report shall not be reproduced except in full without written approval of " +
-                            "Divine Metallurgical Services Pvt. Ltd.")
-                            .FontSize(5).FontColor(Colors.Grey.Darken1).Italic();
+                        footerContent.Item().PaddingBottom(1)
+                            .Text("Conditions of Reporting:")
+                            .FontSize(FontFooter).Bold().FontColor(Colors.Grey.Darken2);
 
-                        if (_data.IsNabl)
+                        for (int i = 0; i < _data.ReportConditions.Count; i++)
                         {
-                            c.Item().Text(
-                                "The results reported relate only to the items tested. " +
-                                "NABL accredited as per ISO/IEC 17025:2017.")
-                                .FontSize(5).FontColor(Colors.Grey.Darken1);
+                            footerContent.Item()
+                                .Text($"  {i + 1}. {_data.ReportConditions[i]}")
+                                .FontSize(FontFooter).FontColor(Colors.Grey.Darken1);
                         }
-                    });
+                    }
 
-                    row.ConstantItem(80).AlignRight().AlignBottom()
+                    // Conformity note in footer
+                    if (_data.StatementOfConformity == "Applicable")
+                    {
+                        footerContent.Item().PaddingTop(1)
+                            .Text("Statement of conformity is based on the decision rule applied. See conformity section in the report.")
+                            .FontSize(FontFooter).Italic().FontColor(Colors.Grey.Darken1);
+                    }
+
+                    // NABL note
+                    if (_data.IsNabl)
+                    {
+                        footerContent.Item().PaddingTop(1)
+                            .Text("The results reported relate only to the items tested. NABL accredited as per ISO/IEC 17025:2017.")
+                            .FontSize(FontFooter).FontColor(Colors.Grey.Darken1);
+                    }
+
+                    // Reproduction note
+                    footerContent.Item().PaddingTop(1)
                         .Text(t =>
                         {
-                            t.Span("Page ").Style(SmallStyle);
-                            t.CurrentPageNumber().Style(SmallStyle);
-                            t.Span(" of ").Style(SmallStyle);
-                            t.TotalPages().Style(SmallStyle);
+                            t.Span($"This report shall not be reproduced except in full without written approval of {Safe(_data.LabName)}.")
+                                .FontSize(FontFooter).FontColor(Colors.Grey.Darken1).Italic();
                         });
                 });
+
+                // Page X of Y — right-aligned
+                col.Item().PaddingTop(2).PaddingHorizontal(4).AlignRight()
+                    .Text(t =>
+                    {
+                        t.Span("Page ").FontSize(FontFooter).FontColor(Colors.Grey.Darken1);
+                        t.CurrentPageNumber().FontSize(FontFooter).FontColor(Colors.Grey.Darken1);
+                        t.Span(" of ").FontSize(FontFooter).FontColor(Colors.Grey.Darken1);
+                        t.TotalPages().FontSize(FontFooter).FontColor(Colors.Grey.Darken1);
+                    });
             });
         }
 
         // ────────────────────────────────────────────────
-        // TABLE HELPERS
+        // TABLE CELL HELPERS
         // ────────────────────────────────────────────────
 
         private static void AddHeaderCell(dynamic header, string text)
         {
             header.Cell()
-                .Background(PrimaryColor)
-                .PaddingVertical(3)
-                .PaddingHorizontal(4)
-                .Text(text)
-                .Style(TableHeaderStyle);
+                .Element(new Action<IContainer>(c =>
+                    c.Background(PrimaryColor)
+                     .Border(CellBorderWidth).BorderColor(BorderColor)
+                     .Padding(CellPadding)
+                     .AlignCenter()
+                     .Text(text)
+                     .FontSize(FontTableHeader).Bold().FontColor(Colors.White)));
         }
 
-        private static void AddTableCell(TableDescriptor table, string text, string bgColor)
+        private static void AddDataCell(TableDescriptor table, string text, string bgColor,
+            HorizontalAlignment alignment = HorizontalAlignment.Left)
         {
-            table.Cell()
+            var cell = table.Cell()
                 .Background(bgColor)
-                .BorderBottom(0.25f).BorderColor(Colors.Grey.Lighten2)
-                .PaddingVertical(2)
-                .PaddingHorizontal(4)
-                .Text(text)
-                .Style(TableCellStyle);
+                .Border(CellBorderWidth).BorderColor(BorderColor)
+                .Padding(CellPadding);
+
+            if (alignment == HorizontalAlignment.Center)
+                cell = cell.AlignCenter();
+            else if (alignment == HorizontalAlignment.Right)
+                cell = cell.AlignRight();
+
+            cell.Text(text).FontSize(FontTableCell);
         }
 
-        private static void AddStatusCell(TableDescriptor table, string status, string bgColor)
+        private static void AddResultCell(TableDescriptor table, string result, string status, string bgColor)
         {
-            string statusColor = status switch
+            string fontColor = status switch
             {
-                "Pass" => "#2E7D32",  // green
-                "Fail" => "#C62828",  // red
-                _ => "#757575"        // grey
+                "Pass" => "#2E7D32",
+                "Fail" => "#C62828",
+                _ => "#333333"
             };
 
             table.Cell()
                 .Background(bgColor)
-                .BorderBottom(0.25f).BorderColor(Colors.Grey.Lighten2)
-                .PaddingVertical(2)
-                .PaddingHorizontal(4)
-                .Text(status)
-                .FontSize(7).Bold().FontColor(statusColor);
+                .Border(CellBorderWidth).BorderColor(BorderColor)
+                .Padding(CellPadding)
+                .AlignCenter()
+                .Text(result)
+                .FontSize(FontTableCell).Bold().FontColor(fontColor);
         }
 
-        private static string FormatSpecLimit(string? min, string? max)
+        // ────────────────────────────────────────────────
+        // UTILITY HELPERS
+        // ────────────────────────────────────────────────
+
+        private enum HorizontalAlignment { Left, Center, Right }
+
+        /// <summary>
+        /// Returns a non-null display string. Empty/null values become "-" (or the specified fallback).
+        /// </summary>
+        private static string Safe(string? value, string fallback = "-")
         {
-            if (string.IsNullOrWhiteSpace(min) && string.IsNullOrWhiteSpace(max))
-                return "-";
-
-            if (!string.IsNullOrWhiteSpace(min) && !string.IsNullOrWhiteSpace(max))
-                return $"{min} - {max}";
-
-            if (!string.IsNullOrWhiteSpace(min))
-                return $"Min: {min}";
-
-            return $"Max: {max}";
+            return string.IsNullOrWhiteSpace(value) ? fallback : value;
         }
 
         /// <summary>
-        /// Resolves image paths. If the path is already absolute, returns it;
-        /// otherwise treats it as relative to wwwroot.
+        /// Builds a dimension string from available Thickness, Diameter, Width, Length values.
         /// </summary>
-        private string GetImageFullPath(string path)
+        private string BuildDimensionString()
         {
-            if (Path.IsPathRooted(path))
+            var parts = new List<string>();
+            if (_data.Thickness.HasValue && _data.Thickness.Value > 0)
+                parts.Add($"Thickness: {_data.Thickness.Value} mm");
+            if (_data.Diameter.HasValue && _data.Diameter.Value > 0)
+                parts.Add($"Diameter: {_data.Diameter.Value} mm");
+            if (_data.Width.HasValue && _data.Width.Value > 0)
+                parts.Add($"Width: {_data.Width.Value} mm");
+            if (_data.Length.HasValue && _data.Length.Value > 0)
+                parts.Add($"Length: {_data.Length.Value} mm");
+            return string.Join(" | ", parts);
+        }
+
+        /// <summary>
+        /// Resolves an image path with fallback: DTO path → Assets fallback → null.
+        /// Checks File.Exists before returning.
+        /// </summary>
+        private string? ResolveImagePath(string? dtoPath, string assetsFallback)
+        {
+            // Try the DTO-provided path first
+            if (!string.IsNullOrWhiteSpace(dtoPath))
+            {
+                var resolved = GetImageFullPath(dtoPath);
+                if (resolved != null && File.Exists(resolved))
+                    return resolved;
+            }
+
+            // Try assets fallback
+            var fallbackPath = Path.Combine(_assetsPath, assetsFallback);
+            if (File.Exists(fallbackPath))
+                return fallbackPath;
+
+            return null;
+        }
+
+        /// <summary>
+        /// Resolves image paths: absolute path → Assets/ relative → wwwroot/ relative → null.
+        /// </summary>
+        private string? GetImageFullPath(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return null;
+
+            // Already absolute and exists
+            if (Path.IsPathRooted(path) && File.Exists(path))
                 return path;
 
-            // Try relative to Assets first
+            // Try relative to Assets
             var assetsRelative = Path.Combine(_assetsPath, path);
             if (File.Exists(assetsRelative))
                 return assetsRelative;
@@ -822,7 +1181,7 @@ namespace LIMSApi.Reporting
             if (File.Exists(wwwrootRelative))
                 return wwwrootRelative;
 
-            // Fallback: return as-is
+            // Return the original path as-is (caller should check File.Exists)
             return path;
         }
     }

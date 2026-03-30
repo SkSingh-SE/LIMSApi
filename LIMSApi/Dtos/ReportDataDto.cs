@@ -13,10 +13,32 @@ namespace LIMSApi.Dtos
         public string? CertificateNo { get; set; }
         public DateTime ReportDate { get; set; }
 
+        // ── Lab/Company Identity ──
+        public string LabName { get; set; } = string.Empty;
+        public string LabAddress { get; set; } = string.Empty;
+        public string LabPhone { get; set; } = string.Empty;
+        public string LabEmail { get; set; } = string.Empty;
+        public string? LabLogoPath { get; set; }
+        public string? CIN { get; set; }
+        public string? NablLogoPath { get; set; }
+        public string? CompanyStampPath { get; set; }
+
+        // ── Certificate Identity ──
+        public string? UlrNo { get; set; }
+        public string? DateOfIssue { get; set; }
+        public string? SampleReceivedDate { get; set; }
+        public string? TestPerformedAt { get; set; }
+
         // ── Customer ──
         public string CustomerName { get; set; } = string.Empty;
         public string CustomerAddress { get; set; } = string.Empty;
         public string CustomerGST { get; set; } = string.Empty;
+
+        // ── Customer Provided Info ──
+        public string? CustomerReference { get; set; }
+        public string? StampedAs { get; set; }
+        public string? NatureOfSample { get; set; }
+        public string? SampleDrawnBy { get; set; }
 
         // ── Sample ──
         public string CaseNo { get; set; } = string.Empty;
@@ -35,6 +57,9 @@ namespace LIMSApi.Dtos
         public string DateReceived { get; set; } = string.Empty;
         public string DateTested { get; set; } = string.Empty;
         public string DateReported { get; set; } = string.Empty;
+
+        // ── Footer Conditions ──
+        public List<string> ReportConditions { get; set; } = new();
 
         // ── Tests ──
         public List<ReportDataTestSection> TestSections { get; set; } = new();
@@ -79,7 +104,16 @@ namespace LIMSApi.Dtos
         /// <summary>General or Chemical — drives the table layout.</summary>
         public string TestType { get; set; } = "General";
 
+        /// <summary>Higher-level category: "CHEMICAL", "MECHANICAL + METALS & ALLOYS", etc.</summary>
+        public string TestCategory { get; set; } = string.Empty;
+
         public string? SpecificationName { get; set; }
+
+        /// <summary>Test method used (e.g., "IS 1608:2005", "JIS G 1253:2002")</summary>
+        public string? TestMethod { get; set; }
+
+        /// <summary>Date test was completed (formatted string)</summary>
+        public string? DateOfTesting { get; set; }
 
         public List<ReportDataParameter> Parameters { get; set; } = new();
         public List<ReportDataImage> Images { get; set; } = new();
@@ -100,6 +134,9 @@ namespace LIMSApi.Dtos
         public string? NablScopeStatus { get; set; } // WithinScope / OutsideScope / NotAccredited
         public decimal? ExpandedUncertainty { get; set; }
         public string? ConformityResult { get; set; } // Conforms / Does not conform / null
+
+        /// <summary>For chemical multi-column pivot: identifies which test group (e.g., "GTAW", "SMAW")</summary>
+        public string? SubGroup { get; set; }
     }
 
     /// <summary>

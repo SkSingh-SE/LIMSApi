@@ -1311,7 +1311,13 @@ namespace LIMSApi.ServiceWORepo
                     TestResultHeaderId = header.ID,
                     TestName = header.LaboratoryTest?.Name ?? "Unknown Test",
                     TestType = testType,
+                    TestCategory = DetermineTestCategory(header, testType),
                     SpecificationName = header.LaboratoryTest?.SubGroup,
+                    TestMethod = header.Parameters
+                        .Select(p => p.TestMethodUsed)
+                        .FirstOrDefault(m => !string.IsNullOrEmpty(m))
+                        ?? header.LaboratoryTest?.SubGroup,
+                    DateOfTesting = header.CompletedAt?.ToString("dd-MM-yyyy") ?? "",
                     Parameters = header.Parameters
                         .OrderBy(p => p.ID)
                         .Select(p => new ReportDataParameter
@@ -1363,6 +1369,29 @@ namespace LIMSApi.ServiceWORepo
             var reviewedBy = signatories.ElementAtOrDefault(1);
             var authorizedBy = signatories.ElementAtOrDefault(2);
 
+            // 6c. Fetch Organization info for report header
+            var org = await _db.Organizations
+                .FirstOrDefaultAsync(o => o.IsActive && o.CompanyCode == loggedInUser.CompanyCode);
+
+            // 6d. Fetch NABL accreditation (for cert number + logo path)
+            var nablAccred = org != null
+                ? await _db.NablAccreditations
+                    .Where(n => n.IsActive && n.OrganizationId == org.Id)
+                    .OrderByDescending(n => n.ExpiryDate)
+                    .FirstOrDefaultAsync()
+                : null;
+
+            // 6e. Fetch configuration values
+            var configKeys = new[] { "CIN", "REPORT_CONDITIONS", "COMPANY_STAMP_PATH" };
+            var configs = await _db.Configurations
+                .Where(c => configKeys.Contains(c.KeyName) && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode)
+                .ToDictionaryAsync(c => c.KeyName, c => c.Value);
+
+            // 6f. Fetch SampleAdditionalDetail for customer-provided info
+            var additionalDetails = await _db.SampleAdditionalDetails
+                .Where(d => d.SampleID == sample.ID)
+                .ToDictionaryAsync(d => d.Label, d => d.Value);
+
             // 7. Build DTO
             var dto = new ReportDataDto
             {
@@ -1372,9 +1401,31 @@ namespace LIMSApi.ServiceWORepo
                 CertificateNo = reportHeader.CertificateNo,
                 ReportDate = reportHeader.GeneratedAt,
 
+                // Lab/Company Identity
+                LabName = org?.LabName ?? "Laboratory",
+                LabAddress = org?.LabAddress ?? "",
+                LabPhone = org?.ContactPhone ?? "",
+                LabEmail = org?.ContactEmail ?? "",
+                LabLogoPath = org?.OrganizationLogo,
+                CIN = configs.GetValueOrDefault("CIN"),
+                NablLogoPath = nablAccred?.LogoPath,
+                CompanyStampPath = configs.GetValueOrDefault("COMPANY_STAMP_PATH"),
+
+                // Certificate Identity
+                UlrNo = reportHeader.CertificateNo,
+                DateOfIssue = reportHeader.GeneratedAt.ToString("dd-MM-yyyy"),
+                SampleReceivedDate = inward.CollectionTime.ToString("dd-MM-yyyy"),
+                TestPerformedAt = org?.LabName ?? "Laboratory",
+
                 CustomerName = customer.Name,
                 CustomerAddress = customer.Address,
                 CustomerGST = customer.GSTNo ?? "",
+
+                // Customer Provided Info
+                CustomerReference = additionalDetails.GetValueOrDefault("Reference"),
+                StampedAs = additionalDetails.GetValueOrDefault("StampedAs"),
+                NatureOfSample = additionalDetails.GetValueOrDefault("NatureOfSample") ?? sample.Details,
+                SampleDrawnBy = additionalDetails.GetValueOrDefault("SampleDrawnBy"),
 
                 CaseNo = inward.CaseNo,
                 SampleNo = sample.SampleNo,
@@ -1390,6 +1441,11 @@ namespace LIMSApi.ServiceWORepo
                 DateReceived = inward.CollectionTime.ToString("dd-MM-yyyy"),
                 DateTested = latestCompleted.ToString("dd-MM-yyyy"),
                 DateReported = reportHeader.GeneratedAt.ToString("dd-MM-yyyy"),
+
+                // Footer Conditions
+                ReportConditions = configs.GetValueOrDefault("REPORT_CONDITIONS")
+                    ?.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                    .ToList() ?? new List<string>(),
 
                 TestSections = testSections,
 
@@ -1410,7 +1466,7 @@ namespace LIMSApi.ServiceWORepo
                 QrCodeData = $"{_config["PublicBaseUrl"]}/report/verify/{reportHeader.ReportNo}",
 
                 IsNabl = testHeaders.All(h => h.IsNabl),
-                NablCertNo = testHeaders.Any(h => h.IsNabl) ? "TC-5765" : null
+                NablCertNo = nablAccred?.CertificateNumber ?? (testHeaders.Any(h => h.IsNabl) ? "TC-5765" : null)
             };
 
             // Build NABL scope info for report
@@ -1493,6 +1549,16 @@ namespace LIMSApi.ServiceWORepo
                 return "Chemical";
 
             return "General";
+        }
+
+        private static string DetermineTestCategory(TestResultHeader header, string testType)
+        {
+            if (testType == "Chemical") return "CHEMICAL";
+
+            var deptName = header.LaboratoryTest?.LabDepartment?.Name?.ToUpper() ?? "";
+            if (!string.IsNullOrEmpty(deptName)) return $"{deptName} + METALS & ALLOYS";
+
+            return "MECHANICAL + METALS & ALLOYS";
         }
 
         private async Task<string?> ResolveEmployeeName(string? employeeIdStr)
