@@ -58,6 +58,22 @@ namespace LIMSApi.Dtos
         public List<ReportLongTermTestDto> LongTermTests { get; set; }
         public List<ReportActionDto> Actions { get; set; }
         public ReportAmendmentPreviewDto? Amendment { get; set; }
+
+        // Sample details for approval review
+        public string? Grade { get; set; }
+        public string? HeatNo { get; set; }
+        public string? BatchNo { get; set; }
+        public string? SampleDescription { get; set; }
+        public string? Quantity { get; set; }
+        public DateTime? SampleReceivedDate { get; set; }
+        public DateTime? TestStartDate { get; set; }
+        public decimal? Thickness { get; set; }
+        public decimal? Diameter { get; set; }
+        public decimal? Width { get; set; }
+        public decimal? Length { get; set; }
+        public string? StatementOfConformity { get; set; }
+        public string? DecisionRule { get; set; }
+        public string? UlrNo { get; set; }
     }
     public class ReportAmendmentPreviewDto
     {
@@ -76,6 +92,14 @@ namespace LIMSApi.Dtos
         public string? Specification2Name { get; set; }
         public string Status { get; set; }
         public List<ReportTestParameterDto> Parameters { get; set; }
+        public List<ReportTestImageDto> Images { get; set; } = new();
+    }
+
+    public class ReportTestImageDto
+    {
+        public long ID { get; set; }
+        public string? FilePath { get; set; }
+        public string? Caption { get; set; }
     }
 
     public class ReportTestParameterDto
@@ -87,6 +111,7 @@ namespace LIMSApi.Dtos
         public decimal? MinValue { get; set; }
         public decimal? MaxValue { get; set; }
         public bool IsWithinLimit { get; set; }
+        public string? ResultStatus { get; set; }
         public string Remarks { get; set; }
     }
 

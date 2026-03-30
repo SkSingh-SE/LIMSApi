@@ -638,6 +638,17 @@ namespace LIMSApi.ServiceWORepo
 
                 ReportNo = reportHeader.ReportNo,
 
+                // Sample Details for approval review
+                SampleDescription = (string?)testData.sample.details,
+                SampleReceivedDate = inward.CreatedOn,
+                TestStartDate = reportHeader.CreatedOn,
+                Thickness = sample.Thickness,
+                Diameter = sample.Diameter,
+                Width = sample.Width,
+                Length = sample.Length,
+                StatementOfConformity = inward.StatementOfConformity,
+                DecisionRule = inward.DecisionRule,
+
                 MechanicalTests = mechanicalTests,
                 ChemicalTests = chemicalTests,
                 LongTermTests = longTermDtos,
@@ -681,12 +692,20 @@ namespace LIMSApi.ServiceWORepo
                         ParameterName = p.ParameterName,
                         Value = p.value,
                         Unit = p.unit,
-                        MinValue = p.minValue,
-                        MaxValue = p.maxValue,
-                        IsWithinLimit = p.minValue != null && p.maxValue != null
+                        MinValue = p.specMinValue ?? p.minValue,
+                        MaxValue = p.specMaxValue ?? p.maxValue,
+                        IsWithinLimit = p.isWithinLimit ?? (p.minValue != null && p.maxValue != null
                             ? (p.value >= p.minValue && p.value <= p.maxValue)
-                            : true,
+                            : true),
+                        ResultStatus = p.resultStatus,
                         Remarks = p.Remarks
+                    }).ToList(),
+                Images = ((IEnumerable<dynamic>)test.images)
+                    .Select(img => new ReportTestImageDto
+                    {
+                        ID = img.ID,
+                        FilePath = img.FilePath,
+                        Caption = img.Caption
                     }).ToList()
             };
         }

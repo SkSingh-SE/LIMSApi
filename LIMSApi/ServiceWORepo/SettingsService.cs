@@ -308,9 +308,27 @@ namespace LIMSApi.ServiceWORepo
                 throw new ArgumentException("Signatory Designation must not exceed 200 characters");
 
             if (signatory.Id == 0)
+            {
                 _db.AuthorizedSignatories.Add(signatory);
-            else if (_db.Entry(signatory).State == EntityState.Detached)
-                _db.AuthorizedSignatories.Update(signatory);
+            }
+            else
+            {
+                var existing = await _db.AuthorizedSignatories.FindAsync(new object[] { signatory.Id }, cancellationToken);
+                if (existing != null)
+                {
+                    existing.Name = signatory.Name;
+                    existing.Designation = signatory.Designation;
+                    existing.SignaturePath = signatory.SignaturePath;
+                    existing.ApplicableFor = signatory.ApplicableFor;
+                    existing.IsActive = signatory.IsActive;
+                    existing.OrganizationId = signatory.OrganizationId;
+                    signatory = existing;
+                }
+                else
+                {
+                    _db.AuthorizedSignatories.Add(signatory);
+                }
+            }
 
             await _db.SaveChangesAsync(cancellationToken);
             return signatory;

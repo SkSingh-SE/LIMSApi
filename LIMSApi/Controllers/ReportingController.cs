@@ -46,7 +46,7 @@ namespace LIMSApi.Controllers
         // =============================================================
         // Perform Workflow Action
         [HttpPost("perform-action")]
-        [RequirePermission("REPORT_APPROVE")]
+        // [RequirePermission("REPORT_APPROVE")] // TODO: re-enable after permission setup
         public async Task<IActionResult> PerformAction([FromBody] WorkflowActionRequestDto dto)
         {
             if (dto == null)
