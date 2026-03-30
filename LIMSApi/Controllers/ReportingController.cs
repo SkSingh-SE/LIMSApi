@@ -127,6 +127,16 @@ namespace LIMSApi.Controllers
             return Ok(ReportDocumentFactory.GetAvailableFormats());
         }
 
+        /// <summary>
+        /// Returns only formats relevant to this specific report's test data.
+        /// </summary>
+        [HttpGet("{id:long}/available-formats")]
+        public async Task<IActionResult> GetAvailableFormatsForReport(long id)
+        {
+            var formats = await _service.GetAvailableFormatsForReportAsync(id);
+            return Ok(formats);
+        }
+
         [HttpGet("{id:long}/generate/{formatType}")]
         public async Task<IActionResult> GenerateByFormat(long id, ReportFormatType formatType, [FromQuery] string? watermark = null)
         {

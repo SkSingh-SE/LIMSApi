@@ -35,5 +35,6 @@ namespace LIMSApi.ServiceWORepo
         /// Public verification: returns basic report info for QR code scan (no auth).
         /// </summary>
         Task<object?> GetReportVerificationAsync(string reportNo);
+        Task<List<object>> GetAvailableFormatsForReportAsync(long reportHeaderId);
     }
 }

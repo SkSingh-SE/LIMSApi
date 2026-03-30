@@ -1201,6 +1201,53 @@ namespace LIMSApi.ServiceWORepo
         }
 
         /// <summary>
+        /// Returns only formats relevant to this report's actual test data.
+        /// </summary>
+        public async Task<List<object>> GetAvailableFormatsForReportAsync(long reportHeaderId)
+        {
+            // Find sample — try by ReportHeader ID first, then by SampleID
+            var reportHeader = await _db.ReportHeaders.FirstOrDefaultAsync(r => r.ID == reportHeaderId);
+            if (reportHeader == null)
+                reportHeader = await _db.ReportHeaders.FirstOrDefaultAsync(r => r.SampleID == reportHeaderId && r.IsActive);
+
+            if (reportHeader == null) return Reporting.ReportDocumentFactory.GetAvailableFormats()
+                .Select(f => (object)new { f.FormatType, f.DisplayName, f.Description }).ToList();
+
+            var testHeaders = await _db.TestResultHeaders
+                .Include(h => h.LaboratoryTest)
+                    .ThenInclude(lt => lt.LabDepartment)
+                .Where(h => h.SampleID == reportHeader.SampleID && h.IsActive)
+                .ToListAsync();
+
+            bool hasChemical = testHeaders.Any(h => DetermineTestType(h) == "Chemical");
+            bool hasMechanical = testHeaders.Any(h => DetermineTestType(h) == "General");
+            bool hasImages = await _db.TestResultImages.AnyAsync(img =>
+                testHeaders.Select(h => h.ID).Contains(img.TestResultHeaderID));
+
+            var formats = new List<object>();
+
+            // Always available
+            if (hasChemical || hasMechanical)
+                formats.Add(new { FormatType = (int)Helpers.Enums.ReportFormatType.TestCertificate, DisplayName = "Test Certificate (MTC)", Description = "Complete test certificate with all sections" });
+
+            if (hasChemical)
+                formats.Add(new { FormatType = (int)Helpers.Enums.ReportFormatType.ChemicalAnalysis, DisplayName = "Chemical Analysis Report", Description = "Chemical composition analysis only" });
+
+            if (hasMechanical)
+                formats.Add(new { FormatType = (int)Helpers.Enums.ReportFormatType.MechanicalTest, DisplayName = "Mechanical Test Report", Description = "Mechanical properties only" });
+
+            if (hasChemical && hasMechanical)
+                formats.Add(new { FormatType = (int)Helpers.Enums.ReportFormatType.FullTestReport, DisplayName = "Full Test Report", Description = "All test sections combined" });
+
+            formats.Add(new { FormatType = (int)Helpers.Enums.ReportFormatType.CertificateOfConformance, DisplayName = "Certificate of Conformance (COC)", Description = "Pass/Fail conformance statement only" });
+
+            if (hasImages)
+                formats.Add(new { FormatType = (int)Helpers.Enums.ReportFormatType.Metallography, DisplayName = "Metallography Report", Description = "Test images + microstructure analysis" });
+
+            return formats;
+        }
+
+        /// <summary>
         /// Public report verification — returns basic info for QR code scan (no auth required).
         /// </summary>
         public async Task<object?> GetReportVerificationAsync(string reportNo)
@@ -1263,6 +1310,7 @@ namespace LIMSApi.ServiceWORepo
                 labPhone = org?.ContactPhone,
                 labEmail = org?.ContactEmail,
                 labCIN = org?.CIN,
+                pdfPath = reportHeader.PdfPath,
                 nablCertNo = (await _db.NablAccreditations
                     .Where(n => n.IsActive && n.OrganizationId == (org != null ? org.Id : 0))
                     .Select(n => n.CertificateNumber)

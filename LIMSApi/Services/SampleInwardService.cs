@@ -952,10 +952,12 @@ namespace LIMSApi.Services
                     sample.PreparationRequired = sampleDto.PreparationRequired;
                     sample.MachiningRequired = sampleDto.MachiningRequired;
                     sample.MachiningAmount = sampleDto.MachiningAmount ?? 0;
+                    sample.Specimen = sampleDto.Specimen ?? sample.Specimen;
                     sample.OtherPreparation = sampleDto.OtherPreparation;
                     sample.OtherPreparationCharge = sampleDto.OtherPreparationCharge ?? 0;
                     sample.TpiRequired = sampleDto.TpiRequired;
                     sample.TpiAgencyID = sampleDto.TpiAgencyID;
+                    sample.TestInstructions = sampleDto.TestInstructions;
 
                     statusJobs.Add(() =>
                         _sampleStatusService.ForceAutoStatusAsync(
