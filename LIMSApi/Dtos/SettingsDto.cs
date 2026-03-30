@@ -17,6 +17,8 @@ namespace LIMSApi.Dtos
         public string? CIN { get; set; }
         public string? Website { get; set; }
         public string? MobileNo { get; set; }
+        public string? UlrPrefix { get; set; }
+        public string? LabLocationCode { get; set; }
     }
     public sealed class NablDto
     {

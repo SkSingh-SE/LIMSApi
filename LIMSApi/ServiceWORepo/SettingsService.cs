@@ -466,7 +466,9 @@ namespace LIMSApi.ServiceWORepo
                 OrganizationLogo = org.OrganizationLogo,
                 CIN = org.CIN,
                 Website = org.Website,
-                MobileNo = org.MobileNo
+                MobileNo = org.MobileNo,
+                UlrPrefix = org.UlrPrefix,
+                LabLocationCode = org.LabLocationCode
             };
 
             var nablDto = new NablDto
@@ -543,6 +545,8 @@ namespace LIMSApi.ServiceWORepo
             existingOrg.CIN = organizationDto.CIN?.Trim();
             existingOrg.Website = organizationDto.Website?.Trim();
             existingOrg.MobileNo = organizationDto.MobileNo?.Trim();
+            existingOrg.UlrPrefix = organizationDto.UlrPrefix?.Trim();
+            existingOrg.LabLocationCode = organizationDto.LabLocationCode?.Trim();
             await _db.SaveChangesAsync(cancellationToken);
             return existingOrg;
         }
@@ -671,6 +675,8 @@ namespace LIMSApi.ServiceWORepo
             existingOrg.CIN = dto.OrganizationInfo.CIN?.Trim();
             existingOrg.Website = dto.OrganizationInfo.Website?.Trim();
             existingOrg.MobileNo = dto.OrganizationInfo.MobileNo?.Trim();
+            existingOrg.UlrPrefix = dto.OrganizationInfo.UlrPrefix?.Trim();
+            existingOrg.LabLocationCode = dto.OrganizationInfo.LabLocationCode?.Trim();
             var org = existingOrg;
 
             NablAccreditation? nabl = null;

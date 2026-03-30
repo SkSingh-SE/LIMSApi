@@ -64,8 +64,11 @@ namespace LIMSApi.Services
 
                 var year = DateTime.UtcNow.Year.ToString().Substring(2, 2);
                 int testCounter = 1;
-                string tcPrefix = "TC5098";
-                string labLocation = "0";
+                // Fetch ULR config from Organization settings
+                var orgForUlr = await _context.Organizations
+                    .FirstOrDefaultAsync(o => o.IsActive && o.CompanyCode == loggedInUser.CompanyCode);
+                string tcPrefix = orgForUlr?.UlrPrefix ?? "TC5098";
+                string labLocation = orgForUlr?.LabLocationCode ?? "0";
                 string yearCode = DateTime.UtcNow.Year.ToString().Substring(2, 2);
 
                 // Rest of the method remains unchanged.  
@@ -867,8 +870,11 @@ namespace LIMSApi.Services
         {
             if (model == null) throw new ArgumentNullException(nameof(model));
 
-            const string tcPrefix = "TC5098";
-            string labLocation = "0";
+            // Fetch ULR config from Organization settings
+            var orgForUlr2 = await _context.Organizations
+                .FirstOrDefaultAsync(o => o.IsActive && o.CompanyCode == loggedInUser.CompanyCode);
+            string tcPrefix = orgForUlr2?.UlrPrefix ?? "TC5098";
+            string labLocation = orgForUlr2?.LabLocationCode ?? "0";
             string year = DateTime.UtcNow.Year.ToString()[^2..];
 
             var statusJobs = new List<Func<Task>>();

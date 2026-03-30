@@ -35,5 +35,11 @@ namespace LIMSApi.Models
 
         [StringLength(50)]
         public string? MobileNo { get; set; }
+
+        [StringLength(50)]
+        public string? UlrPrefix { get; set; }
+
+        [StringLength(20)]
+        public string? LabLocationCode { get; set; }
     }
 }

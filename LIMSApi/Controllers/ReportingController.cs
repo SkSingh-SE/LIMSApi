@@ -3,6 +3,7 @@ using LIMSApi.Helpers.Enums;
 using LIMSApi.Middleware;
 using LIMSApi.Reporting;
 using LIMSApi.ServiceWORepo;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -102,6 +103,19 @@ namespace LIMSApi.Controllers
             if (reportData == null)
                 return NotFound($"Report data for header {id} not found");
             return Ok(reportData);
+        }
+
+        // ---------------------------------------------------------
+        // PUBLIC: Verify Report (QR Code Scan — no auth required)
+        // ---------------------------------------------------------
+        [HttpGet("verify/{reportNo}")]
+        [AllowAnonymous]
+        public async Task<IActionResult> VerifyReport(string reportNo)
+        {
+            var result = await _service.GetReportVerificationAsync(reportNo);
+            if (result == null)
+                return NotFound(new { message = "Report not found" });
+            return Ok(result);
         }
 
         // ---------------------------------------------------------

@@ -1111,16 +1111,18 @@ namespace LIMSApi.ServiceWORepo
 
             if (header != null)
             {
-
-                header.ReportNo = string.IsNullOrWhiteSpace(header.ReportNo) ? GenerateReportNo() : header.ReportNo;
+                if (string.IsNullOrWhiteSpace(header.ReportNo))
+                    header.ReportNo = await GenerateReportNoAsync();
+                if (string.IsNullOrWhiteSpace(header.CertificateNo))
+                    header.CertificateNo = await GenerateCertificateNoAsync();
                 return header;
             }
 
             header = new ReportHeader
             {
                 SampleID = sample.ID,
-                ReportNo = GenerateReportNo(),
-                CertificateNo = GenerateCertificateNo(sample.ID),
+                ReportNo = await GenerateReportNoAsync(),
+                CertificateNo = await GenerateCertificateNoAsync(),
                 GeneratedAt = DateTime.UtcNow,
                 Status = "Report Generated"
             };
@@ -1151,11 +1153,123 @@ namespace LIMSApi.ServiceWORepo
                 .FirstOrDefaultAsync(t => t.IsDefault && t.IsActive);
         }
 
-        private static string GenerateReportNo()
-            => $"R-{DateTime.UtcNow:yyyyMMddHHmmss}";
+        private async Task<string> GenerateReportNoAsync()
+        {
+            var config = await _db.NumberingConfigs
+                .FirstOrDefaultAsync(n => n.ModuleName == "REPORT" && n.CompanyCode == loggedInUser.CompanyCode);
 
-        private static string GenerateCertificateNo(long sampleId)
-            => $"DMSPL-{DateTime.UtcNow:yy}-{sampleId:D6}-1";
+            if (config != null)
+            {
+                config.CurrentNumber++;
+                return $"{config.Prefix}-{DateTime.UtcNow:yyyyMMdd}-{config.CurrentNumber:D4}";
+            }
+            return $"RPT-{DateTime.UtcNow:yyyyMMddHHmmss}";
+        }
+
+        private async Task<string> GenerateCertificateNoAsync()
+        {
+            var config = await _db.NumberingConfigs
+                .FirstOrDefaultAsync(n => n.ModuleName == "TC" && n.CompanyCode == loggedInUser.CompanyCode);
+
+            var year = DateTime.UtcNow.Year.ToString().Substring(2);
+            if (config != null)
+            {
+                config.CurrentNumber++;
+                return $"{config.Prefix}-{year}-{config.CurrentNumber:D6}-0";
+            }
+            return $"TC-{year}-{DateTime.UtcNow:HHmmss}-0";
+        }
+
+        private async Task<string?> GetUlrForSample(long sampleId)
+        {
+            // Fetch ULR from test plan's GeneralTestMethod or ChemicalTest
+            var ulr = await _db.Set<Models.GeneralTestMethod>()
+                .Where(m => m.GeneralTest.SampleTestPlan.SampleID == sampleId
+                    && !string.IsNullOrEmpty(m.UlrNo))
+                .Select(m => m.UlrNo)
+                .FirstOrDefaultAsync();
+
+            if (!string.IsNullOrEmpty(ulr)) return ulr;
+
+            ulr = await _db.Set<Models.ChemicalTest>()
+                .Where(c => c.SampleTestPlan.SampleID == sampleId
+                    && !string.IsNullOrEmpty(c.UlrNo))
+                .Select(c => c.UlrNo)
+                .FirstOrDefaultAsync();
+
+            return ulr;
+        }
+
+        /// <summary>
+        /// Public report verification — returns basic info for QR code scan (no auth required).
+        /// </summary>
+        public async Task<object?> GetReportVerificationAsync(string reportNo)
+        {
+            var reportHeader = await _db.ReportHeaders
+                .Include(r => r.Sample)
+                    .ThenInclude(s => s.SampleInward)
+                        .ThenInclude(i => i.Customer)
+                .Include(r => r.Sample)
+                    .ThenInclude(s => s.MetalClassification)
+                .FirstOrDefaultAsync(r => r.ReportNo == reportNo && r.IsActive);
+
+            if (reportHeader == null) return null;
+
+            var sample = reportHeader.Sample;
+            var inward = sample?.SampleInward;
+            var org = await _db.Organizations.FirstOrDefaultAsync(o => o.IsActive);
+
+            // Test summary — pass/fail per test
+            var testHeaders = await _db.TestResultHeaders
+                .Include(h => h.Parameters)
+                .Include(h => h.LaboratoryTest)
+                .Where(h => h.SampleID == sample!.ID && h.IsActive)
+                .ToListAsync();
+
+            var testDetails = testHeaders.Select(h => new
+            {
+                testName = h.LaboratoryTest?.Name ?? "Test",
+                parameterCount = h.Parameters.Count,
+                allPassed = h.Parameters.All(p => p.IsWithinLimit != false),
+                status = h.Status,
+                parameters = h.Parameters.OrderBy(p => p.ID).Select(p => new
+                {
+                    name = p.ParameterName,
+                    unit = p.Unit,
+                    specMin = FormatDecimal(p.SpecMinValue ?? p.MinValue),
+                    specMax = FormatDecimal(p.SpecMaxValue ?? p.MaxValue),
+                    result = FormatDecimal(p.Value),
+                    status = p.IsWithinLimit == true ? "Pass" : p.IsWithinLimit == false ? "Fail" : "N/A",
+                    remarks = p.Remarks
+                }).ToList()
+            }).ToList();
+
+            return new
+            {
+                reportNo = reportHeader.ReportNo,
+                certificateNo = reportHeader.CertificateNo,
+                sampleNo = sample?.SampleNo,
+                caseNo = inward?.CaseNo,
+                customerName = inward?.Customer?.Name,
+                customerAddress = inward?.Customer?.Address,
+                material = sample?.MetalClassification?.Name,
+                condition = sample?.ProductCondition?.Name,
+                sampleDescription = sample?.Details,
+                dateOfIssue = reportHeader.GeneratedAt.ToString("dd-MM-yyyy"),
+                dateReceived = inward?.CollectionTime.ToString("dd-MM-yyyy"),
+                status = reportHeader.Status,
+                labName = org?.LabName,
+                labAddress = org?.LabAddress,
+                labPhone = org?.ContactPhone,
+                labEmail = org?.ContactEmail,
+                labCIN = org?.CIN,
+                nablCertNo = (await _db.NablAccreditations
+                    .Where(n => n.IsActive && n.OrganizationId == (org != null ? org.Id : 0))
+                    .Select(n => n.CertificateNumber)
+                    .FirstOrDefaultAsync()),
+                testDetails
+            };
+        }
 
         public async Task RequestAmendmentAsync(long reportHeaderId, string reason, IFormFile file)
         {
@@ -1227,6 +1341,7 @@ namespace LIMSApi.ServiceWORepo
         {
             // 1. Load report header with sample chain
             var reportHeader = await _db.ReportHeaders
+                .Include(r => r.Reports)
                 .Include(r => r.Sample)
                     .ThenInclude(s => s.SampleInward)
                         .ThenInclude(i => i.Customer)
@@ -1380,8 +1495,8 @@ namespace LIMSApi.ServiceWORepo
                 NablLogoPath = nablAccred?.LogoPath,
                 CompanyStampPath = configs.GetValueOrDefault("COMPANY_STAMP_PATH"),
 
-                // Certificate Identity
-                UlrNo = reportHeader.CertificateNo,
+                // Certificate Identity — ULR from test plan
+                UlrNo = await GetUlrForSample(sample.ID),
                 DateOfIssue = reportHeader.GeneratedAt.ToString("dd-MM-yyyy"),
                 SampleReceivedDate = inward.CollectionTime.ToString("dd-MM-yyyy"),
                 TestPerformedAt = org?.LabName ?? "Laboratory",
@@ -1435,7 +1550,7 @@ namespace LIMSApi.ServiceWORepo
                 QrCodeData = $"{_config["PublicBaseUrl"]}/report/verify/{reportHeader.ReportNo}",
 
                 IsNabl = testHeaders.All(h => h.IsNabl),
-                NablCertNo = nablAccred?.CertificateNumber ?? (testHeaders.Any(h => h.IsNabl) ? "TC-5765" : null)
+                NablCertNo = nablAccred?.CertificateNumber
             };
 
             // Build NABL scope info for report

@@ -30,5 +30,10 @@ namespace LIMSApi.ServiceWORepo
         /// Generates a PDF using the specified format type.
         /// </summary>
         Task<byte[]> GenerateReportByFormatAsync(long reportHeaderId, ReportFormatType formatType, string? watermark = null);
+
+        /// <summary>
+        /// Public verification: returns basic report info for QR code scan (no auth).
+        /// </summary>
+        Task<object?> GetReportVerificationAsync(string reportNo);
     }
 }

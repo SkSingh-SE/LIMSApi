@@ -958,11 +958,6 @@ namespace LIMSApi.Reporting
             if (string.IsNullOrWhiteSpace(_data.QrCodeData))
                 return;
 
-            // Try QR code image from assets
-            var qrPath = Path.Combine(_assetsPath, "qr_code.png");
-            if (!File.Exists(qrPath))
-                return;
-
             container.AlignRight().Row(row =>
             {
                 row.RelativeItem(); // push to right
@@ -971,7 +966,19 @@ namespace LIMSApi.Reporting
                 {
                     try
                     {
-                        col.Item().Height(55).Image(qrPath).FitArea();
+                        // Dynamic QR generation from URL
+                        var qrBytes = Helpers.QrCodeHelper.GenerateQrPng(_data.QrCodeData, 8);
+                        if (qrBytes != null && qrBytes.Length > 0)
+                        {
+                            col.Item().Height(55).Image(qrBytes).FitArea();
+                        }
+                        else
+                        {
+                            // Fallback to static file
+                            var qrPath = Path.Combine(_assetsPath, "qr_code.png");
+                            if (File.Exists(qrPath))
+                                col.Item().Height(55).Image(qrPath).FitArea();
+                        }
                     }
                     catch
                     {
