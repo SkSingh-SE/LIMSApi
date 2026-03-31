@@ -2,6 +2,7 @@ using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
+using LIMSApi.Services.Interface;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
@@ -11,11 +12,13 @@ namespace LIMSApi.ServiceWORepo
     {
         private readonly LIMSContext _db;
         private readonly BillingSettlementService _billingSettlement;
+        private readonly INotificationService _notificationService;
 
-        public CustomerLedgerService(LIMSContext db, BillingSettlementService billingSettlement)
+        public CustomerLedgerService(LIMSContext db, BillingSettlementService billingSettlement, INotificationService notificationService)
         {
             _db = db;
             _billingSettlement = billingSettlement;
+            _notificationService = notificationService;
         }
 
         // ===== LEDGER OPERATIONS =====
@@ -238,9 +241,37 @@ namespace LIMSApi.ServiceWORepo
             if (dto.Amount <= 0)
                 throw new Exception("Payment amount must be greater than zero");
 
-            var validModes = new[] { "Cash", "Cheque", "UPI", "NEFT", "RTGS", "BankTransfer", "Razorpay" };
+            var validModes = new[] { "Cash", "Cheque", "UPI", "NEFT", "RTGS", "NEFT/RTGS", "BankTransfer", "Razorpay" };
             if (!validModes.Contains(dto.PaymentMode))
                 throw new InvalidOperationException($"Invalid payment mode: {dto.PaymentMode}");
+
+            // Cheque-specific validation
+            if (dto.PaymentMode == "Cheque")
+            {
+                if (string.IsNullOrWhiteSpace(dto.ChequeNo))
+                    throw new InvalidOperationException("Cheque number is required for cheque payments.");
+                if (!System.Text.RegularExpressions.Regex.IsMatch(dto.ChequeNo.Trim(), @"^\d{6}$"))
+                    throw new InvalidOperationException("Cheque number must be exactly 6 digits.");
+                if (string.IsNullOrWhiteSpace(dto.BankName))
+                    throw new InvalidOperationException("Bank name is required for cheque payments.");
+                if (!dto.ChequeDate.HasValue)
+                    throw new InvalidOperationException("Cheque date is required for cheque payments.");
+            }
+
+            // NEFT/RTGS/UPI-specific validation
+            if (dto.PaymentMode is "NEFT" or "RTGS" or "NEFT/RTGS")
+            {
+                if (string.IsNullOrWhiteSpace(dto.TransactionRef))
+                    throw new InvalidOperationException("Transaction reference is required for NEFT/RTGS payments.");
+                if (string.IsNullOrWhiteSpace(dto.BankName))
+                    throw new InvalidOperationException("Bank name is required for NEFT/RTGS payments.");
+            }
+
+            if (dto.PaymentMode == "UPI")
+            {
+                if (string.IsNullOrWhiteSpace(dto.TransactionRef))
+                    throw new InvalidOperationException("Transaction reference is required for UPI payments.");
+            }
 
             // Generate receipt number
             var receiptNo = await GenerateReceiptNo();
@@ -319,6 +350,36 @@ namespace LIMSApi.ServiceWORepo
             {
                 var employeeId = LIMSApi.Helpers.LoggedInUserProvider.CurrentUser?.EmployeeID ?? 0;
                 await _billingSettlement.RecalculateBillingStatusAsync(dto.InwardId.Value, employeeId);
+            }
+
+            // Notify current user
+            var currentUser = LIMSApi.Helpers.LoggedInUserProvider.CurrentUser;
+            await _notificationService.CreateNotificationAsync(new Notification
+            {
+                UserID = currentUser?.EmployeeID,
+                Title = "Payment Recorded",
+                Message = $"Payment of {dto.Amount:N2} from {customer.Name} via {dto.PaymentMode}. Receipt: {receiptNo}",
+                Type = NotificationType.System,
+                EntityID = receipt.Id,
+                EntityType = "PaymentReceipt"
+            });
+
+            // Notify case creator if different from current user
+            if (dto.InwardId.HasValue)
+            {
+                var inward = await _db.SampleInwards.FindAsync(dto.InwardId.Value);
+                if (inward != null && inward.CreatedBy != currentUser?.EmployeeID)
+                {
+                    await _notificationService.CreateNotificationAsync(new Notification
+                    {
+                        UserID = inward.CreatedBy,
+                        Title = "Payment Received",
+                        Message = $"Payment of {dto.Amount:N2} received for Case {inward.CaseNo} via {dto.PaymentMode}",
+                        Type = NotificationType.System,
+                        EntityID = inward.ID,
+                        EntityType = "SampleInward"
+                    });
+                }
             }
 
             return new PaymentReceiptDto

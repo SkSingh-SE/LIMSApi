@@ -502,9 +502,16 @@ namespace LIMSApi.Repositories
             long nextSampleNumber = lastSampleNumber + 1;
             var year = DateTime.UtcNow.Year.ToString().Substring(2, 2);
 
+            // Fetch LabCode from Organization settings, extract prefix before first "-"
+            var fullLabCode = await _context.Organizations
+                .Where(o => o.IsActive && o.CompanyCode == loggedInUser.CompanyCode)
+                .Select(o => o.LabCode)
+                .FirstOrDefaultAsync() ?? "DMSPL";
+            var casePrefix = fullLabCode.Contains('-') ? fullLabCode.Split('-')[0] : fullLabCode;
+
             var res = new
             {
-                caseNo = $"DMSPL-{nextCaseNumber:D6}",
+                caseNo = $"{casePrefix}-{nextCaseNumber:D6}",
                 sampleNo = $"{year}-{nextSampleNumber:D6}",
                 nextSampleCounter = nextSampleNumber
             };

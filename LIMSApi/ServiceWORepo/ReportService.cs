@@ -650,6 +650,7 @@ namespace LIMSApi.ServiceWORepo
                 ReportNo = reportHeader.ReportNo,
 
                 // Sample Details for approval review
+                Grade = sample.ProductCondition?.Name,
                 SampleDescription = (string?)testData.sample.details,
                 SampleReceivedDate = inward.CreatedOn,
                 TestStartDate = reportHeader.CreatedOn,

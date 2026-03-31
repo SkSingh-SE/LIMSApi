@@ -20,8 +20,10 @@ namespace LIMSApi.ServiceWORepo
         private readonly IProformaInvoiceRepository _proformaInvoiceRepository;
         private readonly TemplateService _templateService;
         private readonly ISampleStatusService _sampleStatusService;
+        private readonly ICustomerLedgerService _customerLedgerService;
+        private readonly INotificationService _notificationService;
 
-        public AccountService(LIMSContext db, EmailService emailService, WhatsAppService whatsAppService, InvoicePdfService invoicePdfService, IPriceCalculationService priceCalculationService, IProformaInvoiceRepository proformaInvoiceRepository, TemplateService templateService, ISampleStatusService sampleStatusService)
+        public AccountService(LIMSContext db, EmailService emailService, WhatsAppService whatsAppService, InvoicePdfService invoicePdfService, IPriceCalculationService priceCalculationService, IProformaInvoiceRepository proformaInvoiceRepository, TemplateService templateService, ISampleStatusService sampleStatusService, ICustomerLedgerService customerLedgerService, INotificationService notificationService)
         {
             _db = db;
             _emailService = emailService;
@@ -31,6 +33,8 @@ namespace LIMSApi.ServiceWORepo
             _proformaInvoiceRepository = proformaInvoiceRepository;
             _templateService = templateService;
             _sampleStatusService = sampleStatusService;
+            _customerLedgerService = customerLedgerService;
+            _notificationService = notificationService;
         }
 
         public async Task<AccountDashboardDto> GetDashboardAsync()
@@ -312,6 +316,18 @@ namespace LIMSApi.ServiceWORepo
 
             var grandTotal = discountedSubTotal + cgst + sgst + igst;
 
+            // ── PO BALANCE VALIDATION (before creating invoice) ──
+            Models.CustomerPurchaseOrder? linkedPO = null;
+            if (inward.PurchaseOrderId.HasValue)
+            {
+                linkedPO = await _db.CustomerPurchaseOrders.FindAsync(inward.PurchaseOrderId.Value);
+                if (linkedPO != null && linkedPO.Status == "Active" && linkedPO.RemainingAmount < grandTotal)
+                {
+                    throw new InvalidOperationException(
+                        $"PO remaining balance ({linkedPO.RemainingAmount:N2}) is insufficient for invoice amount ({grandTotal:N2}).");
+                }
+            }
+
             // ADVANCE PAYMENT ADJUSTMENT
             var advancePayment = inward.AdvancePayment;
             
@@ -332,6 +348,7 @@ namespace LIMSApi.ServiceWORepo
                 InvoiceDate = DateTime.UtcNow,
                 InwardID = inward.ID,
                 CustomerID = inward.CustomerID,
+                PurchaseOrderId = inward.PurchaseOrderId,
                 SubTotal = subTotal,
                 DiscountPercentage = discountAmt > 0 ? discountPct : null,
                 DiscountAmount = discountAmt,
@@ -353,12 +370,42 @@ namespace LIMSApi.ServiceWORepo
                 evt.ModifiedOn = DateTime.UtcNow;
             }
 
+            // ── UPDATE PO UTILIZATION ──
+            if (linkedPO != null)
+            {
+                linkedPO.UtilizedAmount += grandTotal;
+                linkedPO.RemainingAmount = linkedPO.POAmount - linkedPO.UtilizedAmount;
+                if (linkedPO.RemainingAmount <= 0)
+                    linkedPO.Status = "Exhausted";
+                linkedPO.ModifiedOn = DateTime.UtcNow;
+            }
+
             // Update inward status
             inward.IsInvoiceGenerated = true;
             inward.BillingStatus = BillingStatus.INVOICE_GENERATED.ToString();
             inward.ModifiedOn = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
+
+            // ── CREATE LEDGER DEBIT ENTRY ──
+            await _customerLedgerService.AddDebitEntry(
+                inward.CustomerID,
+                grandTotal,
+                invoice.InvoiceNo,
+                $"Tax Invoice for Case {inward.CaseNo}",
+                inwardId,
+                invoice.ID);
+
+            // ── NOTIFICATION ──
+            await _notificationService.CreateNotificationAsync(new Notification
+            {
+                UserID = user.EmployeeID,
+                Title = "Invoice Generated",
+                Message = $"Tax Invoice {invoice.InvoiceNo} for Case {inward.CaseNo} — Amount: {grandTotal:N2}",
+                Type = NotificationType.System,
+                EntityID = invoice.ID,
+                EntityType = "TaxInvoice"
+            });
 
             // Set PAYMENT_PENDING on all active samples for this inward
             var samples = await _db.SampleDetails

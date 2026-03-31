@@ -21,6 +21,9 @@ namespace LIMSApi.Dtos
         public string Country { get; set; } = string.Empty;
         public string GstNo { get; set; } = string.Empty;
 
+        // PO Linkage
+        public long? PurchaseOrderId { get; set; }
+
         // Flags
         public decimal AdvancePayment { get; set; }
         public bool BillRequired { get; set; }

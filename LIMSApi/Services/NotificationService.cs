@@ -1,11 +1,11 @@
-﻿using LIMSApi.Helpers;
+﻿using LIMSApi.Data;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.VisualStudio.Web.CodeGenerators.Mvc.Templates.BlazorIdentity.Pages.Manage;
-using NuGet.Protocol.Core.Types;
+using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Services
 {
@@ -15,14 +15,16 @@ namespace LIMSApi.Services
         private readonly IHubContext<NotificationHub> _hub;
         private readonly IPushNotificationService _pushNotificationService;
         private readonly EmailService _emailService;
+        private readonly LIMSContext _db;
         private readonly LoggedInUserDTO _loggedInUser;
 
-        public NotificationService(INotificationRepository repo, IHubContext<NotificationHub> hub, IPushNotificationService pushNotificationService, EmailService emailService)
+        public NotificationService(INotificationRepository repo, IHubContext<NotificationHub> hub, IPushNotificationService pushNotificationService, EmailService emailService, LIMSContext db)
         {
             _repo = repo;
             _hub = hub;
             _pushNotificationService = pushNotificationService;
             _emailService = emailService;
+            _db = db;
             _loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
@@ -55,6 +57,34 @@ namespace LIMSApi.Services
                     notification.EntityType,
                     notification.EntityID ?? 0
                 );
+            }
+        }
+
+        public async Task NotifyByRoleAsync(string roleName, string title, string message, string? entityType = null, long? entityId = null)
+        {
+            var roleId = await _db.RoleMasters
+                .Where(r => r.Name == roleName && r.IsActive)
+                .Select(r => r.ID)
+                .FirstOrDefaultAsync();
+            if (roleId == 0) return;
+
+            var employees = await _db.EmployeeMasters
+                .Where(e => e.IsActive && e.RoleID == roleId)
+                .Select(e => new { e.ID, e.EmailId })
+                .ToListAsync();
+
+            foreach (var emp in employees)
+            {
+                await CreateNotificationAsync(new Notification
+                {
+                    UserID = emp.ID,
+                    Email = emp.EmailId,
+                    Title = title,
+                    Message = message,
+                    Type = NotificationType.System,
+                    EntityType = entityType,
+                    EntityID = entityId
+                });
             }
         }
 

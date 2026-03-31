@@ -404,6 +404,11 @@ builder.Services.AddHangfireServer();
 var app = builder.Build();
 
 // --------------------
+// Seed essential data on first deployment
+// --------------------
+await LIMSApi.DataSeeder.SeedAsync(app);
+
+// --------------------
 // Infrastructure (no auth needed)
 // --------------------
 app.UseStaticFiles();

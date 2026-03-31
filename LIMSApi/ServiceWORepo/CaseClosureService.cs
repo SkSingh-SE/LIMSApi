@@ -1,6 +1,7 @@
 using LIMSApi.Data;
 using LIMSApi.Helpers.Enums;
 using LIMSApi.Models;
+using LIMSApi.Services.Interface;
 using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.ServiceWORepo
@@ -12,11 +13,13 @@ namespace LIMSApi.ServiceWORepo
     {
         private readonly LIMSContext _db;
         private readonly ILogger<CaseClosureService> _logger;
+        private readonly INotificationService _notificationService;
 
-        public CaseClosureService(LIMSContext db, ILogger<CaseClosureService> logger)
+        public CaseClosureService(LIMSContext db, ILogger<CaseClosureService> logger, INotificationService notificationService)
         {
             _db = db;
             _logger = logger;
+            _notificationService = notificationService;
         }
 
         /// <summary>
@@ -113,6 +116,22 @@ namespace LIMSApi.ServiceWORepo
 
             await _db.SaveChangesAsync();
             _logger.LogInformation("Case {CaseNo} closed successfully", inward.CaseNo);
+
+            // Notify case creator
+            await _notificationService.CreateNotificationAsync(new Notification
+            {
+                UserID = inward.CreatedBy,
+                Title = "Case Closed",
+                Message = $"Case {inward.CaseNo} has been closed.",
+                Type = NotificationType.System,
+                EntityID = inward.ID,
+                EntityType = "SampleInward"
+            });
+
+            // Notify Accounts team
+            await _notificationService.NotifyByRoleAsync("Accounts",
+                "Case Closed", $"Case {inward.CaseNo} has been closed.",
+                "SampleInward", inward.ID);
         }
     }
 }

@@ -15,12 +15,14 @@ namespace LIMSApi.Controllers
         private readonly IAccountService _accountService;
         private readonly IPriceCalculationService _priceCalculationService;
         private readonly IPaymentGatingService _paymentGatingService;
+        private readonly CaseClosureService _caseClosureService;
 
-        public AccountController(IAccountService accountService, IPriceCalculationService priceCalculationService, IPaymentGatingService paymentGatingService)
+        public AccountController(IAccountService accountService, IPriceCalculationService priceCalculationService, IPaymentGatingService paymentGatingService, CaseClosureService caseClosureService)
         {
             _accountService = accountService;
             _priceCalculationService = priceCalculationService;
             _paymentGatingService = paymentGatingService;
+            _caseClosureService = caseClosureService;
         }
 
         // -------------------------------
@@ -188,6 +190,24 @@ namespace LIMSApi.Controllers
         {
             await _accountService.DeleteLineItemAsync(id);
             return Ok(new { message = "Line item deleted successfully" });
+        }
+
+        // -------------------------------
+        // ZONE 7: CASE CLOSURE
+        // -------------------------------
+        [HttpGet("cases/{inwardId}/can-close")]
+        public async Task<IActionResult> CanCloseCase(long inwardId)
+        {
+            var (canClose, reason) = await _caseClosureService.CanCloseCaseAsync(inwardId);
+            return Ok(new { canClose, reason });
+        }
+
+        [HttpPost("cases/{inwardId}/close")]
+        public async Task<IActionResult> CloseCase(long inwardId)
+        {
+            var employeeId = Helpers.LoggedInUserProvider.CurrentUser?.EmployeeID ?? 0;
+            await _caseClosureService.CloseCaseAsync(inwardId, employeeId);
+            return Ok(new { message = "Case closed successfully" });
         }
     }
 }

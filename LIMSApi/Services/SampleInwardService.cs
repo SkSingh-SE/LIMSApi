@@ -71,11 +71,26 @@ namespace LIMSApi.Services
                 string labLocation = orgForUlr?.LabLocationCode ?? "0";
                 string yearCode = DateTime.UtcNow.Year.ToString().Substring(2, 2);
 
-                // Rest of the method remains unchanged.  
+                // Validate PO if provided
+                if (model.PurchaseOrderId.HasValue)
+                {
+                    var po = await _context.CustomerPurchaseOrders
+                        .FirstOrDefaultAsync(p => p.ID == model.PurchaseOrderId.Value && p.IsActive);
+                    if (po == null)
+                        throw new ArgumentException("Selected Purchase Order not found.");
+                    if (po.CustomerId != model.CustomerID)
+                        throw new ArgumentException("Purchase Order does not belong to the selected customer.");
+                    if (po.Status != "Active")
+                        throw new ArgumentException($"Purchase Order {po.PONumber} is {po.Status}. Only active POs can be linked.");
+                    if (po.ValidUntil.HasValue && po.ValidUntil.Value < DateTime.UtcNow)
+                        throw new ArgumentException($"Purchase Order {po.PONumber} has expired on {po.ValidUntil.Value:dd-MMM-yyyy}.");
+                }
+
                 var entity = new SampleInward
                 {
                     CaseNo = caseAndSample.caseNo,
                     CustomerID = model.CustomerID,
+                    PurchaseOrderId = model.PurchaseOrderId,
                     Address = model.Address,
                     Area = model.Area,
                     State = model.State,
@@ -357,6 +372,7 @@ namespace LIMSApi.Services
 
                 // Update scalar fields
                 entity.CustomerID = model.CustomerID;
+                entity.PurchaseOrderId = model.PurchaseOrderId;
                 entity.Address = model.Address;
                 entity.Area = model.Area;
                 entity.State = model.State;

@@ -34,10 +34,16 @@ namespace LIMSApi.ServiceWORepo
                 return await CheckWalkInGateAsync(inward, customer);
             }
 
-            // ─── PURCHASE ORDER: Check PO balance ───
-            if (CustomerTypeConstants.IsPurchaseOrder(customerType))
+            // ─── PO CHECK: If a PO is linked (any customer type can have PO) ───
+            if (inward.PurchaseOrderId.HasValue || CustomerTypeConstants.IsPurchaseOrder(customerType))
             {
                 return await CheckPurchaseOrderGateAsync(inward, customer);
+            }
+
+            // ─── RELATIONSHIP CREDIT: Same soft warning as Credit ───
+            if (CustomerTypeConstants.IsRelationshipCredit(customerType))
+            {
+                return await CheckCreditGateAsync(inward, customer);
             }
 
             // ─── CREDIT (default): Check credit limit ───
