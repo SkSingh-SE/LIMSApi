@@ -20,17 +20,12 @@ public static class DataSeeder
 
         try
         {
-            // Quick check: if Admin role exists, seeding was already done
-            var alreadySeeded = await db.Database
-                .SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM RoleMasters WHERE Name = N'Admin' AND IsActive = 1")
-                .FirstAsync();
-            if (alreadySeeded > 0)
-            {
-                logger.LogInformation("DataSeeder: seed data already present — skipping.");
-                return;
-            }
+            // Each method uses IF NOT EXISTS internally — safe to run every startup.
+            // No duplicates will be created even on repeated runs.
+            logger.LogInformation("DataSeeder: checking and applying seed data...");
 
-            logger.LogInformation("DataSeeder: first-time deployment detected — seeding data...");
+            // Ensure schema is up-to-date (handles columns missing from older DBs)
+            await EnsureSchemaAsync(db);
 
             await SeedRolesAsync(db);
             await SeedMenusAsync(db);
@@ -39,12 +34,29 @@ public static class DataSeeder
             await SeedConfigurationsAsync(db);
             await SeedAdminUserAsync(db, logger);
 
-            logger.LogInformation("DataSeeder: seeding complete.");
+            logger.LogInformation("DataSeeder: seed check complete.");
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "DataSeeder: error during seeding");
         }
+    }
+
+    // ───────────────────────────────────────────────
+    // 0. ENSURE SCHEMA — add missing columns for older databases
+    // ───────────────────────────────────────────────
+    private static async Task EnsureSchemaAsync(LIMSContext db)
+    {
+        await db.Database.ExecuteSqlRawAsync(@"
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'EmployeeMasters') AND name = N'ProfileImagePath')
+                ALTER TABLE EmployeeMasters ADD ProfileImagePath NVARCHAR(MAX) NULL;
+
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'EmployeeMasters') AND name = N'DigitalSignature')
+                ALTER TABLE EmployeeMasters ADD DigitalSignature NVARCHAR(MAX) NULL;
+
+            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'EmployeeMasters') AND name = N'EmployeeStatus')
+                ALTER TABLE EmployeeMasters ADD EmployeeStatus NVARCHAR(MAX) NULL;
+        ");
     }
 
     // ───────────────────────────────────────────────
@@ -639,7 +651,7 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
             EmployeeID = emp.ID,
             IsLoginEnabled = true,
             AccountStatus = "Active",
-            ForcePasswordChange = true
+            ForcePasswordChange = false
         };
         db.UserMasters.Add(user);
         await db.SaveChangesAsync();
