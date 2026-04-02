@@ -86,7 +86,10 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.LaboratoryTestName != null && x.LaboratoryTestName.ToLower().Contains(search)));
+                _query = _query.Where(x =>
+                    (x.LaboratoryTestName != null && x.LaboratoryTestName.ToLower().Contains(search))
+                    || (x.TestMethodSpecificationName != null && x.TestMethodSpecificationName.ToLower().Contains(search))
+                );
             }
 
             if (filter.SortByColumn != null)
@@ -94,16 +97,7 @@ namespace LIMSApi.Repositories
                 _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
             }
 
-            // Total Records Count
-            int totalRecords = await _query.CountAsync();
-
-            // Apply Pagination
-            var items = await _query
-                .Skip((filter.PageNumber - 1) * filter.PageSize)
-                .Take(filter.PageSize)
-                .ToListAsync();
-
-            return new PagedResponse<object>(items.Cast<object>().ToList(), totalRecords, filter.PageNumber, filter.PageSize);
+            return await _query.Cast<object>().ToPagedAsync(filter);
         }
 
        

@@ -21,15 +21,17 @@ namespace LIMSApi.Helpers
             .FirstOrDefault(p => p.Name.Equals(filter.Column, StringComparison.OrdinalIgnoreCase));
                 if (property == null) continue;
 
-                if (property.PropertyType == typeof(string))
+                var propType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+
+                if (propType == typeof(string))
                 {
                     query = ApplyStringFilter(query, filter.Column, filter.Type, filter.Value);
                 }
-                else if (property.PropertyType == typeof(int) || property.PropertyType == typeof(decimal) || property.PropertyType == typeof(double))
+                else if (propType == typeof(int) || propType == typeof(decimal) || propType == typeof(double) || propType == typeof(long))
                 {
                     query = ApplyNumberFilter(query, filter.Column, filter.Type, filter.Value);
                 }
-                else if (property.PropertyType == typeof(DateTime))
+                else if (propType == typeof(DateTime))
                 {
                     query = ApplyDateFilter(query, filter.Column, filter.Type, filter.Value, filter.Value2);
                 }
@@ -55,7 +57,7 @@ namespace LIMSApi.Helpers
 
         private static IQueryable<T> ApplyNumberFilter<T>(IQueryable<T> query, string column, string type, string value)
         {
-            if (!int.TryParse(value, out int numericValue)) return query;
+            if (!decimal.TryParse(value, out decimal numericValue)) return query;
 
             switch (type)
             {
@@ -75,21 +77,25 @@ namespace LIMSApi.Helpers
         private static IQueryable<T> ApplyDateFilter<T>(IQueryable<T> query, string column, string type, string value, string? value2)
         {
             if (!DateTime.TryParse(value, out DateTime dateValue)) return query;
+            dateValue = dateValue.Date; // Strip time component
 
             switch (type)
             {
                 case "Equal":
-                    return query.Where($"{column} == @0", dateValue);
+                    // Match entire day: >= start of day AND < next day
+                    return query.Where($"{column} >= @0 && {column} < @1", dateValue, dateValue.AddDays(1));
                 case "NotEqual":
-                    return query.Where($"{column} != @0", dateValue);
+                    return query.Where($"{column} < @0 || {column} >= @1", dateValue, dateValue.AddDays(1));
                 case "GreaterThan":
-                    return query.Where($"{column} > @0", dateValue);
+                    return query.Where($"{column} >= @0", dateValue.AddDays(1));
                 case "LessThan":
                     return query.Where($"{column} < @0", dateValue);
                 case "Between":
                     if (!string.IsNullOrWhiteSpace(value2) && DateTime.TryParse(value2, out DateTime dateValue2))
                     {
-                        return query.Where($"{column} >= @0 && {column} <= @1", dateValue, dateValue2);
+                        dateValue2 = dateValue2.Date;
+                        // Include entire end date day
+                        return query.Where($"{column} >= @0 && {column} < @1", dateValue, dateValue2.AddDays(1));
                     }
                     break;
             }

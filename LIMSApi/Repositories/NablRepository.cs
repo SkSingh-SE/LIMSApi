@@ -587,14 +587,7 @@ namespace LIMSApi.Repositories
                 query = query.OrderByDescending(x => x.ID);
             }
 
-            int totalRecords = await query.CountAsync();
-
-            var items = await query
-                .Skip((filter.PageNumber - 1) * filter.PageSize)
-                .Take(filter.PageSize)
-                .ToListAsync();
-
-            return new PagedResponse<object>(items.Cast<object>().ToList(), totalRecords, filter.PageNumber, filter.PageSize);
+            return await query.Cast<object>().ToPagedAsync(filter);
         }
 
         private async Task<T?> GetByIdTyped<T>(long id) where T : NablFormBase

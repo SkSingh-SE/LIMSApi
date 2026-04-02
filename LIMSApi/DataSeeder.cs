@@ -37,6 +37,7 @@ public static class DataSeeder
             await SeedPermissionsAsync(db);
             await SeedRoleMenuMappingsAsync(db);
             await SeedConfigurationsAsync(db);
+            await SeedCurrenciesAsync(db);
             await SeedAdminUserAsync(db, logger);
 
             logger.LogInformation("DataSeeder: seeding complete.");
@@ -165,6 +166,7 @@ public static class DataSeeder
             IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 124) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (124,N'Record Payment',NULL,0,N'/account/record-payment',NULL,1012);
             IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 125) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (125,N'Aging Report',NULL,0,N'/account/aging-report',NULL,1012);
             IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 126) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (126,N'Outstanding Report',NULL,0,N'/account/outstanding-report',NULL,1012);
+            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 127) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (127,N'Customer Purchase Orders',NULL,0,N'/accounts/purchase-orders',NULL,1012);
 
             -- ══════ Level 2: Sub-children ══════
             -- Under Material Specification (200)
@@ -421,6 +423,7 @@ public static class DataSeeder
             (N'CanReadRecordPayment',N'View Record Payment',124,N'Read'),
             (N'CanReadAgingReport',N'View Aging Report',125,N'Read'),
             (N'CanReadOutstandingReport',N'View Outstanding Report',126,N'Read'),
+            (N'CanReadCustomerPO',N'View Customer Purchase Orders',127,N'Read'),
 
             -- ═══════════════════════════════════════
             -- ACTION PERMISSIONS (frontend role-helper)
@@ -553,6 +556,34 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
             IF NOT EXISTS (SELECT 1 FROM Configurations WHERE KeyName = N'Customer Type' AND CompanyCode = N'LIMS')
                 INSERT INTO Configurations (KeyName, GroupName, [Value], ValueType, [Description], CreatedBy, CreatedOn, CompanyCode, IsActive)
                 VALUES (N'Customer Type', N'CUSTOMER', N'Walk in,Credit Customer,Relationship Credit Customer', N'csv', N'Available customer types for the customer master form', 0, GETUTCDATE(), N'LIMS', 1);
+
+            IF NOT EXISTS (SELECT 1 FROM Configurations WHERE KeyName = N'PaymentGatewayEnabled' AND CompanyCode = N'LIMS')
+                INSERT INTO Configurations (KeyName, GroupName, [Value], ValueType, [Description], CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'PaymentGatewayEnabled', N'BILLING', N'false', N'boolean', N'Enable/disable Razorpay payment gateway. Set to true when credentials are configured.', 0, GETUTCDATE(), N'LIMS', 1);
+        ");
+    }
+
+    // ───────────────────────────────────────────────
+    // 5b. DEFAULT CURRENCIES
+    // ───────────────────────────────────────────────
+    private static async Task SeedCurrenciesAsync(LIMSContext db)
+    {
+        await db.Database.ExecuteSqlRawAsync(@"
+            IF NOT EXISTS (SELECT 1 FROM CurrencyMasters WHERE Code = N'INR' AND IsActive = 1)
+                INSERT INTO CurrencyMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Indian Rupee', N'INR', 0, GETUTCDATE(), N'LIMS', 1);
+
+            IF NOT EXISTS (SELECT 1 FROM CurrencyMasters WHERE Code = N'USD' AND IsActive = 1)
+                INSERT INTO CurrencyMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'US Dollar', N'USD', 0, GETUTCDATE(), N'LIMS', 1);
+
+            IF NOT EXISTS (SELECT 1 FROM CurrencyMasters WHERE Code = N'EUR' AND IsActive = 1)
+                INSERT INTO CurrencyMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Euro', N'EUR', 0, GETUTCDATE(), N'LIMS', 1);
+
+            IF NOT EXISTS (SELECT 1 FROM CurrencyMasters WHERE Code = N'GBP' AND IsActive = 1)
+                INSERT INTO CurrencyMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'British Pound', N'GBP', 0, GETUTCDATE(), N'LIMS', 1);
         ");
     }
 

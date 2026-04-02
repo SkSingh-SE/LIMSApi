@@ -4,6 +4,7 @@
     {
         public long InwardID { get; set; }
         public string CaseNo { get; set; } = null!;
+        public long CustomerId { get; set; }
         public string CustomerName { get; set; } = null!;
         public string CustomerType { get; set; } = null!;
         public string PIStatus { get; set; } = null!;

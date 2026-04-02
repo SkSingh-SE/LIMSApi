@@ -144,13 +144,19 @@ namespace LIMSApi.ServiceWORepo
             var hasPendingPayment = await _db.PaymentOrders
                 .AnyAsync(p => p.InwardID == inwardId && p.Status != PaymentStatus.Paid);
 
+            // DirectTaxInvoice: skip PI step entirely
+            var piStatus = inward.Customer!.DirectTaxInvoiceNoPerforma
+                ? "NOT_REQUIRED"
+                : inward.PIReceived ? "Completed" : "Pending";
+
             return new CaseAccountSummaryDto
             {
                 InwardID = inward.ID,
                 CaseNo = inward.CaseNo,
-                CustomerName = inward.Customer!.Name,
+                CustomerName = inward.Customer.Name,
                 CustomerType = inward.Customer.CustomerType,
-                PIStatus = inward.PIReceived ? "Completed" : "Pending",
+                CustomerId = inward.CustomerID,
+                PIStatus = piStatus,
                 InvoiceStatus = inward.IsInvoiceGenerated ? "Completed" : "Pending",
                 HasPendingPayment = hasPendingPayment
             };
@@ -253,6 +259,8 @@ namespace LIMSApi.ServiceWORepo
                 throw new UnauthorizedAccessException("Only Accounts role can generate invoices.");
             }
 
+            using var transaction = await _db.Database.BeginTransactionAsync();
+
             var inward = await _db.SampleInwards
                 .Include(x => x.Customer)
                 .FirstAsync(x => x.ID == inwardId);
@@ -299,6 +307,14 @@ namespace LIMSApi.ServiceWORepo
 
             var customerGstExempt = inward.Customer?.GSTNA ?? false;
 
+            // SpecialAccountingCase: SEZ or No GST = exempt from GST
+            var specialCase = inward.Customer?.SpecialAccountingCase ?? "";
+            if (specialCase.Equals("SEZ", StringComparison.OrdinalIgnoreCase)
+                || specialCase.Equals("No GST applicable", StringComparison.OrdinalIgnoreCase))
+            {
+                customerGstExempt = true;
+            }
+
             decimal cgst = 0, sgst = 0, igst = 0;
 
             if (gstApplicable && !customerGstExempt)
@@ -344,7 +360,7 @@ namespace LIMSApi.ServiceWORepo
 
             var invoice = new TaxInvoice
             {
-                InvoiceNo = $"TI-{DateTime.UtcNow:yyyyMMddHHmmss}",
+                InvoiceNo = await GenerateInvoiceNoAsync(),
                 InvoiceDate = DateTime.UtcNow,
                 InwardID = inward.ID,
                 CustomerID = inward.CustomerID,
@@ -396,16 +412,67 @@ namespace LIMSApi.ServiceWORepo
                 inwardId,
                 invoice.ID);
 
-            // ── NOTIFICATION ──
-            await _notificationService.CreateNotificationAsync(new Notification
+            await transaction.CommitAsync();
+
+            // ── NOTIFICATION (fire-and-forget — outside transaction) ──
+            try
             {
-                UserID = user.EmployeeID,
-                Title = "Invoice Generated",
-                Message = $"Tax Invoice {invoice.InvoiceNo} for Case {inward.CaseNo} — Amount: {grandTotal:N2}",
-                Type = NotificationType.System,
-                EntityID = invoice.ID,
-                EntityType = "TaxInvoice"
-            });
+                await _notificationService.CreateNotificationAsync(new Notification
+                {
+                    UserID = user.EmployeeID,
+                    Title = "Invoice Generated",
+                    Message = $"Tax Invoice {invoice.InvoiceNo} for Case {inward.CaseNo} — Amount: {grandTotal:N2}",
+                    Type = NotificationType.System,
+                    EntityID = invoice.ID,
+                    EntityType = "TaxInvoice"
+                });
+            }
+            catch (Exception ex)
+            {
+                // Log but don't fail — invoice is already saved
+                System.Diagnostics.Debug.WriteLine($"Notification failed for invoice {invoice.InvoiceNo}: {ex.Message}");
+            }
+
+            // ── PO LOW/EXHAUSTED NOTIFICATION ──
+            try
+            {
+                if (linkedPO != null)
+                {
+                    if (linkedPO.Status == "Exhausted")
+                    {
+                        await _notificationService.NotifyByRoleAsync("Accounts",
+                            "PO Exhausted", $"PO {linkedPO.PONumber} for {inward.Customer?.Name} has been fully utilized.",
+                            "CustomerPurchaseOrder", linkedPO.ID);
+                    }
+                    else if (linkedPO.RemainingAmount <= linkedPO.POAmount * 0.2m)
+                    {
+                        await _notificationService.NotifyByRoleAsync("Accounts",
+                            "PO Balance Low", $"PO {linkedPO.PONumber} for {inward.Customer?.Name} has only {linkedPO.RemainingAmount:N2} remaining ({(linkedPO.RemainingAmount / linkedPO.POAmount * 100):N0}%)",
+                            "CustomerPurchaseOrder", linkedPO.ID);
+                    }
+                }
+            }
+            catch { /* PO notification failure must not block */ }
+
+            // ── CREDIT LIMIT EXCEEDED NOTIFICATION ──
+            try
+            {
+                var customer = inward.Customer;
+                if (customer?.CreditLimitAmount > 0)
+                {
+                    var outstanding = await _db.CustomerLedgers
+                        .Where(l => l.CustomerId == customer.ID)
+                        .SumAsync(l => l.DebitAmount - l.CreditAmount);
+                    if (outstanding > customer.CreditLimitAmount)
+                    {
+                        await _notificationService.NotifyByRoleAsync("Accounts",
+                            "Credit Limit Exceeded",
+                            $"Customer {customer.Name} outstanding ({outstanding:N2}) exceeds credit limit ({customer.CreditLimitAmount:N2})",
+                            "Customer", customer.ID);
+                    }
+                }
+            }
+            catch { /* credit notification failure must not block */ }
 
             // Set PAYMENT_PENDING on all active samples for this inward
             var samples = await _db.SampleDetails
@@ -498,6 +565,24 @@ namespace LIMSApi.ServiceWORepo
         public async Task<long> GenerateProformaInvoiceAsync(long inwardId)
         {
             var proformaInvoiceId = await _proformaInvoiceRepository.GeneratePIAsync(inwardId);
+
+            // Notification (fire-and-forget)
+            try
+            {
+                var user = Helpers.LoggedInUserProvider.CurrentUser;
+                var inward = await _db.SampleInwards.FindAsync(inwardId);
+                await _notificationService.CreateNotificationAsync(new Notification
+                {
+                    UserID = user?.EmployeeID,
+                    Title = "Proforma Invoice Generated",
+                    Message = $"PI generated for Case {inward?.CaseNo}",
+                    Type = NotificationType.System,
+                    EntityID = inwardId,
+                    EntityType = "SampleInward"
+                });
+            }
+            catch { /* notification failure must not block PI generation */ }
+
             return proformaInvoiceId;
         }
 
@@ -622,6 +707,30 @@ namespace LIMSApi.ServiceWORepo
 
             _db.InvoiceLineItems.Remove(lineItem);
             await _db.SaveChangesAsync();
+        }
+
+        /// <summary>
+        /// Generates sequential invoice number: TI/YY-MM/XXXXXX (max 16 chars per GST Rule 46)
+        /// </summary>
+        private async Task<string> GenerateInvoiceNoAsync()
+        {
+            var now = DateTime.UtcNow;
+            var prefix = $"TI/{now:yy}-{now:MM}/";
+            var lastInvoice = await _db.TaxInvoices
+                .Where(i => i.InvoiceNo.StartsWith(prefix))
+                .OrderByDescending(i => i.InvoiceNo)
+                .Select(i => i.InvoiceNo)
+                .FirstOrDefaultAsync();
+
+            var nextNum = 1;
+            if (lastInvoice != null)
+            {
+                var parts = lastInvoice.Split('/');
+                if (parts.Length == 3 && int.TryParse(parts[2], out var lastNum))
+                    nextNum = lastNum + 1;
+            }
+
+            return $"{prefix}{nextNum:D6}"; // e.g. TI/26-04/000001 (16 chars)
         }
     }
 

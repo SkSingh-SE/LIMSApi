@@ -403,21 +403,7 @@ namespace LIMSApi.Repositories
                 query = query.OrderBy($"{filter.SortByColumn} {order}");
             }
 
-            // Total Count
-            int totalRecords = await query.CountAsync();
-
-            // Pagination
-            var items = await query
-                .Skip((filter.PageNumber - 1) * filter.PageSize)
-                .Take(filter.PageSize)
-                .ToListAsync();
-
-            return new PagedResponse<object>(
-                items,
-                totalRecords,
-                filter.PageNumber,
-                filter.PageSize
-            );
+            return await query.ToPagedAsync(filter);
         }
 
 

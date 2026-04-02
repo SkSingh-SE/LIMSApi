@@ -475,6 +475,21 @@ RecurringJob.AddOrUpdate<MonthlyBillingJob>(
     job => job.ExecuteWeekly(),
     "0 9 * * MON"); // Every Monday at 9 AM
 
+RecurringJob.AddOrUpdate<CustomIntervalBillingJob>(
+    "custom-interval-billing",
+    job => job.Execute(),
+    "0 2 * * *"); // Daily at 2 AM — checks BillingEvery customers
+
+RecurringJob.AddOrUpdate<PaymentOverdueJob>(
+    "payment-overdue-check",
+    job => job.Execute(),
+    "0 8 * * *"); // Daily at 8 AM — notifies Accounts of overdue invoices
+
+RecurringJob.AddOrUpdate<POExpiryJob>(
+    "po-expiry-check",
+    job => job.Execute(),
+    "0 8 * * *"); // Daily at 8 AM — notifies about POs expiring within 7 days
+
 RecurringJob.AddOrUpdate<TestUsageStatsJob>(
     "test-usage-stats",
     x => x.Execute(),

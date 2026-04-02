@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20260401133059_AddLastBillingDateToCustomer")]
+    partial class AddLastBillingDateToCustomer
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -75,7 +78,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("ReportHeaderID");
 
-                    b.ToTable("AmendmentRequests", (string)null);
+                    b.ToTable("AmendmentRequests");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.AreaMaster", b =>
@@ -122,7 +125,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("CityID");
 
-                    b.ToTable("AreaMasters", (string)null);
+                    b.ToTable("AreaMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.AuthorizedSignatory", b =>
@@ -174,7 +177,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AuthorizedSignatories", (string)null);
+                    b.ToTable("AuthorizedSignatories");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.BankMaster", b =>
@@ -234,7 +237,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("BankMasters", (string)null);
+                    b.ToTable("BankMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.CalibrationAgencyMaster", b =>
@@ -343,7 +346,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("CalibrationAgencyMasters", (string)null);
+                    b.ToTable("CalibrationAgencyMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ChargeEvent", b =>
@@ -438,7 +441,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("TaxInvoiceID");
 
-                    b.ToTable("ChargeEvents", (string)null);
+                    b.ToTable("ChargeEvents");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ChemicalTest", b =>
@@ -479,7 +482,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("SampleTestPlanID");
 
-                    b.ToTable("ChemicalTests", (string)null);
+                    b.ToTable("ChemicalTests");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ChemicalTestElement", b =>
@@ -521,7 +524,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("ParameterID");
 
-                    b.ToTable("ChemicalTestElements", (string)null);
+                    b.ToTable("ChemicalTestElements");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ChemicalTestType", b =>
@@ -551,7 +554,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("LaboratoryTestID");
 
-                    b.ToTable("ChemicalTestTypes", (string)null);
+                    b.ToTable("ChemicalTestTypes");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.CityMaster", b =>
@@ -595,7 +598,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("StateID");
 
-                    b.ToTable("CityMasters", (string)null);
+                    b.ToTable("CityMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ClassificationMaster", b =>
@@ -635,7 +638,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("ClassificationMasters", (string)null);
+                    b.ToTable("ClassificationMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.CompanyCategoryMaster", b =>
@@ -676,7 +679,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("CompanyCategoryMasters", (string)null);
+                    b.ToTable("CompanyCategoryMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.CompanyMaster", b =>
@@ -770,7 +773,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("StateID");
 
-                    b.ToTable("CompanyMasters", (string)null);
+                    b.ToTable("CompanyMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.Configuration", b =>
@@ -822,7 +825,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("Configurations", (string)null);
+                    b.ToTable("Configurations");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ContactPerson", b =>
@@ -905,7 +908,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("DepartmentID");
 
-                    b.ToTable("ContactPersons", (string)null);
+                    b.ToTable("ContactPersons");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.CoolingMediumMaster", b =>
@@ -942,7 +945,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("CoolingMediumMasters", (string)null);
+                    b.ToTable("CoolingMediumMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.CountryMaster", b =>
@@ -981,7 +984,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("CountryMasters", (string)null);
+                    b.ToTable("CountryMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.CourierMaster", b =>
@@ -1022,7 +1025,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("CourierMasters", (string)null);
+                    b.ToTable("CourierMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.CurrencyMaster", b =>
@@ -1062,7 +1065,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("CurrencyMasters", (string)null);
+                    b.ToTable("CurrencyMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.Customer", b =>
@@ -1220,7 +1223,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("Customers", (string)null);
+                    b.ToTable("Customers");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.CustomerAmendment", b =>
@@ -1270,7 +1273,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("TokenID");
 
-                    b.ToTable("CustomerAmendments", (string)null);
+                    b.ToTable("CustomerAmendments");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.CustomerCompanyCategory", b =>
@@ -1293,7 +1296,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("CustomerID");
 
-                    b.ToTable("CustomerCompanyCategories", (string)null);
+                    b.ToTable("CustomerCompanyCategories");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.CustomerDispatchMode", b =>
@@ -1316,7 +1319,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("DispatchModeID");
 
-                    b.ToTable("CustomerDispatchModes", (string)null);
+                    b.ToTable("CustomerDispatchModes");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.CustomerLedger", b =>
@@ -1408,7 +1411,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("InwardId");
 
-                    b.ToTable("CustomerLedgers", (string)null);
+                    b.ToTable("CustomerLedgers");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.CustomerPurchaseOrder", b =>
@@ -1485,7 +1488,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("CustomerId");
 
-                    b.ToTable("CustomerPurchaseOrders", (string)null);
+                    b.ToTable("CustomerPurchaseOrders");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.CuttingChargeDetail", b =>
@@ -1525,7 +1528,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("CuttingID");
 
-                    b.ToTable("CuttingChargeDetails", (string)null);
+                    b.ToTable("CuttingChargeDetails");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.CuttingChargeHeader", b =>
@@ -1565,7 +1568,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("InwardID");
 
-                    b.ToTable("CuttingChargeHeaders", (string)null);
+                    b.ToTable("CuttingChargeHeaders");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.CuttingChargeSample", b =>
@@ -1632,7 +1635,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("SpecimenTypeId");
 
-                    b.ToTable("CuttingChargeSamples", (string)null);
+                    b.ToTable("CuttingChargeSamples");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.CuttingPriceMaster", b =>
@@ -1686,7 +1689,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("SpecimenTypeId");
 
-                    b.ToTable("CuttingPriceMasters", (string)null);
+                    b.ToTable("CuttingPriceMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.DepartmentMaster", b =>
@@ -1729,7 +1732,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("DepartmentMasters", (string)null);
+                    b.ToTable("DepartmentMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.DesignationMaster", b =>
@@ -1789,7 +1792,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("RoleID");
 
-                    b.ToTable("DesignationMasters", (string)null);
+                    b.ToTable("DesignationMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.DimensionalFactorMaster", b =>
@@ -1853,7 +1856,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("ParameterUnitID");
 
-                    b.ToTable("DimensionalFactorMasters", (string)null);
+                    b.ToTable("DimensionalFactorMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.DimensionalFactorProductForm", b =>
@@ -1868,7 +1871,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("ProductFormID");
 
-                    b.ToTable("DimensionalFactorProductForms", (string)null);
+                    b.ToTable("DimensionalFactorProductForms");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.DisciplineMaster", b =>
@@ -1909,7 +1912,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("DisciplineMasters", (string)null);
+                    b.ToTable("DisciplineMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.DispatchModeMaster", b =>
@@ -1950,7 +1953,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("DispatchModeMasters", (string)null);
+                    b.ToTable("DispatchModeMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.EmployeeDocument", b =>
@@ -2010,7 +2013,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("UploadReferenceID");
 
-                    b.ToTable("EmployeeDocuments", (string)null);
+                    b.ToTable("EmployeeDocuments");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.EmployeeMaster", b =>
@@ -2199,7 +2202,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("UserID");
 
-                    b.ToTable("EmployeeMasters", (string)null);
+                    b.ToTable("EmployeeMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.EmployeeQualification", b =>
@@ -2249,7 +2252,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("EmployeeID");
 
-                    b.ToTable("EmployeeQualifications", (string)null);
+                    b.ToTable("EmployeeQualifications");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.EquipmentCalibration", b =>
@@ -2295,7 +2298,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("EquipmentMasterID");
 
-                    b.ToTable("EquipmentCalibration", (string)null);
+                    b.ToTable("EquipmentCalibration");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.EquipmentMaintenance", b =>
@@ -2329,7 +2332,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("EquipmentMasterID");
 
-                    b.ToTable("EquipmentMaintenance", (string)null);
+                    b.ToTable("EquipmentMaintenance");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.EquipmentMaster", b =>
@@ -2423,7 +2426,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("EquipmentTypeID");
 
-                    b.ToTable("EquipmentMasters", (string)null);
+                    b.ToTable("EquipmentMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.EquipmentReferenceMaterial", b =>
@@ -2496,7 +2499,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("EquipmentMasterID");
 
-                    b.ToTable("EquipmentReferenceMaterials", (string)null);
+                    b.ToTable("EquipmentReferenceMaterials");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.EquipmentSOP", b =>
@@ -2535,7 +2538,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("EquipmentMasterID");
 
-                    b.ToTable("EquipmentSOP", (string)null);
+                    b.ToTable("EquipmentSOP");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.EquipmentTypeMaster", b =>
@@ -2575,7 +2578,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("EquipmentTypeMasters", (string)null);
+                    b.ToTable("EquipmentTypeMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.FinancialYear", b =>
@@ -2624,7 +2627,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("FinancialYears", (string)null);
+                    b.ToTable("FinancialYears");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.FinancialYearChangeLog", b =>
@@ -2664,7 +2667,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("FinancialYearId");
 
-                    b.ToTable("FinancialYearChangeLogs", (string)null);
+                    b.ToTable("FinancialYearChangeLogs");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.GeneralTest", b =>
@@ -2688,7 +2691,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("SampleTestPlanID");
 
-                    b.ToTable("GeneralTests", (string)null);
+                    b.ToTable("GeneralTests");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.GeneralTestMethod", b =>
@@ -2729,7 +2732,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("GeneralTestID");
 
-                    b.ToTable("GeneralTestMethods", (string)null);
+                    b.ToTable("GeneralTestMethods");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.GroupMaster", b =>
@@ -2775,7 +2778,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("DisciplineID");
 
-                    b.ToTable("GroupMasters", (string)null);
+                    b.ToTable("GroupMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.GstConfig", b =>
@@ -2834,7 +2837,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("GstConfigs", (string)null);
+                    b.ToTable("GstConfigs");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.HardnessEquivalence", b =>
@@ -2898,7 +2901,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("HardnessEquivalences", (string)null);
+                    b.ToTable("HardnessEquivalences");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.HeatTreatmentCategoryMaster", b =>
@@ -2935,7 +2938,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("HeatTreatmentCategoryMasters", (string)null);
+                    b.ToTable("HeatTreatmentCategoryMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.HeatTreatmentMaster", b =>
@@ -3001,7 +3004,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("HeatTreatmentCategoryID");
 
-                    b.ToTable("HeatTreatmentMasters", (string)null);
+                    b.ToTable("HeatTreatmentMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.HeatTreatmentMetalClassification", b =>
@@ -3016,7 +3019,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("MetalClassificationID");
 
-                    b.ToTable("HeatTreatmentMetalClassifications", (string)null);
+                    b.ToTable("HeatTreatmentMetalClassifications");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.IndustryMaster", b =>
@@ -3057,7 +3060,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("IndustryMasters", (string)null);
+                    b.ToTable("IndustryMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.InvoiceCase", b =>
@@ -3103,7 +3106,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("LaboratoryTestID");
 
-                    b.ToTable("InvoiceCases", (string)null);
+                    b.ToTable("InvoiceCases");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.InvoiceCaseAliasName", b =>
@@ -3126,7 +3129,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("InvoiceConfigurationID");
 
-                    b.ToTable("InvoiceCaseAliasNames", (string)null);
+                    b.ToTable("InvoiceCaseAliasNames");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.InvoiceCaseConfiguration", b =>
@@ -3201,7 +3204,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("PriceDimensionTypeId");
 
-                    b.ToTable("InvoiceCaseConfigurations", (string)null);
+                    b.ToTable("InvoiceCaseConfigurations");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.InvoiceCasePrice", b =>
@@ -3235,7 +3238,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("InvoiceCaseID");
 
-                    b.ToTable("InvoiceCasePrices", (string)null);
+                    b.ToTable("InvoiceCasePrices");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.InvoiceLineItem", b =>
@@ -3303,7 +3306,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("TaxInvoiceID");
 
-                    b.ToTable("InvoiceLineItems", (string)null);
+                    b.ToTable("InvoiceLineItems");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ItemMaster", b =>
@@ -3344,7 +3347,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("ItemMasters", (string)null);
+                    b.ToTable("ItemMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.JobExecutionLog", b =>
@@ -3375,7 +3378,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("JobExecutionLogs", (string)null);
+                    b.ToTable("JobExecutionLogs");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.LabScopeMaster", b =>
@@ -3412,7 +3415,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("LaboratoryTestID");
 
-                    b.ToTable("LabScopeMasters", (string)null);
+                    b.ToTable("LabScopeMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.LabScopeSpecification", b =>
@@ -3440,7 +3443,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("TestMethodSpecificationVersionID");
 
-                    b.ToTable("LabScopeSpecifications", (string)null);
+                    b.ToTable("LabScopeSpecifications");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.LabScopeSpecificationParameter", b =>
@@ -3492,7 +3495,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("LabScopeSpecificationID");
 
-                    b.ToTable("LabScopeSpecificationParameters", (string)null);
+                    b.ToTable("LabScopeSpecificationParameters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.LabScopeSpecificationParameterEquipment", b =>
@@ -3513,7 +3516,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("LabScopeSpecificationParameterID");
 
-                    b.ToTable("LabScopeSpecificationParameterEquipments", (string)null);
+                    b.ToTable("LabScopeSpecificationParameterEquipments");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.LaboratoryTest", b =>
@@ -3586,7 +3589,7 @@ namespace LIMSApi.Migrations
                     b.HasIndex("SubGroup")
                         .IsUnique();
 
-                    b.ToTable("LaboratoryTests", (string)null);
+                    b.ToTable("LaboratoryTests");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.LaboratoryTestInvoiceCase", b =>
@@ -3612,7 +3615,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("LaboratoryTestID");
 
-                    b.ToTable("LaboratoryTestInvoiceCase", (string)null);
+                    b.ToTable("LaboratoryTestInvoiceCase");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.LongTermRecord", b =>
@@ -3656,7 +3659,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("LongTermTestID");
 
-                    b.ToTable("LongTermRecords", (string)null);
+                    b.ToTable("LongTermRecords");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.LongTermTest", b =>
@@ -3716,7 +3719,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("TestResultHeaderID");
 
-                    b.ToTable("LongTermTests", (string)null);
+                    b.ToTable("LongTermTests");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.MachineDataLog", b =>
@@ -3775,7 +3778,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("MachineDataLogs", (string)null);
+                    b.ToTable("MachineDataLogs");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.MachiningChargeItem", b =>
@@ -3824,7 +3827,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("SampleID");
 
-                    b.ToTable("MachiningChargeItems", (string)null);
+                    b.ToTable("MachiningChargeItems");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.MakerMaster", b =>
@@ -3861,7 +3864,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("MakerMasters", (string)null);
+                    b.ToTable("MakerMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.MenuMaster", b =>
@@ -3896,7 +3899,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("ParentID");
 
-                    b.ToTable("MenuMasters", (string)null);
+                    b.ToTable("MenuMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.MessageTemplate", b =>
@@ -3956,7 +3959,7 @@ namespace LIMSApi.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_MessageTemplate_TemplateKey_Channel_Version");
 
-                    b.ToTable("MessageTemplates", (string)null);
+                    b.ToTable("MessageTemplates");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.MetalClassificationMaster", b =>
@@ -4016,7 +4019,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("ParentID");
 
-                    b.ToTable("MetalClassificationMasters", (string)null);
+                    b.ToTable("MetalClassificationMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.MetalClassificationParameter", b =>
@@ -4031,7 +4034,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("ParameterID");
 
-                    b.ToTable("MetalClassificationParameter", (string)null);
+                    b.ToTable("MetalClassificationParameter");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablAccreditation", b =>
@@ -4082,7 +4085,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("NablAccreditations", (string)null);
+                    b.ToTable("NablAccreditations");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablApprovedSupplier", b =>
@@ -4218,7 +4221,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("NablApprovedSuppliers", (string)null);
+                    b.ToTable("NablApprovedSuppliers");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablAuditChecklist", b =>
@@ -4374,7 +4377,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("DepartmentId");
 
-                    b.ToTable("NablAuditChecklists", (string)null);
+                    b.ToTable("NablAuditChecklists");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablAuditLog", b =>
@@ -4425,7 +4428,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("NablAuditLogs", (string)null);
+                    b.ToTable("NablAuditLogs");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablAuditPlan", b =>
@@ -4576,7 +4579,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("LeadAuditorId");
 
-                    b.ToTable("NablAuditPlans", (string)null);
+                    b.ToTable("NablAuditPlans");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablAuditSummary", b =>
@@ -4727,7 +4730,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("AuditPlanId");
 
-                    b.ToTable("NablAuditSummaries", (string)null);
+                    b.ToTable("NablAuditSummaries");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablCalibrationReview", b =>
@@ -4881,7 +4884,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("EquipmentId");
 
-                    b.ToTable("NablCalibrationReviews", (string)null);
+                    b.ToTable("NablCalibrationReviews");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablCompetenceRequirement", b =>
@@ -5013,7 +5016,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("PositionId");
 
-                    b.ToTable("NablCompetenceRequirements", (string)null);
+                    b.ToTable("NablCompetenceRequirements");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablComplaint", b =>
@@ -5180,7 +5183,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("CustomerId");
 
-                    b.ToTable("NablComplaints", (string)null);
+                    b.ToTable("NablComplaints");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablCrmConsumption", b =>
@@ -5325,7 +5328,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("ReferenceMaterialId");
 
-                    b.ToTable("NablCrmConsumptions", (string)null);
+                    b.ToTable("NablCrmConsumptions");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablCustomerFeedback", b =>
@@ -5486,7 +5489,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("CustomerId");
 
-                    b.ToTable("NablCustomerFeedbacks", (string)null);
+                    b.ToTable("NablCustomerFeedbacks");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablDocumentChangeRequest", b =>
@@ -5644,7 +5647,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("NablDocumentChangeRequests", (string)null);
+                    b.ToTable("NablDocumentChangeRequests");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablDocumentReview", b =>
@@ -5784,7 +5787,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("NablDocumentReviews", (string)null);
+                    b.ToTable("NablDocumentReviews");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablEmployeeAuthorization", b =>
@@ -5926,7 +5929,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("EmployeeId");
 
-                    b.ToTable("NablEmployeeAuthorizations", (string)null);
+                    b.ToTable("NablEmployeeAuthorizations");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablEmployeeCompetence", b =>
@@ -6070,7 +6073,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("EmployeeId");
 
-                    b.ToTable("NablEmployeeCompetences", (string)null);
+                    b.ToTable("NablEmployeeCompetences");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablEmployeePerformanceRecord", b =>
@@ -6222,7 +6225,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("EmployeeId");
 
-                    b.ToTable("NablEmployeePerformanceRecords", (string)null);
+                    b.ToTable("NablEmployeePerformanceRecords");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablEnvironmentMonitoring", b =>
@@ -6375,7 +6378,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("DepartmentId");
 
-                    b.ToTable("NablEnvironmentMonitorings", (string)null);
+                    b.ToTable("NablEnvironmentMonitorings");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablEquipmentHistory", b =>
@@ -6539,7 +6542,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("EquipmentId");
 
-                    b.ToTable("NablEquipmentHistories", (string)null);
+                    b.ToTable("NablEquipmentHistories");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablFeedbackAnalysis", b =>
@@ -6698,7 +6701,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("CustomerFeedbackId");
 
-                    b.ToTable("NablFeedbackAnalyses", (string)null);
+                    b.ToTable("NablFeedbackAnalyses");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablFormAttachment", b =>
@@ -6754,7 +6757,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("NablFormAttachments", (string)null);
+                    b.ToTable("NablFormAttachments");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablFormRevisionHistory", b =>
@@ -6819,7 +6822,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("NablFormRevisionHistory", (string)null);
+                    b.ToTable("NablFormRevisionHistory");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablIncomingMaterial", b =>
@@ -6980,7 +6983,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("SupplierId");
 
-                    b.ToTable("NablIncomingMaterials", (string)null);
+                    b.ToTable("NablIncomingMaterials");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablInductionTraining", b =>
@@ -7174,7 +7177,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("EmployeeId");
 
-                    b.ToTable("NablInductionTrainings", (string)null);
+                    b.ToTable("NablInductionTrainings");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablIntermediateCheck", b =>
@@ -7323,7 +7326,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("EquipmentId");
 
-                    b.ToTable("NablIntermediateChecks", (string)null);
+                    b.ToTable("NablIntermediateChecks");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablInternalAuditor", b =>
@@ -7478,7 +7481,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("EmployeeId");
 
-                    b.ToTable("NablInternalAuditors", (string)null);
+                    b.ToTable("NablInternalAuditors");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablJobDescription", b =>
@@ -7652,7 +7655,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("DesignationId");
 
-                    b.ToTable("NablJobDescriptions", (string)null);
+                    b.ToTable("NablJobDescriptions");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablMasterDocument", b =>
@@ -7797,7 +7800,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("NablMasterDocuments", (string)null);
+                    b.ToTable("NablMasterDocuments");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablMeasurementUncertainty", b =>
@@ -7947,7 +7950,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("NablMeasurementUncertainties", (string)null);
+                    b.ToTable("NablMeasurementUncertainties");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablMeetingAgenda", b =>
@@ -8088,7 +8091,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("ChairpersonId");
 
-                    b.ToTable("NablMeetingAgendas", (string)null);
+                    b.ToTable("NablMeetingAgendas");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablMeetingMinutes", b =>
@@ -8228,7 +8231,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("AgendaId");
 
-                    b.ToTable("NablMeetingMinutes", (string)null);
+                    b.ToTable("NablMeetingMinutes");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablMethodValidation", b =>
@@ -8396,7 +8399,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("NablMethodValidations", (string)null);
+                    b.ToTable("NablMethodValidations");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablMethodVerification", b =>
@@ -8550,7 +8553,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("NablMethodVerifications", (string)null);
+                    b.ToTable("NablMethodVerifications");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablNcCorrectiveAction", b =>
@@ -8709,7 +8712,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("NCId");
 
-                    b.ToTable("NablNcCorrectiveActions", (string)null);
+                    b.ToTable("NablNcCorrectiveActions");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablNonConformingWork", b =>
@@ -8859,7 +8862,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("NablNonConformingWorks", (string)null);
+                    b.ToTable("NablNonConformingWorks");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablProductInspection", b =>
@@ -9011,7 +9014,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("SupplierId");
 
-                    b.ToTable("NablProductInspections", (string)null);
+                    b.ToTable("NablProductInspections");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablPtIlcPlan", b =>
@@ -9152,7 +9155,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("NablPtIlcPlans", (string)null);
+                    b.ToTable("NablPtIlcPlans");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablPurchaseIndent", b =>
@@ -9289,7 +9292,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("DepartmentId");
 
-                    b.ToTable("NablPurchaseIndents", (string)null);
+                    b.ToTable("NablPurchaseIndents");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablPurchaseMaterialVerification", b =>
@@ -9430,7 +9433,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("PurchaseOrderId");
 
-                    b.ToTable("NablPurchaseMaterialVerifications", (string)null);
+                    b.ToTable("NablPurchaseMaterialVerifications");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablPurchaseOrder", b =>
@@ -9579,7 +9582,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("SupplierId");
 
-                    b.ToTable("NablPurchaseOrders", (string)null);
+                    b.ToTable("NablPurchaseOrders");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablQualityControlPlan", b =>
@@ -9734,7 +9737,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("DepartmentId");
 
-                    b.ToTable("NablQualityControlPlans", (string)null);
+                    b.ToTable("NablQualityControlPlans");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablReferenceMaterial", b =>
@@ -9896,7 +9899,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("NablReferenceMaterials", (string)null);
+                    b.ToTable("NablReferenceMaterials");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablResponsibilityAuthority", b =>
@@ -10037,7 +10040,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("DesignationId");
 
-                    b.ToTable("NablResponsibilityAuthorities", (string)null);
+                    b.ToTable("NablResponsibilityAuthorities");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablRetesting", b =>
@@ -10197,7 +10200,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("NablRetestings", (string)null);
+                    b.ToTable("NablRetestings");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablRiskAssessment", b =>
@@ -10326,7 +10329,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("NablRiskAssessments", (string)null);
+                    b.ToTable("NablRiskAssessments");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablSampleInwardRegister", b =>
@@ -10475,7 +10478,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("NablSampleInwardRegisters", (string)null);
+                    b.ToTable("NablSampleInwardRegisters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablSampleLabel", b =>
@@ -10617,7 +10620,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("NablSampleLabels", (string)null);
+                    b.ToTable("NablSampleLabels");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablSampleMusterRegister", b =>
@@ -10766,7 +10769,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("NablSampleMusterRegisters", (string)null);
+                    b.ToTable("NablSampleMusterRegisters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablSkillMatrix", b =>
@@ -10908,7 +10911,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("DesignationId");
 
-                    b.ToTable("NablSkillMatrices", (string)null);
+                    b.ToTable("NablSkillMatrices");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablSkillMatrixDecision", b =>
@@ -11043,7 +11046,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("DesignationId");
 
-                    b.ToTable("NablSkillMatrixDecisions", (string)null);
+                    b.ToTable("NablSkillMatrixDecisions");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablSupplierConfidentiality", b =>
@@ -11182,7 +11185,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("NablSupplierConfidentialities", (string)null);
+                    b.ToTable("NablSupplierConfidentialities");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablSupplierEvaluation", b =>
@@ -11327,7 +11330,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("NablSupplierEvaluations", (string)null);
+                    b.ToTable("NablSupplierEvaluations");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablSupplierRegistration", b =>
@@ -11539,7 +11542,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("NablSupplierRegistrations", (string)null);
+                    b.ToTable("NablSupplierRegistrations");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablTechnicalRawData", b =>
@@ -11698,7 +11701,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("EquipmentId");
 
-                    b.ToTable("NablTechnicalRawDatas", (string)null);
+                    b.ToTable("NablTechnicalRawDatas");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablTestMethod", b =>
@@ -11874,7 +11877,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("TestMethodStandardId");
 
-                    b.ToTable("NablTestMethods", (string)null);
+                    b.ToTable("NablTestMethods");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablTestReport", b =>
@@ -12023,7 +12026,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("NablTestReports", (string)null);
+                    b.ToTable("NablTestReports");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablTestRequest", b =>
@@ -12185,7 +12188,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("CustomerId");
 
-                    b.ToTable("NablTestRequests", (string)null);
+                    b.ToTable("NablTestRequests");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablTrainingAttendance", b =>
@@ -12319,7 +12322,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("TrainingPlanId");
 
-                    b.ToTable("NablTrainingAttendances", (string)null);
+                    b.ToTable("NablTrainingAttendances");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablTrainingEffectiveness", b =>
@@ -12479,7 +12482,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("TrainingPlanId");
 
-                    b.ToTable("NablTrainingEffectiveness", (string)null);
+                    b.ToTable("NablTrainingEffectiveness");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablTrainingPlan", b =>
@@ -12662,7 +12665,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("EmployeeId");
 
-                    b.ToTable("NablTrainingPlans", (string)null);
+                    b.ToTable("NablTrainingPlans");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.Notification", b =>
@@ -12729,7 +12732,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("Notifications", (string)null);
+                    b.ToTable("Notifications");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NumberingConfig", b =>
@@ -12780,7 +12783,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("NumberingConfigs", (string)null);
+                    b.ToTable("NumberingConfigs");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.OEMMaster", b =>
@@ -12889,7 +12892,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("OEMMasters", (string)null);
+                    b.ToTable("OEMMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.OrganisationMaster", b =>
@@ -12932,7 +12935,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("OrganisationMasters", (string)null);
+                    b.ToTable("OrganisationMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.Organization", b =>
@@ -13013,7 +13016,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Organizations", (string)null);
+                    b.ToTable("Organizations");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ParameterCategoryMaster", b =>
@@ -13050,7 +13053,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("ParameterCategoryMasters", (string)null);
+                    b.ToTable("ParameterCategoryMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ParameterMaster", b =>
@@ -13139,7 +13142,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("ParameterUnitID");
 
-                    b.ToTable("ParameterMasters", (string)null);
+                    b.ToTable("ParameterMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ParameterSpecimenOrientation", b =>
@@ -13154,7 +13157,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("SpecimenOrientationID");
 
-                    b.ToTable("ParameterSpecimenOrientations", (string)null);
+                    b.ToTable("ParameterSpecimenOrientations");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ParameterUnitMaster", b =>
@@ -13217,7 +13220,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("ParameterUnitMasters", (string)null);
+                    b.ToTable("ParameterUnitMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.PaymentOrder", b =>
@@ -13304,7 +13307,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("TaxInvoiceID");
 
-                    b.ToTable("PaymentOrders", (string)null);
+                    b.ToTable("PaymentOrders");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.PaymentReceipt", b =>
@@ -13385,7 +13388,7 @@ namespace LIMSApi.Migrations
                     b.HasIndex("ReceiptNo")
                         .IsUnique();
 
-                    b.ToTable("PaymentReceipts", (string)null);
+                    b.ToTable("PaymentReceipts");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.PermissionMaster", b =>
@@ -13419,7 +13422,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("MenuID");
 
-                    b.ToTable("PermissionMasters", (string)null);
+                    b.ToTable("PermissionMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.PlanHistory", b =>
@@ -13487,7 +13490,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("PlanId");
 
-                    b.ToTable("PlanHistories", (string)null);
+                    b.ToTable("PlanHistories");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.PriceDimensionType", b =>
@@ -13538,7 +13541,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("PriceDimensionTypes", (string)null);
+                    b.ToTable("PriceDimensionTypes");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ProductConditionCategoryMaster", b =>
@@ -13575,7 +13578,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("ProductConditionCategoryMasters", (string)null);
+                    b.ToTable("ProductConditionCategoryMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ProductConditionMaster", b =>
@@ -13637,7 +13640,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("ProductConditionCategoryID");
 
-                    b.ToTable("ProductConditionMasters", (string)null);
+                    b.ToTable("ProductConditionMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ProductConditionPropertyType", b =>
@@ -13652,7 +13655,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("PropertyTypeID");
 
-                    b.ToTable("ProductConditionPropertyTypes", (string)null);
+                    b.ToTable("ProductConditionPropertyTypes");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ProductFormMaster", b =>
@@ -13689,7 +13692,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("ProductFormMasters", (string)null);
+                    b.ToTable("ProductFormMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ProductSpecification", b =>
@@ -13767,7 +13770,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("TestMethodSpecificationVersionID");
 
-                    b.ToTable("ProductSpecifications", (string)null);
+                    b.ToTable("ProductSpecifications");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ProductSpecificationGrade", b =>
@@ -13813,7 +13816,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("SpecificationGradeID");
 
-                    b.ToTable("ProductSpecificationGrades", (string)null);
+                    b.ToTable("ProductSpecificationGrades");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ProductTestGroup", b =>
@@ -13870,7 +13873,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("TestMethodStandardID");
 
-                    b.ToTable("ProductTestGroups", (string)null);
+                    b.ToTable("ProductTestGroups");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ProformaInvoiceDetail", b =>
@@ -13917,7 +13920,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("ProformaInvoiceHeaderID");
 
-                    b.ToTable("ProformaInvoiceDetails", (string)null);
+                    b.ToTable("ProformaInvoiceDetails");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ProformaInvoiceHeader", b =>
@@ -13988,7 +13991,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("InwardID");
 
-                    b.ToTable("ProformaInvoiceHeader", (string)null);
+                    b.ToTable("ProformaInvoiceHeader");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.PropertyTypeMaster", b =>
@@ -14025,7 +14028,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("PropertyTypeMasters", (string)null);
+                    b.ToTable("PropertyTypeMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.PurchaseOrderItem", b =>
@@ -14094,7 +14097,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("CustomerPurchaseOrderID");
 
-                    b.ToTable("PurchaseOrderItems", (string)null);
+                    b.ToTable("PurchaseOrderItems");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.RemarkMaster", b =>
@@ -14135,7 +14138,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("RemarkMasters", (string)null);
+                    b.ToTable("RemarkMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ReplanRequest", b =>
@@ -14206,7 +14209,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("PlanId");
 
-                    b.ToTable("ReplanRequests", (string)null);
+                    b.ToTable("ReplanRequests");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.Report", b =>
@@ -14273,7 +14276,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("ReportHeaderID");
 
-                    b.ToTable("Reports", (string)null);
+                    b.ToTable("Reports");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ReportAmendmentToken", b =>
@@ -14309,7 +14312,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("ReportID");
 
-                    b.ToTable("ReportAmendmentTokens", (string)null);
+                    b.ToTable("ReportAmendmentTokens");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ReportBlock", b =>
@@ -14358,7 +14361,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("ReportID");
 
-                    b.ToTable("ReportBlocks", (string)null);
+                    b.ToTable("ReportBlocks");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ReportHeader", b =>
@@ -14426,7 +14429,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("SampleID");
 
-                    b.ToTable("ReportHeaders", (string)null);
+                    b.ToTable("ReportHeaders");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ReportTemplate", b =>
@@ -14515,7 +14518,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("TestTypeID");
 
-                    b.ToTable("ReportTemplates", (string)null);
+                    b.ToTable("ReportTemplates");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ReportTemplateBlock", b =>
@@ -14568,7 +14571,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("ReportTemplateID");
 
-                    b.ToTable("ReportTemplateBlocks", (string)null);
+                    b.ToTable("ReportTemplateBlocks");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.RoleMaster", b =>
@@ -14611,7 +14614,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("RoleMasters", (string)null);
+                    b.ToTable("RoleMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.RoleMenuMapping", b =>
@@ -14634,7 +14637,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("RoleID");
 
-                    b.ToTable("RoleMenuMappings", (string)null);
+                    b.ToTable("RoleMenuMappings");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SampleAdditionalDetail", b =>
@@ -14664,7 +14667,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("SampleID");
 
-                    b.ToTable("SampleAdditionalDetails", (string)null);
+                    b.ToTable("SampleAdditionalDetails");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SampleDetail", b =>
@@ -14799,7 +14802,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("SpecimenOrientationID");
 
-                    b.ToTable("SampleDetails", (string)null);
+                    b.ToTable("SampleDetails");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SampleInward", b =>
@@ -14964,7 +14967,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("PurchaseOrderId");
 
-                    b.ToTable("SampleInwards", (string)null);
+                    b.ToTable("SampleInwards");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SampleInwardAddressInfo", b =>
@@ -15025,7 +15028,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("InwardID");
 
-                    b.ToTable("InwardAddresses", (string)null);
+                    b.ToTable("InwardAddresses");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SampleInwardContactPerson", b =>
@@ -15067,7 +15070,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("InwardID");
 
-                    b.ToTable("InwardContacts", (string)null);
+                    b.ToTable("InwardContacts");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SampleInwardDispatchMode", b =>
@@ -15088,7 +15091,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("InwardID");
 
-                    b.ToTable("InwardDispatchModes", (string)null);
+                    b.ToTable("InwardDispatchModes");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SamplePreparationMaster", b =>
@@ -15150,7 +15153,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("TestMethodStandardID");
 
-                    b.ToTable("SamplePreparationMasters", (string)null);
+                    b.ToTable("SamplePreparationMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SampleStatusHistory", b =>
@@ -15198,7 +15201,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("SampleStatusHistories", (string)null);
+                    b.ToTable("SampleStatusHistories");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SampleTestPlan", b =>
@@ -15241,7 +15244,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("SampleID");
 
-                    b.ToTable("TestPlans", (string)null);
+                    b.ToTable("TestPlans");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SiteActivity", b =>
@@ -15284,7 +15287,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("SiteActivities", (string)null);
+                    b.ToTable("SiteActivities");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SiteError", b =>
@@ -15330,7 +15333,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("SiteErrors", (string)null);
+                    b.ToTable("SiteErrors");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SpecificationGrade", b =>
@@ -15364,7 +15367,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("SpecificationHeaderID");
 
-                    b.ToTable("SpecificationGrades", (string)null);
+                    b.ToTable("SpecificationGrades");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SpecificationHeader", b =>
@@ -15418,7 +15421,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("StandardOrganizationID");
 
-                    b.ToTable("SpecificationHeaders", (string)null);
+                    b.ToTable("SpecificationHeaders");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SpecificationLine", b =>
@@ -15504,7 +15507,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("SpecimenOrientationID");
 
-                    b.ToTable("SpecificationLines", (string)null);
+                    b.ToTable("SpecificationLines");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SpecimenOrientationCategoryMaster", b =>
@@ -15541,7 +15544,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("SpecimenOrientationCategoryMasters", (string)null);
+                    b.ToTable("SpecimenOrientationCategoryMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SpecimenOrientationMaster", b =>
@@ -15596,7 +15599,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("SpecimenOrientationCategoryID");
 
-                    b.ToTable("SpecimenOrientationMasters", (string)null);
+                    b.ToTable("SpecimenOrientationMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SpecimenOrientationMetalClassification", b =>
@@ -15611,7 +15614,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("MetalClassificationID");
 
-                    b.ToTable("SpecimenOrientationMetalClassifications", (string)null);
+                    b.ToTable("SpecimenOrientationMetalClassifications");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SpecimenOrientationProductForm", b =>
@@ -15626,7 +15629,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("ProductFormID");
 
-                    b.ToTable("SpecimenOrientationProductForms", (string)null);
+                    b.ToTable("SpecimenOrientationProductForms");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SpecimenTypeMaster", b =>
@@ -15669,7 +15672,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("SpecimenTypeMasters", (string)null);
+                    b.ToTable("SpecimenTypeMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.StandardOrganizationMaster", b =>
@@ -15711,7 +15714,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("StandardOrganizationMasters", (string)null);
+                    b.ToTable("StandardOrganizationMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.StateMaster", b =>
@@ -15759,7 +15762,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("CountryID");
 
-                    b.ToTable("StateMasters", (string)null);
+                    b.ToTable("StateMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SubContractorMaster", b =>
@@ -15823,7 +15826,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("SubContractorMasters", (string)null);
+                    b.ToTable("SubContractorMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SubGroupMaster", b =>
@@ -15869,7 +15872,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("GroupID");
 
-                    b.ToTable("SubGroupMasters", (string)null);
+                    b.ToTable("SubGroupMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SupplierMaster", b =>
@@ -15990,7 +15993,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("SupplierMasters", (string)null);
+                    b.ToTable("SupplierMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.TPIMaster", b =>
@@ -16037,7 +16040,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("TPIMasters", (string)null);
+                    b.ToTable("TPIMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.TaxInvoice", b =>
@@ -16050,13 +16053,6 @@ namespace LIMSApi.Migrations
 
                     b.Property<decimal>("CGST")
                         .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("CompanyCode")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<long>("CreatedBy")
-                        .HasColumnType("bigint");
 
                     b.Property<DateTime>("CreatedOn")
                         .HasColumnType("datetime2");
@@ -16086,15 +16082,6 @@ namespace LIMSApi.Migrations
                     b.Property<long>("InwardID")
                         .HasColumnType("bigint");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<long?>("ModifiedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime?>("ModifiedOn")
-                        .HasColumnType("datetime2");
-
                     b.Property<DateTime?>("PaymentDueDate")
                         .HasColumnType("datetime2");
 
@@ -16107,11 +16094,6 @@ namespace LIMSApi.Migrations
 
                     b.Property<long?>("PurchaseOrderId")
                         .HasColumnType("bigint");
-
-                    b.Property<string>("SACCode")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
 
                     b.Property<decimal>("SGST")
                         .HasColumnType("decimal(18,2)");
@@ -16131,7 +16113,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("PurchaseOrderId");
 
-                    b.ToTable("TaxInvoices", (string)null);
+                    b.ToTable("TaxInvoices");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.TaxMaster", b =>
@@ -16178,7 +16160,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("TaxMasters", (string)null);
+                    b.ToTable("TaxMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.TestGroup", b =>
@@ -16219,7 +16201,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("TestGroups", (string)null);
+                    b.ToTable("TestGroups");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.TestGroupMapping", b =>
@@ -16242,7 +16224,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("TestMethodID");
 
-                    b.ToTable("TestGroupMappings", (string)null);
+                    b.ToTable("TestGroupMappings");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.TestMaster", b =>
@@ -16295,7 +16277,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("TestMasters", (string)null);
+                    b.ToTable("TestMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.TestMethodSpecification", b =>
@@ -16357,7 +16339,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("TestMethodSpecifications", (string)null);
+                    b.ToTable("TestMethodSpecifications");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.TestMethodSpecificationVersion", b =>
@@ -16417,7 +16399,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("TestMethodSpecificationID");
 
-                    b.ToTable("TestMethodSpecificationVersions", (string)null);
+                    b.ToTable("TestMethodSpecificationVersions");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.TestMethodStandard", b =>
@@ -16504,7 +16486,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("StandardOrganisationID");
 
-                    b.ToTable("TestMethodStandards", (string)null);
+                    b.ToTable("TestMethodStandards");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.TestMethodSubGroup", b =>
@@ -16537,7 +16519,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("TestMethodID");
 
-                    b.ToTable("TestMethodSubGroups", (string)null);
+                    b.ToTable("TestMethodSubGroups");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.TestResultHeader", b =>
@@ -16671,7 +16653,7 @@ namespace LIMSApi.Migrations
                     b.HasIndex("SampleID", "LaboratoryTestID", "TestPlanID")
                         .HasFilter("[IsActive] = 1");
 
-                    b.ToTable("TestResultHeaders", (string)null);
+                    b.ToTable("TestResultHeaders");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.TestResultImage", b =>
@@ -16725,7 +16707,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("TestResultHeaderID");
 
-                    b.ToTable("TestResultImages", (string)null);
+                    b.ToTable("TestResultImages");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.TestResultParameter", b =>
@@ -16855,7 +16837,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("TestResultHeaderID");
 
-                    b.ToTable("TestResultParameters", (string)null);
+                    b.ToTable("TestResultParameters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.TestTypeMaster", b =>
@@ -16892,7 +16874,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("TestTypeMasters", (string)null);
+                    b.ToTable("TestTypeMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.TestUsageStats", b =>
@@ -16931,7 +16913,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("LaboratoryTestID", "MetalClassificationID", "ProductConditionID", "CustomerID");
 
-                    b.ToTable("TestUsageStats", (string)null);
+                    b.ToTable("TestUsageStats");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ToleranceMaster", b =>
@@ -16994,7 +16976,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("SpecificationHeaderID");
 
-                    b.ToTable("ToleranceMasters", (string)null);
+                    b.ToTable("ToleranceMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.TpiInspection", b =>
@@ -17067,7 +17049,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("TPIMasterID");
 
-                    b.ToTable("TpiInspections", (string)null);
+                    b.ToTable("TpiInspections");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.UOMMaster", b =>
@@ -17104,7 +17086,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("UOMMasters", (string)null);
+                    b.ToTable("UOMMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.UniversalCodeTypeMaster", b =>
@@ -17141,7 +17123,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("UniversalCodeTypeMasters", (string)null);
+                    b.ToTable("UniversalCodeTypeMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.UploadFile", b =>
@@ -17196,7 +17178,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("UploadFiles", (string)null);
+                    b.ToTable("UploadFiles");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.UserMaster", b =>
@@ -17313,7 +17295,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("RoleID");
 
-                    b.ToTable("UserMasters", (string)null);
+                    b.ToTable("UserMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.UserPermission", b =>
@@ -17358,7 +17340,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("UserID");
 
-                    b.ToTable("UserPermissions", (string)null);
+                    b.ToTable("UserPermissions");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.UserPushSubscription", b =>
@@ -17386,7 +17368,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("UserPushSubscriptions", (string)null);
+                    b.ToTable("UserPushSubscriptions");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.VendorMaster", b =>
@@ -17459,7 +17441,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("VendorMasters", (string)null);
+                    b.ToTable("VendorMasters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.Workflow", b =>
@@ -17501,7 +17483,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("Workflows", (string)null);
+                    b.ToTable("Workflows");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.WorkflowActionLog", b =>
@@ -17545,7 +17527,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("WorkflowID");
 
-                    b.ToTable("WorkflowActionLogs", (string)null);
+                    b.ToTable("WorkflowActionLogs");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.WorkflowInstance", b =>
@@ -17599,7 +17581,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("WorkflowID");
 
-                    b.ToTable("WorkflowInstances", (string)null);
+                    b.ToTable("WorkflowInstances");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.WorkflowStep", b =>
@@ -17638,7 +17620,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("WorkflowID");
 
-                    b.ToTable("WorkflowSteps", (string)null);
+                    b.ToTable("WorkflowSteps");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.WorkflowTransition", b =>
@@ -17674,7 +17656,7 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("StepID");
 
-                    b.ToTable("WorkflowTransitions", (string)null);
+                    b.ToTable("WorkflowTransitions");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.AmendmentRequest", b =>

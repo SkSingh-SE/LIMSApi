@@ -45,6 +45,8 @@ namespace LIMSApi.Models
         public bool BillingEvery { get; set; }
 
         public int? BillingEveryDays { get; set; }
+
+        public DateTime? LastBillingDate { get; set; }
         [StringLength(100)]
         public string? SpecialAccountingCase { get; set; }
 

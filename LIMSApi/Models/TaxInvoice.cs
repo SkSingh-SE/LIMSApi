@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace LIMSApi.Models
 {
-    public class TaxInvoice
+    public class TaxInvoice : AuditProperty
     {
         [Key]
         public long ID { get; set; }
@@ -43,7 +43,9 @@ namespace LIMSApi.Models
         // PDF
         public string? PdfPath { get; set; }
 
-        public DateTime CreatedOn { get; set; } = DateTime.UtcNow;
+        // HSN/SAC code for GST compliance (SAC 998346 = Technical testing and analysis services)
+        [MaxLength(10)]
+        public string SACCode { get; set; } = "998346";
 
         [ForeignKey(nameof(InwardID))]
         public SampleInward? Inward { get; set; }

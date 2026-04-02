@@ -117,21 +117,27 @@ namespace LIMSApi.ServiceWORepo
             await _db.SaveChangesAsync();
             _logger.LogInformation("Case {CaseNo} closed successfully", inward.CaseNo);
 
-            // Notify case creator
-            await _notificationService.CreateNotificationAsync(new Notification
+            // Notifications (fire-and-forget — must not block case closure)
+            try
             {
-                UserID = inward.CreatedBy,
-                Title = "Case Closed",
-                Message = $"Case {inward.CaseNo} has been closed.",
-                Type = NotificationType.System,
-                EntityID = inward.ID,
-                EntityType = "SampleInward"
-            });
+                await _notificationService.CreateNotificationAsync(new Notification
+                {
+                    UserID = inward.CreatedBy,
+                    Title = "Case Closed",
+                    Message = $"Case {inward.CaseNo} has been closed.",
+                    Type = NotificationType.System,
+                    EntityID = inward.ID,
+                    EntityType = "SampleInward"
+                });
 
-            // Notify Accounts team
-            await _notificationService.NotifyByRoleAsync("Accounts",
-                "Case Closed", $"Case {inward.CaseNo} has been closed.",
-                "SampleInward", inward.ID);
+                await _notificationService.NotifyByRoleAsync("Accounts",
+                    "Case Closed", $"Case {inward.CaseNo} has been closed.",
+                    "SampleInward", inward.ID);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Notification failed for case closure {CaseNo}", inward.CaseNo);
+            }
         }
     }
 }
