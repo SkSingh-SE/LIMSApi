@@ -149,6 +149,36 @@ namespace LIMSApi.ServiceWORepo
                 ? "NOT_REQUIRED"
                 : inward.PIReceived ? "Completed" : "Pending";
 
+            // Load PI details
+            var pi = await _db.ProformaInvoiceHeader
+                .Where(p => p.InwardID == inwardId)
+                .OrderByDescending(p => p.PIDate)
+                .FirstOrDefaultAsync();
+
+            // Update piStatus if PI exists but inward not marked
+            if (pi != null && piStatus == "Pending")
+                piStatus = "Generated";
+
+            // Load Invoice details
+            var invoice = await _db.TaxInvoices
+                .Where(i => i.InwardID == inwardId && i.IsActive)
+                .OrderByDescending(i => i.InvoiceDate)
+                .FirstOrDefaultAsync();
+
+            // Load advance payments
+            var advancePayments = await _db.PaymentOrders
+                .Where(p => p.InwardID == inwardId && p.PaymentType == PaymentType.Advance)
+                .OrderByDescending(p => p.CreatedOn)
+                .Select(p => new AdvancePaymentSummary
+                {
+                    Id = p.ID,
+                    Amount = p.Amount,
+                    Date = p.CreatedOn,
+                    PaymentMode = p.PaymentType.ToString(),
+                    Status = p.Status.ToString()
+                })
+                .ToListAsync();
+
             return new CaseAccountSummaryDto
             {
                 InwardID = inward.ID,
@@ -158,80 +188,94 @@ namespace LIMSApi.ServiceWORepo
                 CustomerId = inward.CustomerID,
                 PIStatus = piStatus,
                 InvoiceStatus = inward.IsInvoiceGenerated ? "Completed" : "Pending",
-                HasPendingPayment = hasPendingPayment
+                HasPendingPayment = hasPendingPayment,
+
+                ProformaInvoice = pi != null ? new ProformaInvoiceSummary
+                {
+                    Id = pi.ID,
+                    PiNo = pi.PINo ?? $"PI-{pi.ID}",
+                    PiDate = pi.PIDate,
+                    Status = "Generated",
+                    SubTotal = pi.SubTotal,
+                    TaxAmount = pi.TaxAmount,
+                    GrandTotal = pi.GrandTotal,
+                    Amount = pi.GrandTotal
+                } : null,
+
+                FinalInvoice = invoice != null ? new InvoiceSummary
+                {
+                    InvoiceId = invoice.ID,
+                    InvoiceNo = invoice.InvoiceNo,
+                    InvoiceDate = invoice.InvoiceDate,
+                    SubTotal = invoice.SubTotal,
+                    TaxAmount = invoice.CGST + invoice.SGST + invoice.IGST,
+                    GrandTotal = invoice.GrandTotal,
+                    Amount = invoice.GrandTotal
+                } : null,
+
+                AdvancePayments = advancePayments
             };
         }
 
         public async Task<PagedResponse<object>> GetCasePaymentListAsync(long inwardId, PageFilter filter)
         {
-            var query =
-                (from p in _db.PaymentOrders
-                 where p.InwardID == inwardId
-
-                 select new
-                 {
-                     p.ID,
-                     p.CreatedOn,
-                     PaymentType = p.PaymentType.ToString(),
-
-                     Against =
-                         p.SampleID != null ? "Sample" :
-                         p.ReportID != null ? "Report" : "Case",
-
-                     Reference =
-                         p.SampleID != null
-                             ? _db.SampleDetails
-                                 .Where(s => s.ID == p.SampleID)
-                                 .Select(s => s.SampleNo)
-                                 .FirstOrDefault()
-                             : p.ReportID != null
-                                 ? _db.Reports
-                                     .Where(r => r.ID == p.ReportID)
-                                     .Select(r => r.ReportNo)
-                                     .FirstOrDefault()
-                                 : p.CaseNo,
-
-                     p.Amount,
-                     Status = p.Status.ToString(),
-
-                     Action =
-                         p.Status == PaymentStatus.Pending || p.Status == PaymentStatus.Failed
-                             ? "SendLink"
-                             : "-"
-                 })
-                .AsQueryable()
-                .ApplyFilters(filter.Filter);
-
-            // ------------- SEARCH -------------
-            if (!string.IsNullOrWhiteSpace(filter.searchTerm))
-            {
-                var search = filter.searchTerm.Trim().ToLower();
-
-                query = query.Where(x =>
-                    x.PaymentType.ToLower().Contains(search) ||
-                    x.Reference.ToLower().Contains(search) ||
-                    x.Status.ToLower().Contains(search)
-                );
-            }
-
-            // ------------- SORT -------------
-            if (!string.IsNullOrWhiteSpace(filter.SortByColumn))
-            {
-                query = query.OrderBy(
-                    $"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}"
-                );
-            }
-
-            // ------------- PAGINATION -------------
-            int totalRecords = await query.CountAsync();
-
-            var items = await query
-                .Skip((filter.PageNumber - 1) * filter.PageSize)
-                .Take(filter.PageSize)
+            // ── 1. Payment Orders (Razorpay / system-generated) ──
+            var paymentOrderItems = await _db.PaymentOrders
+                .Where(p => p.InwardID == inwardId)
+                .Select(p => new
+                {
+                    id = p.ID,
+                    date = p.CreatedOn,
+                    paymentType = p.PaymentType.ToString(),
+                    source = "PaymentOrder",
+                    against = p.SampleID != null ? "Sample" : p.ReportID != null ? "Report" : "Case",
+                    reference = p.CaseNo ?? "",
+                    amount = p.Amount,
+                    status = p.Status.ToString(),
+                    receiptNo = "",
+                    paymentMode = "",
+                    action = (p.Status == PaymentStatus.Pending || p.Status == PaymentStatus.Failed) ? "SendLink" : "-",
+                    paymentOrderId = (long?)p.ID
+                })
                 .ToListAsync();
 
+            // ── 2. Ledger Credit Entries (manual payments — Cash, Cheque, NEFT, UPI) ──
+            var ledgerCreditItems = await _db.CustomerLedgers
+                .Where(l => l.InwardId == inwardId && l.CreditAmount > 0)
+                .Select(l => new
+                {
+                    id = l.Id,
+                    date = l.Date,
+                    paymentType = "Manual",
+                    source = "PaymentReceipt",
+                    against = "Case",
+                    reference = l.Description ?? "",
+                    amount = l.CreditAmount,
+                    status = "Paid",
+                    receiptNo = l.ReferenceNo ?? "",
+                    paymentMode = "",
+                    action = "-",
+                    paymentOrderId = (long?)null
+                })
+                .ToListAsync();
+
+            // ── 3. Combine in memory ──
+            var allItems = paymentOrderItems
+                .Cast<object>()
+                .Concat(ledgerCreditItems.Cast<object>())
+                .OrderByDescending(x => ((dynamic)x).date)
+                .ToList();
+
+            var totalRecords = allItems.Count;
+
+            // Simple pagination in memory
+            var items = allItems
+                .Skip((filter.PageNumber - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .ToList();
+
             return new PagedResponse<object>(
-                items.Cast<object>().ToList(),
+                items,
                 totalRecords,
                 filter.PageNumber,
                 filter.PageSize

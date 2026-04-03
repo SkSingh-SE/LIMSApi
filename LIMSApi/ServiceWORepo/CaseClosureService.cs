@@ -82,24 +82,22 @@ namespace LIMSApi.ServiceWORepo
             var hasOpenNCW = false;
             if (sampleNos.Any())
             {
-                var openNCWs = await _db.NablNonConformingWorks
+                // Build SQL-level filter: check each sample code against NCW SampleCode field
+                var openNCWQuery = _db.NablNonConformingWorks
                     .Where(ncw => ncw.IsActive && !ncw.IsObsolete
-                        && (ncw.Status == "Draft" || ncw.Status == "Submitted" || ncw.Status == "Under Review"))
-                    .ToListAsync();
-                hasOpenNCW = openNCWs.Any(ncw =>
-                    sampleNos.Any(sn => (ncw.SampleCode ?? "").Contains(sn)));
+                        && (ncw.Status == "Draft" || ncw.Status == "Submitted" || ncw.Status == "Under Review")
+                        && ncw.SampleCode != null);
+
+                // Check if any NCW references any of our sample numbers
+                foreach (var sn in sampleNos)
+                {
+                    hasOpenNCW = await openNCWQuery.AnyAsync(ncw => ncw.SampleCode!.Contains(sn));
+                    if (hasOpenNCW) break;
+                }
             }
 
             if (hasOpenNCW)
                 return (false, "Open Non-Conforming Work (NCW) exists for this case. Resolve all NCWs before closure.");
-
-            // Check sample disposition is documented (returned/retained/disposed)
-            var undocumentedSamples = inward.SampleDetails
-                .Where(s => s.IsActive && !s.Disabled
-                    && string.IsNullOrWhiteSpace(s.SampleStatus)
-                    || (s.SampleStatus != SampleStatus.REPORT_DISPATCHED.ToString()
-                        && s.SampleStatus != SampleStatus.CASE_CLOSED.ToString()))
-                .ToList();
 
             // Check credit approval for credit customers
             if (inward.Customer?.CustomerType?.Equals("Credit", StringComparison.OrdinalIgnoreCase) == true)
