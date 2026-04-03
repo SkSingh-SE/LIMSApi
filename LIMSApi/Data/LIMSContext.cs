@@ -165,6 +165,11 @@ public partial class LIMSContext : DbContext
     public DbSet<TaxInvoice> TaxInvoices { get; set; }
     public DbSet<ChargeEvent> ChargeEvents { get; set; }
     public DbSet<InvoiceLineItem> InvoiceLineItems { get; set; }
+    public DbSet<CreditNote> CreditNotes { get; set; }
+    public DbSet<DebitNote> DebitNotes { get; set; }
+    public DbSet<AdvancePaymentVoucher> AdvancePaymentVouchers { get; set; }
+    public DbSet<Quotation> Quotations { get; set; }
+    public DbSet<QuotationItem> QuotationItems { get; set; }
     public DbSet<MessageTemplate> MessageTemplates { get; set; }
 
     /* ============================
@@ -673,6 +678,53 @@ public partial class LIMSContext : DbContext
             .WithMany()
             .HasForeignKey(x => x.SampleInwardID)
             .OnDelete(DeleteBehavior.NoAction);
+
+        // CreditNote / DebitNote FKs (no cascade)
+        modelBuilder.Entity<CreditNote>()
+            .HasOne(x => x.TaxInvoice)
+            .WithMany()
+            .HasForeignKey(x => x.TaxInvoiceID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<CreditNote>()
+            .HasOne(x => x.Customer)
+            .WithMany()
+            .HasForeignKey(x => x.CustomerID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<DebitNote>()
+            .HasOne(x => x.TaxInvoice)
+            .WithMany()
+            .HasForeignKey(x => x.TaxInvoiceID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<DebitNote>()
+            .HasOne(x => x.Customer)
+            .WithMany()
+            .HasForeignKey(x => x.CustomerID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // AdvancePaymentVoucher FKs (no cascade)
+        modelBuilder.Entity<AdvancePaymentVoucher>()
+            .HasOne(x => x.Customer).WithMany()
+            .HasForeignKey(x => x.CustomerID).OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<AdvancePaymentVoucher>()
+            .HasOne(x => x.Inward).WithMany()
+            .HasForeignKey(x => x.InwardID).OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<AdvancePaymentVoucher>()
+            .HasOne(x => x.AdjustedToInvoice).WithMany()
+            .HasForeignKey(x => x.AdjustedToInvoiceID).OnDelete(DeleteBehavior.NoAction);
+
+        // Quotation FKs (no cascade)
+        modelBuilder.Entity<Quotation>()
+            .HasOne(x => x.Customer).WithMany()
+            .HasForeignKey(x => x.CustomerID).OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<Quotation>()
+            .HasOne(x => x.ConvertedToInward).WithMany()
+            .HasForeignKey(x => x.ConvertedToInwardID).OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<QuotationItem>()
+            .HasOne(x => x.Quotation).WithMany(q => q.Items)
+            .HasForeignKey(x => x.QuotationID).OnDelete(DeleteBehavior.Cascade);
 
         // SamplePreparationMaster FKs (no cascade)
         modelBuilder.Entity<SamplePreparationMaster>()

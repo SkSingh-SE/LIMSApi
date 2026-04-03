@@ -364,6 +364,13 @@ namespace LIMSApi.Controllers
             return Ok(new { Success = true, Message = "Submitted for verification" });
         }
 
+        [HttpPost("submit-sample-for-verification/{sampleId}")]
+        public async Task<IActionResult> SubmitSampleForVerification(long sampleId)
+        {
+            var result = await _service.SubmitSampleForVerification(sampleId);
+            return Ok(result);
+        }
+
         [HttpPost("verification-list")]
         public async Task<IActionResult> GetVerificationList(PageFilter filter)
         {

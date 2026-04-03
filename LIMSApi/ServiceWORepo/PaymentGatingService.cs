@@ -70,15 +70,25 @@ namespace LIMSApi.ServiceWORepo
                 IsOverLimit = creditLimit > 0 && outstanding > creditLimit
             };
 
-            if (result.IsOverLimit)
+            if (creditLimit > 0)
             {
-                result.Warning = $"Customer outstanding ({outstanding:N2}) exceeds credit limit ({creditLimit:N2}). " +
-                                 $"Over-limit by {outstanding - creditLimit:N2}.";
-            }
-            else if (creditLimit > 0 && available < creditLimit * 0.2m)
-            {
-                result.Warning = $"Customer is approaching credit limit. " +
-                                 $"Available credit: {available:N2} of {creditLimit:N2}.";
+                var utilizationPercent = (outstanding / creditLimit) * 100;
+
+                if (utilizationPercent >= 120)
+                {
+                    result.Warning = $"CRITICAL: Customer outstanding ({outstanding:N2}) is at {utilizationPercent:N0}% of credit limit ({creditLimit:N2}). " +
+                                     $"Auto-blocked — payment required.";
+                }
+                else if (utilizationPercent >= 100)
+                {
+                    result.Warning = $"Customer outstanding ({outstanding:N2}) exceeds credit limit ({creditLimit:N2}). " +
+                                     $"Over-limit by {outstanding - creditLimit:N2}. Lab Manager override required.";
+                }
+                else if (utilizationPercent >= 80)
+                {
+                    result.Warning = $"Customer is approaching credit limit ({utilizationPercent:N0}% utilized). " +
+                                     $"Available credit: {available:N2} of {creditLimit:N2}.";
+                }
             }
 
             return result;
@@ -146,19 +156,44 @@ namespace LIMSApi.ServiceWORepo
             var creditLimit = customer.CreditLimitAmount ?? 0;
             var outstanding = await GetOutstandingBalanceAsync(customer.ID);
 
-            // Credit customers are NOT hard-blocked, only warned
             var result = new PaymentGateResult
             {
                 IsBlocked = false,
                 CustomerType = CustomerTypeConstants.Credit,
                 CreditLimit = creditLimit > 0 ? creditLimit : null,
-                OutstandingBalance = outstanding
+                OutstandingBalance = outstanding,
+                CreditEscalationLevel = "None"
             };
 
-            if (creditLimit > 0 && outstanding > creditLimit)
+            if (creditLimit <= 0)
+                return result;
+
+            var utilizationPercent = (outstanding / creditLimit) * 100;
+
+            // ── 120%+ AUTO-BLOCK: No override possible ──
+            if (utilizationPercent >= 120)
             {
-                result.BlockReason = $"Warning: Customer outstanding ({outstanding:N2}) exceeds " +
-                                     $"credit limit ({creditLimit:N2}). Over-limit by {outstanding - creditLimit:N2}.";
+                result.IsBlocked = true;
+                result.AllowOverride = false;
+                result.CreditEscalationLevel = "AutoBlock";
+                result.BlockReason = $"BLOCKED: Customer outstanding ({outstanding:N2}) is at {utilizationPercent:N0}% of credit limit ({creditLimit:N2}). " +
+                                     $"Payment required before new testing can begin. No override possible.";
+            }
+            // ── 100%+ HARD BLOCK: LabManager can override ──
+            else if (utilizationPercent >= 100)
+            {
+                result.IsBlocked = true;
+                result.AllowOverride = true;
+                result.CreditEscalationLevel = "HardBlock";
+                result.BlockReason = $"BLOCKED: Customer outstanding ({outstanding:N2}) has reached {utilizationPercent:N0}% of credit limit ({creditLimit:N2}). " +
+                                     $"Lab Manager override with documented justification required to proceed.";
+            }
+            // ── 80%+ WARNING: Soft advisory ──
+            else if (utilizationPercent >= 80)
+            {
+                result.CreditEscalationLevel = "Warning";
+                result.BlockReason = $"Warning: Customer outstanding ({outstanding:N2}) is at {utilizationPercent:N0}% of credit limit ({creditLimit:N2}). " +
+                                     $"Available credit: {creditLimit - outstanding:N2}.";
             }
 
             return result;

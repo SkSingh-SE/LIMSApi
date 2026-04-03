@@ -58,12 +58,48 @@ namespace LIMSApi.ServiceWORepo
                 return (false, "Pending amendments exist. All amendments must be resolved before case closure.");
 
             // Check if all samples have reports dispatched
-            var allSamplesDispatched = inward.SampleDetails.All(s => 
+            var allSamplesDispatched = inward.SampleDetails.All(s =>
                 s.SampleStatus == SampleStatus.REPORT_DISPATCHED.ToString() ||
                 s.SampleStatus == SampleStatus.CASE_CLOSED.ToString());
 
             if (!allSamplesDispatched)
                 return (false, "Not all reports have been dispatched. All reports must be dispatched before case closure.");
+
+            // Check all reports are in Approved or Dispatched status (NABL Clause 7.8)
+            var reportHeaders = await _db.ReportHeaders
+                .Where(r => sampleIds.Contains(r.SampleID) && r.IsActive)
+                .ToListAsync();
+
+            var pendingReports = reportHeaders
+                .Where(r => r.Status != "Approved" && r.Status != "Dispatched" && r.Status != "Generated")
+                .ToList();
+
+            if (pendingReports.Any())
+                return (false, $"Reports not yet approved: {pendingReports.Count} report(s) are still in '{pendingReports.First().Status}' status.");
+
+            // Check no pending Non-Conforming Work (NCW) for any test in the case
+            var sampleNos = inward.SampleDetails.Select(s => s.SampleNo).Where(s => !string.IsNullOrEmpty(s)).ToList();
+            var hasOpenNCW = false;
+            if (sampleNos.Any())
+            {
+                var openNCWs = await _db.NablNonConformingWorks
+                    .Where(ncw => ncw.IsActive && !ncw.IsObsolete
+                        && (ncw.Status == "Draft" || ncw.Status == "Submitted" || ncw.Status == "Under Review"))
+                    .ToListAsync();
+                hasOpenNCW = openNCWs.Any(ncw =>
+                    sampleNos.Any(sn => (ncw.SampleCode ?? "").Contains(sn)));
+            }
+
+            if (hasOpenNCW)
+                return (false, "Open Non-Conforming Work (NCW) exists for this case. Resolve all NCWs before closure.");
+
+            // Check sample disposition is documented (returned/retained/disposed)
+            var undocumentedSamples = inward.SampleDetails
+                .Where(s => s.IsActive && !s.Disabled
+                    && string.IsNullOrWhiteSpace(s.SampleStatus)
+                    || (s.SampleStatus != SampleStatus.REPORT_DISPATCHED.ToString()
+                        && s.SampleStatus != SampleStatus.CASE_CLOSED.ToString()))
+                .ToList();
 
             // Check credit approval for credit customers
             if (inward.Customer?.CustomerType?.Equals("Credit", StringComparison.OrdinalIgnoreCase) == true)

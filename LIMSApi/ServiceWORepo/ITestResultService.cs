@@ -88,6 +88,7 @@ namespace LIMSApi.ServiceWORepo
         // Phase 5: Test Verification Workflow
         // -------------------------------------------------------------
         Task SubmitForVerification(long headerId);
+        Task<object> SubmitSampleForVerification(long sampleId);
         Task<PagedResponse<object>> GetVerificationList(PageFilter filter);
         Task VerifyTest(long headerId, string? comments);
         Task RejectVerification(long headerId, string? comments);

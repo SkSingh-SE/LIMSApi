@@ -430,8 +430,15 @@ namespace LIMSApi.Services
 
                 if (nextApprovers.SequenceEqual(approvers))
                 {
-                    await PerformAction(instance.ID, "Approve", employeeId, "Auto-approved (same approver)");
-                    return;
+                    // Use the first forward transition from next step (not hardcoded "Approve")
+                    var nextTransition = nextStep.Transitions
+                        .FirstOrDefault(t => t.IsActive && !t.Action.Equals("Cancel", StringComparison.OrdinalIgnoreCase));
+
+                    if (nextTransition != null)
+                    {
+                        await PerformAction(instance.ID, nextTransition.Action, employeeId, "Auto-approved (same approver)");
+                        return;
+                    }
                 }
 
                 //  Notify next approvers

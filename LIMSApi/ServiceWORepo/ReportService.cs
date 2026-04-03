@@ -689,10 +689,18 @@ namespace LIMSApi.ServiceWORepo
 
         private ReportTestDto MapTestDto(dynamic test)
         {
+            // Add specimen label when multiple specimens exist
+            string baseName = test.laboratoryTest ?? "Test";
+            int totalSpec = 1;
+            int seqNo = 1;
+            try { totalSpec = (int)(test.totalSpecimens ?? 1); } catch { }
+            try { seqNo = (int)(test.sequenceNo ?? 1); } catch { }
+            string testName = totalSpec > 1 ? $"{baseName} - Specimen {seqNo}" : baseName;
+
             return new ReportTestDto
             {
                 TestResultHeaderId = test.headerId,
-                TestName = test.laboratoryTest,
+                TestName = testName,
                 ReportNo = test.reportNo,
                 Specification1Name = test.specfication1Name,
                 Specification2Name = test.specfication2Name,

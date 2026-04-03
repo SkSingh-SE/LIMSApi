@@ -2156,6 +2156,72 @@ namespace LIMSApi.ServiceWORepo
             }
         }
 
+        /// <summary>
+        /// Submit ALL test results for a sample for verification at once.
+        /// NABL ISO 17025 Clause 7.7: Reviewer must see complete picture — all specimens together.
+        /// Validates: all headers must be in Completed status before submission.
+        /// </summary>
+        public async Task<object> SubmitSampleForVerification(long sampleId)
+        {
+            var headers = await _db.TestResultHeaders
+                .Where(h => h.SampleID == sampleId && h.IsActive)
+                .ToListAsync();
+
+            if (!headers.Any())
+                throw new Exception("No test results found for this sample.");
+
+            // Check all tests are completed
+            var incompleteHeaders = headers
+                .Where(h => h.Status != "Completed" && h.Status != "PendingVerification" && h.Status != "Verified")
+                .ToList();
+
+            if (incompleteHeaders.Any())
+            {
+                var pendingCount = incompleteHeaders.Count;
+                var pendingTests = new List<string>();
+                foreach (var h in incompleteHeaders)
+                {
+                    var testName = await _db.LaboratoryTests
+                        .Where(t => t.ID == h.LaboratoryTestID)
+                        .Select(t => t.Name)
+                        .FirstOrDefaultAsync() ?? "Unknown";
+
+                    var hasMultiple = headers.Count(x => x.LaboratoryTestID == h.LaboratoryTestID) > 1;
+                    pendingTests.Add(hasMultiple ? $"{testName} - Specimen {h.SequenceNo} ({h.Status})" : $"{testName} ({h.Status})");
+                }
+
+                throw new InvalidOperationException(
+                    $"Cannot submit for verification. {pendingCount} test(s) not yet completed: {string.Join(", ", pendingTests)}");
+            }
+
+            // Skip already submitted
+            var toSubmit = headers.Where(h => h.Status == "Completed").ToList();
+            if (!toSubmit.Any())
+            {
+                return new { Success = true, Message = "All tests already submitted for verification.", SubmittedCount = 0 };
+            }
+
+            // Mark all as PendingVerification
+            foreach (var h in toSubmit)
+            {
+                h.Status = "PendingVerification";
+            }
+            await _db.SaveChangesAsync();
+
+            // Update sample status
+            await _sampleStatusService.ForceAutoStatusAsync(
+                sampleId,
+                SampleStatus.TESTING_UNDER_VERIFICATION,
+                loggedInUser.EmployeeID);
+
+            return new
+            {
+                Success = true,
+                Message = $"{toSubmit.Count} test(s) submitted for verification.",
+                SubmittedCount = toSubmit.Count
+            };
+        }
+
         public async Task<PagedResponse<object>> GetVerificationList(PageFilter filter)
         {
             var query = from h in _db.TestResultHeaders
@@ -2358,14 +2424,24 @@ namespace LIMSApi.ServiceWORepo
             // Test charges
             var headers = await _db.TestResultHeaders
                 .Where(h => h.SampleID == sampleId && h.IsActive)
+                .OrderBy(h => h.LaboratoryTestID).ThenBy(h => h.SequenceNo)
                 .ToListAsync();
+
+            // Detect multi-specimen tests for labeling
+            var labTestCounts = headers.GroupBy(h => h.LaboratoryTestID)
+                .ToDictionary(g => g.Key, g => g.Count());
 
             foreach (var h in headers)
             {
-                var testName = await _db.LaboratoryTests
+                var baseName = await _db.LaboratoryTests
                     .Where(t => t.ID == h.LaboratoryTestID)
                     .Select(t => t.Name)
                     .FirstOrDefaultAsync() ?? "Unknown";
+
+                // Add specimen label when multiple headers share same test
+                var testName = labTestCounts.GetValueOrDefault(h.LaboratoryTestID, 1) > 1
+                    ? $"{baseName} - Specimen {h.SequenceNo}"
+                    : baseName;
 
                 var finalPrice = h.PriceOverridden ? (h.OverridePrice ?? 0) : (h.CalculatedPrice ?? 0);
 
