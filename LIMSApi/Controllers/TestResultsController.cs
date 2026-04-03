@@ -58,7 +58,7 @@ namespace LIMSApi.Controllers
             }
             catch (System.Data.SqlTypes.SqlNullValueException ex)
             {
-                return StatusCode(500, new { message = ex.Message, stackTrace = ex.StackTrace?.Split('\n').Take(10) });
+                return StatusCode(500, new { message = "Data error loading test results. Some fields may have null values. " + ex.Message });
             }
         }
 

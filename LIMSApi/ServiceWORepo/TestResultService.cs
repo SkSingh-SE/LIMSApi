@@ -160,7 +160,7 @@ namespace LIMSApi.ServiceWORepo
         public async Task SaveTestResult(TestResultSaveDto dto)
         {
             if (dto == null)
-                throw new Exception("Dto can not be blank");
+                throw new ArgumentException("Payload cannot be blank.");
 
             await using var trx = await _db.Database.BeginTransactionAsync();
             try
@@ -240,7 +240,12 @@ namespace LIMSApi.ServiceWORepo
                     header = await _db.TestResultHeaders
                         .Include(h => h.Parameters)
                         .FirstOrDefaultAsync(h => h.ID == g.HeaderId)
-                        ?? throw new Exception($"Header not found: {g.HeaderId}");
+                        ?? throw new KeyNotFoundException($"Header not found: {g.HeaderId}");
+
+                    // CRITICAL #1: Block saves on finalized tests (Completed is allowed — user can edit before verification)
+                    var blockedStatuses = new[] { "Verified", "PendingVerification" };
+                    if (blockedStatuses.Contains(header.Status))
+                        throw new InvalidOperationException($"Cannot save results — test is in '{header.Status}' status. Reject verification first to make changes.");
                 }
                 else
                 {
@@ -249,10 +254,20 @@ namespace LIMSApi.ServiceWORepo
                         SampleID = sampleId,
                         LaboratoryTestID = g.LaboratoryTestId,
                         TestPlanID = planId,
-                        Status = "In-Progress"
+                        Status = "In-Progress",
+                        CreatedBy = loggedInUser.EmployeeID,
+                        CreatedOn = DateTime.UtcNow,
+                        CompanyCode = loggedInUser.CompanyCode ?? "LIMS",
+                        IsActive = true
                     };
 
                     _db.TestResultHeaders.Add(header);
+                }
+
+                // HIGH #10: Persist equipment selection
+                if (!string.IsNullOrEmpty(g.EquipmentIdsJson))
+                {
+                    header.EquipmentIdsJson = g.EquipmentIdsJson;
                 }
 
                 // Save parameter values
@@ -262,7 +277,8 @@ namespace LIMSApi.ServiceWORepo
 
                     if (p.Id > 0)
                     {
-                        param = header.Parameters.First(x => x.ID == p.Id);
+                        param = header.Parameters.FirstOrDefault(x => x.ID == p.Id);
+                        if (param == null) continue;
                     }
                     else
                     {
@@ -285,8 +301,12 @@ namespace LIMSApi.ServiceWORepo
                     param.ConvertedValue = p.ConvertedValue;
                     param.SelectedUnit = p.SelectedUnit;
                     param.TestMethodUsed = p.TestMethodUsed;
-                    if(header.Status == "Completed" && p.Value == 0)
-                        throw new Exception("All parameters must have values greater than 0 after completion.");
+
+                    // CRITICAL #3: Allow value==0 (valid for chemical trace elements)
+                    // Only block null values for completed tests, not zero
+                    if (header.Status == "Completed" && p.Value == null)
+                        throw new InvalidOperationException($"Parameter '{p.ParameterName}' must have a value after test completion.");
+
                     param.Value = p.Value.HasValue ? Convert.ToDecimal(p.Value) : p.Value;
 
                     // Save formula expression if provided
@@ -296,8 +316,10 @@ namespace LIMSApi.ServiceWORepo
                     }
                 }
 
+                // HIGH #12: Flush changes before recalculation so it sees latest values
+                await _db.SaveChangesAsync();
 
-                // 🚀 **Important: Run calculations**
+                // Run calculations on current header
                 await RecalculateAllParameters(header.ID);
             }
         }
@@ -364,11 +386,17 @@ namespace LIMSApi.ServiceWORepo
 
                     // ----------------------------------------------
                     // RANGE CHECK (use SpecMinValue/SpecMaxValue with fallback to MinValue/MaxValue)
+                    // Apply ConversionFactor for comparison (e.g., unit conversion)
                     // ----------------------------------------------
                     decimal? specMin = param.SpecMinValue ?? param.MinValue;
                     decimal? specMax = param.SpecMaxValue ?? param.MaxValue;
 
-                    string resultStatus = _formulaEvaluator.DetermineResultStatus(param.Value, specMin, specMax);
+                    // Apply conversion factor before range check (matches frontend behavior)
+                    var compareValue = param.Value.HasValue
+                        ? Math.Round(param.Value.Value * param.ConversionFactor, param.DecimalPrecision, MidpointRounding.AwayFromZero)
+                        : param.Value;
+
+                    string resultStatus = _formulaEvaluator.DetermineResultStatus(compareValue, specMin, specMax);
                     if (resultStatus != null)
                     {
                         param.ResultStatus = resultStatus;
@@ -528,7 +556,7 @@ namespace LIMSApi.ServiceWORepo
         {
             // load sample + testplans + minimal inward header
             var sample = await _db.SampleDetails
-                .Where(s => s.ID == sampleId)
+                .Where(s => s.ID == sampleId && s.SampleInward!.CompanyCode == loggedInUser.CompanyCode)
                 .Include(s => s.SampleInward)
                     .ThenInclude(c => c!.Customer)
                 .Include(s => s.AdditionalDetails)
@@ -1321,15 +1349,29 @@ namespace LIMSApi.ServiceWORepo
             if (statuses == null || statuses.Count == 0)
                 return "Pending";
 
-            // If any test is running, sample is in progress
-            if (statuses.Any(s =>
-                s == "Started" ||
-                s == "In Progress"))
+            // All verified
+            if (statuses.All(s => s == "Verified"))
+                return "Verified";
+
+            // All completed or verified (mix)
+            if (statuses.All(s => s == "Completed" || s == "Verified" || s == "PendingVerification"))
+            {
+                if (statuses.Any(s => s == "PendingVerification"))
+                    return "Pending Verification";
+                return "Completed";
+            }
+
+            // Any test rejected
+            if (statuses.Any(s => s == "VerificationRejected"))
+                return "Verification Rejected";
+
+            // Any test in progress
+            if (statuses.Any(s => s == "Started" || s == "In Progress" || s == "In-Progress"))
                 return "In Progress";
 
-            // If ALL tests are completed
-            if (statuses.All(s => s == "Completed"))
-                return "Completed";
+            // Any test is long-term
+            if (statuses.Any(s => s == "Long-Term"))
+                return "Long-Term Testing";
 
             // Default fallback
             return "Pending";
@@ -1370,6 +1412,24 @@ namespace LIMSApi.ServiceWORepo
             header.TestStartTime = DateTime.UtcNow;
             header.StartedBy = loggedInUser.EmployeeID;
             header.PerformedById = loggedInUser.EmployeeID;
+            header.PerformedByName = loggedInUser.Name;
+
+            // Capture lab environment at test start time (ISO 17025)
+            try
+            {
+                var latestEnv = await _db.NablEnvironmentMonitorings
+                    .Where(e => e.IsActive && !e.IsObsolete && e.MonitoringDate != null
+                        && e.MonitoringDate.Value.Date == DateTime.UtcNow.Date)
+                    .OrderByDescending(e => e.MonitoringDate)
+                    .FirstOrDefaultAsync();
+
+                if (latestEnv != null)
+                {
+                    header.RoomTemperature = latestEnv.Temperature;
+                    header.RoomHumidity = latestEnv.Humidity;
+                }
+            }
+            catch { /* Environment capture is best-effort, don't block test start */ }
 
             await _db.SaveChangesAsync();
 
@@ -2248,16 +2308,24 @@ namespace LIMSApi.ServiceWORepo
         public async Task SubmitForVerification(long headerId)
         {
             var header = await _db.TestResultHeaders.FindAsync(headerId);
-            if (header == null) throw new Exception("Header not found.");
+            if (header == null) throw new KeyNotFoundException("Header not found.");
+            if (!header.IsActive) throw new InvalidOperationException("Header is inactive.");
 
             header.Status = "PendingVerification";
             await _db.SaveChangesAsync();
 
-            // Update sample status
-            await _sampleStatusService.ForceAutoStatusAsync(
-                header.SampleID,
-                SampleStatus.TESTING_UNDER_VERIFICATION,
-                loggedInUser.EmployeeID);
+            // CRITICAL #23: Only set sample status if ALL headers are submitted/verified
+            var allSubmitted = !await _db.TestResultHeaders.AnyAsync(h =>
+                h.SampleID == header.SampleID && h.IsActive &&
+                h.Status != "PendingVerification" && h.Status != "Verified");
+
+            if (allSubmitted)
+            {
+                await _sampleStatusService.ForceAutoStatusAsync(
+                    header.SampleID,
+                    SampleStatus.TESTING_UNDER_VERIFICATION,
+                    loggedInUser.EmployeeID);
+            }
 
             // Start workflow if configured
             try
@@ -2377,19 +2445,21 @@ namespace LIMSApi.ServiceWORepo
         public async Task VerifyTest(long headerId, string? comments)
         {
             var header = await _db.TestResultHeaders.FindAsync(headerId);
-            if (header == null) throw new Exception("Header not found.");
+            if (header == null) throw new KeyNotFoundException("Header not found.");
 
             if (header.Status != "PendingVerification")
                 throw new InvalidOperationException($"Cannot verify test in '{header.Status}' status. Only 'PendingVerification' tests can be verified.");
 
             header.Status = "Verified";
+            header.ModifiedBy = loggedInUser.EmployeeID;
+            header.ModifiedOn = DateTime.UtcNow;
             await _db.SaveChangesAsync();
 
-            // Check if all tests for sample are verified
+            // CRITICAL #24: Only count "Verified" — "Completed" is NOT verified
             bool allVerified = !await _db.TestResultHeaders.AnyAsync(h =>
                 h.SampleID == header.SampleID &&
                 h.IsActive &&
-                h.Status != "Verified" && h.Status != "Completed");
+                h.Status != "Verified");
 
             if (allVerified)
             {
@@ -2403,12 +2473,14 @@ namespace LIMSApi.ServiceWORepo
         public async Task RejectVerification(long headerId, string? comments)
         {
             var header = await _db.TestResultHeaders.FindAsync(headerId);
-            if (header == null) throw new Exception("Header not found.");
+            if (header == null) throw new KeyNotFoundException("Header not found.");
 
             if (header.Status != "PendingVerification")
                 throw new InvalidOperationException($"Cannot reject test in '{header.Status}' status. Only 'PendingVerification' tests can be rejected.");
 
             header.Status = "VerificationRejected";
+            header.ModifiedBy = loggedInUser.EmployeeID;
+            header.ModifiedOn = DateTime.UtcNow;
             await _db.SaveChangesAsync();
 
             await _sampleStatusService.ForceAutoStatusAsync(
