@@ -947,23 +947,121 @@ namespace LIMSApi.ServiceWORepo
                 .FirstOrDefaultAsync(h => h.ID == headerId)
                 ?? throw new KeyNotFoundException("Test header not found.");
 
-            // Get the plan's specification IDs
             var plan = await _db.TestPlans
                 .Include(p => p.GeneralTests)
+                .Include(p => p.ChemicalTests)
+                    .ThenInclude(ct => ct.TestTypes)
+                .Include(p => p.ChemicalTests)
+                    .ThenInclude(ct => ct.Elements)
+                        .ThenInclude(e => e.Parameter)
                 .FirstOrDefaultAsync(p => p.ID == header.TestPlanID);
 
-            var specIds = new List<long>();
+            var warnings = new List<string>();
+            var specParams = new List<TestResultParameter>();
+
+            // Detect: is this header for a General test or Chemical test?
+            // Check if header's LaboratoryTestID exists in any ChemicalTestType
+            bool isChemical = false;
             if (plan != null)
             {
+                // Direct DB query — more reliable than navigational Include
+                isChemical = await _db.Set<ChemicalTestType>()
+                    .AnyAsync(tt => tt.IsSelected
+                        && tt.LaboratoryTestID == header.LaboratoryTestID
+                        && plan.ChemicalTests.Select(ct => ct.ID).Contains(tt.ChemicalTestID));
+            }
+
+            if (!isChemical && plan != null)
+            {
+                // ── GENERAL/MECHANICAL: load from SpecificationLine (Type="mechanical") ──
+                var specIds = new List<long>();
                 foreach (var gt in plan.GeneralTests)
                 {
                     if (gt.Specification1.HasValue && gt.Specification1.Value > 0) specIds.Add(gt.Specification1.Value);
                     if (gt.Specification2.HasValue && gt.Specification2.Value > 0) specIds.Add(gt.Specification2.Value);
                 }
+                specParams = await BuildMechanicalParametersAsync(header.LaboratoryTestID, specIds, warnings);
             }
+            else if (isChemical && plan != null)
+            {
+                // ── CHEMICAL: load from ChemicalTestElement (elements like Fe, Cu, Ni) ──
+                var chemTest = plan.ChemicalTests.FirstOrDefault(ct =>
+                    ct.TestTypes != null && ct.TestTypes.Any(tt => tt.LaboratoryTestID == header.LaboratoryTestID));
 
-            var warnings = new List<string>();
-            var specParams = await BuildMechanicalParametersAsync(header.LaboratoryTestID, specIds, warnings);
+                if (chemTest != null)
+                {
+                    // Also load from chemical spec lines (Type="chemical")
+                    var chemSpecIds = new List<long>();
+                    if (chemTest.Specification1.HasValue && chemTest.Specification1.Value > 0) chemSpecIds.Add(chemTest.Specification1.Value);
+                    if (chemTest.Specification2.HasValue && chemTest.Specification2.Value > 0) chemSpecIds.Add(chemTest.Specification2.Value);
+
+                    // First: elements from ChemicalTestElement
+                    foreach (var el in chemTest.Elements.Where(e => e.ParameterID > 0))
+                    {
+                        var pm = el.Parameter ?? await _db.ParameterMasters
+                            .Include(p => p.ParameterUnit)
+                            .FirstOrDefaultAsync(p => p.ID == el.ParameterID);
+
+                        if (pm == null) continue;
+
+                        specParams.Add(new TestResultParameter
+                        {
+                            ParameterID = pm.ID,
+                            ParameterName = pm.Name,
+                            Unit = pm.ParameterUnit?.Name ?? el.ParameterUnit ?? "%",
+                            Value = null,
+                            IsCalculated = false,
+                            IsAdditional = false,
+                            MinValue = el.MinValue,
+                            MaxValue = el.MaxValue,
+                            SpecMinValue = el.MinValue,
+                            SpecMaxValue = el.MaxValue,
+                            SpecificationLineID = el.SpecificationLineID,
+                            ParameterType = "Quantitative"
+                        });
+                    }
+
+                    // Second: spec lines (Type="chemical") if any additional
+                    if (chemSpecIds.Any())
+                    {
+                        var chemSpecLines = await _db.SpecificationLines
+                            .Include(sl => sl.Parameter)
+                                .ThenInclude(p => p.ParameterUnit)
+                            .Where(sl => sl.SpecificationGradeID.HasValue
+                                && chemSpecIds.Contains(sl.SpecificationGradeID.Value)
+                                && sl.Type == "chemical"
+                                && sl.ParameterID.HasValue)
+                            .ToListAsync();
+
+                        var alreadyAdded = specParams.Select(p => p.ParameterID).ToHashSet();
+                        foreach (var sl in chemSpecLines.Where(s => s.ParameterID.HasValue && !alreadyAdded.Contains(s.ParameterID.Value)))
+                        {
+                            var pm = sl.Parameter;
+                            if (pm == null) continue;
+
+                            specParams.Add(new TestResultParameter
+                            {
+                                ParameterID = pm.ID,
+                                ParameterName = pm.Name,
+                                Unit = pm.ParameterUnit?.Name ?? "%",
+                                Value = null,
+                                IsCalculated = false,
+                                IsAdditional = false,
+                                MinValue = sl.MinValue,
+                                MaxValue = sl.MaxValue,
+                                SpecMinValue = sl.MinValue,
+                                SpecMaxValue = sl.MaxValue,
+                                SpecificationLineID = sl.ID,
+                                ParameterType = "Quantitative"
+                            });
+                        }
+                    }
+                }
+                else
+                {
+                    warnings.Add("Chemical test definition not found in test plan.");
+                }
+            }
 
             // Skip parameters already present
             var existingParamIds = header.Parameters.Select(p => p.ParameterID).ToHashSet();
@@ -2006,6 +2104,22 @@ namespace LIMSApi.ServiceWORepo
                 IsOverallPass = header.IsOverallPass,
                 Parameters = paramResults
             };
+        }
+
+        // =====================================================================
+        //  DELETE PARAMETER
+        // =====================================================================
+        public async Task DeleteParameter(long paramId)
+        {
+            var param = await _db.TestResultParameters.FindAsync(paramId);
+            if (param == null) throw new KeyNotFoundException("Parameter not found.");
+
+            var header = await _db.TestResultHeaders.FindAsync(param.TestResultHeaderID);
+            if (header != null && (header.Status == "Verified" || header.Status == "PendingVerification"))
+                throw new InvalidOperationException("Cannot delete parameter from a verified or pending verification test.");
+
+            _db.TestResultParameters.Remove(param);
+            await _db.SaveChangesAsync();
         }
 
         // =====================================================================

@@ -235,6 +235,16 @@ namespace LIMSApi.Controllers
         }
 
         // =============================================================
+        // Delete Parameter
+        // =============================================================
+        [HttpDelete("delete-parameter/{paramId}")]
+        public async Task<IActionResult> DeleteParameter(long paramId)
+        {
+            await _service.DeleteParameter(paramId);
+            return Ok(new { Success = true, Message = "Parameter deleted" });
+        }
+
+        // =============================================================
         // Add Parameter from Another Test Method
         // =============================================================
         [HttpPost("add-parameter-from-method/{headerId}")]

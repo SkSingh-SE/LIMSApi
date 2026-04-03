@@ -78,6 +78,7 @@ namespace LIMSApi.ServiceWORepo
         // Load Parameters from Specification into existing header
         // -------------------------------------------------------------
         Task<object> LoadParametersFromSpecAsync(long headerId);
+        Task DeleteParameter(long paramId);
 
         // -------------------------------------------------------------
         // Auto-create TestResultHeaders from approved plan
