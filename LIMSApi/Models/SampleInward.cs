@@ -35,7 +35,7 @@ namespace LIMSApi.Models
         [Required, StringLength(100)]
         public string Country { get; set; } = string.Empty;
 
-        [Required, StringLength(15)]
+        [StringLength(15)]
         public string GstNo { get; set; } = string.Empty;
 
         [Column(TypeName = "decimal(18,2)")]

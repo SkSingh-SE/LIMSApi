@@ -548,7 +548,7 @@ namespace LIMSApi.ServiceWORepo
                 InvoiceDate = invoice.InvoiceDate,
                 CustomerName = invoice.Customer!.Name,
                 CustomerAddress = invoice.Customer.Address,
-                CustomerGst = invoice.Customer.GSTNo,
+                CustomerGst = invoice.Customer.GSTNo ?? "",
                 SubTotal = invoice.SubTotal,
                 DiscountPercentage = invoice.DiscountPercentage,
                 DiscountAmount = invoice.DiscountAmount,

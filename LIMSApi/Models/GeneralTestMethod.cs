@@ -14,7 +14,7 @@ namespace LIMSApi.Models
         public long? TestCaseID { get; set; }
 
         public int Quantity { get; set; }
-        public string ReportNo { get; set; }
+        public string? ReportNo { get; set; }
         public string UlrNo { get; set; } = string.Empty;
         public bool Cancel { get; set; }
         [ForeignKey("GeneralTestID"),JsonIgnore]

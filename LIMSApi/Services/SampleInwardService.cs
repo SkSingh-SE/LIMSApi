@@ -333,15 +333,14 @@ namespace LIMSApi.Services
         /// </summary>
         private bool ValidateMandatoryInformation(SampleInward inward)
         {
-            // Check mandatory fields
+            // Check mandatory fields (GstNo excluded — can be empty when customer has GSTNA=true)
             if (string.IsNullOrWhiteSpace(inward.CaseNo) ||
                 inward.CustomerID == 0 ||
                 string.IsNullOrWhiteSpace(inward.Address) ||
                 string.IsNullOrWhiteSpace(inward.City) ||
                 string.IsNullOrWhiteSpace(inward.State) ||
                 string.IsNullOrWhiteSpace(inward.PinCode) ||
-                string.IsNullOrWhiteSpace(inward.Country) ||
-                string.IsNullOrWhiteSpace(inward.GstNo))
+                string.IsNullOrWhiteSpace(inward.Country))
             {
                 return false;
             }
@@ -1308,6 +1307,7 @@ namespace LIMSApi.Services
                 ID = sampleInward.ID,
                 CaseNo = sampleInward.CaseNo,
                 CustomerID = sampleInward.CustomerID,
+                PurchaseOrderId = sampleInward.PurchaseOrderId,
                 Address = sampleInward.Address,
                 Area = sampleInward.Area,
                 State = sampleInward.State,
@@ -1478,6 +1478,7 @@ namespace LIMSApi.Services
                 CaseNo = sampleInward.CaseNo,
                 CustomerID = sampleInward.CustomerID,
                 CustomerName = sampleInward?.Customer?.Name,
+                PurchaseOrderId = sampleInward.PurchaseOrderId,
                 Address = sampleInward.Address,
                 Area = sampleInward.Area,
                 State = sampleInward.State,

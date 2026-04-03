@@ -30,7 +30,7 @@ namespace LIMSApi.Models
 
 
         [StringLength(50)]
-        public required string GSTNo { get; set; }
+        public string? GSTNo { get; set; }
         [StringLength(50)]
         public string? PANNo { get; set; }
 

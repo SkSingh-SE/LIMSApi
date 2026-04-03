@@ -17,6 +17,13 @@ namespace LIMSApi.Models
 
         [Required]
         public long TestPlanID { get; set; }
+
+        /// <summary>
+        /// Specimen number within same (SampleID, LaboratoryTestID, TestPlanID).
+        /// When GeneralTestMethod.Quantity = 3, creates headers with SequenceNo 1, 2, 3.
+        /// </summary>
+        public int SequenceNo { get; set; } = 1;
+
         public long? TestID { get; set; }
 
         [Required]

@@ -101,7 +101,8 @@ namespace LIMSApi.Repositories
             {
                 var search = searchTerm.Trim().ToLower();
                 _query = _query.Where(x =>
-                    (x.SpecimenType != null && x.SpecimenType.ToLower().Contains(search))
+                    x.ID.ToString().Contains(search)
+                    || (x.SpecimenType != null && x.SpecimenType.ToLower().Contains(search))
                     || (x.Dimensions != null && x.Dimensions.ToLower().Contains(search)));
             }
 

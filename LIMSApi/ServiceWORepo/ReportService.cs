@@ -1434,14 +1434,25 @@ namespace LIMSApi.ServiceWORepo
             // 4. Build test sections
             var testSections = new List<ReportDataTestSection>();
 
+            // Group by LabTestID to detect multi-specimen tests
+            var labTestGroups = testHeaders.GroupBy(h => h.LaboratoryTestID)
+                .ToDictionary(g => g.Key, g => g.Count());
+
             foreach (var header in testHeaders)
             {
                 var testType = DetermineTestType(header);
+                var baseName = header.LaboratoryTest?.Name ?? "Unknown Test";
+
+                // Add specimen label when multiple headers share same lab test
+                var hasMultipleSpecimens = labTestGroups.GetValueOrDefault(header.LaboratoryTestID, 1) > 1;
+                var testName = hasMultipleSpecimens
+                    ? $"{baseName} - Specimen {header.SequenceNo}"
+                    : baseName;
 
                 var section = new ReportDataTestSection
                 {
                     TestResultHeaderId = header.ID,
-                    TestName = header.LaboratoryTest?.Name ?? "Unknown Test",
+                    TestName = testName,
                     TestType = testType,
                     TestCategory = DetermineTestCategory(header, testType),
                     SpecificationName = header.LaboratoryTest?.SubGroup,

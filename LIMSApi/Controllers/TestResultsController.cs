@@ -52,7 +52,14 @@ namespace LIMSApi.Controllers
         [HttpGet("full-result-payload/{sampleId}")]
         public async Task<IActionResult> GetFullResultPayload(long sampleId)
         {
-            return Ok(await _service.GetSampleDetailsForResult(sampleId));
+            try
+            {
+                return Ok(await _service.GetSampleDetailsForResult(sampleId));
+            }
+            catch (System.Data.SqlTypes.SqlNullValueException ex)
+            {
+                return StatusCode(500, new { message = ex.Message, stackTrace = ex.StackTrace?.Split('\n').Take(10) });
+            }
         }
 
         // =============================================================

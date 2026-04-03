@@ -79,7 +79,7 @@ namespace LIMSApi.Repositories
                     (x.Name != null && x.Name.ToLower().Contains(search))
                     || x.CustomerType.ToLower().Contains(search)
                     || x.PinCode.ToLower().Contains(search)
-                    || x.GSTNo.ToLower().Contains(search)
+                    || (x.GSTNo != null && x.GSTNo.ToLower().Contains(search))
                 );
             }
 

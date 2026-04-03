@@ -124,9 +124,12 @@ namespace LIMSApi.Services
             if (exists)
                 throw new InvalidOperationException("Same Customer already exists!");
 
-            bool duplicateCustomer = await _customerRepository.ValidateDuplicateCustomer(model.GSTNo, model.ID);
-            if(duplicateCustomer)
-                throw new InvalidOperationException("Same Customer GST already exists!");
+            if (!string.IsNullOrWhiteSpace(model.GSTNo))
+            {
+                bool duplicateCustomer = await _customerRepository.ValidateDuplicateCustomer(model.GSTNo, model.ID);
+                if(duplicateCustomer)
+                    throw new InvalidOperationException("Same Customer GST already exists!");
+            }
 
             var existingCustomer = await _customerRepository.GetCustomerById(model.ID);
             if (existingCustomer == null)

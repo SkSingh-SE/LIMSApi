@@ -577,14 +577,15 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 INSERT INTO CurrencyMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive)
                 VALUES (N'US Dollar', N'USD', 0, GETUTCDATE(), N'LIMS', 1);
 
-            IF NOT EXISTS (SELECT 1 FROM CurrencyMasters WHERE Code = N'EUR' AND IsActive = 1)
-                INSERT INTO CurrencyMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'Euro', N'EUR', 0, GETUTCDATE(), N'LIMS', 1);
-
-            IF NOT EXISTS (SELECT 1 FROM CurrencyMasters WHERE Code = N'GBP' AND IsActive = 1)
-                INSERT INTO CurrencyMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'British Pound', N'GBP', 0, GETUTCDATE(), N'LIMS', 1);
         ");
+
+        //IF NOT EXISTS(SELECT 1 FROM CurrencyMasters WHERE Code = N'EUR' AND IsActive = 1)
+        //        INSERT INTO CurrencyMasters(Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive)
+        //        VALUES(N'Euro', N'EUR', 0, GETUTCDATE(), N'LIMS', 1);
+
+        //IF NOT EXISTS(SELECT 1 FROM CurrencyMasters WHERE Code = N'GBP' AND IsActive = 1)
+        //        INSERT INTO CurrencyMasters(Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive)
+        //        VALUES(N'British Pound', N'GBP', 0, GETUTCDATE(), N'LIMS', 1);
     }
 
     // ───────────────────────────────────────────────

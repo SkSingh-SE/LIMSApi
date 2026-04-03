@@ -529,8 +529,8 @@ namespace LIMSApi.ServiceWORepo
             // load sample + testplans + minimal inward header
             var sample = await _db.SampleDetails
                 .Where(s => s.ID == sampleId)
-                .Include(s => s.SampleInward) // for parent inward info
-                    .ThenInclude(c => c.Customer)
+                .Include(s => s.SampleInward)
+                    .ThenInclude(c => c!.Customer)
                 .Include(s => s.AdditionalDetails)
                 .Include(s => s.ProductCondition)
                 .Include(s => s.TestPlans)
@@ -542,6 +542,7 @@ namespace LIMSApi.ServiceWORepo
                 .Include(s => s.TestPlans)
                     .ThenInclude(tp => tp.ChemicalTests)
                         .ThenInclude(ct => ct.TestTypes)
+                .AsSplitQuery()
                 .FirstOrDefaultAsync();
 
             if (sample == null) return null;
@@ -556,85 +557,157 @@ namespace LIMSApi.ServiceWORepo
                 var generalTests = new List<object>();
                 foreach (var gt in plan.GeneralTests)
                 {
-                    // every method may map to one laboratory test/method id
+                    // Collect specification IDs for on-demand header creation
+                    var specIds = new List<long>();
+                    if (gt.Specification1.HasValue && gt.Specification1.Value > 0) specIds.Add(gt.Specification1.Value);
+                    if (gt.Specification2.HasValue && gt.Specification2.Value > 0) specIds.Add(gt.Specification2.Value);
+
+                    // Cache spec names (shared across all methods in this GeneralTest)
+                    var spec1Name = gt.Specification1.HasValue ? await GetSpecificationNameWithGrade(gt.Specification1.Value) : string.Empty;
+                    var spec2Name = gt.Specification2.HasValue ? await GetSpecificationNameWithGrade(gt.Specification2.Value) : string.Empty;
+
                     foreach (var method in gt.Methods)
                     {
-                        var labTestId = method.LaboratoryTestID; // map to LaboratoryTest.ID in your model
+                        var labTestId = method.LaboratoryTestID;
 
-                        // find header for this sample + labTest + plan
-                        var header = await _db.TestResultHeaders
+                        // Fetch ALL headers for this method (supports Qty > 1)
+                        var headers = await _db.TestResultHeaders
                             .Include(h => h.Parameters)
                             .Include(i => i.Images)
-                            .FirstOrDefaultAsync(h =>
+                            .Where(h =>
                                 h.SampleID == sampleId &&
                                 h.LaboratoryTestID == labTestId &&
-                                h.TestPlanID == plan.ID);
+                                h.TestPlanID == plan.ID)
+                            .OrderBy(h => h.SequenceNo)
+                            .ToListAsync();
 
-                        if (header == null)
+                        var quantity = method.Quantity > 0 ? method.Quantity : 1;
+
+                        // On-demand: create missing specimen headers
+                        if (headers.Count < quantity)
                         {
-                            header = await AutoCreateHeaderForLabTestAsync(sampleId, plan.ID, labTestId);
+                            var parameters = await BuildMechanicalParametersAsync(labTestId, specIds, new List<string>());
+                            var maxSeq = headers.Any() ? headers.Max(h => h.SequenceNo) : 0;
+
+                            for (int i = headers.Count; i < quantity; i++)
+                            {
+                                var newHeader = new TestResultHeader
+                                {
+                                    SampleID = sampleId,
+                                    LaboratoryTestID = labTestId,
+                                    TestPlanID = plan.ID,
+                                    SequenceNo = maxSeq + (i - headers.Count) + 1,
+                                    CreatedBy = loggedInUser.EmployeeID,
+                                    CreatedOn = DateTime.UtcNow,
+                                    Status = "Pending"
+                                };
+                                foreach (var p in parameters)
+                                {
+                                    newHeader.Parameters.Add(new TestResultParameter
+                                    {
+                                        ParameterID = p.ParameterID,
+                                        ParameterName = p.ParameterName,
+                                        Unit = p.Unit,
+                                        Value = null,
+                                        Formula = p.Formula,
+                                        IsCalculated = p.IsCalculated,
+                                        IsAdditional = false,
+                                        MinValue = p.MinValue,
+                                        MaxValue = p.MaxValue,
+                                        SpecMinValue = p.SpecMinValue,
+                                        SpecMaxValue = p.SpecMaxValue,
+                                        AcceptanceCriteria = p.AcceptanceCriteria,
+                                        SpecificationLineID = p.SpecificationLineID,
+                                        ParameterType = p.ParameterType,
+                                    });
+                                }
+                                _db.TestResultHeaders.Add(newHeader);
+                                headers.Add(newHeader);
+                            }
+                            await _db.SaveChangesAsync();
                         }
 
-                        header.CertificateNo = inward?.CaseNo;
-                        generalTests.Add(new
+                        // Fallback: if still no headers (unlikely)
+                        if (!headers.Any())
                         {
-                            headerId = header.ID,
-                            generalTestId = gt.ID,
-                            testMethodId = method.ID,
-                            laboratoryTestId = labTestId,
-                            laboratoryTest = method.LaboratoryTestID > 0 ? (await _db.LaboratoryTests.FindAsync(labTestId))?.Name : "General Test",
-                            standard = method.StandardID,
-                            reportNo = method.ReportNo,
-                            specification1 = gt.Specification1,
-                            specification2 = gt.Specification2,
-                            specfication1Name = gt.Specification1.HasValue ? await GetSpecificationNameWithGrade(gt.Specification1.Value) : string.Empty,
-                            specfication2Name = gt.Specification2.HasValue ? await GetSpecificationNameWithGrade(gt.Specification2.Value) : string.Empty,
-                            testPlanID = plan.ID,
-                            type = "General",
-                            status = header.Status,
-                            // Timing & Equipment
-                            testStartTime = header.TestStartTime ?? header.StartedAt,
-                            testEndTime = header.TestEndTime ?? header.CompletedAt,
-                            performedByName = header.PerformedByName,
-                            equipmentIdsJson = header.EquipmentIdsJson,
-                            equipmentId = header.EquipmentID,
+                            var fallback = await AutoCreateHeaderForLabTestAsync(sampleId, plan.ID, labTestId);
+                            headers = new List<TestResultHeader> { fallback };
+                        }
 
-                            parameters = header.Parameters.Select(p => new
-                            {
-                                p.ID,
-                                p.ParameterID,
-                                p.ParameterName,
-                                unit = p.Unit,
-                                value = p.Value,
-                                minValue = p.MinValue,
-                                maxValue = p.MaxValue,
-                                specMinValue = p.SpecMinValue ?? p.MinValue,
-                                specMaxValue = p.SpecMaxValue ?? p.MaxValue,
-                                acceptanceCriteria = p.AcceptanceCriteria,
-                                p.Remarks,
-                                formulaExpression = p.Formula,
-                                p.IsCalculated,
-                                p.SpecificationLineID,
-                                isBillable = p.IsBillable,
-                                isWithinLimit = p.IsWithinLimit,
-                                resultStatus = p.ResultStatus,
-                                isStandalone = p.IsStandalone,
-                                sourceTestMethodId = p.SourceTestMethodId,
-                                parameterType = p.ParameterType,
-                                testMethodUsed = p.TestMethodUsed,
-                                decimalPrecision = p.DecimalPrecision,
-                                conversionFactor = p.ConversionFactor,
-                                convertedValue = p.ConvertedValue,
-                                selectedUnit = p.SelectedUnit
-                            }).ToList(),
+                        // Cache lab test name (avoid N+1)
+                        var labTestName = labTestId > 0
+                            ? (await _db.LaboratoryTests.FindAsync(labTestId))?.Name ?? "General Test"
+                            : "General Test";
 
-                            images = header.Images.Select(img => new
+                        // totalSpecimens = max of plan qty and actual header count (handles replan qty decrease)
+                        var totalSpecimens = Math.Max(quantity, headers.Count);
+
+                        // Emit one entry per header (each specimen is a separate entry)
+                        foreach (var header in headers)
+                        {
+                            header.CertificateNo = inward?.CaseNo;
+                            generalTests.Add(new
                             {
-                                img.ID,
-                                img.FilePath,
-                                img.Caption,
-                            }).ToList()
-                        });
+                                headerId = header.ID,
+                                generalTestId = gt.ID,
+                                testMethodId = method.ID,
+                                laboratoryTestId = labTestId,
+                                laboratoryTest = labTestName,
+                                sequenceNo = header.SequenceNo,
+                                totalSpecimens = totalSpecimens,
+                                standard = method.StandardID,
+                                reportNo = method.ReportNo,
+                                specification1 = gt.Specification1,
+                                specification2 = gt.Specification2,
+                                specfication1Name = spec1Name,
+                                specfication2Name = spec2Name,
+                                testPlanID = plan.ID,
+                                type = "General",
+                                status = header.Status,
+                                // Timing & Equipment
+                                testStartTime = header.TestStartTime ?? header.StartedAt,
+                                testEndTime = header.TestEndTime ?? header.CompletedAt,
+                                performedByName = header.PerformedByName,
+                                equipmentIdsJson = header.EquipmentIdsJson,
+                                equipmentId = header.EquipmentID,
+
+                                parameters = header.Parameters.Select(p => new
+                                {
+                                    p.ID,
+                                    p.ParameterID,
+                                    p.ParameterName,
+                                    unit = p.Unit,
+                                    value = p.Value,
+                                    minValue = p.MinValue,
+                                    maxValue = p.MaxValue,
+                                    specMinValue = p.SpecMinValue ?? p.MinValue,
+                                    specMaxValue = p.SpecMaxValue ?? p.MaxValue,
+                                    acceptanceCriteria = p.AcceptanceCriteria,
+                                    p.Remarks,
+                                    formulaExpression = p.Formula,
+                                    p.IsCalculated,
+                                    p.SpecificationLineID,
+                                    isBillable = p.IsBillable,
+                                    isWithinLimit = p.IsWithinLimit,
+                                    resultStatus = p.ResultStatus,
+                                    isStandalone = p.IsStandalone,
+                                    sourceTestMethodId = p.SourceTestMethodId,
+                                    parameterType = p.ParameterType,
+                                    testMethodUsed = p.TestMethodUsed,
+                                    decimalPrecision = p.DecimalPrecision,
+                                    conversionFactor = p.ConversionFactor,
+                                    convertedValue = p.ConvertedValue,
+                                    selectedUnit = p.SelectedUnit
+                                }).ToList(),
+
+                                images = header.Images.Select(img => new
+                                {
+                                    img.ID,
+                                    img.FilePath,
+                                    img.Caption,
+                                }).ToList()
+                            });
+                        }
                     }
                 }
 
@@ -790,6 +863,7 @@ namespace LIMSApi.ServiceWORepo
                 SampleID = sampleId,
                 LaboratoryTestID = labTestId,
                 TestPlanID = planId,
+                SequenceNo = 1,
                 CreatedBy = loggedInUser.EmployeeID,
                 CreatedOn = DateTime.UtcNow,
                 Status = "Pending"
@@ -979,6 +1053,7 @@ namespace LIMSApi.ServiceWORepo
                             SampleID = sampleId,
                             LaboratoryTestID = method.LaboratoryTestID,
                             TestPlanID = planId,
+                            SequenceNo = existingCount + i + 1, // Specimen number (1-based)
                             CreatedBy = loggedInUser.EmployeeID,
                             CreatedOn = DateTime.UtcNow,
                             Status = "Pending"
