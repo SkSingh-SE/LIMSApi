@@ -1417,16 +1417,51 @@ namespace LIMSApi.ServiceWORepo
             // Capture lab environment at test start time (ISO 17025)
             try
             {
-                var latestEnv = await _db.NablEnvironmentMonitorings
-                    .Where(e => e.IsActive && !e.IsObsolete && e.MonitoringDate != null
-                        && e.MonitoringDate.Value.Date == DateTime.UtcNow.Date)
-                    .OrderByDescending(e => e.MonitoringDate)
-                    .FirstOrDefaultAsync();
-
-                if (latestEnv != null)
+                // Try room-specific capture first (via equipment → lab room → daily record)
+                if (header.EquipmentIdsJson != null)
                 {
-                    header.RoomTemperature = latestEnv.Temperature;
-                    header.RoomHumidity = latestEnv.Humidity;
+                    try
+                    {
+                        var equipIds = System.Text.Json.JsonSerializer.Deserialize<List<long>>(header.EquipmentIdsJson);
+                        if (equipIds?.Any() == true)
+                        {
+                            var equipment = await _db.EquipmentMasters.FirstOrDefaultAsync(e => e.ID == equipIds.First());
+                            if (equipment?.LabRoomID != null)
+                            {
+                                header.LabRoomId = equipment.LabRoomID;
+
+                                // Find today's daily record for this room
+                                var dailyRecord = await _db.EnvironmentDailyRecords
+                                    .Where(d => d.IsActive && d.RecordDate.Date == DateTime.UtcNow.Date
+                                        && d.EnvironmentMonitoring!.LabRoomId == equipment.LabRoomID)
+                                    .OrderByDescending(d => d.RecordDate)
+                                    .FirstOrDefaultAsync();
+
+                                if (dailyRecord != null)
+                                {
+                                    header.RoomTemperature = dailyRecord.Temperature;
+                                    header.RoomHumidity = dailyRecord.Humidity;
+                                }
+                            }
+                        }
+                    }
+                    catch { /* Equipment parsing failed — fallback below */ }
+                }
+
+                // Fallback: latest monitoring record for today (any room)
+                if (header.RoomTemperature == null)
+                {
+                    var latestEnv = await _db.NablEnvironmentMonitorings
+                        .Where(e => e.IsActive && !e.IsObsolete && e.MonitoringDate != null
+                            && e.MonitoringDate.Value.Date == DateTime.UtcNow.Date)
+                        .OrderByDescending(e => e.MonitoringDate)
+                        .FirstOrDefaultAsync();
+
+                    if (latestEnv != null)
+                    {
+                        header.RoomTemperature = latestEnv.Temperature;
+                        header.RoomHumidity = latestEnv.Humidity;
+                    }
                 }
             }
             catch { /* Environment capture is best-effort, don't block test start */ }

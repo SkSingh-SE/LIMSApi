@@ -490,6 +490,11 @@ RecurringJob.AddOrUpdate<POExpiryJob>(
     job => job.Execute(),
     "0 8 * * *"); // Daily at 8 AM — notifies about POs expiring within 7 days
 
+RecurringJob.AddOrUpdate<EnvironmentMonitoringJob>(
+    "environment-monitoring-daily",
+    job => job.Execute(),
+    "0 8 * * *"); // Daily at 8 AM — auto-generate daily environment records
+
 RecurringJob.AddOrUpdate<TestUsageStatsJob>(
     "test-usage-stats",
     x => x.Execute(),

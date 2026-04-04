@@ -14,11 +14,25 @@ namespace LIMSApi.Models
         [MaxLength(200)]
         public string? DepartmentName { get; set; }
 
+        // Lab Room linkage (Phase 8)
+        public long? LabRoomId { get; set; }
+
+        [ForeignKey(nameof(LabRoomId))]
+        public virtual LabRoom? LabRoom { get; set; }
+
+        [MaxLength(200)]
+        public string? RoomName { get; set; }
+
+        // Monthly monitoring period
+        public int? MonitoringMonth { get; set; }
+        public int? MonitoringYear { get; set; }
+
         public DateTime? MonitoringDate { get; set; }
 
         [MaxLength(50)]
         public string? TimeOfReading { get; set; }
 
+        // Single reading (legacy — kept for backward compat)
         [Column(TypeName = "decimal(6,2)")]
         public decimal? Temperature { get; set; }
 
@@ -44,5 +58,8 @@ namespace LIMSApi.Models
 
         [MaxLength(200)]
         public string? RecordedBy { get; set; }
+
+        // Daily records (Phase 8 — monthly header with child records)
+        public virtual ICollection<EnvironmentDailyRecord> DailyRecords { get; set; } = new List<EnvironmentDailyRecord>();
     }
 }

@@ -194,6 +194,8 @@ public partial class LIMSContext : DbContext
     public DbSet<NablTrainingAttendance> NablTrainingAttendances => Set<NablTrainingAttendance>();
     public DbSet<NablTrainingEffectiveness> NablTrainingEffectivenesses => Set<NablTrainingEffectiveness>();
     public DbSet<NablEnvironmentMonitoring> NablEnvironmentMonitorings => Set<NablEnvironmentMonitoring>();
+    public DbSet<EnvironmentDailyRecord> EnvironmentDailyRecords { get; set; }
+    public DbSet<LabRoom> LabRooms { get; set; }
     public DbSet<NablQualityControlPlan> NablQualityControlPlans => Set<NablQualityControlPlan>();
     public DbSet<NablTestRequest> NablTestRequests => Set<NablTestRequest>();
     public DbSet<NablTestMethod> NablTestMethods => Set<NablTestMethod>();
@@ -725,6 +727,19 @@ public partial class LIMSContext : DbContext
         modelBuilder.Entity<QuotationItem>()
             .HasOne(x => x.Quotation).WithMany(q => q.Items)
             .HasForeignKey(x => x.QuotationID).OnDelete(DeleteBehavior.Cascade);
+
+        // LabRoom + EnvironmentDailyRecord FKs
+        modelBuilder.Entity<EnvironmentDailyRecord>()
+            .HasOne(x => x.EnvironmentMonitoring).WithMany(m => m.DailyRecords)
+            .HasForeignKey(x => x.EnvironmentMonitoringID).OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<NablEnvironmentMonitoring>()
+            .HasOne(x => x.LabRoom).WithMany()
+            .HasForeignKey(x => x.LabRoomId).OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<EquipmentMaster>()
+            .HasOne(x => x.LabRoom).WithMany()
+            .HasForeignKey(x => x.LabRoomID).OnDelete(DeleteBehavior.NoAction);
 
         // SamplePreparationMaster FKs (no cascade)
         modelBuilder.Entity<SamplePreparationMaster>()

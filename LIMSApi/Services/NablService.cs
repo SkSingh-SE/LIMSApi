@@ -960,6 +960,10 @@ namespace LIMSApi.Services
 
                 existing.DepartmentId = model.DepartmentId;
                 existing.DepartmentName = model.DepartmentName;
+                existing.LabRoomId = model.LabRoomId;
+                existing.RoomName = model.RoomName;
+                existing.MonitoringMonth = model.MonitoringMonth;
+                existing.MonitoringYear = model.MonitoringYear;
                 existing.MonitoringDate = model.MonitoringDate;
                 existing.TimeOfReading = model.TimeOfReading;
                 existing.Temperature = model.Temperature;
@@ -974,6 +978,26 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
+
+                // Save daily records if provided
+                if (model.DailyRecords?.Any() == true)
+                {
+                    // Remove existing daily records for this header and re-add
+                    var existingRecords = await _context.EnvironmentDailyRecords
+                        .Where(d => d.EnvironmentMonitoringID == existing.ID)
+                        .ToListAsync();
+                    _context.EnvironmentDailyRecords.RemoveRange(existingRecords);
+
+                    foreach (var record in model.DailyRecords)
+                    {
+                        record.EnvironmentMonitoringID = existing.ID;
+                        record.CreatedOn = DateTime.UtcNow;
+                        record.CreatedBy = loggedInUser.EmployeeID;
+                        record.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
+                        record.IsActive = true;
+                        _context.EnvironmentDailyRecords.Add(record);
+                    }
+                }
 
                 await _repository.Update("EnvironmentMonitoring", existing);
                 await LogAudit("EnvironmentMonitoring", existing.ID, "Updated", null, body.GetRawText());
