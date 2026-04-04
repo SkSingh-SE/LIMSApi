@@ -831,6 +831,19 @@ namespace LIMSApi.Services
                         SampleStatus.FINAL_REPORT_APPROVED,
                         _loggedInUser.EmployeeID);
 
+                    // Report approval implies test results are accepted — mark all as Verified
+                    var pendingHeaders = await context.TestResultHeaders
+                        .Where(h => h.SampleID == report.SampleID && h.IsActive
+                            && (h.Status == "PendingVerification" || h.Status == "Completed"))
+                        .ToListAsync();
+
+                    foreach (var h in pendingHeaders)
+                    {
+                        h.Status = "Verified";
+                        h.ModifiedBy = _loggedInUser.EmployeeID;
+                        h.ModifiedOn = DateTime.UtcNow;
+                    }
+
                     // After report approval, check if all samples for inward are approved
                     // If all approved, trigger price calculation
                     if (report.Sample != null && report.Sample.SampleInward != null)
@@ -846,6 +859,19 @@ namespace LIMSApi.Services
                         report.SampleID,
                         SampleStatus.REPORT_UNDER_REVIEW,
                         _loggedInUser.EmployeeID);
+
+                    // Report sent back — revert test headers to allow corrections
+                    var sentBackHeaders = await context.TestResultHeaders
+                        .Where(h => h.SampleID == report.SampleID && h.IsActive
+                            && (h.Status == "Verified" || h.Status == "PendingVerification"))
+                        .ToListAsync();
+
+                    foreach (var h in sentBackHeaders)
+                    {
+                        h.Status = "VerificationRejected";
+                        h.ModifiedBy = _loggedInUser.EmployeeID;
+                        h.ModifiedOn = DateTime.UtcNow;
+                    }
                     break;
 
                 case WorkflowActions.Cancel:
