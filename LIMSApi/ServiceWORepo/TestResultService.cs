@@ -1857,11 +1857,30 @@ namespace LIMSApi.ServiceWORepo
             if (header == null)
                 return null;
 
-            var parameters = header.Parameters.Select(p => new
+            var parameters = header.Parameters.OrderBy(p => p.ID).Select(p => new
             {
                 p.ParameterID,
-                p.ParameterName,
-                p.Unit
+                parameterName = p.ParameterName,
+                name = p.ParameterName,
+                unit = p.Unit,
+                value = p.Value,
+                resultValue = p.Value,
+                specification = (p.SpecMinValue ?? p.MinValue) != null && (p.SpecMaxValue ?? p.MaxValue) != null
+                    ? $"{p.SpecMinValue ?? p.MinValue} - {p.SpecMaxValue ?? p.MaxValue}"
+                    : (p.SpecMinValue ?? p.MinValue) != null ? $"Min: {p.SpecMinValue ?? p.MinValue}"
+                    : (p.SpecMaxValue ?? p.MaxValue) != null ? $"Max: {p.SpecMaxValue ?? p.MaxValue}"
+                    : "-",
+                requirement = p.AcceptanceCriteria,
+                passFail = p.ResultStatus,
+                result = p.ResultStatus,
+                p.IsWithinLimit,
+                p.IsBillable,
+                p.IsWithinNablScope,
+                p.NablScopeStatus,
+                p.Remarks,
+                p.DecimalPrecision,
+                p.ConversionFactor,
+                p.ConvertedValue
             }).ToList();
 
             return parameters;
@@ -1901,6 +1920,27 @@ namespace LIMSApi.ServiceWORepo
             _db.LongTermRecords.Add(record);
             await _db.SaveChangesAsync();
         }
+        public async Task CompleteLongTermTest(long longTermTestId)
+        {
+            var lt = await _db.LongTermTests
+                .Include(x => x.TestResultHeader)
+                .FirstOrDefaultAsync(x => x.ID == longTermTestId && x.IsActive)
+                ?? throw new KeyNotFoundException("Long-term test not found.");
+
+            if (lt.Status == "Completed" || lt.Status == "Force Completed")
+                throw new InvalidOperationException("Long-term test is already completed.");
+
+            lt.Status = "Completed";
+            lt.EndedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+
+            // Complete the parent test header if needed
+            if (lt.TestResultHeader != null && (lt.TestResultHeader.Status == "Started" || lt.TestResultHeader.Status == "Long-Term" || lt.TestResultHeader.Status == "In-Progress"))
+            {
+                await CompleteTest(lt.TestResultHeaderID);
+            }
+        }
+
         public async Task<string> UploadTestImageAsync(long headerId, IFormFile file, string? caption)
         {
             var header = await _db.TestResultHeaders
@@ -2406,37 +2446,129 @@ namespace LIMSApi.ServiceWORepo
 
         public async Task<PagedResponse<object>> GetVerificationList(PageFilter filter)
         {
+            var userId = loggedInUser.EmployeeID;
+
+            // Base query: show PendingVerification + recently Verified
             var query = from h in _db.TestResultHeaders
-                        where h.IsActive && h.Status == "PendingVerification"
+                        where h.IsActive && (h.Status == "PendingVerification" || h.Status == "Verified" || h.Status == "VerificationRejected")
                         join sample in _db.SampleDetails on h.SampleID equals sample.ID
                         join inward in _db.SampleInwards on sample.InwardID equals inward.ID
                         where inward.CompanyCode == loggedInUser.CompanyCode
+
+                        // LEFT JOIN to workflow instance
+                        join wi in _db.Set<WorkflowInstance>()
+                            on new { EntityID = h.ID, EntityType = "TestResult", IsActive = true }
+                            equals new { wi.EntityID, wi.EntityType, wi.IsActive }
+                            into wiJoin
+                        from wi in wiJoin.DefaultIfEmpty()
+
                         select new
                         {
                             h.ID,
+                            SampleId = sample.ID,
                             sample.SampleNo,
                             inward.CaseNo,
                             TestName = _db.LaboratoryTests
                                 .Where(t => t.ID == h.LaboratoryTestID)
                                 .Select(t => t.Name)
                                 .FirstOrDefault(),
+                            h.SequenceNo,
                             ParametersCount = h.Parameters.Count,
                             h.IsOverallPass,
                             h.IsNabl,
                             PerformedBy = h.PerformedByName,
                             h.CompletedAt,
-                            h.Status
+                            h.Status,
+
+                            // Workflow info
+                            WorkflowInstanceId = wi != null ? (long?)wi.ID : null,
+                            WorkflowStatus = wi != null ? wi.Status : "No Workflow",
+                            CurrentStepId = wi != null ? (long?)wi.CurrentStepID : null,
                         };
+
+            // Search
+            if (!string.IsNullOrWhiteSpace(filter.searchTerm))
+            {
+                var search = filter.searchTerm.Trim().ToLower();
+                query = query.Where(x =>
+                    (x.SampleNo != null && x.SampleNo.ToLower().Contains(search)) ||
+                    (x.CaseNo != null && x.CaseNo.ToLower().Contains(search)) ||
+                    (x.TestName != null && x.TestName.ToLower().Contains(search)) ||
+                    (x.PerformedBy != null && x.PerformedBy.ToLower().Contains(search)));
+            }
 
             int totalRecords = await query.CountAsync();
 
-            var data = await query
+            var rawData = await query
+                .OrderByDescending(x => x.CompletedAt)
                 .Skip((filter.PageNumber - 1) * filter.PageSize)
                 .Take(filter.PageSize)
                 .ToListAsync();
 
+            // Post-process: resolve workflow step + actions
+            var data = new List<object>();
+            foreach (var item in rawData)
+            {
+                string? currentStep = null;
+                bool canTakeAction = false;
+                List<object>? actions = null;
+
+                if (item.CurrentStepId.HasValue)
+                {
+                    var step = await _db.Set<WorkflowStep>()
+                        .Include(s => s.Transitions.Where(t => t.IsActive))
+                        .FirstOrDefaultAsync(s => s.ID == item.CurrentStepId.Value);
+
+                    if (step != null)
+                    {
+                        currentStep = step.Name;
+                        canTakeAction = Helpers.FilterHelper.IsUserApprover(step.AssignedToValue, userId);
+
+                        if (canTakeAction)
+                        {
+                            actions = step.Transitions
+                                .Select(t => (object)new
+                                {
+                                    id = item.WorkflowInstanceId,
+                                    name = t.Alias ?? t.Action,
+                                    action = t.Action
+                                })
+                                .ToList();
+                        }
+                    }
+                }
+
+                // Specimen label
+                var specimenCount = rawData.Count(r => r.SampleId == item.SampleId
+                    && r.TestName == item.TestName);
+                var testLabel = specimenCount > 1
+                    ? $"{item.TestName} - Specimen {item.SequenceNo}"
+                    : item.TestName;
+
+                data.Add(new
+                {
+                    item.ID,
+                    headerId = item.ID,
+                    item.SampleId,
+                    item.SampleNo,
+                    item.CaseNo,
+                    testName = testLabel,
+                    item.ParametersCount,
+                    item.IsOverallPass,
+                    item.IsNabl,
+                    performedBy = item.PerformedBy,
+                    completedDate = item.CompletedAt,
+                    item.Status,
+                    workflowInstanceId = item.WorkflowInstanceId,
+                    workflowStatus = item.WorkflowStatus,
+                    currentStep = currentStep,
+                    canTakeAction = canTakeAction,
+                    actions = actions
+                });
+            }
+
             return new PagedResponse<object>(
-                data.Cast<object>().ToList(),
+                data,
                 totalRecords,
                 filter.PageNumber,
                 filter.PageSize);
@@ -2450,23 +2582,28 @@ namespace LIMSApi.ServiceWORepo
             if (header.Status != "PendingVerification")
                 throw new InvalidOperationException($"Cannot verify test in '{header.Status}' status. Only 'PendingVerification' tests can be verified.");
 
+            // Try workflow-based verification first
+            var instance = await _workflowService.GetActiveInstanceForEntityAsync(headerId, "TestResult");
+            if (instance != null)
+            {
+                // Route through workflow → ApplyEntityStatusUpdate → HandleTestVerification
+                await _workflowService.PerformAction(instance.ID, "Next", loggedInUser.EmployeeID, comments ?? "Verified");
+                return;
+            }
+
+            // Fallback: direct status change (no workflow configured)
             header.Status = "Verified";
             header.ModifiedBy = loggedInUser.EmployeeID;
             header.ModifiedOn = DateTime.UtcNow;
             await _db.SaveChangesAsync();
 
-            // CRITICAL #24: Only count "Verified" — "Completed" is NOT verified
             bool allVerified = !await _db.TestResultHeaders.AnyAsync(h =>
-                h.SampleID == header.SampleID &&
-                h.IsActive &&
-                h.Status != "Verified");
+                h.SampleID == header.SampleID && h.IsActive && h.Status != "Verified");
 
             if (allVerified)
             {
                 await _sampleStatusService.ForceAutoStatusAsync(
-                    header.SampleID,
-                    SampleStatus.TESTING_VERIFIED,
-                    loggedInUser.EmployeeID);
+                    header.SampleID, SampleStatus.TESTING_VERIFIED, loggedInUser.EmployeeID);
             }
         }
 
@@ -2478,15 +2615,22 @@ namespace LIMSApi.ServiceWORepo
             if (header.Status != "PendingVerification")
                 throw new InvalidOperationException($"Cannot reject test in '{header.Status}' status. Only 'PendingVerification' tests can be rejected.");
 
+            // Try workflow-based rejection first
+            var instance = await _workflowService.GetActiveInstanceForEntityAsync(headerId, "TestResult");
+            if (instance != null)
+            {
+                await _workflowService.PerformAction(instance.ID, "Cancel", loggedInUser.EmployeeID, comments ?? "Rejected");
+                return;
+            }
+
+            // Fallback: direct status change
             header.Status = "VerificationRejected";
             header.ModifiedBy = loggedInUser.EmployeeID;
             header.ModifiedOn = DateTime.UtcNow;
             await _db.SaveChangesAsync();
 
             await _sampleStatusService.ForceAutoStatusAsync(
-                header.SampleID,
-                SampleStatus.TESTING_VERIFICATION_REJECTED,
-                loggedInUser.EmployeeID);
+                header.SampleID, SampleStatus.TESTING_VERIFICATION_REJECTED, loggedInUser.EmployeeID);
         }
 
         // =====================================================================

@@ -113,6 +113,12 @@ namespace LIMSApi.Dtos
         public bool IsWithinLimit { get; set; }
         public string? ResultStatus { get; set; }
         public string Remarks { get; set; }
+
+        // Unit conversion & display
+        public int DecimalPrecision { get; set; } = 2;
+        public decimal ConversionFactor { get; set; } = 1;
+        public decimal? ConvertedValue { get; set; }
+        public string? SelectedUnit { get; set; }
     }
 
     public class ReportLongTermTestDto

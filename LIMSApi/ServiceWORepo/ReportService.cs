@@ -718,7 +718,11 @@ namespace LIMSApi.ServiceWORepo
                             ? (p.value >= p.minValue && p.value <= p.maxValue)
                             : true),
                         ResultStatus = p.resultStatus,
-                        Remarks = p.Remarks
+                        Remarks = p.Remarks,
+                        DecimalPrecision = (int)(p.decimalPrecision ?? 2),
+                        ConversionFactor = (decimal)(p.conversionFactor ?? 1m),
+                        ConvertedValue = p.convertedValue,
+                        SelectedUnit = p.selectedUnit
                     }).ToList(),
                 Images = ((IEnumerable<dynamic>)test.images)
                     .Select(img => new ReportTestImageDto
@@ -1292,9 +1296,9 @@ namespace LIMSApi.ServiceWORepo
                 {
                     name = p.ParameterName,
                     unit = p.Unit,
-                    specMin = FormatDecimal(p.SpecMinValue ?? p.MinValue),
-                    specMax = FormatDecimal(p.SpecMaxValue ?? p.MaxValue),
-                    result = FormatDecimal(p.Value),
+                    specMin = FormatDecimal(p.SpecMinValue ?? p.MinValue, p.DecimalPrecision),
+                    specMax = FormatDecimal(p.SpecMaxValue ?? p.MaxValue, p.DecimalPrecision),
+                    result = FormatDecimal(p.Value, p.DecimalPrecision),
                     status = p.IsWithinLimit == true ? "Pass" : p.IsWithinLimit == false ? "Fail" : "N/A",
                     remarks = p.Remarks
                 }).ToList()
@@ -1475,9 +1479,9 @@ namespace LIMSApi.ServiceWORepo
                         {
                             Name = p.ParameterName,
                             Unit = p.Unit,
-                            SpecMin = FormatDecimal(p.SpecMinValue ?? p.MinValue),
-                            SpecMax = FormatDecimal(p.SpecMaxValue ?? p.MaxValue),
-                            Result = FormatDecimal(p.Value),
+                            SpecMin = FormatDecimal(p.SpecMinValue ?? p.MinValue, p.DecimalPrecision),
+                            SpecMax = FormatDecimal(p.SpecMaxValue ?? p.MaxValue, p.DecimalPrecision),
+                            Result = FormatDecimal(p.Value, p.DecimalPrecision),
                             Status = p.IsWithinLimit == true ? "Pass"
                                    : p.IsWithinLimit == false ? "Fail"
                                    : "N/A",
@@ -1704,12 +1708,10 @@ namespace LIMSApi.ServiceWORepo
         }
 
         /// <summary>Format decimal: removes trailing zeros (545.0000 → 545, 600.50 → 600.5)</summary>
-        private static string? FormatDecimal(decimal? value)
+        private static string? FormatDecimal(decimal? value, int decimalPrecision = 2)
         {
             if (!value.HasValue) return null;
-            return value.Value % 1 == 0
-                ? value.Value.ToString("0")
-                : value.Value.ToString("0.##");
+            return value.Value.ToString($"F{decimalPrecision}");
         }
 
         private static string DetermineTestCategory(TestResultHeader header, string testType)

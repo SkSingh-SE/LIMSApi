@@ -38,6 +38,7 @@ public static class DataSeeder
             await SeedRoleMenuMappingsAsync(db);
             await SeedConfigurationsAsync(db);
             await SeedCurrenciesAsync(db);
+            await SeedDispatchModesAsync(db);
             await SeedAdminUserAsync(db, logger);
 
             logger.LogInformation("DataSeeder: seeding complete.");
@@ -560,6 +561,10 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
             IF NOT EXISTS (SELECT 1 FROM Configurations WHERE KeyName = N'PaymentGatewayEnabled' AND CompanyCode = N'LIMS')
                 INSERT INTO Configurations (KeyName, GroupName, [Value], ValueType, [Description], CreatedBy, CreatedOn, CompanyCode, IsActive)
                 VALUES (N'PaymentGatewayEnabled', N'BILLING', N'false', N'boolean', N'Enable/disable Razorpay payment gateway. Set to true when credentials are configured.', 0, GETUTCDATE(), N'LIMS', 1);
+
+            IF NOT EXISTS (SELECT 1 FROM Configurations WHERE KeyName = N'Entity Type' AND CompanyCode = N'LIMS')
+                INSERT INTO Configurations (KeyName, GroupName, [Value], ValueType, [Description], CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Entity Type', N'dropdown', N'Request Review|Report Review|Report Amendment|Test Result Verification', N'string', N'Entity types used for workflow configuration. Each value is a fixed entity type.', 0, GETUTCDATE(), N'LIMS', 1);
         ");
     }
 
@@ -589,7 +594,31 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
     }
 
     // ───────────────────────────────────────────────
-    // 6. ADMIN USER  (Department → Designation → Employee → User)
+    // 7. DISPATCH MODES
+    // ───────────────────────────────────────────────
+    private static async Task SeedDispatchModesAsync(LIMSContext db)
+    {
+        await db.Database.ExecuteSqlRawAsync(@"
+            IF NOT EXISTS (SELECT 1 FROM DispatchModeMasters WHERE Name = N'Email')
+                INSERT INTO DispatchModeMasters (Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Email', N'Report sent via email', 0, GETUTCDATE(), N'LIMS', 1);
+
+            IF NOT EXISTS (SELECT 1 FROM DispatchModeMasters WHERE Name = N'WhatsApp')
+                INSERT INTO DispatchModeMasters (Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'WhatsApp', N'Report sent via WhatsApp', 0, GETUTCDATE(), N'LIMS', 1);
+
+            IF NOT EXISTS (SELECT 1 FROM DispatchModeMasters WHERE Name = N'Courier')
+                INSERT INTO DispatchModeMasters (Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Courier', N'Report dispatched via courier service', 0, GETUTCDATE(), N'LIMS', 1);
+
+            IF NOT EXISTS (SELECT 1 FROM DispatchModeMasters WHERE Name = N'Self Pickup')
+                INSERT INTO DispatchModeMasters (Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Self Pickup', N'Collected by customer in person', 0, GETUTCDATE(), N'LIMS', 1);
+        ");
+    }
+
+    // ───────────────────────────────────────────────
+    // 8. ADMIN USER  (Department → Designation → Employee → User)
     //    Password: Admin@123 (ForcePasswordChange = true)
     // ───────────────────────────────────────────────
     private static async Task SeedAdminUserAsync(LIMSContext db, ILogger logger)

@@ -720,6 +720,10 @@ namespace LIMSApi.Services
                 case "Report Amendment":
                     await HandleReportAmendment(instance.EntityID, action);
                     break;
+
+                case "TestResult":
+                    await HandleTestVerification(instance.EntityID, action);
+                    break;
             }
         }
         private async Task HandleRequestReview(long inwardId, string action)
@@ -992,6 +996,49 @@ namespace LIMSApi.Services
                     await _statusService.ForceAutoStatusAsync(
                         amendment.ReportHeader.SampleID,
                         SampleStatus.REPORT_AMENDED_REJECTED,
+                        _loggedInUser.EmployeeID);
+                    break;
+            }
+
+            await context.SaveChangesAsync();
+        }
+
+        private async Task HandleTestVerification(long headerId, string action)
+        {
+            var header = await context.TestResultHeaders
+                .FirstOrDefaultAsync(h => h.ID == headerId)
+                ?? throw new KeyNotFoundException("Test result header not found.");
+
+            switch (action)
+            {
+                case WorkflowActions.Next: // VERIFIED
+                    header.Status = "Verified";
+                    header.ModifiedBy = _loggedInUser.EmployeeID;
+                    header.ModifiedOn = DateTime.UtcNow;
+
+                    // Check if ALL tests for this sample are now verified
+                    bool allVerified = !await context.TestResultHeaders.AnyAsync(h =>
+                        h.SampleID == header.SampleID && h.IsActive && h.ID != headerId
+                        && h.Status != "Verified");
+
+                    if (allVerified)
+                    {
+                        await _statusService.ForceAutoStatusAsync(
+                            header.SampleID,
+                            SampleStatus.TESTING_VERIFIED,
+                            _loggedInUser.EmployeeID);
+                    }
+                    break;
+
+                case WorkflowActions.Back: // SEND BACK for correction
+                case WorkflowActions.Cancel: // REJECTED
+                    header.Status = "VerificationRejected";
+                    header.ModifiedBy = _loggedInUser.EmployeeID;
+                    header.ModifiedOn = DateTime.UtcNow;
+
+                    await _statusService.ForceAutoStatusAsync(
+                        header.SampleID,
+                        SampleStatus.TESTING_VERIFICATION_REJECTED,
                         _loggedInUser.EmployeeID);
                     break;
             }

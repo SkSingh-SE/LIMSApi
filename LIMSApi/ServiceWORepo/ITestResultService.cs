@@ -50,6 +50,7 @@ namespace LIMSApi.ServiceWORepo
 
         Task<object?> GetParametersForHeader(long headerId);
         Task RecordLongTermReading(LongTermRecordDto dto);
+        Task CompleteLongTermTest(long longTermTestId);
         Task<string> UploadTestImageAsync(long headerId, IFormFile file, string? caption);
         Task<List<TestResultImageDto>> UploadTestImagesAsync(long headerId, List<IFormFile> files, List<string>? captions);
         Task<List<TestResultImageDto>> UploadedTestImages(long headerId);

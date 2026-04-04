@@ -16,15 +16,18 @@ namespace LIMSApi.Controllers
         private readonly ITestResultService _service;
         private readonly ITestPriceCalculationService _priceService;
         private readonly INablScopeValidationService _nablService;
+        private readonly IWorkflowService _workflowService;
 
         public TestResultsController(
             ITestResultService service,
             ITestPriceCalculationService priceService,
-            INablScopeValidationService nablService)
+            INablScopeValidationService nablService,
+            IWorkflowService workflowService)
         {
             _service = service;
             _priceService = priceService;
             _nablService = nablService;
+            _workflowService = workflowService;
         }
 
         // =============================================================
@@ -160,6 +163,13 @@ namespace LIMSApi.Controllers
                 return NotFound(new { message = "Header not found." });
 
             return Ok(result);
+        }
+
+        [HttpPost("long-term/complete/{longTermTestId}")]
+        public async Task<IActionResult> CompleteLongTermTest(long longTermTestId)
+        {
+            await _service.CompleteLongTermTest(longTermTestId);
+            return Ok(new { Success = true, Message = "Long-term test completed" });
         }
 
         [HttpPost("long-term/record")]
@@ -402,6 +412,19 @@ namespace LIMSApi.Controllers
         {
             await _service.RejectVerification(headerId, dto?.Comments);
             return Ok(new { Success = true, Message = "Verification rejected" });
+        }
+
+        /// <summary>
+        /// Workflow-based verification action (matches Report approval pattern)
+        /// </summary>
+        [HttpPost("verification/action")]
+        public async Task<IActionResult> PerformVerificationAction([FromBody] WorkflowActionRequestDto dto)
+        {
+            if (dto == null || dto.Id <= 0)
+                return BadRequest("Invalid workflow action payload.");
+
+            await _workflowService.PerformWorkflowActionAsync(dto);
+            return Ok(new { Success = true, Message = "Verification action completed" });
         }
 
         // =============================================================
