@@ -1,4 +1,7 @@
+using System.Collections.Concurrent;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq.Dynamic.Core;
+using System.Reflection;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -13,10 +16,30 @@ namespace LIMSApi.Repositories
         private readonly LIMSContext _context;
         private readonly LoggedInUserDTO loggedInUser;
 
+        // Cache of searchable string property names per NABL form type (excluding sensitive/audit fields)
+        private static readonly ConcurrentDictionary<Type, string[]> _searchablePropsCache = new();
+
+        // Audit/sensitive string fields excluded from reflection-based search
+        private static readonly HashSet<string> _excludedProps = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "CompanyCode", "RejectionRemarks"
+        };
+
         public NablRepository(LIMSContext context)
         {
             _context = context;
             loggedInUser = LoggedInUserProvider.CurrentUser;
+        }
+
+        private static string[] GetSearchableStringProps(Type t)
+        {
+            return _searchablePropsCache.GetOrAdd(t, type =>
+                type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                    .Where(p => p.PropertyType == typeof(string)
+                                && p.GetCustomAttribute<NotMappedAttribute>() == null
+                                && !_excludedProps.Contains(p.Name))
+                    .Select(p => p.Name)
+                    .ToArray());
         }
 
         public async Task<PagedResponse<object>> GetAll(string formType, PageFilter filter)
@@ -567,14 +590,18 @@ namespace LIMSApi.Repositories
             // Apply column filters using existing FilterHelper
             query = query.AsQueryable().ApplyFilters(filter.Filter);
 
-            // Global search
+            // Global search: reflection-based OR-chain across all string properties of T
+            // (covers inherited NablFormBase fields + entity-specific fields, excludes CompanyCode/RejectionRemarks)
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                query = query.Where(x =>
-                    (x.DocumentNo != null && x.DocumentNo.ToLower().Contains(search)) ||
-                    (x.FormCode != null && x.FormCode.ToLower().Contains(search)) ||
-                    (x.Status != null && x.Status.ToLower().Contains(search)));
+                var props = GetSearchableStringProps(typeof(T));
+                if (props.Length > 0)
+                {
+                    var predicate = string.Join(" || ",
+                        props.Select(p => $"({p} != null && {p}.ToLower().Contains(@0))"));
+                    query = query.AsQueryable().Where(predicate, search).OfType<T>();
+                }
             }
 
             // Sorting

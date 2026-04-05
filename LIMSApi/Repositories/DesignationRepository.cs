@@ -78,7 +78,9 @@ namespace LIMSApi.Repositories
             {
                 var search = filter.searchTerm.Trim().ToLower();
                 _query = _query.Where(x => (x.Description != null && x.Description.ToLower().Contains(search))
-                                     || (x.Name != null && x.Name.ToLower().Contains(search)));
+                                     || (x.Name != null && x.Name.ToLower().Contains(search))
+                                     || (x.RoleName != null && x.RoleName.ToLower().Contains(search))
+                                     || (x.CreatedBy != null && x.CreatedBy.ToLower().Contains(search)));
             }
 
             if (filter.SortByColumn != null)

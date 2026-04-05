@@ -1,4 +1,5 @@
-﻿using System.Linq.Dynamic.Core;
+﻿using System.Diagnostics;
+using System.Linq.Dynamic.Core;
 using LIMSApi.Dtos;
 
 namespace LIMSApi.Helpers
@@ -19,7 +20,11 @@ namespace LIMSApi.Helpers
                 var property = typeof(T)
             .GetProperties()
             .FirstOrDefault(p => p.Name.Equals(filter.Column, StringComparison.OrdinalIgnoreCase));
-                if (property == null) continue;
+                if (property == null)
+                {
+                    Debug.WriteLine($"[FilterHelper] Column '{filter.Column}' not found on type '{typeof(T).Name}' — filter skipped.");
+                    continue;
+                }
 
                 var propType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
 
@@ -34,6 +39,10 @@ namespace LIMSApi.Helpers
                 else if (propType == typeof(DateTime))
                 {
                     query = ApplyDateFilter(query, filter.Column, filter.Type, filter.Value, filter.Value2);
+                }
+                else if (propType == typeof(bool))
+                {
+                    query = ApplyBoolFilter(query, filter.Column, filter.Type, filter.Value);
                 }
             }
 
@@ -100,6 +109,31 @@ namespace LIMSApi.Helpers
                     break;
             }
             return query;
+        }
+
+        private static IQueryable<T> ApplyBoolFilter<T>(IQueryable<T> query, string column, string type, string value)
+        {
+            if (!TryParseBool(value, out bool boolValue)) return query;
+
+            switch (type)
+            {
+                case "Equal":
+                    return query.Where($"{column} == @0", boolValue);
+                case "NotEqual":
+                    return query.Where($"{column} != @0", boolValue);
+                default:
+                    return query;
+            }
+        }
+
+        private static bool TryParseBool(string value, out bool result)
+        {
+            result = false;
+            if (string.IsNullOrWhiteSpace(value)) return false;
+            var v = value.Trim().ToLowerInvariant();
+            if (v == "true" || v == "yes" || v == "1") { result = true; return true; }
+            if (v == "false" || v == "no" || v == "0") { result = false; return true; }
+            return false;
         }
 
         public static bool IsUserApprover(string assignedToValue, long userId)
