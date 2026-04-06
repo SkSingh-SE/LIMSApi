@@ -107,8 +107,15 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x =>(x.SubGroup != null && x.SubGroup.ToLower().Contains(search)) || x.ID.ToString().Contains(search));
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim().ToLower();
+                    _query = _query.Where(x => (x.SubGroup != null && x.SubGroup.ToLower().Contains(search)));
+                }
             }
 
             var skip = pageNo * pageSize;
@@ -138,8 +145,15 @@ namespace LIMSApi.Repositories
             _query = _query.Where(x => x.Department.ToString().ToLower().Contains("chemical"));
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.SubGroup != null && x.SubGroup.ToLower().Contains(search)) || x.ID.ToString().Contains(search));
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim().ToLower();
+                    _query = _query.Where(x => (x.SubGroup != null && x.SubGroup.ToLower().Contains(search)));
+                }
             }
 
             var skip = pageNo * pageSize;

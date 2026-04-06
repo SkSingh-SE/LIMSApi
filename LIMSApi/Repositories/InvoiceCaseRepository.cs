@@ -95,9 +95,15 @@ namespace LIMSApi.Repositories
            
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search))
-                || x.ID.ToString().Contains(search));
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim().ToLower();
+                    _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                }
             }
 
             var skip = pageNo * pageSize;
@@ -114,6 +120,16 @@ namespace LIMSApi.Repositories
         public async Task<bool> ExistsByFinancialAndName(string financialYear, string name)
         {
             return await _context.InvoiceCases.Include(y => y.InvoiceCasePrices).AnyAsync(x => x.FinancialYear == financialYear && x.InvoiceCasePrices.Any(p => p.Name == name) && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+        }
+
+        public async Task<bool> ExistsByFinancialYearAndTest(string financialYear, long laboratoryTestId)
+        {
+            return await _context.InvoiceCases.AnyAsync(x => x.FinancialYear == financialYear && x.LaboratoryTestID == laboratoryTestId && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+        }
+
+        public async Task<bool> ExistsByFinancialYearAndTestNotId(string financialYear, long laboratoryTestId, long excludeId)
+        {
+            return await _context.InvoiceCases.AnyAsync(x => x.FinancialYear == financialYear && x.LaboratoryTestID == laboratoryTestId && x.ID != excludeId && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
     }
 }

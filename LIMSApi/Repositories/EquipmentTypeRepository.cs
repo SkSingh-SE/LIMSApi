@@ -76,9 +76,17 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var search = searchTerm.Trim().ToLower();
+                // Exact ID match for rebinding (SearchableDropdown passes ID as searchTerm)
+                if (long.TryParse(search, out long exactId))
+                {
+                    var exactMatch = await _query.Where(x => x.ID == exactId)
+                        .Select(x => new DropdwonSelector { Id = x.ID, Name = x.Name })
+                        .FirstOrDefaultAsync();
+                    if (exactMatch != null)
+                        return new List<DropdwonSelector> { exactMatch };
+                }
                 _query = _query.Where(x => (x.Description != null && x.Description.ToLower().Contains(search))
-                                      || (x.Name != null && x.Name.ToLower().Contains(search))
-                                      || x.ID.ToString().Contains(search));
+                                      || (x.Name != null && x.Name.ToLower().Contains(search)));
             }
 
             var skip = pageNo * pageSize;

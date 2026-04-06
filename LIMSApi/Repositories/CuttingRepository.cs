@@ -46,15 +46,7 @@ namespace LIMSApi.Repositories
 
                 where i.IsActive
                       && i.CompanyCode == loggedInUser.CompanyCode
-                      && i.SampleDetails.Any(s =>
-                            s.PreparationRequired &&
-                            (
-                                s.SampleStatus == SampleStatus.REQUEST_APPROVED.ToString() ||
-                                s.SampleStatus == SampleStatus.PREPARATION_REQUIRED.ToString() ||
-                                s.SampleStatus == SampleStatus.PREPARATION_IN_PROGRESS.ToString() ||
-                                s.SampleStatus == SampleStatus.PREPARATION_COMPLETED.ToString()
-                            )
-                      )
+                      && i.SampleDetails.Any(s => s.PreparationRequired)
 
                 join c in _context.CuttingChargeHeaders
                     on i.ID equals c.InwardID into cuttingJoin
@@ -104,7 +96,10 @@ namespace LIMSApi.Repositories
                             s.SampleStatus == SampleStatus.PREPARATION_COMPLETED.ToString()
                         )
                         ? ActionStatus.COMPLETED.ToString()
-                        : ActionStatus.PENDING.ToString()
+                        : ActionStatus.PENDING.ToString(),
+
+                    // 🔥 Invoice lock — edit disabled after invoice
+                    IsInvoiced = i.IsInvoiceGenerated
                 };
 
             // Filters
@@ -240,6 +235,9 @@ namespace LIMSApi.Repositories
 
             try
             {
+                // Detach any tracked instances to avoid "entity already tracked" errors
+                _context.ChangeTracker.Clear();
+
                 _context.CuttingChargeHeaders.Update(model);
                 await _context.SaveChangesAsync();
                 await trx.CommitAsync();

@@ -12,5 +12,7 @@ namespace LIMSApi.Repositories.Interface
 
         Task<List<DropdwonSelector>> GetInvoiceCaseDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<bool> ExistsByFinancialAndName(string financialYear, string name);
+        Task<bool> ExistsByFinancialYearAndTest(string financialYear, long laboratoryTestId);
+        Task<bool> ExistsByFinancialYearAndTestNotId(string financialYear, long laboratoryTestId, long excludeId);
     }
 }

@@ -18,6 +18,10 @@ namespace LIMSApi.Services
 
         public async Task CreateInvoiceCase(InvoiceCase model)
         {
+            // Check duplicate: same Financial Year + same Sub Group Test
+            if (await _InvoiceCaseRepository.ExistsByFinancialYearAndTest(model.FinancialYear, model.LaboratoryTestID))
+                throw new InvalidOperationException($"Invoice Case for this Sub Group Test already exists for Financial Year {model.FinancialYear}!");
+
             foreach (var price in model.InvoiceCasePrices)
             {
                 if (price != null)
@@ -40,6 +44,10 @@ namespace LIMSApi.Services
             var existingInvoiceCase = await _InvoiceCaseRepository.GetInvoiceCaseById(model.ID);
             if (existingInvoiceCase == null)
                 throw new InvalidOperationException("InvoiceCase not found!");
+
+            // Check duplicate on update: same Financial Year + same Sub Group Test (excluding self)
+            if (await _InvoiceCaseRepository.ExistsByFinancialYearAndTestNotId(model.FinancialYear, model.LaboratoryTestID, model.ID))
+                throw new InvalidOperationException($"Invoice Case for this Sub Group Test already exists for Financial Year {model.FinancialYear}!");
 
             existingInvoiceCase.LaboratoryTestID = model.LaboratoryTestID;
             existingInvoiceCase.FinancialYear = model.FinancialYear;

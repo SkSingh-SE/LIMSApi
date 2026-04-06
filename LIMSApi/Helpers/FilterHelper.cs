@@ -136,6 +136,18 @@ namespace LIMSApi.Helpers
             return false;
         }
 
+        /// <summary>
+        /// Dropdown helper: if searchTerm is a numeric ID, check for exact ID match.
+        /// Used by SearchableDropdown rebinding — it passes the selected ID as searchTerm.
+        /// Call this before applying name-based search in dropdown methods.
+        /// </summary>
+        public static bool IsExactIdSearch(string? searchTerm, out long exactId)
+        {
+            exactId = 0;
+            if (string.IsNullOrWhiteSpace(searchTerm)) return false;
+            return long.TryParse(searchTerm.Trim(), out exactId);
+        }
+
         public static bool IsUserApprover(string assignedToValue, long userId)
         {
             if (string.IsNullOrWhiteSpace(assignedToValue))
