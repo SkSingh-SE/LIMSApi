@@ -29,7 +29,7 @@ namespace LIMSApi.Services
 
             bool exists = await _customerTypeRepository.ExistsByName(model.Name);
             if (exists)
-                throw new InvalidOperationException("CustomerType already exists!");
+                throw new InvalidOperationException("Company Category already exists!");
 
             model.CreatedOn = DateTime.UtcNow;
             model.CreatedBy = loggedInUser.EmployeeID;
@@ -46,7 +46,7 @@ namespace LIMSApi.Services
 
             bool exists = await _customerTypeRepository.ExistsByNameAndNotId(model.Name, model.ID);
             if (exists)
-                throw new InvalidOperationException("Same CustomerType already exists!");
+                throw new InvalidOperationException("Company Category already exists!");
 
             var existingCustomerType = await _customerTypeRepository.GetCustomerTypeById(model.ID);
             if (existingCustomerType == null)

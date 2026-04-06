@@ -91,7 +91,9 @@ namespace LIMSApi.Repositories
                 var search = filter.searchTerm.Trim().ToLower();
                 _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search))
                                      || (x.StandardOrganizationName != null && x.StandardOrganizationName.ToLower().Contains(search))
-                                     || (x.TestMethodStandard != null && x.TestMethodStandard.ToLower().Contains(search)));
+                                     || (x.TestMethodStandard != null && x.TestMethodStandard.ToLower().Contains(search))
+                                     || (x.CurrentVersion != null && x.CurrentVersion.ToLower().Contains(search))
+                                     || (x.CurrentVersionYear != null && x.CurrentVersionYear.ToString()!.Contains(search)));
             }
 
             if (filter.SortByColumn != null)

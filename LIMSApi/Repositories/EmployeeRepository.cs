@@ -95,6 +95,9 @@ namespace LIMSApi.Repositories
                     || (x.Gender != null && x.Gender.ToLower().Contains(search))
                     || (x.DepartmentName != null && x.DepartmentName.ToLower().Contains(search))
                     || (x.DesignationName != null && x.DesignationName.ToLower().Contains(search))
+                    || (x.DateOfJoin.HasValue && x.DateOfJoin.Value.ToString().Contains(search))
+                    || x.DateOfBirth.ToString().Contains(search)
+                    || (x.ModifiedOn.HasValue && x.ModifiedOn.Value.ToString().Contains(search))
                 );
             }
 

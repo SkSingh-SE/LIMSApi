@@ -27,7 +27,14 @@ namespace LIMSApi.Services
 
             bool exists = await _specimenRepository.ExistsByName(model.Name);
             if (exists)
-                throw new InvalidOperationException("SpecimenOrientation already exists!");
+                throw new InvalidOperationException("Specimen Orientation Name already exists!");
+
+            if (!string.IsNullOrWhiteSpace(model.Code))
+            {
+                bool codeExists = await _specimenRepository.ExistsByCode(model.Code);
+                if (codeExists)
+                    throw new InvalidOperationException("Specimen Orientation Code already exists!");
+            }
 
             await _specimenRepository.AddSpecimenOrientation(model);
             _logger.LogInformation("SpecimenOrientation '{SpecimenOrientationName}' created successfully.", model.Name);
@@ -40,7 +47,14 @@ namespace LIMSApi.Services
 
             bool exists = await _specimenRepository.ExistsByNameAndNotId(model.Name, model.ID);
             if (exists)
-                throw new InvalidOperationException("Same SpecimenOrientation already exists!");
+                throw new InvalidOperationException("Specimen Orientation Name already exists!");
+
+            if (!string.IsNullOrWhiteSpace(model.Code))
+            {
+                bool codeExists = await _specimenRepository.ExistsByCodeAndNotId(model.Code, model.ID);
+                if (codeExists)
+                    throw new InvalidOperationException("Specimen Orientation Code already exists!");
+            }
 
             var existingSpecimenOrientation = await _specimenRepository.GetSpecimenOrientationById(model.ID);
             if (existingSpecimenOrientation == null)
