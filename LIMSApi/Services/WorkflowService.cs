@@ -430,8 +430,15 @@ namespace LIMSApi.Services
 
                 if (nextApprovers.SequenceEqual(approvers))
                 {
-                    await PerformAction(instance.ID, "Approve", employeeId, "Auto-approved (same approver)");
-                    return;
+                    // Use the first forward transition from next step (not hardcoded "Approve")
+                    var nextTransition = nextStep.Transitions
+                        .FirstOrDefault(t => t.IsActive && !t.Action.Equals("Cancel", StringComparison.OrdinalIgnoreCase));
+
+                    if (nextTransition != null)
+                    {
+                        await PerformAction(instance.ID, nextTransition.Action, employeeId, "Auto-approved (same approver)");
+                        return;
+                    }
                 }
 
                 //  Notify next approvers
@@ -713,6 +720,10 @@ namespace LIMSApi.Services
                 case "Report Amendment":
                     await HandleReportAmendment(instance.EntityID, action);
                     break;
+
+                case "TestResult":
+                    await HandleTestVerification(instance.EntityID, action);
+                    break;
             }
         }
         private async Task HandleRequestReview(long inwardId, string action)
@@ -824,6 +835,19 @@ namespace LIMSApi.Services
                         SampleStatus.FINAL_REPORT_APPROVED,
                         _loggedInUser.EmployeeID);
 
+                    // Report approval implies test results are accepted — mark all as Verified
+                    var pendingHeaders = await context.TestResultHeaders
+                        .Where(h => h.SampleID == report.SampleID && h.IsActive
+                            && (h.Status == "PendingVerification" || h.Status == "Completed"))
+                        .ToListAsync();
+
+                    foreach (var h in pendingHeaders)
+                    {
+                        h.Status = "Verified";
+                        h.ModifiedBy = _loggedInUser.EmployeeID;
+                        h.ModifiedOn = DateTime.UtcNow;
+                    }
+
                     // After report approval, check if all samples for inward are approved
                     // If all approved, trigger price calculation
                     if (report.Sample != null && report.Sample.SampleInward != null)
@@ -839,6 +863,19 @@ namespace LIMSApi.Services
                         report.SampleID,
                         SampleStatus.REPORT_UNDER_REVIEW,
                         _loggedInUser.EmployeeID);
+
+                    // Report sent back — revert test headers to allow corrections
+                    var sentBackHeaders = await context.TestResultHeaders
+                        .Where(h => h.SampleID == report.SampleID && h.IsActive
+                            && (h.Status == "Verified" || h.Status == "PendingVerification"))
+                        .ToListAsync();
+
+                    foreach (var h in sentBackHeaders)
+                    {
+                        h.Status = "VerificationRejected";
+                        h.ModifiedBy = _loggedInUser.EmployeeID;
+                        h.ModifiedOn = DateTime.UtcNow;
+                    }
                     break;
 
                 case WorkflowActions.Cancel:
@@ -959,6 +996,49 @@ namespace LIMSApi.Services
                     await _statusService.ForceAutoStatusAsync(
                         amendment.ReportHeader.SampleID,
                         SampleStatus.REPORT_AMENDED_REJECTED,
+                        _loggedInUser.EmployeeID);
+                    break;
+            }
+
+            await context.SaveChangesAsync();
+        }
+
+        private async Task HandleTestVerification(long headerId, string action)
+        {
+            var header = await context.TestResultHeaders
+                .FirstOrDefaultAsync(h => h.ID == headerId)
+                ?? throw new KeyNotFoundException("Test result header not found.");
+
+            switch (action)
+            {
+                case WorkflowActions.Next: // VERIFIED
+                    header.Status = "Verified";
+                    header.ModifiedBy = _loggedInUser.EmployeeID;
+                    header.ModifiedOn = DateTime.UtcNow;
+
+                    // Check if ALL tests for this sample are now verified
+                    bool allVerified = !await context.TestResultHeaders.AnyAsync(h =>
+                        h.SampleID == header.SampleID && h.IsActive && h.ID != headerId
+                        && h.Status != "Verified");
+
+                    if (allVerified)
+                    {
+                        await _statusService.ForceAutoStatusAsync(
+                            header.SampleID,
+                            SampleStatus.TESTING_VERIFIED,
+                            _loggedInUser.EmployeeID);
+                    }
+                    break;
+
+                case WorkflowActions.Back: // SEND BACK for correction
+                case WorkflowActions.Cancel: // REJECTED
+                    header.Status = "VerificationRejected";
+                    header.ModifiedBy = _loggedInUser.EmployeeID;
+                    header.ModifiedOn = DateTime.UtcNow;
+
+                    await _statusService.ForceAutoStatusAsync(
+                        header.SampleID,
+                        SampleStatus.TESTING_VERIFICATION_REJECTED,
                         _loggedInUser.EmployeeID);
                     break;
             }

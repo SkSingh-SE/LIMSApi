@@ -352,34 +352,41 @@ namespace LIMSApi.ServiceWORepo
                 await _billingSettlement.RecalculateBillingStatusAsync(dto.InwardId.Value, employeeId);
             }
 
-            // Notify current user
-            var currentUser = LIMSApi.Helpers.LoggedInUserProvider.CurrentUser;
-            await _notificationService.CreateNotificationAsync(new Notification
+            // Notifications (fire-and-forget — must not block payment recording)
+            try
             {
-                UserID = currentUser?.EmployeeID,
-                Title = "Payment Recorded",
-                Message = $"Payment of {dto.Amount:N2} from {customer.Name} via {dto.PaymentMode}. Receipt: {receiptNo}",
-                Type = NotificationType.System,
-                EntityID = receipt.Id,
-                EntityType = "PaymentReceipt"
-            });
-
-            // Notify case creator if different from current user
-            if (dto.InwardId.HasValue)
-            {
-                var inward = await _db.SampleInwards.FindAsync(dto.InwardId.Value);
-                if (inward != null && inward.CreatedBy != currentUser?.EmployeeID)
+                var currentUser = LIMSApi.Helpers.LoggedInUserProvider.CurrentUser;
+                await _notificationService.CreateNotificationAsync(new Notification
                 {
-                    await _notificationService.CreateNotificationAsync(new Notification
+                    UserID = currentUser?.EmployeeID,
+                    Title = "Payment Recorded",
+                    Message = $"Payment of {dto.Amount:N2} from {customer.Name} via {dto.PaymentMode}. Receipt: {receiptNo}",
+                    Type = NotificationType.System,
+                    EntityID = receipt.Id,
+                    EntityType = "PaymentReceipt"
+                });
+
+                // Notify case creator if different from current user
+                if (dto.InwardId.HasValue)
+                {
+                    var inward = await _db.SampleInwards.FindAsync(dto.InwardId.Value);
+                    if (inward != null && inward.CreatedBy != currentUser?.EmployeeID)
                     {
-                        UserID = inward.CreatedBy,
-                        Title = "Payment Received",
-                        Message = $"Payment of {dto.Amount:N2} received for Case {inward.CaseNo} via {dto.PaymentMode}",
-                        Type = NotificationType.System,
-                        EntityID = inward.ID,
-                        EntityType = "SampleInward"
-                    });
+                        await _notificationService.CreateNotificationAsync(new Notification
+                        {
+                            UserID = inward.CreatedBy,
+                            Title = "Payment Received",
+                            Message = $"Payment of {dto.Amount:N2} received for Case {inward.CaseNo} via {dto.PaymentMode}",
+                            Type = NotificationType.System,
+                            EntityID = inward.ID,
+                            EntityType = "SampleInward"
+                        });
+                    }
                 }
+            }
+            catch (Exception)
+            {
+                // Log but don't fail — payment is already recorded
             }
 
             return new PaymentReceiptDto

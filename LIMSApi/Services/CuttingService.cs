@@ -1,4 +1,5 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Helpers.Enums;
 using LIMSApi.Models;
@@ -15,12 +16,24 @@ namespace LIMSApi.Services
         private readonly ILogger<CuttingService> _logger;
         private LoggedInUserDTO loggedInUser;
         private readonly ISampleStatusService _sampleStatusService;
-        public CuttingService(ICuttingRepository cuttingRepository,  ILogger<CuttingService> logger, ISampleStatusService sampleStatusService)
+        private readonly LIMSContext _db;
+        public CuttingService(ICuttingRepository cuttingRepository,  ILogger<CuttingService> logger, ISampleStatusService sampleStatusService, LIMSContext db)
         {
             _cuttingRepository = cuttingRepository;
             _logger = logger;
             _sampleStatusService = sampleStatusService;
+            _db = db;
             loggedInUser = LoggedInUserProvider.CurrentUser;
+        }
+
+        private async Task EnsureNotInvoicedAsync(long inwardId)
+        {
+            var isInvoiced = await _db.SampleInwards
+                .Where(x => x.ID == inwardId)
+                .Select(x => x.IsInvoiceGenerated)
+                .FirstOrDefaultAsync();
+            if (isInvoiced)
+                throw new InvalidOperationException("Cutting/Machining charges cannot be modified after invoice generation.");
         }
 
         public async Task CreateAsync(CuttingChargeHeader payload)
@@ -34,6 +47,7 @@ namespace LIMSApi.Services
             if (payload.Samples == null || payload.Samples.Count == 0)
                 throw new Exception("At least one sample is required.");
 
+            await EnsureNotInvoicedAsync(payload.InwardID);
 
             var exists = await _cuttingRepository.ExistsByInwardIdAsync(payload.InwardID);
 
@@ -93,8 +107,12 @@ namespace LIMSApi.Services
             if(model.InwardID <= 0)
                 throw new Exception("Invalid InwardId.");
 
-            var existingRecord = await _cuttingRepository.GetByIdAsync(model.ID);
-            if (existingRecord == null)
+            await EnsureNotInvoicedAsync(model.InwardID);
+
+            // Detach any tracked instance before Update() attaches the incoming model
+            var exists = await _db.CuttingChargeHeaders.AsNoTracking()
+                .AnyAsync(x => x.ID == model.ID && x.IsActive);
+            if (!exists)
                 throw new Exception("CuttingChargeHeader record not found.");
 
 

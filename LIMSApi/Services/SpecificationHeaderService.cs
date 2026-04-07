@@ -28,10 +28,8 @@ namespace LIMSApi.Services
                 {
                     if (line.ParameterID == null || line.ParameterID == 0)
                         throw new ArgumentException($"Parameter is required for all specification lines in grade '{grade.Grade}'.");
-                    if (line.MinValue == null)
-                        throw new ArgumentException($"Min Value is required for all specification lines in grade '{grade.Grade}'.");
-                    if (line.MaxValue == null)
-                        throw new ArgumentException($"Max Value is required for all specification lines in grade '{grade.Grade}'.");
+                    if (line.MinValue.HasValue && line.MaxValue.HasValue && line.MinValue > line.MaxValue)
+                        throw new ArgumentException($"Min Value cannot be greater than Max Value in grade '{grade.Grade}'.");
                 }
             }
         }
@@ -76,7 +74,8 @@ namespace LIMSApi.Services
             existingSpecificationHeader.IsCustom = model.IsCustom;
             existingSpecificationHeader.ModifiedOn = DateTime.UtcNow;
 
-            var toRemoveGrades = existingSpecificationHeader.Grades.Where(x => !model.Grades.Any(y =>  x.ID == x.ID)).ToList();
+            var incomingGradeIds = model.Grades.Where(y => y.ID > 0).Select(y => y.ID).ToHashSet();
+            var toRemoveGrades = existingSpecificationHeader.Grades.Where(x => !incomingGradeIds.Contains(x.ID)).ToList();
             foreach(var  grade in toRemoveGrades)
             {
                 existingSpecificationHeader.Grades.Remove(grade);
@@ -84,9 +83,12 @@ namespace LIMSApi.Services
 
             foreach (var grade in model.Grades)
             {
-                var existingGrade = existingSpecificationHeader.Grades.FirstOrDefault(x => x.ID == grade.ID);
+                var existingGrade = grade.ID > 0
+                    ? existingSpecificationHeader.Grades.FirstOrDefault(x => x.ID == grade.ID)
+                    : null;
                 if (existingGrade == null)
                 {
+                    grade.ID = 0; // Ensure EF treats as new insert
                     grade.SpecificationHeaderID = model.ID;
                     existingSpecificationHeader.Grades.Add(grade);
                     continue;
@@ -98,9 +100,10 @@ namespace LIMSApi.Services
                 existingGrade.UNSSteelNumber = grade.UNSSteelNumber;
                 existingGrade.MetalClassificationID = grade.MetalClassificationID;
 
-                // Remove missing lines
+                // Remove missing lines (only check lines with real IDs from payload, ignore new lines with ID=0)
+                var incomingLineIds = grade.SpecificationLines.Where(y => y.ID > 0).Select(y => y.ID).ToHashSet();
                 var linesToRemove = existingGrade.SpecificationLines
-                    .Where(x => !grade.SpecificationLines.Any(y => y.ID == x.ID)).ToList();
+                    .Where(x => !incomingLineIds.Contains(x.ID)).ToList();
 
                 foreach (var lineToRemove in linesToRemove)
                 {
@@ -109,11 +112,13 @@ namespace LIMSApi.Services
 
                 foreach (var line in grade.SpecificationLines)
                 {
-                    var existingLine = existingGrade.SpecificationLines
-                        .FirstOrDefault(l => l.ID == line.ID);
+                    var existingLine = line.ID > 0
+                        ? existingGrade.SpecificationLines.FirstOrDefault(l => l.ID == line.ID)
+                        : null;
 
                     if (existingLine == null)
                     {
+                        line.ID = 0; // Ensure EF treats as new insert
                         line.SpecificationGradeID = existingGrade.ID;
                         existingGrade.SpecificationLines.Add(line);
                     }

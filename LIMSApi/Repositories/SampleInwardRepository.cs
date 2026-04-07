@@ -67,6 +67,8 @@ namespace LIMSApi.Repositories
                                     .ThenInclude(sd => sd.ProductCondition)
                                 .Include(x => x.SampleDetails)
                                     .ThenInclude(sd => sd.SpecimenOrientation)
+                                .Include(x => x.SampleDetails)
+                                    .ThenInclude(sd => sd.ProductForm)
                                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
             return sampleInward;
         }
@@ -403,21 +405,7 @@ namespace LIMSApi.Repositories
                 query = query.OrderBy($"{filter.SortByColumn} {order}");
             }
 
-            // Total Count
-            int totalRecords = await query.CountAsync();
-
-            // Pagination
-            var items = await query
-                .Skip((filter.PageNumber - 1) * filter.PageSize)
-                .Take(filter.PageSize)
-                .ToListAsync();
-
-            return new PagedResponse<object>(
-                items,
-                totalRecords,
-                filter.PageNumber,
-                filter.PageSize
-            );
+            return await query.ToPagedAsync(filter);
         }
 
 
@@ -452,8 +440,15 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x =>x.ID.ToString().Contains(search) || (x.CaseNo != null && x.CaseNo.ToLower().Contains(search)));
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim().ToLower();
+                    _query = _query.Where(x => (x.CaseNo != null && x.CaseNo.ToLower().Contains(search)));
+                }
             }
 
             var skip = pageNo * pageSize;

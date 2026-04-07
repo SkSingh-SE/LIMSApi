@@ -47,11 +47,14 @@ namespace LIMSApi.Repositories
             var _query = from c in _context.InvoiceCases
                          join l in _context.LaboratoryTests on c.LaboratoryTestID equals l.ID into ltGroup
                          from lt in ltGroup.DefaultIfEmpty()
+                         join fy in _context.FinancialYears on c.FinancialYearId equals fy.Id into fyGroup
+                         from fy in fyGroup.DefaultIfEmpty()
                          where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
                          select new
                          {
                              c.ID,
-                             c.FinancialYear,
+                             c.FinancialYearId,
+                             FinancialYear = fy != null ? fy.Year : "",
                              LaboratoryTest = lt != null ? lt.Name : "",
                              TierCount = _context.InvoiceCasePrices.Count(p => p.InvoiceCaseID == c.ID),
                              c.ModifiedOn,
@@ -76,14 +79,7 @@ namespace LIMSApi.Repositories
                 _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
             }
 
-            int totalRecords = await _query.CountAsync();
-
-            var items = await _query
-                .Skip((filter.PageNumber - 1) * filter.PageSize)
-                .Take(filter.PageSize)
-                .ToListAsync();
-
-            return new PagedResponse<object>(items.Cast<object>().ToList(), totalRecords, filter.PageNumber, filter.PageSize);
+            return await _query.Cast<object>().ToPagedAsync(filter);
         }
 
         public async Task<List<DropdwonSelector>> GetInvoiceCaseDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
@@ -102,9 +98,15 @@ namespace LIMSApi.Repositories
            
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search))
-                || x.ID.ToString().Contains(search));
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim().ToLower();
+                    _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                }
             }
 
             var skip = pageNo * pageSize;
@@ -118,9 +120,19 @@ namespace LIMSApi.Repositories
             return data;
         }
 
-        public async Task<bool> ExistsByFinancialAndName(string financialYear, string name)
+        public async Task<bool> ExistsByFinancialAndName(long? financialYearId, string name)
         {
-            return await _context.InvoiceCases.Include(y => y.InvoiceCasePrices).AnyAsync(x => x.FinancialYear == financialYear && x.InvoiceCasePrices.Any(p => p.Name == name) && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.InvoiceCases.Include(y => y.InvoiceCasePrices).AnyAsync(x => x.FinancialYearId == financialYearId && x.InvoiceCasePrices.Any(p => p.Name == name) && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+        }
+
+        public async Task<bool> ExistsByFinancialYearAndTest(long? financialYearId, long laboratoryTestId)
+        {
+            return await _context.InvoiceCases.AnyAsync(x => x.FinancialYearId == financialYearId && x.LaboratoryTestID == laboratoryTestId && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+        }
+
+        public async Task<bool> ExistsByFinancialYearAndTestNotId(long? financialYearId, long laboratoryTestId, long excludeId)
+        {
+            return await _context.InvoiceCases.AnyAsync(x => x.FinancialYearId == financialYearId && x.LaboratoryTestID == laboratoryTestId && x.ID != excludeId && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
     }
 }

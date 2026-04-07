@@ -74,6 +74,16 @@ namespace LIMSApi.Dtos
         public string? StatementOfConformity { get; set; }
         public string? DecisionRule { get; set; }
         public string? UlrNo { get; set; }
+
+        // NABL compliance fields
+        public string? ProductForm { get; set; }
+        public string? SpecimenOrientation { get; set; }
+        public string? HeatTreatment { get; set; }
+        public decimal? RoomTemperature { get; set; }
+        public decimal? RoomHumidity { get; set; }
+        public string? EquipmentUsed { get; set; }
+        public decimal? CrossSectionArea { get; set; }
+        public decimal? GaugeLength { get; set; }
     }
     public class ReportAmendmentPreviewDto
     {
@@ -87,6 +97,7 @@ namespace LIMSApi.Dtos
     {
         public long TestResultHeaderId { get; set; }
         public string? TestName { get; set; }
+        public string? TestMethod { get; set; }
         public string ReportNo { get; set; }
         public string? Specification1Name { get; set; }
         public string? Specification2Name { get; set; }
@@ -113,6 +124,12 @@ namespace LIMSApi.Dtos
         public bool IsWithinLimit { get; set; }
         public string? ResultStatus { get; set; }
         public string Remarks { get; set; }
+
+        // Unit conversion & display
+        public int DecimalPrecision { get; set; } = 2;
+        public decimal ConversionFactor { get; set; } = 1;
+        public decimal? ConvertedValue { get; set; }
+        public string? SelectedUnit { get; set; }
     }
 
     public class ReportLongTermTestDto

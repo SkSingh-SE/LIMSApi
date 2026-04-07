@@ -27,7 +27,14 @@ namespace LIMSApi.Services
 
             bool exists = await _MetalClassificationRepository.ExistsByName(model.Name);
             if (exists)
-                throw new InvalidOperationException("MetalClassification already exists!");
+                throw new InvalidOperationException("Metal Classification Name already exists!");
+
+            if (!string.IsNullOrWhiteSpace(model.Code))
+            {
+                bool codeExists = await _MetalClassificationRepository.ExistsByCode(model.Code);
+                if (codeExists)
+                    throw new InvalidOperationException("Metal Classification Code already exists!");
+            }
 
             await _MetalClassificationRepository.AddMetalClassification(model);
             _logger.LogInformation("MetalClassification '{MetalClassificationName}' created successfully.", model.Name);
@@ -40,7 +47,14 @@ namespace LIMSApi.Services
 
             bool exists = await _MetalClassificationRepository.ExistsByNameAndNotId(model.Name, model.ID);
             if (exists)
-                throw new InvalidOperationException("Same MetalClassification already exists!");
+                throw new InvalidOperationException("Metal Classification Name already exists!");
+
+            if (!string.IsNullOrWhiteSpace(model.Code))
+            {
+                bool codeExists = await _MetalClassificationRepository.ExistsByCodeAndNotId(model.Code, model.ID);
+                if (codeExists)
+                    throw new InvalidOperationException("Metal Classification Code already exists!");
+            }
 
             var existingMetalClassification = await _MetalClassificationRepository.GetMetalClassificationById(model.ID);
             if (existingMetalClassification == null)

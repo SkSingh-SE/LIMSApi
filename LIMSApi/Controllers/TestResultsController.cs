@@ -16,15 +16,18 @@ namespace LIMSApi.Controllers
         private readonly ITestResultService _service;
         private readonly ITestPriceCalculationService _priceService;
         private readonly INablScopeValidationService _nablService;
+        private readonly IWorkflowService _workflowService;
 
         public TestResultsController(
             ITestResultService service,
             ITestPriceCalculationService priceService,
-            INablScopeValidationService nablService)
+            INablScopeValidationService nablService,
+            IWorkflowService workflowService)
         {
             _service = service;
             _priceService = priceService;
             _nablService = nablService;
+            _workflowService = workflowService;
         }
 
         // =============================================================
@@ -52,7 +55,14 @@ namespace LIMSApi.Controllers
         [HttpGet("full-result-payload/{sampleId}")]
         public async Task<IActionResult> GetFullResultPayload(long sampleId)
         {
-            return Ok(await _service.GetSampleDetailsForResult(sampleId));
+            try
+            {
+                return Ok(await _service.GetSampleDetailsForResult(sampleId));
+            }
+            catch (System.Data.SqlTypes.SqlNullValueException ex)
+            {
+                return StatusCode(500, new { message = "Data error loading test results. Some fields may have null values. " + ex.Message });
+            }
         }
 
         // =============================================================
@@ -155,6 +165,13 @@ namespace LIMSApi.Controllers
             return Ok(result);
         }
 
+        [HttpPost("long-term/complete/{longTermTestId}")]
+        public async Task<IActionResult> CompleteLongTermTest(long longTermTestId)
+        {
+            await _service.CompleteLongTermTest(longTermTestId);
+            return Ok(new { Success = true, Message = "Long-term test completed" });
+        }
+
         [HttpPost("long-term/record")]
         public async Task<IActionResult> RecordLongTermReading(LongTermRecordDto dto)
         {
@@ -225,6 +242,16 @@ namespace LIMSApi.Controllers
 
             var result = await _service.AddStandaloneParameter(headerId, dto);
             return Ok(result);
+        }
+
+        // =============================================================
+        // Delete Parameter
+        // =============================================================
+        [HttpDelete("delete-parameter/{paramId}")]
+        public async Task<IActionResult> DeleteParameter(long paramId)
+        {
+            await _service.DeleteParameter(paramId);
+            return Ok(new { Success = true, Message = "Parameter deleted" });
         }
 
         // =============================================================
@@ -357,6 +384,13 @@ namespace LIMSApi.Controllers
             return Ok(new { Success = true, Message = "Submitted for verification" });
         }
 
+        [HttpPost("submit-sample-for-verification/{sampleId}")]
+        public async Task<IActionResult> SubmitSampleForVerification(long sampleId)
+        {
+            var result = await _service.SubmitSampleForVerification(sampleId);
+            return Ok(result);
+        }
+
         [HttpPost("verification-list")]
         public async Task<IActionResult> GetVerificationList(PageFilter filter)
         {
@@ -378,6 +412,19 @@ namespace LIMSApi.Controllers
         {
             await _service.RejectVerification(headerId, dto?.Comments);
             return Ok(new { Success = true, Message = "Verification rejected" });
+        }
+
+        /// <summary>
+        /// Workflow-based verification action (matches Report approval pattern)
+        /// </summary>
+        [HttpPost("verification/action")]
+        public async Task<IActionResult> PerformVerificationAction([FromBody] WorkflowActionRequestDto dto)
+        {
+            if (dto == null || dto.Id <= 0)
+                return BadRequest("Invalid workflow action payload.");
+
+            await _workflowService.PerformWorkflowActionAsync(dto);
+            return Ok(new { Success = true, Message = "Verification action completed" });
         }
 
         // =============================================================

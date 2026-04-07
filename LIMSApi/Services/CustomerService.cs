@@ -1,4 +1,5 @@
-﻿using LIMSApi.Dtos;
+﻿using LIMSApi.Data;
+using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
@@ -11,12 +12,14 @@ namespace LIMSApi.Services
     {
         private readonly ICustomerRepository _customerRepository;
         private readonly ILogger<CustomerService> _logger;
+        private readonly LIMSContext _context;
         private LoggedInUserDTO loggedInUser;
 
-        public CustomerService(ICustomerRepository customerRepo, ILogger<CustomerService> logger)
+        public CustomerService(ICustomerRepository customerRepo, ILogger<CustomerService> logger, LIMSContext context)
         {
             _customerRepository = customerRepo;
             _logger = logger;
+            _context = context;
             loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
@@ -124,9 +127,12 @@ namespace LIMSApi.Services
             if (exists)
                 throw new InvalidOperationException("Same Customer already exists!");
 
-            bool duplicateCustomer = await _customerRepository.ValidateDuplicateCustomer(model.GSTNo, model.ID);
-            if(duplicateCustomer)
-                throw new InvalidOperationException("Same Customer GST already exists!");
+            if (!string.IsNullOrWhiteSpace(model.GSTNo))
+            {
+                bool duplicateCustomer = await _customerRepository.ValidateDuplicateCustomer(model.GSTNo, model.ID);
+                if(duplicateCustomer)
+                    throw new InvalidOperationException("Same Customer GST already exists!");
+            }
 
             var existingCustomer = await _customerRepository.GetCustomerById(model.ID);
             if (existingCustomer == null)
@@ -135,6 +141,7 @@ namespace LIMSApi.Services
 
             existingCustomer.Name = model.Name;
             existingCustomer.LegalName = model.LegalName;
+            existingCustomer.TallyLedgerName = model.TallyLedgerName;
             existingCustomer.Address = model.Address;
             existingCustomer.PinCode = model.PinCode;
             existingCustomer.AreaID = model.AreaID;
@@ -283,6 +290,9 @@ namespace LIMSApi.Services
             var existingCustomer = await _customerRepository.GetCustomerById(id);
             if (existingCustomer == null)
                 throw new InvalidOperationException("Customer not found!");
+
+            // Check FK dependencies — prevent delete if linked to inwards, invoices, etc.
+            await DeleteValidationHelper.ValidateDeleteAsync<Customer>(_context, id, "Customer");
 
             existingCustomer.IsActive = false;
             existingCustomer.ModifiedOn = DateTime.UtcNow;

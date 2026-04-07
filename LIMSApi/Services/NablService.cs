@@ -960,6 +960,10 @@ namespace LIMSApi.Services
 
                 existing.DepartmentId = model.DepartmentId;
                 existing.DepartmentName = model.DepartmentName;
+                existing.LabRoomId = model.LabRoomId;
+                existing.RoomName = model.RoomName;
+                existing.MonitoringMonth = model.MonitoringMonth;
+                existing.MonitoringYear = model.MonitoringYear;
                 existing.MonitoringDate = model.MonitoringDate;
                 existing.TimeOfReading = model.TimeOfReading;
                 existing.Temperature = model.Temperature;
@@ -974,6 +978,26 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
+
+                // Save daily records if provided
+                if (model.DailyRecords?.Any() == true)
+                {
+                    // Remove existing daily records for this header and re-add
+                    var existingRecords = await _context.EnvironmentDailyRecords
+                        .Where(d => d.EnvironmentMonitoringID == existing.ID)
+                        .ToListAsync();
+                    _context.EnvironmentDailyRecords.RemoveRange(existingRecords);
+
+                    foreach (var record in model.DailyRecords)
+                    {
+                        record.EnvironmentMonitoringID = existing.ID;
+                        record.CreatedOn = DateTime.UtcNow;
+                        record.CreatedBy = loggedInUser.EmployeeID;
+                        record.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
+                        record.IsActive = true;
+                        _context.EnvironmentDailyRecords.Add(record);
+                    }
+                }
 
                 await _repository.Update("EnvironmentMonitoring", existing);
                 await LogAudit("EnvironmentMonitoring", existing.ID, "Updated", null, body.GetRawText());
@@ -3386,6 +3410,55 @@ namespace LIMSApi.Services
                 "PtIlcPlan" => await _context.NablPtIlcPlans
                     .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode),
                 _ => throw new ArgumentException($"Unknown form type: {formType}")
+            };
+        }
+
+        // ─── Form Defaults & Suggested Reviewers ────────────────────────
+
+        public async Task<object> GetFormDefaults(string formType)
+        {
+            var org = await _context.Organizations.FirstOrDefaultAsync();
+            var nabl = await _context.NablAccreditations.FirstOrDefaultAsync();
+            var employee = await _context.EmployeeMasters
+                .FirstOrDefaultAsync(e => e.ID == loggedInUser.EmployeeID);
+
+            var formCode = FormCodeMap.TryGetValue(formType, out var code) ? code : formType;
+
+            return new
+            {
+                formCode,
+                companyName = org?.LabName ?? "",
+                companyAddress = org?.LabAddress ?? "",
+                contactEmail = org?.ContactEmail ?? "",
+                contactPhone = org?.ContactPhone ?? "",
+                organizationLogo = org?.OrganizationLogo ?? "",
+                nablTcNumber = nabl?.CertificateNumber ?? "",
+                nablLogo = nabl?.LogoPath ?? "",
+                preparedBy = employee?.Name ?? loggedInUser.Name ?? "",
+                preparedById = loggedInUser.EmployeeID
+            };
+        }
+
+        public async Task<object> GetSuggestedReviewers()
+        {
+            // Get employees with Reviewer or Approver roles, or Lab Manager / Quality Manager designations
+            var employees = await _context.EmployeeMasters
+                .Where(e => e.IsActive && e.CompanyCode == loggedInUser.CompanyCode)
+                .Select(e => new
+                {
+                    id = e.ID,
+                    name = e.Name,
+                    designation = e.Designation != null ? e.Designation.Name : "",
+                    department = e.Department != null ? e.Department.Name : ""
+                })
+                .ToListAsync();
+
+            // For now, return all active employees as potential reviewers/approvers
+            // The frontend can filter by role/designation as needed
+            return new
+            {
+                reviewers = employees,
+                approvers = employees
             };
         }
     }

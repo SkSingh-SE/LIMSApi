@@ -54,7 +54,8 @@ namespace LIMSApi.Repositories
         public async Task<PagedResponse<object>> GetAllChemicalParameters(PageFilter filter)
         {
             var _query = (from c in _context.ParameterMasters
-                          join u in _context.ParameterUnitMasters on c.ParameterUnitID equals u.ID
+                          join u in _context.ParameterUnitMasters on c.ParameterUnitID equals u.ID into unitGroup
+                          from u in unitGroup.DefaultIfEmpty()
                           join cat in _context.ParameterCategoryMasters on c.ParameterCategoryID equals cat.ID into catGroup
                           from cat in catGroup.DefaultIfEmpty()
                           where c.IsActive && c.ParameterType == "Chemical"
@@ -66,8 +67,8 @@ namespace LIMSApi.Repositories
                               c.Symbol,
                               c.AliasName,
                               c.ElementType,
-                              UnitName = u.Name,
-                              Factor = u.ConversaionFactor,
+                              UnitName = u != null ? u.Name : "",
+                              Factor = u != null ? u.ConversaionFactor : "1",
                               CategoryName = cat != null ? cat.Name : "",
                               c.DecimalPrecision,
                               c.CreatedOn,
@@ -78,28 +79,20 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)) || (x.Code != null && x.Code.ToLower().Contains(search)) || (x.Symbol != null && x.Symbol.ToLower().Contains(search)));
+                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)) || (x.Code != null && x.Code.ToLower().Contains(search)) || (x.Symbol != null && x.Symbol.ToLower().Contains(search)) || (x.UnitName != null && x.UnitName.ToLower().Contains(search)));
             }
             if (filter.SortByColumn != null)
             {
                 _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
             }
 
-            // Total Records Count
-            int totalRecords = await _query.CountAsync();
-
-            // Apply Pagination
-            var items = await _query
-                .Skip((filter.PageNumber - 1) * filter.PageSize)
-                .Take(filter.PageSize)
-                .ToListAsync();
-
-            return new PagedResponse<object>(items.Cast<object>().ToList(), totalRecords, filter.PageNumber, filter.PageSize);
+            return await _query.Cast<object>().ToPagedAsync(filter);
         }
         public async Task<PagedResponse<object>> GetAllMechanicalParameters(PageFilter filter)
         {
             var _query = (from c in _context.ParameterMasters
-                          join u in _context.ParameterUnitMasters on c.ParameterUnitID equals u.ID
+                          join u in _context.ParameterUnitMasters on c.ParameterUnitID equals u.ID into unitGroup
+                          from u in unitGroup.DefaultIfEmpty()
                           join cat in _context.ParameterCategoryMasters on c.ParameterCategoryID equals cat.ID into catGroup
                           from cat in catGroup.DefaultIfEmpty()
                           where c.IsActive && c.ParameterType == "Mechanical"
@@ -110,8 +103,8 @@ namespace LIMSApi.Repositories
                               c.Code,
                               c.AliasName,
                               c.ElementType,
-                              UnitName = u.Name,
-                              Factor = u.ConversaionFactor,
+                              UnitName = u != null ? u.Name : "",
+                              Factor = u != null ? u.ConversaionFactor : "1",
                               CategoryName = cat != null ? cat.Name : "",
                               c.DecimalPrecision,
                               c.CreatedOn,
@@ -122,28 +115,20 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)) || (x.Code != null && x.Code.ToLower().Contains(search)));
+                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)) || (x.Code != null && x.Code.ToLower().Contains(search)) || (x.AliasName != null && x.AliasName.ToLower().Contains(search)) || (x.ElementType != null && x.ElementType.ToLower().Contains(search)) || (x.UnitName != null && x.UnitName.ToLower().Contains(search)) || (x.CategoryName != null && x.CategoryName.ToLower().Contains(search)));
             }
             if (filter.SortByColumn != null)
             {
                 _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
             }
 
-            // Total Records Count
-            int totalRecords = await _query.CountAsync();
-
-            // Apply Pagination
-            var items = await _query
-                .Skip((filter.PageNumber - 1) * filter.PageSize)
-                .Take(filter.PageSize)
-                .ToListAsync();
-
-            return new PagedResponse<object>(items.Cast<object>().ToList(), totalRecords, filter.PageNumber, filter.PageSize);
+            return await _query.Cast<object>().ToPagedAsync(filter);
         }
         public async Task<PagedResponse<object>> ParameterList(PageFilter filter)
         {
             var _query = (from c in _context.ParameterMasters
-                          join u in _context.ParameterUnitMasters on c.ParameterUnitID equals u.ID
+                          join u in _context.ParameterUnitMasters on c.ParameterUnitID equals u.ID into unitGroup
+                          from u in unitGroup.DefaultIfEmpty()
                           where c.IsActive
                           select new
                           {
@@ -152,10 +137,10 @@ namespace LIMSApi.Repositories
                               c.AliasName,
                               c.ElementType,
                               ParameterType = c.ParameterType,
-                              UnitName = u.Name,
+                              UnitName = u != null ? u.Name : "",
                               Min = 0, // Placeholder for Min value, replace with actual value if available
                               Max = 0, // Placeholder for Max value, replace with actual value if available
-                              Factor = u.ConversaionFactor,
+                              Factor = u != null ? u.ConversaionFactor : "1",
                               c.CreatedOn,
                               c.ModifiedOn
                           }).AsQueryable().ApplyFilters(filter.Filter);
@@ -177,16 +162,7 @@ namespace LIMSApi.Repositories
                 _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
             }
 
-            // Total Records Count
-            int totalRecords = await _query.CountAsync();
-
-            // Apply Pagination
-            var items = await _query
-                .Skip((filter.PageNumber - 1) * filter.PageSize)
-                .Take(filter.PageSize)
-                .ToListAsync();
-
-            return new PagedResponse<object>(items.Cast<object>().ToList(), totalRecords, filter.PageNumber, filter.PageSize);
+            return await _query.Cast<object>().ToPagedAsync(filter);
         }
 
 
@@ -198,8 +174,15 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)) || x.ID.ToString().Contains(search));
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim().ToLower();
+                    _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                }
             }
 
             var skip = pageNo * pageSize;
@@ -221,21 +204,29 @@ namespace LIMSApi.Repositories
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.ParameterMasters 
-                         join u in _context.ParameterUnitMasters on a.ParameterUnitID equals u.ID
+            var _query = from a in _context.ParameterMasters
+                         join u in _context.ParameterUnitMasters on a.ParameterUnitID equals u.ID into unitGroup
+                         from u in unitGroup.DefaultIfEmpty()
                          where a.IsActive && a.ParameterType == "Chemical" select new
                          {
                              a.Name,
                              a.ID,
                              a.ParameterType,
                              unitID = a.ParameterUnitID,
-                             unit = u.Name
+                             unit = u != null ? u.Name : ""
                          };
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)) || x.ID.ToString().Contains(search));
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim().ToLower();
+                    _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                }
             }
 
             var skip = pageNo * pageSize;
@@ -271,8 +262,15 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)) || x.ID.ToString().Contains(search));
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim().ToLower();
+                    _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                }
             }
 
             var skip = pageNo * pageSize;

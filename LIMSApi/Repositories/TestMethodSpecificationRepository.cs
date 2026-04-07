@@ -77,7 +77,7 @@ namespace LIMSApi.Repositories
                              StandardOrganizationName = s.Name,
                              c.TestMethodStandard,
                              CurrentVersion = activeVersion != null ? activeVersion.Version : "",
-                             CurrentVersionYear = activeVersion != null ? activeVersion.Year : (int?)null,
+                             CurrentVersionYear = activeVersion != null ? activeVersion.Year : (string?)null,
                              c.IsDisabled,
                              c.CreatedBy,
                              c.CreatedOn,
@@ -91,7 +91,10 @@ namespace LIMSApi.Repositories
                 var search = filter.searchTerm.Trim().ToLower();
                 _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search))
                                      || (x.StandardOrganizationName != null && x.StandardOrganizationName.ToLower().Contains(search))
-                                     || (x.TestMethodStandard != null && x.TestMethodStandard.ToLower().Contains(search)));
+                                     || (x.TestMethodStandard != null && x.TestMethodStandard.ToLower().Contains(search))
+                                     || (x.CurrentVersion != null && x.CurrentVersion.ToLower().Contains(search))
+                                     || (x.CurrentVersionYear != null && x.CurrentVersionYear.ToString()!.Contains(search))
+                                     || (x.IsDisabled ? "disabled" : "active").Contains(search));
             }
 
             if (filter.SortByColumn != null)
@@ -99,14 +102,7 @@ namespace LIMSApi.Repositories
                 _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
             }
 
-            int totalRecords = await _query.CountAsync();
-
-            var items = await _query
-                .Skip((filter.PageNumber - 1) * filter.PageSize)
-                .Take(filter.PageSize)
-                .ToListAsync();
-
-            return new PagedResponse<object>(items.Cast<object>().ToList(), totalRecords, filter.PageNumber, filter.PageSize);
+            return await _query.Cast<object>().ToPagedAsync(filter);
         }
 
         public async Task<List<DropdwonSelector>> GetTestMethodSpecificationDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
@@ -117,12 +113,15 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var search = searchTerm.Trim().ToLower();
-                // Support search by ID (for preselection) or by Name
-                if (long.TryParse(search, out var searchId))
-                    _query = _query.Where(x => x.ID == searchId || (x.Name != null && x.Name.ToLower().Contains(search)));
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
                 else
+                {
+                    var search = searchTerm.Trim().ToLower();
                     _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                }
             }
 
             var skip = pageNo * pageSize;

@@ -20,5 +20,9 @@ namespace LIMSApi.Services.Interface
         // History & Audit
         Task<List<object>> GetRevisionHistory(string formType, long id);
         Task<List<object>> GetAuditLog(string formType, long id);
+
+        // Form Defaults & Reviewers
+        Task<object> GetFormDefaults(string formType);
+        Task<object> GetSuggestedReviewers();
     }
 }

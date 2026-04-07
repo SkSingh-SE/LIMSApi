@@ -464,6 +464,13 @@ namespace LIMSApi.ServiceWORepo
                 .Include(r => r.Sample)
                     .ThenInclude(s => s.SampleInward)
                         .ThenInclude(i => i.Customer)
+                .Include(r => r.Sample)
+                    .ThenInclude(s => s.SpecimenOrientation)
+                .Include(r => r.Sample)
+                    .ThenInclude(s => s.ProductForm)
+                .Include(r => r.Sample)
+                    .ThenInclude(s => s.ProductCondition)
+                        .ThenInclude(pc => pc.LinkedHeatTreatment)
                 .FirstOrDefaultAsync(r => r.ID == reportHeaderId);
 
             // Fallback: treat the ID as a SampleID
@@ -473,6 +480,13 @@ namespace LIMSApi.ServiceWORepo
                     .Include(r => r.Sample)
                         .ThenInclude(s => s.SampleInward)
                             .ThenInclude(i => i.Customer)
+                    .Include(r => r.Sample)
+                        .ThenInclude(s => s.SpecimenOrientation)
+                    .Include(r => r.Sample)
+                        .ThenInclude(s => s.ProductForm)
+                    .Include(r => r.Sample)
+                        .ThenInclude(s => s.ProductCondition)
+                            .ThenInclude(pc => pc.LinkedHeatTreatment)
                     .FirstOrDefaultAsync(r => r.SampleID == reportHeaderId && r.IsActive);
             }
 
@@ -661,6 +675,21 @@ namespace LIMSApi.ServiceWORepo
                 StatementOfConformity = inward.StatementOfConformity,
                 DecisionRule = inward.DecisionRule,
 
+                // NABL compliance fields
+                ProductForm = sample.ProductForm?.Name,
+                SpecimenOrientation = sample.SpecimenOrientation?.Name,
+                HeatTreatment = sample.ProductCondition?.LinkedHeatTreatment?.Name,
+                CrossSectionArea = sample.Diameter.HasValue && sample.Diameter > 0
+                    ? Math.Round((decimal)(Math.PI / 4) * sample.Diameter.Value * sample.Diameter.Value, 4)
+                    : sample.Thickness.HasValue && sample.Width.HasValue
+                        ? Math.Round(sample.Thickness.Value * sample.Width.Value, 4)
+                        : null,
+                GaugeLength = (sample.Diameter.HasValue && sample.Diameter > 0
+                    ? Math.Round(5.65m * (decimal)Math.Sqrt((double)(Math.PI / 4) * (double)(sample.Diameter.Value * sample.Diameter.Value)), 2)
+                    : sample.Thickness.HasValue && sample.Width.HasValue
+                        ? Math.Round(5.65m * (decimal)Math.Sqrt((double)(sample.Thickness.Value * sample.Width.Value)), 2)
+                        : null),
+
                 MechanicalTests = mechanicalTests,
                 ChemicalTests = chemicalTests,
                 LongTermTests = longTermDtos,
@@ -689,10 +718,19 @@ namespace LIMSApi.ServiceWORepo
 
         private ReportTestDto MapTestDto(dynamic test)
         {
+            // Add specimen label when multiple specimens exist
+            string baseName = test.laboratoryTest ?? "Test";
+            int totalSpec = 1;
+            int seqNo = 1;
+            try { totalSpec = (int)(test.totalSpecimens ?? 1); } catch { }
+            try { seqNo = (int)(test.sequenceNo ?? 1); } catch { }
+            string testName = totalSpec > 1 ? $"{baseName} - Specimen {seqNo}" : baseName;
+
             return new ReportTestDto
             {
                 TestResultHeaderId = test.headerId,
-                TestName = test.laboratoryTest,
+                TestName = testName,
+                TestMethod = test.standard,
                 ReportNo = test.reportNo,
                 Specification1Name = test.specfication1Name,
                 Specification2Name = test.specfication2Name,
@@ -710,7 +748,11 @@ namespace LIMSApi.ServiceWORepo
                             ? (p.value >= p.minValue && p.value <= p.maxValue)
                             : true),
                         ResultStatus = p.resultStatus,
-                        Remarks = p.Remarks
+                        Remarks = p.Remarks,
+                        DecimalPrecision = (int)(p.decimalPrecision ?? 2),
+                        ConversionFactor = (decimal)(p.conversionFactor ?? 1m),
+                        ConvertedValue = p.convertedValue,
+                        SelectedUnit = p.selectedUnit
                     }).ToList(),
                 Images = ((IEnumerable<dynamic>)test.images)
                     .Select(img => new ReportTestImageDto
@@ -1284,9 +1326,9 @@ namespace LIMSApi.ServiceWORepo
                 {
                     name = p.ParameterName,
                     unit = p.Unit,
-                    specMin = FormatDecimal(p.SpecMinValue ?? p.MinValue),
-                    specMax = FormatDecimal(p.SpecMaxValue ?? p.MaxValue),
-                    result = FormatDecimal(p.Value),
+                    specMin = FormatDecimal(p.SpecMinValue ?? p.MinValue, p.DecimalPrecision),
+                    specMax = FormatDecimal(p.SpecMaxValue ?? p.MaxValue, p.DecimalPrecision),
+                    result = FormatDecimal(p.Value, p.DecimalPrecision),
                     status = p.IsWithinLimit == true ? "Pass" : p.IsWithinLimit == false ? "Fail" : "N/A",
                     remarks = p.Remarks
                 }).ToList()
@@ -1398,6 +1440,11 @@ namespace LIMSApi.ServiceWORepo
                     .ThenInclude(s => s.MetalClassification)
                 .Include(r => r.Sample)
                     .ThenInclude(s => s.ProductCondition)
+                        .ThenInclude(pc => pc.LinkedHeatTreatment)
+                .Include(r => r.Sample)
+                    .ThenInclude(s => s.SpecimenOrientation)
+                .Include(r => r.Sample)
+                    .ThenInclude(s => s.ProductForm)
                 .FirstOrDefaultAsync(r => r.ID == reportHeaderId)
                 ?? throw new InvalidOperationException("Report header not found.");
 
@@ -1434,14 +1481,25 @@ namespace LIMSApi.ServiceWORepo
             // 4. Build test sections
             var testSections = new List<ReportDataTestSection>();
 
+            // Group by LabTestID to detect multi-specimen tests
+            var labTestGroups = testHeaders.GroupBy(h => h.LaboratoryTestID)
+                .ToDictionary(g => g.Key, g => g.Count());
+
             foreach (var header in testHeaders)
             {
                 var testType = DetermineTestType(header);
+                var baseName = header.LaboratoryTest?.Name ?? "Unknown Test";
+
+                // Add specimen label when multiple headers share same lab test
+                var hasMultipleSpecimens = labTestGroups.GetValueOrDefault(header.LaboratoryTestID, 1) > 1;
+                var testName = hasMultipleSpecimens
+                    ? $"{baseName} - Specimen {header.SequenceNo}"
+                    : baseName;
 
                 var section = new ReportDataTestSection
                 {
                     TestResultHeaderId = header.ID,
-                    TestName = header.LaboratoryTest?.Name ?? "Unknown Test",
+                    TestName = testName,
                     TestType = testType,
                     TestCategory = DetermineTestCategory(header, testType),
                     SpecificationName = header.LaboratoryTest?.SubGroup,
@@ -1456,15 +1514,16 @@ namespace LIMSApi.ServiceWORepo
                         {
                             Name = p.ParameterName,
                             Unit = p.Unit,
-                            SpecMin = FormatDecimal(p.SpecMinValue ?? p.MinValue),
-                            SpecMax = FormatDecimal(p.SpecMaxValue ?? p.MaxValue),
-                            Result = FormatDecimal(p.Value),
+                            SpecMin = FormatDecimal(p.SpecMinValue ?? p.MinValue, p.DecimalPrecision),
+                            SpecMax = FormatDecimal(p.SpecMaxValue ?? p.MaxValue, p.DecimalPrecision),
+                            Result = FormatDecimal(p.Value, p.DecimalPrecision),
                             Status = p.IsWithinLimit == true ? "Pass"
                                    : p.IsWithinLimit == false ? "Fail"
                                    : "N/A",
                             IsWithinNablScope = p.IsWithinNablScope,
                             NablScopeStatus = p.NablScopeStatus,
                             ExpandedUncertainty = p.ExpandedUncertainty,
+                            CoverageFactor = p.CoverageFactor,
                             SubGroup = testType == "Chemical" ? (header.LaboratoryTest?.TestCaption ?? header.LaboratoryTest?.Name) : null
                         })
                         .ToList(),
@@ -1525,6 +1584,44 @@ namespace LIMSApi.ServiceWORepo
                 .Where(d => d.SampleID == sample.ID)
                 .ToDictionaryAsync(d => d.Label, d => d.Value);
 
+            // 6g. Calculate CrossSectionArea and GaugeLength from dimensions
+            decimal? crossSectionArea = null;
+            if (sample.Diameter.HasValue && sample.Diameter > 0)
+                crossSectionArea = Math.Round((decimal)(Math.PI / 4) * sample.Diameter.Value * sample.Diameter.Value, 4);
+            else if (sample.Thickness.HasValue && sample.Width.HasValue && sample.Thickness > 0 && sample.Width > 0)
+                crossSectionArea = Math.Round(sample.Thickness.Value * sample.Width.Value, 4);
+
+            decimal? gaugeLength = null;
+            if (crossSectionArea.HasValue && crossSectionArea > 0)
+                gaugeLength = Math.Round(5.65m * (decimal)Math.Sqrt((double)crossSectionArea.Value), 2);
+
+            // 6h. Resolve equipment names, lab room, and environment from test headers
+            var firstCompletedHeader = testHeaders.FirstOrDefault(h => h.CompletedAt.HasValue) ?? testHeaders.FirstOrDefault();
+            var equipmentNames = new List<string>();
+            foreach (var header in testHeaders.Where(h => h.EquipmentID.HasValue || !string.IsNullOrEmpty(h.EquipmentIdsJson)))
+            {
+                var eqIds = new List<long>();
+                if (header.EquipmentID.HasValue) eqIds.Add(header.EquipmentID.Value);
+                if (!string.IsNullOrEmpty(header.EquipmentIdsJson))
+                {
+                    try
+                    {
+                        var parsed = System.Text.Json.JsonSerializer.Deserialize<List<long>>(header.EquipmentIdsJson);
+                        if (parsed != null) eqIds.AddRange(parsed);
+                    }
+                    catch { }
+                }
+                foreach (var eqId in eqIds.Distinct())
+                {
+                    var eq = await _db.EquipmentMasters.Where(e => e.ID == eqId).Select(e => e.Name).FirstOrDefaultAsync();
+                    if (eq != null && !equipmentNames.Contains(eq)) equipmentNames.Add(eq);
+                }
+            }
+
+            var labRoomName = firstCompletedHeader?.LabRoomId > 0
+                ? await _db.LabRooms.Where(r => r.ID == firstCompletedHeader.LabRoomId).Select(r => r.Name).FirstOrDefaultAsync()
+                : null;
+
             // 7. Build DTO
             var dto = new ReportDataDto
             {
@@ -1565,11 +1662,25 @@ namespace LIMSApi.ServiceWORepo
                 SampleDescription = sample.Details,
                 MaterialSpec = sample.MetalClassification?.Name ?? "",
                 Grade = sample.ProductCondition?.Name ?? "",
+                ProductForm = sample.ProductForm?.Name,
+                SpecimenOrientation = sample.SpecimenOrientation?.Name,
+                HeatTreatment = sample.ProductCondition?.LinkedHeatTreatment?.Name,
+                HeatNo = additionalDetails.GetValueOrDefault("Heat No"),
+                BatchNo = additionalDetails.GetValueOrDefault("Batch No"),
+                Quantity = sample.Quantity,
 
                 Thickness = sample.Thickness,
                 Diameter = sample.Diameter,
                 Width = sample.Width,
                 Length = sample.Length,
+                CrossSectionArea = crossSectionArea,
+                GaugeLength = gaugeLength,
+
+                // Test Conditions
+                RoomTemperature = firstCompletedHeader?.RoomTemperature,
+                RoomHumidity = firstCompletedHeader?.RoomHumidity,
+                EquipmentUsed = equipmentNames.Any() ? string.Join(", ", equipmentNames) : null,
+                LabRoom = labRoomName,
 
                 DateReceived = inward.CollectionTime.ToString("dd-MM-yyyy"),
                 DateTested = latestCompleted.ToString("dd-MM-yyyy"),
@@ -1685,12 +1796,10 @@ namespace LIMSApi.ServiceWORepo
         }
 
         /// <summary>Format decimal: removes trailing zeros (545.0000 → 545, 600.50 → 600.5)</summary>
-        private static string? FormatDecimal(decimal? value)
+        private static string? FormatDecimal(decimal? value, int decimalPrecision = 2)
         {
             if (!value.HasValue) return null;
-            return value.Value % 1 == 0
-                ? value.Value.ToString("0")
-                : value.Value.ToString("0.##");
+            return value.Value.ToString($"F{decimalPrecision}");
         }
 
         private static string DetermineTestCategory(TestResultHeader header, string testType)

@@ -27,7 +27,14 @@ namespace LIMSApi.Services
 
             bool exists = await _heatTreatmentRepository.ExistsByName(model.Name);
             if (exists)
-                throw new InvalidOperationException("HeatTreatment already exists!");
+                throw new InvalidOperationException("Heat Treatment Name already exists!");
+
+            if (!string.IsNullOrWhiteSpace(model.Code))
+            {
+                bool codeExists = await _heatTreatmentRepository.ExistsByCode(model.Code);
+                if (codeExists)
+                    throw new InvalidOperationException("Heat Treatment Code already exists!");
+            }
 
             await _heatTreatmentRepository.AddHeatTreatment(model);
             _logger.LogInformation("HeatTreatment '{HeatTreatmentName}' created successfully.", model.Name);
@@ -40,7 +47,14 @@ namespace LIMSApi.Services
 
             bool exists = await _heatTreatmentRepository.ExistsByNameAndNotId(model.Name, model.ID);
             if (exists)
-                throw new InvalidOperationException("Same HeatTreatment already exists!");
+                throw new InvalidOperationException("Heat Treatment Name already exists!");
+
+            if (!string.IsNullOrWhiteSpace(model.Code))
+            {
+                bool codeExists = await _heatTreatmentRepository.ExistsByCodeAndNotId(model.Code, model.ID);
+                if (codeExists)
+                    throw new InvalidOperationException("Heat Treatment Code already exists!");
+            }
 
             var existingHeatTreatment = await _heatTreatmentRepository.GetHeatTreatmentById(model.ID);
             if (existingHeatTreatment == null)

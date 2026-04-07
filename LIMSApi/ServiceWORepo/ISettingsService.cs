@@ -47,6 +47,12 @@ namespace LIMSApi.ServiceWORepo
         Task<string> UploadNablCertificateAsync(IFormFile file, CancellationToken cancellationToken = default);
         Task<string> UploadSignatureAsync(IFormFile file, CancellationToken cancellationToken = default);
         Task DeleteSignatoryAsync(long signatoryId, CancellationToken cancellationToken = default);
+
+        // Financial Year management
+        Task<List<FinancialYear>> GetAllFinancialYearsAsync(CancellationToken cancellationToken = default);
+        Task<List<FinancialYearDropdownDto>> GetFinancialYearsDropdownAsync(CancellationToken cancellationToken = default);
+        Task SetDefaultFinancialYearAsync(long id, CancellationToken cancellationToken = default);
+        Task DeleteFinancialYearAsync(long id, CancellationToken cancellationToken = default);
     }
 
 }

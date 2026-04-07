@@ -84,9 +84,20 @@ namespace LIMSApi.Controllers
         }
 
         [HttpGet("by-classification/{metalClassificationId}")]
-        public async Task<IActionResult> GetByClassification(long metalClassificationId, string? searchTerm, int pageNo = 1, int pageSize = 20)
+        public async Task<IActionResult> GetByClassification(long metalClassificationId, string? searchTerm, int pageNo = 0, int pageSize = 20)
         {
-            if (pageNo < 1) pageNo = 1;
+            if (pageNo < 0) pageNo = 0;
+
+            // Rebind scenario: if searchTerm is a numeric ID, always return that specific record
+            // (regardless of classification mapping) so the dropdown can resolve the saved label
+            if (!string.IsNullOrWhiteSpace(searchTerm) && long.TryParse(searchTerm.Trim(), out var searchId))
+            {
+                var byId = await _context.SpecimenOrientationMasters
+                    .Where(so => so.IsActive && so.ID == searchId)
+                    .Select(so => new DropdwonSelector { Id = so.ID, Name = so.Name })
+                    .ToListAsync();
+                if (byId.Any()) return Ok(byId);
+            }
 
             // Check if any mappings exist for this metal classification
             var hasMappings = await _context.SpecimenOrientationMetalClassifications
@@ -106,7 +117,7 @@ namespace LIMSApi.Controllers
 
                 data = await query
                     .OrderBy(so => so.Name)
-                    .Skip((pageNo - 1) * pageSize)
+                    .Skip(pageNo * pageSize)
                     .Take(pageSize)
                     .Select(so => new DropdwonSelector { Id = so.ID, Name = so.Name })
                     .ToListAsync();

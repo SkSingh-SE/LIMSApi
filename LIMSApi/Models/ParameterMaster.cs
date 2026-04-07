@@ -15,7 +15,7 @@ public partial class ParameterMaster : AuditProperty
     public required string Name { get; set; }
 
     public string? AliasName { get; set; }
-    public long ParameterUnitID {  get; set; }
+    public long? ParameterUnitID {  get; set; }
     public string? ElementType { get; set; } = "normal";
     public bool IsCalculated { get; set; } = false;
     public string? Formula { get; set; }

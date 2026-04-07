@@ -337,6 +337,7 @@ builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IPushNotificationService, PushNotificationService>();
 builder.Services.AddScoped<ISampleStatusService, SampleStatusService>();
 builder.Services.AddScoped<ICuttingService, CuttingService>();
+builder.Services.AddScoped<ISamplePreparationService, SamplePreparationService>();
 builder.Services.AddScoped<IPricingEngine, PricingEngine>();
 builder.Services.AddScoped<IPriceCalculationService, PriceCalculationService>();
 builder.Services.AddScoped<IFinancialYearService, FinancialYearService>();
@@ -355,6 +356,8 @@ builder.Services.AddScoped<FormulaEvaluator>();
 builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IReportTemplateService, ReportTemplateService>();
 builder.Services.AddScoped<IReportBlockGenerator, ReportBlockGenerator>();
+builder.Services.AddScoped<IReportFormatService, ReportFormatService>();
+builder.Services.AddScoped<IReportAutoGenerationService, ReportAutoGenerationService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<ICustomerAmendmentService, CustomerAmendmentService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
@@ -475,6 +478,26 @@ RecurringJob.AddOrUpdate<MonthlyBillingJob>(
     job => job.ExecuteWeekly(),
     "0 9 * * MON"); // Every Monday at 9 AM
 
+RecurringJob.AddOrUpdate<CustomIntervalBillingJob>(
+    "custom-interval-billing",
+    job => job.Execute(),
+    "0 2 * * *"); // Daily at 2 AM — checks BillingEvery customers
+
+RecurringJob.AddOrUpdate<PaymentOverdueJob>(
+    "payment-overdue-check",
+    job => job.Execute(),
+    "0 8 * * *"); // Daily at 8 AM — notifies Accounts of overdue invoices
+
+RecurringJob.AddOrUpdate<POExpiryJob>(
+    "po-expiry-check",
+    job => job.Execute(),
+    "0 8 * * *"); // Daily at 8 AM — notifies about POs expiring within 7 days
+
+RecurringJob.AddOrUpdate<EnvironmentMonitoringJob>(
+    "environment-monitoring-daily",
+    job => job.Execute(),
+    "0 8 * * *"); // Daily at 8 AM — auto-generate daily environment records
+
 RecurringJob.AddOrUpdate<TestUsageStatsJob>(
     "test-usage-stats",
     x => x.Execute(),
@@ -484,6 +507,11 @@ RecurringJob.AddOrUpdate<VersionReviewReminderJob>(
     "version-review-reminder",
     x => x.Execute(),
     "0 9 * * MON"); // Every Monday at 9 AM
+
+RecurringJob.AddOrUpdate<FinancialYearRolloverJob>(
+    "financial-year-rollover",
+    x => x.Execute(),
+    "0 0 1 4 *"); // April 1st at midnight
 
 // --------------------
 // Endpoints

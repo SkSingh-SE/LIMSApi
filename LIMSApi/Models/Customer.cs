@@ -30,7 +30,7 @@ namespace LIMSApi.Models
 
 
         [StringLength(50)]
-        public required string GSTNo { get; set; }
+        public string? GSTNo { get; set; }
         [StringLength(50)]
         public string? PANNo { get; set; }
 
@@ -45,6 +45,8 @@ namespace LIMSApi.Models
         public bool BillingEvery { get; set; }
 
         public int? BillingEveryDays { get; set; }
+
+        public DateTime? LastBillingDate { get; set; }
         [StringLength(100)]
         public string? SpecialAccountingCase { get; set; }
 

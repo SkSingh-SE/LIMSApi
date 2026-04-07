@@ -30,7 +30,14 @@ namespace LIMSApi.Services
 
             bool exists = await _parameterRepository.ExistsByName(model.Name);
             if (exists)
-                throw new InvalidOperationException("Parameter already exists!");
+                throw new InvalidOperationException("Parameter Name already exists!");
+
+            if (!string.IsNullOrWhiteSpace(model.Code))
+            {
+                bool codeExists = await _parameterRepository.ExistsByCode(model.Code);
+                if (codeExists)
+                    throw new InvalidOperationException("Parameter Code already exists!");
+            }
 
             if (model.IsCalculated) ValidateFormula(model.Formula);
             model.Formula = model.IsCalculated ? model.Formula : null;
@@ -48,7 +55,14 @@ namespace LIMSApi.Services
 
             bool exists = await _parameterRepository.ExistsByNameAndNotId(model.Name, model.ID);
             if (exists)
-                throw new InvalidOperationException("Same Parameter already exists!");
+                throw new InvalidOperationException("Parameter Name already exists!");
+
+            if (!string.IsNullOrWhiteSpace(model.Code))
+            {
+                bool codeExists = await _parameterRepository.ExistsByCodeAndNotId(model.Code, model.ID);
+                if (codeExists)
+                    throw new InvalidOperationException("Parameter Code already exists!");
+            }
 
             var existingParameter = await _parameterRepository.GetParameterById(model.ID);
             if (existingParameter == null)

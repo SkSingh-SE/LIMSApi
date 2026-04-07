@@ -50,6 +50,7 @@ namespace LIMSApi.ServiceWORepo
 
         Task<object?> GetParametersForHeader(long headerId);
         Task RecordLongTermReading(LongTermRecordDto dto);
+        Task CompleteLongTermTest(long longTermTestId);
         Task<string> UploadTestImageAsync(long headerId, IFormFile file, string? caption);
         Task<List<TestResultImageDto>> UploadTestImagesAsync(long headerId, List<IFormFile> files, List<string>? captions);
         Task<List<TestResultImageDto>> UploadedTestImages(long headerId);
@@ -78,6 +79,7 @@ namespace LIMSApi.ServiceWORepo
         // Load Parameters from Specification into existing header
         // -------------------------------------------------------------
         Task<object> LoadParametersFromSpecAsync(long headerId);
+        Task DeleteParameter(long paramId);
 
         // -------------------------------------------------------------
         // Auto-create TestResultHeaders from approved plan
@@ -88,6 +90,7 @@ namespace LIMSApi.ServiceWORepo
         // Phase 5: Test Verification Workflow
         // -------------------------------------------------------------
         Task SubmitForVerification(long headerId);
+        Task<object> SubmitSampleForVerification(long sampleId);
         Task<PagedResponse<object>> GetVerificationList(PageFilter filter);
         Task VerifyTest(long headerId, string? comments);
         Task RejectVerification(long headerId, string? comments);

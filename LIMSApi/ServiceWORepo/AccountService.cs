@@ -85,8 +85,13 @@ namespace LIMSApi.ServiceWORepo
                      CustomerName = c.Name,
                      CustomerType = c.CustomerType, // Walk-in / Credit
 
-                     PIStatus =  i.AdvancePIRequired ? i.PIReceived ? "Completed" :  _db.ProformaInvoiceHeader.Any(x => x.InwardID == i.ID) ? "Generated" : "Pending" : "Completed",
+                     PIStatus = i.AdvancePIRequired ? i.PIReceived ? "Completed" : _db.ProformaInvoiceHeader.Any(x => x.InwardID == i.ID) ? "Generated" : "Pending" : "Completed",
                      InvoiceStatus = i.IsInvoiceGenerated ? "Completed" : "Pending",
+                     PaymentStatus = _db.PaymentOrders.Any(po => po.InwardID == i.ID && po.Status != LIMSApi.Helpers.Enums.PaymentStatus.Paid)
+                         ? "Pending"
+                         : _db.PaymentOrders.Any(po => po.InwardID == i.ID)
+                             ? "Paid"
+                             : i.IsInvoiceGenerated ? "Pending" : "N/A",
                      i.CreatedOn,
                      i.ModifiedOn
                  })
@@ -99,11 +104,12 @@ namespace LIMSApi.ServiceWORepo
                 var search = filter.searchTerm.Trim().ToLower();
 
                 query = query.Where(x =>
-                    x.CaseNo.ToLower().Contains(search) ||
-                    x.CustomerName.ToLower().Contains(search) ||
-                    x.CustomerType.ToLower().Contains(search) ||
-                    x.PIStatus.ToLower().Contains(search) ||
-                    x.InvoiceStatus.ToLower().Contains(search)
+                    (x.CaseNo != null && x.CaseNo.ToLower().Contains(search)) ||
+                    (x.CustomerName != null && x.CustomerName.ToLower().Contains(search)) ||
+                    (x.CustomerType != null && x.CustomerType.ToLower().Contains(search)) ||
+                    (x.PIStatus != null && x.PIStatus.ToLower().Contains(search)) ||
+                    (x.InvoiceStatus != null && x.InvoiceStatus.ToLower().Contains(search)) ||
+                    (x.PaymentStatus != null && x.PaymentStatus.ToLower().Contains(search))
                 );
             }
 
@@ -144,88 +150,138 @@ namespace LIMSApi.ServiceWORepo
             var hasPendingPayment = await _db.PaymentOrders
                 .AnyAsync(p => p.InwardID == inwardId && p.Status != PaymentStatus.Paid);
 
+            // DirectTaxInvoice: skip PI step entirely
+            var piStatus = inward.Customer!.DirectTaxInvoiceNoPerforma
+                ? "NOT_REQUIRED"
+                : inward.PIReceived ? "Completed" : "Pending";
+
+            // Load PI details
+            var pi = await _db.ProformaInvoiceHeader
+                .Where(p => p.InwardID == inwardId)
+                .OrderByDescending(p => p.PIDate)
+                .FirstOrDefaultAsync();
+
+            // Update piStatus if PI exists but inward not marked
+            if (pi != null && piStatus == "Pending")
+                piStatus = "Generated";
+
+            // Load Invoice details
+            var invoice = await _db.TaxInvoices
+                .Where(i => i.InwardID == inwardId && i.IsActive)
+                .OrderByDescending(i => i.InvoiceDate)
+                .FirstOrDefaultAsync();
+
+            // Load advance payments
+            var advancePayments = await _db.PaymentOrders
+                .Where(p => p.InwardID == inwardId && p.PaymentType == PaymentType.Advance)
+                .OrderByDescending(p => p.CreatedOn)
+                .Select(p => new AdvancePaymentSummary
+                {
+                    Id = p.ID,
+                    Amount = p.Amount,
+                    Date = p.CreatedOn,
+                    PaymentMode = p.PaymentType.ToString(),
+                    Status = p.Status.ToString()
+                })
+                .ToListAsync();
+
             return new CaseAccountSummaryDto
             {
                 InwardID = inward.ID,
                 CaseNo = inward.CaseNo,
-                CustomerName = inward.Customer!.Name,
+                CustomerName = inward.Customer.Name,
                 CustomerType = inward.Customer.CustomerType,
-                PIStatus = inward.PIReceived ? "Completed" : "Pending",
+                CustomerId = inward.CustomerID,
+                PIStatus = piStatus,
                 InvoiceStatus = inward.IsInvoiceGenerated ? "Completed" : "Pending",
-                HasPendingPayment = hasPendingPayment
+                HasPendingPayment = hasPendingPayment,
+
+                ProformaInvoice = pi != null ? new ProformaInvoiceSummary
+                {
+                    Id = pi.ID,
+                    PiNo = pi.PINo ?? $"PI-{pi.ID}",
+                    PiDate = pi.PIDate,
+                    Status = "Generated",
+                    SubTotal = pi.SubTotal,
+                    TaxAmount = pi.TaxAmount,
+                    GrandTotal = pi.GrandTotal,
+                    Amount = pi.GrandTotal
+                } : null,
+
+                FinalInvoice = invoice != null ? new InvoiceSummary
+                {
+                    InvoiceId = invoice.ID,
+                    InvoiceNo = invoice.InvoiceNo,
+                    InvoiceDate = invoice.InvoiceDate,
+                    SubTotal = invoice.SubTotal,
+                    TaxAmount = invoice.CGST + invoice.SGST + invoice.IGST,
+                    GrandTotal = invoice.GrandTotal,
+                    Amount = invoice.GrandTotal
+                } : null,
+
+                AdvancePayments = advancePayments
             };
         }
 
         public async Task<PagedResponse<object>> GetCasePaymentListAsync(long inwardId, PageFilter filter)
         {
-            var query =
-                (from p in _db.PaymentOrders
-                 where p.InwardID == inwardId
-
-                 select new
-                 {
-                     p.ID,
-                     p.CreatedOn,
-                     PaymentType = p.PaymentType.ToString(),
-
-                     Against =
-                         p.SampleID != null ? "Sample" :
-                         p.ReportID != null ? "Report" : "Case",
-
-                     Reference =
-                         p.SampleID != null
-                             ? _db.SampleDetails
-                                 .Where(s => s.ID == p.SampleID)
-                                 .Select(s => s.SampleNo)
-                                 .FirstOrDefault()
-                             : p.ReportID != null
-                                 ? _db.Reports
-                                     .Where(r => r.ID == p.ReportID)
-                                     .Select(r => r.ReportNo)
-                                     .FirstOrDefault()
-                                 : p.CaseNo,
-
-                     p.Amount,
-                     Status = p.Status.ToString(),
-
-                     Action =
-                         p.Status == PaymentStatus.Pending || p.Status == PaymentStatus.Failed
-                             ? "SendLink"
-                             : "-"
-                 })
-                .AsQueryable()
-                .ApplyFilters(filter.Filter);
-
-            // ------------- SEARCH -------------
-            if (!string.IsNullOrWhiteSpace(filter.searchTerm))
-            {
-                var search = filter.searchTerm.Trim().ToLower();
-
-                query = query.Where(x =>
-                    x.PaymentType.ToLower().Contains(search) ||
-                    x.Reference.ToLower().Contains(search) ||
-                    x.Status.ToLower().Contains(search)
-                );
-            }
-
-            // ------------- SORT -------------
-            if (!string.IsNullOrWhiteSpace(filter.SortByColumn))
-            {
-                query = query.OrderBy(
-                    $"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}"
-                );
-            }
-
-            // ------------- PAGINATION -------------
-            int totalRecords = await query.CountAsync();
-
-            var items = await query
-                .Skip((filter.PageNumber - 1) * filter.PageSize)
-                .Take(filter.PageSize)
+            // ── 1. Payment Orders (Razorpay / system-generated) ──
+            var paymentOrderItems = await _db.PaymentOrders
+                .Where(p => p.InwardID == inwardId)
+                .Select(p => new
+                {
+                    id = p.ID,
+                    date = p.CreatedOn,
+                    paymentType = p.PaymentType.ToString(),
+                    source = "PaymentOrder",
+                    against = p.SampleID != null ? "Sample" : p.ReportID != null ? "Report" : "Case",
+                    reference = p.CaseNo ?? "",
+                    amount = p.Amount,
+                    status = p.Status.ToString(),
+                    receiptNo = "",
+                    paymentMode = "",
+                    action = (p.Status == PaymentStatus.Pending || p.Status == PaymentStatus.Failed) ? "SendLink" : "-",
+                    paymentOrderId = (long?)p.ID
+                })
                 .ToListAsync();
 
+            // ── 2. Ledger Credit Entries (manual payments — Cash, Cheque, NEFT, UPI) ──
+            var ledgerCreditItems = await _db.CustomerLedgers
+                .Where(l => l.InwardId == inwardId && l.CreditAmount > 0)
+                .Select(l => new
+                {
+                    id = l.Id,
+                    date = l.Date,
+                    paymentType = "Manual",
+                    source = "PaymentReceipt",
+                    against = "Case",
+                    reference = l.Description ?? "",
+                    amount = l.CreditAmount,
+                    status = "Paid",
+                    receiptNo = l.ReferenceNo ?? "",
+                    paymentMode = "",
+                    action = "-",
+                    paymentOrderId = (long?)null
+                })
+                .ToListAsync();
+
+            // ── 3. Combine in memory ──
+            var allItems = paymentOrderItems
+                .Cast<object>()
+                .Concat(ledgerCreditItems.Cast<object>())
+                .OrderByDescending(x => ((dynamic)x).date)
+                .ToList();
+
+            var totalRecords = allItems.Count;
+
+            // Simple pagination in memory
+            var items = allItems
+                .Skip((filter.PageNumber - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .ToList();
+
             return new PagedResponse<object>(
-                items.Cast<object>().ToList(),
+                items,
                 totalRecords,
                 filter.PageNumber,
                 filter.PageSize
@@ -252,6 +308,8 @@ namespace LIMSApi.ServiceWORepo
             {
                 throw new UnauthorizedAccessException("Only Accounts role can generate invoices.");
             }
+
+            using var transaction = await _db.Database.BeginTransactionAsync();
 
             var inward = await _db.SampleInwards
                 .Include(x => x.Customer)
@@ -299,6 +357,14 @@ namespace LIMSApi.ServiceWORepo
 
             var customerGstExempt = inward.Customer?.GSTNA ?? false;
 
+            // SpecialAccountingCase: SEZ or No GST = exempt from GST
+            var specialCase = inward.Customer?.SpecialAccountingCase ?? "";
+            if (specialCase.Equals("SEZ", StringComparison.OrdinalIgnoreCase)
+                || specialCase.Equals("No GST applicable", StringComparison.OrdinalIgnoreCase))
+            {
+                customerGstExempt = true;
+            }
+
             decimal cgst = 0, sgst = 0, igst = 0;
 
             if (gstApplicable && !customerGstExempt)
@@ -342,9 +408,11 @@ namespace LIMSApi.ServiceWORepo
             // Calculate balance payable after advance adjustment
             var balancePayable = grandTotal - advancePayment;
 
+            var currentFY = await _db.FinancialYears.FirstOrDefaultAsync(f => f.IsCurrent);
+
             var invoice = new TaxInvoice
             {
-                InvoiceNo = $"TI-{DateTime.UtcNow:yyyyMMddHHmmss}",
+                InvoiceNo = await GenerateInvoiceNoAsync(),
                 InvoiceDate = DateTime.UtcNow,
                 InwardID = inward.ID,
                 CustomerID = inward.CustomerID,
@@ -355,7 +423,8 @@ namespace LIMSApi.ServiceWORepo
                 CGST = cgst,
                 SGST = sgst,
                 IGST = igst,
-                GrandTotal = grandTotal
+                GrandTotal = grandTotal,
+                FinancialYearId = currentFY?.Id
             };
 
             _db.TaxInvoices.Add(invoice);
@@ -396,16 +465,67 @@ namespace LIMSApi.ServiceWORepo
                 inwardId,
                 invoice.ID);
 
-            // ── NOTIFICATION ──
-            await _notificationService.CreateNotificationAsync(new Notification
+            await transaction.CommitAsync();
+
+            // ── NOTIFICATION (fire-and-forget — outside transaction) ──
+            try
             {
-                UserID = user.EmployeeID,
-                Title = "Invoice Generated",
-                Message = $"Tax Invoice {invoice.InvoiceNo} for Case {inward.CaseNo} — Amount: {grandTotal:N2}",
-                Type = NotificationType.System,
-                EntityID = invoice.ID,
-                EntityType = "TaxInvoice"
-            });
+                await _notificationService.CreateNotificationAsync(new Notification
+                {
+                    UserID = user.EmployeeID,
+                    Title = "Invoice Generated",
+                    Message = $"Tax Invoice {invoice.InvoiceNo} for Case {inward.CaseNo} — Amount: {grandTotal:N2}",
+                    Type = NotificationType.System,
+                    EntityID = invoice.ID,
+                    EntityType = "TaxInvoice"
+                });
+            }
+            catch (Exception ex)
+            {
+                // Log but don't fail — invoice is already saved
+                System.Diagnostics.Debug.WriteLine($"Notification failed for invoice {invoice.InvoiceNo}: {ex.Message}");
+            }
+
+            // ── PO LOW/EXHAUSTED NOTIFICATION ──
+            try
+            {
+                if (linkedPO != null)
+                {
+                    if (linkedPO.Status == "Exhausted")
+                    {
+                        await _notificationService.NotifyByRoleAsync("Accounts",
+                            "PO Exhausted", $"PO {linkedPO.PONumber} for {inward.Customer?.Name} has been fully utilized.",
+                            "CustomerPurchaseOrder", linkedPO.ID);
+                    }
+                    else if (linkedPO.RemainingAmount <= linkedPO.POAmount * 0.2m)
+                    {
+                        await _notificationService.NotifyByRoleAsync("Accounts",
+                            "PO Balance Low", $"PO {linkedPO.PONumber} for {inward.Customer?.Name} has only {linkedPO.RemainingAmount:N2} remaining ({(linkedPO.RemainingAmount / linkedPO.POAmount * 100):N0}%)",
+                            "CustomerPurchaseOrder", linkedPO.ID);
+                    }
+                }
+            }
+            catch { /* PO notification failure must not block */ }
+
+            // ── CREDIT LIMIT EXCEEDED NOTIFICATION ──
+            try
+            {
+                var customer = inward.Customer;
+                if (customer?.CreditLimitAmount > 0)
+                {
+                    var outstanding = await _db.CustomerLedgers
+                        .Where(l => l.CustomerId == customer.ID)
+                        .SumAsync(l => l.DebitAmount - l.CreditAmount);
+                    if (outstanding > customer.CreditLimitAmount)
+                    {
+                        await _notificationService.NotifyByRoleAsync("Accounts",
+                            "Credit Limit Exceeded",
+                            $"Customer {customer.Name} outstanding ({outstanding:N2}) exceeds credit limit ({customer.CreditLimitAmount:N2})",
+                            "Customer", customer.ID);
+                    }
+                }
+            }
+            catch { /* credit notification failure must not block */ }
 
             // Set PAYMENT_PENDING on all active samples for this inward
             var samples = await _db.SampleDetails
@@ -481,7 +601,7 @@ namespace LIMSApi.ServiceWORepo
                 InvoiceDate = invoice.InvoiceDate,
                 CustomerName = invoice.Customer!.Name,
                 CustomerAddress = invoice.Customer.Address,
-                CustomerGst = invoice.Customer.GSTNo,
+                CustomerGst = invoice.Customer.GSTNo ?? "",
                 SubTotal = invoice.SubTotal,
                 DiscountPercentage = invoice.DiscountPercentage,
                 DiscountAmount = invoice.DiscountAmount,
@@ -498,6 +618,24 @@ namespace LIMSApi.ServiceWORepo
         public async Task<long> GenerateProformaInvoiceAsync(long inwardId)
         {
             var proformaInvoiceId = await _proformaInvoiceRepository.GeneratePIAsync(inwardId);
+
+            // Notification (fire-and-forget)
+            try
+            {
+                var user = Helpers.LoggedInUserProvider.CurrentUser;
+                var inward = await _db.SampleInwards.FindAsync(inwardId);
+                await _notificationService.CreateNotificationAsync(new Notification
+                {
+                    UserID = user?.EmployeeID,
+                    Title = "Proforma Invoice Generated",
+                    Message = $"PI generated for Case {inward?.CaseNo}",
+                    Type = NotificationType.System,
+                    EntityID = inwardId,
+                    EntityType = "SampleInward"
+                });
+            }
+            catch { /* notification failure must not block PI generation */ }
+
             return proformaInvoiceId;
         }
 
@@ -622,6 +760,30 @@ namespace LIMSApi.ServiceWORepo
 
             _db.InvoiceLineItems.Remove(lineItem);
             await _db.SaveChangesAsync();
+        }
+
+        /// <summary>
+        /// Generates sequential invoice number: TI/YY-MM/XXXXXX (max 16 chars per GST Rule 46)
+        /// </summary>
+        private async Task<string> GenerateInvoiceNoAsync()
+        {
+            var now = DateTime.UtcNow;
+            var prefix = $"TI/{now:yy}-{now:MM}/";
+            var lastInvoice = await _db.TaxInvoices
+                .Where(i => i.InvoiceNo.StartsWith(prefix))
+                .OrderByDescending(i => i.InvoiceNo)
+                .Select(i => i.InvoiceNo)
+                .FirstOrDefaultAsync();
+
+            var nextNum = 1;
+            if (lastInvoice != null)
+            {
+                var parts = lastInvoice.Split('/');
+                if (parts.Length == 3 && int.TryParse(parts[2], out var lastNum))
+                    nextNum = lastNum + 1;
+            }
+
+            return $"{prefix}{nextNum:D6}"; // e.g. TI/26-04/000001 (16 chars)
         }
     }
 

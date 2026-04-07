@@ -597,32 +597,45 @@ namespace LIMSApi.ServiceWORepo
         {
             ValidateFinancialYear(yearDto.StartDate, yearDto.EndDate);
 
-            var (org, _, _, _, existingYear, _) = await GetAllAsync(0, cancellationToken);
-
-            await ValidateFinancialYearOverlapAsync(yearDto.StartDate, yearDto.EndDate, existingYear?.Id, org.Id, cancellationToken);
+            var org = await _db.Organizations.FirstOrDefaultAsync(cancellationToken)
+                ?? throw new InvalidOperationException("Organization not configured");
 
             FinancialYear model;
-            if (existingYear != null)
+
+            if (yearDto.Id.HasValue && yearDto.Id.Value > 0)
             {
-                existingYear.OrganizationId = org.Id;
-                existingYear.StartDate = yearDto.StartDate.ToDateTime(TimeOnly.MinValue);
-                existingYear.EndDate = yearDto.EndDate.ToDateTime(TimeOnly.MinValue);
-                existingYear.Year = $"{yearDto.StartDate.Year}-{yearDto.EndDate.Year}";
-                existingYear.IsCurrent = true;
-                model = existingYear;
+                // Update existing FY
+                model = await _db.FinancialYears.FirstOrDefaultAsync(f => f.Id == yearDto.Id.Value, cancellationToken)
+                    ?? throw new KeyNotFoundException("Financial Year not found");
+
+                await ValidateFinancialYearOverlapAsync(yearDto.StartDate, yearDto.EndDate, model.Id, org.Id, cancellationToken);
+
+                model.StartDate = yearDto.StartDate.ToDateTime(TimeOnly.MinValue);
+                model.EndDate = yearDto.EndDate.ToDateTime(TimeOnly.MinValue);
+                model.Year = $"{yearDto.StartDate.Year}-{yearDto.EndDate.Year}";
+                model.ModifiedOn = DateTime.UtcNow;
             }
             else
             {
+                // Create new FY
+                await ValidateFinancialYearOverlapAsync(yearDto.StartDate, yearDto.EndDate, null, org.Id, cancellationToken);
+
+                // If this is the first FY, make it default
+                var anyExists = await _db.FinancialYears.AnyAsync(cancellationToken);
+
                 model = new FinancialYear
                 {
                     OrganizationId = org.Id,
                     StartDate = yearDto.StartDate.ToDateTime(TimeOnly.MinValue),
                     EndDate = yearDto.EndDate.ToDateTime(TimeOnly.MinValue),
                     Year = $"{yearDto.StartDate.Year}-{yearDto.EndDate.Year}",
-                    IsCurrent = true
+                    IsCurrent = !anyExists // First FY becomes default automatically
                 };
+                _db.FinancialYears.Add(model);
             }
-            return await SaveFinancialYearAsync(model, cancellationToken);
+
+            await _db.SaveChangesAsync(cancellationToken);
+            return model;
         }
 
         public async Task<AuthorizedSignatory[]> SaveSignatoriesAsync(SignatoryDto[] signatoryDtos, CancellationToken cancellationToken = default)
@@ -770,6 +783,77 @@ namespace LIMSApi.ServiceWORepo
             var sign = await _db.AuthorizedSignatories.FirstOrDefaultAsync(x => x.Id == signatoryId, cancellationToken)
                 ?? throw new KeyNotFoundException("Signatory not found");
             _db.AuthorizedSignatories.Remove(sign);
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+
+        // =====================
+        // Financial Year Management
+        // =====================
+
+        public async Task<List<FinancialYear>> GetAllFinancialYearsAsync(CancellationToken cancellationToken = default)
+        {
+            return await _db.FinancialYears
+                .OrderByDescending(f => f.StartDate)
+                .ToListAsync(cancellationToken);
+        }
+
+        public async Task<List<FinancialYearDropdownDto>> GetFinancialYearsDropdownAsync(CancellationToken cancellationToken = default)
+        {
+            return await _db.FinancialYears
+                .OrderByDescending(f => f.StartDate)
+                .Select(f => new FinancialYearDropdownDto
+                {
+                    Id = f.Id,
+                    Year = f.Year,
+                    IsCurrent = f.IsCurrent
+                })
+                .ToListAsync(cancellationToken);
+        }
+
+        public async Task SetDefaultFinancialYearAsync(long id, CancellationToken cancellationToken = default)
+        {
+            var fy = await _db.FinancialYears.FirstOrDefaultAsync(f => f.Id == id, cancellationToken)
+                ?? throw new KeyNotFoundException("Financial Year not found");
+
+            // Unset all
+            var allCurrent = await _db.FinancialYears.Where(f => f.IsCurrent).ToListAsync(cancellationToken);
+            foreach (var f in allCurrent)
+                f.IsCurrent = false;
+
+            fy.IsCurrent = true;
+
+            // Audit log
+            _db.FinancialYearChangeLogs.Add(new FinancialYearChangeLog
+            {
+                FinancialYearId = id,
+                OldYear = allCurrent.FirstOrDefault()?.Year ?? "(none)",
+                NewYear = fy.Year,
+                ChangedById = Helpers.LoggedInUserProvider.CurrentUser.EmployeeID,
+                ChangedOn = DateTime.UtcNow,
+                Reason = "Changed default via Settings"
+            });
+
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+
+        public async Task DeleteFinancialYearAsync(long id, CancellationToken cancellationToken = default)
+        {
+            var fy = await _db.FinancialYears.FirstOrDefaultAsync(f => f.Id == id, cancellationToken)
+                ?? throw new KeyNotFoundException("Financial Year not found");
+
+            if (fy.IsCurrent)
+                throw new InvalidOperationException("Cannot delete the current default Financial Year. Set another as default first.");
+
+            // Check if referenced by any billing entities
+            bool inUse = await _db.InvoiceCases.AnyAsync(x => x.FinancialYearId == id && x.IsActive, cancellationToken)
+                || await _db.Set<TaxInvoice>().AnyAsync(x => x.FinancialYearId == id, cancellationToken)
+                || await _db.Set<CreditNote>().AnyAsync(x => x.FinancialYearId == id, cancellationToken)
+                || await _db.Set<DebitNote>().AnyAsync(x => x.FinancialYearId == id, cancellationToken);
+
+            if (inUse)
+                throw new InvalidOperationException("Cannot delete: Financial Year is referenced by invoices or billing records.");
+
+            _db.FinancialYears.Remove(fy);
             await _db.SaveChangesAsync(cancellationToken);
         }
     }

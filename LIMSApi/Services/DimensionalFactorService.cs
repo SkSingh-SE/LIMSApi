@@ -27,7 +27,14 @@ namespace LIMSApi.Services
 
             bool exists = await _dimensionalRepository.ExistsByName(model.Name);
             if (exists)
-                throw new InvalidOperationException("DimensionalFactor already exists!");
+                throw new InvalidOperationException("Dimensional Factor Name already exists!");
+
+            if (!string.IsNullOrWhiteSpace(model.Code))
+            {
+                bool codeExists = await _dimensionalRepository.ExistsByCode(model.Code);
+                if (codeExists)
+                    throw new InvalidOperationException("Dimensional Factor Code already exists!");
+            }
 
             await _dimensionalRepository.AddDimensionalFactor(model);
             _logger.LogInformation("DimensionalFactor '{DimensionalFactorName}' created successfully.", model.Name);
@@ -40,7 +47,14 @@ namespace LIMSApi.Services
 
             bool exists = await _dimensionalRepository.ExistsByNameAndNotId(model.Name, model.ID);
             if (exists)
-                throw new InvalidOperationException("Same DimensionalFactor already exists!");
+                throw new InvalidOperationException("Dimensional Factor Name already exists!");
+
+            if (!string.IsNullOrWhiteSpace(model.Code))
+            {
+                bool codeExists = await _dimensionalRepository.ExistsByCodeAndNotId(model.Code, model.ID);
+                if (codeExists)
+                    throw new InvalidOperationException("Dimensional Factor Code already exists!");
+            }
 
             var existingDimensionalFactor = await _dimensionalRepository.GetDimensionalFactorById(model.ID);
             if (existingDimensionalFactor == null)

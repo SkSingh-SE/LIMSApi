@@ -55,6 +55,7 @@ public partial class LIMSContext : DbContext
     public DbSet<LabScopeSpecification> LabScopeSpecifications { get; set; }
     public DbSet<LabScopeSpecificationParameter> LabScopeSpecificationParameters { get; set; }
     public DbSet<LabScopeSpecificationParameterEquipment> LabScopeSpecificationParameterEquipments { get; set; }
+    public DbSet<LabScopeChangeLog> LabScopeChangeLogs { get; set; }
     public virtual DbSet<MakerMaster> MakerMasters { get; set; }
     public virtual DbSet<MenuMaster> MenuMasters { get; set; }
     public virtual DbSet<MetalClassificationMaster> MetalClassificationMasters { get; set; }
@@ -136,6 +137,7 @@ public partial class LIMSContext : DbContext
     public DbSet<CuttingChargeDetail> CuttingChargeDetails { get; set; }
     public DbSet<MachiningChargeItem> MachiningChargeItems { get; set; }
     public DbSet<SamplePreparationMaster> SamplePreparationMasters { get; set; }
+    public DbSet<SamplePreparation> SamplePreparations { get; set; }
     public DbSet<ProductTestGroup> ProductTestGroups { get; set; }
     public DbSet<ProductSpecificationGrade> ProductSpecificationGrades { get; set; }
 
@@ -161,10 +163,21 @@ public partial class LIMSContext : DbContext
 
     public DbSet<PaymentOrder> PaymentOrders { get; set; }
     public DbSet<ReportAmendmentToken> ReportAmendmentTokens { get; set; }
+
+    // ── Dynamic Report Format System (parallel to existing reporting) ──
+    public DbSet<ReportFormat> ReportFormats { get; set; }
+    public DbSet<ReportFormatSection> ReportFormatSections { get; set; }
+    public DbSet<ReportFormatMapping> ReportFormatMappings { get; set; }
+    public DbSet<GeneratedReport> GeneratedReports { get; set; }
     public DbSet<CustomerAmendment> CustomerAmendments { get; set; }
     public DbSet<TaxInvoice> TaxInvoices { get; set; }
     public DbSet<ChargeEvent> ChargeEvents { get; set; }
     public DbSet<InvoiceLineItem> InvoiceLineItems { get; set; }
+    public DbSet<CreditNote> CreditNotes { get; set; }
+    public DbSet<DebitNote> DebitNotes { get; set; }
+    public DbSet<AdvancePaymentVoucher> AdvancePaymentVouchers { get; set; }
+    public DbSet<Quotation> Quotations { get; set; }
+    public DbSet<QuotationItem> QuotationItems { get; set; }
     public DbSet<MessageTemplate> MessageTemplates { get; set; }
 
     /* ============================
@@ -189,6 +202,8 @@ public partial class LIMSContext : DbContext
     public DbSet<NablTrainingAttendance> NablTrainingAttendances => Set<NablTrainingAttendance>();
     public DbSet<NablTrainingEffectiveness> NablTrainingEffectivenesses => Set<NablTrainingEffectiveness>();
     public DbSet<NablEnvironmentMonitoring> NablEnvironmentMonitorings => Set<NablEnvironmentMonitoring>();
+    public DbSet<EnvironmentDailyRecord> EnvironmentDailyRecords { get; set; }
+    public DbSet<LabRoom> LabRooms { get; set; }
     public DbSet<NablQualityControlPlan> NablQualityControlPlans => Set<NablQualityControlPlan>();
     public DbSet<NablTestRequest> NablTestRequests => Set<NablTestRequest>();
     public DbSet<NablTestMethod> NablTestMethods => Set<NablTestMethod>();
@@ -312,6 +327,13 @@ public partial class LIMSContext : DbContext
             .WithMany()
             .HasForeignKey(x => x.ParameterCategoryID)
             .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<ParameterMaster>()
+            .HasOne(x => x.ParameterUnit)
+            .WithMany()
+            .HasForeignKey(x => x.ParameterUnitID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.SetNull);
 
         // Phase 2: Junction table composite keys
         modelBuilder.Entity<SpecimenOrientationProductForm>().HasKey(x => new { x.SpecimenOrientationID, x.ProductFormID });
@@ -674,6 +696,77 @@ public partial class LIMSContext : DbContext
             .HasForeignKey(x => x.SampleInwardID)
             .OnDelete(DeleteBehavior.NoAction);
 
+        // CreditNote / DebitNote FKs (no cascade)
+        modelBuilder.Entity<CreditNote>()
+            .HasOne(x => x.TaxInvoice)
+            .WithMany()
+            .HasForeignKey(x => x.TaxInvoiceID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<CreditNote>()
+            .HasOne(x => x.Customer)
+            .WithMany()
+            .HasForeignKey(x => x.CustomerID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<DebitNote>()
+            .HasOne(x => x.TaxInvoice)
+            .WithMany()
+            .HasForeignKey(x => x.TaxInvoiceID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<DebitNote>()
+            .HasOne(x => x.Customer)
+            .WithMany()
+            .HasForeignKey(x => x.CustomerID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // AdvancePaymentVoucher FKs (no cascade)
+        modelBuilder.Entity<AdvancePaymentVoucher>()
+            .HasOne(x => x.Customer).WithMany()
+            .HasForeignKey(x => x.CustomerID).OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<AdvancePaymentVoucher>()
+            .HasOne(x => x.Inward).WithMany()
+            .HasForeignKey(x => x.InwardID).OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<AdvancePaymentVoucher>()
+            .HasOne(x => x.AdjustedToInvoice).WithMany()
+            .HasForeignKey(x => x.AdjustedToInvoiceID).OnDelete(DeleteBehavior.NoAction);
+
+        // Quotation FKs (no cascade)
+        modelBuilder.Entity<Quotation>()
+            .HasOne(x => x.Customer).WithMany()
+            .HasForeignKey(x => x.CustomerID).OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<Quotation>()
+            .HasOne(x => x.ConvertedToInward).WithMany()
+            .HasForeignKey(x => x.ConvertedToInwardID).OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<QuotationItem>()
+            .HasOne(x => x.Quotation).WithMany(q => q.Items)
+            .HasForeignKey(x => x.QuotationID).OnDelete(DeleteBehavior.Cascade);
+
+        // LabRoom + EnvironmentDailyRecord FKs
+        modelBuilder.Entity<EnvironmentDailyRecord>()
+            .HasOne(x => x.EnvironmentMonitoring).WithMany(m => m.DailyRecords)
+            .HasForeignKey(x => x.EnvironmentMonitoringID).OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<NablEnvironmentMonitoring>()
+            .HasOne(x => x.LabRoom).WithMany()
+            .HasForeignKey(x => x.LabRoomId).OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<EquipmentMaster>()
+            .HasOne(x => x.LabRoom).WithMany()
+            .HasForeignKey(x => x.LabRoomID).OnDelete(DeleteBehavior.NoAction);
+
+        // SamplePreparation FKs (no cascade — prevent multiple cascade paths)
+        modelBuilder.Entity<SamplePreparation>(entity =>
+        {
+            entity.HasOne(x => x.Sample).WithMany().HasForeignKey(x => x.SampleID).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(x => x.SampleInward).WithMany().HasForeignKey(x => x.InwardID).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(x => x.AssignedTo).WithMany().HasForeignKey(x => x.AssignedToEmployeeID).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(x => x.PreparedBy).WithMany().HasForeignKey(x => x.PreparedByEmployeeID).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(x => x.VerifiedBy).WithMany().HasForeignKey(x => x.VerifiedByEmployeeID).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(x => x.Equipment).WithMany().HasForeignKey(x => x.EquipmentID).OnDelete(DeleteBehavior.NoAction);
+        });
+
         // SamplePreparationMaster FKs (no cascade)
         modelBuilder.Entity<SamplePreparationMaster>()
             .HasOne(x => x.LaboratoryTest)
@@ -698,6 +791,49 @@ public partial class LIMSContext : DbContext
         // TestUsageStats composite index for smart auto-suggest lookups
         modelBuilder.Entity<TestUsageStats>()
             .HasIndex(t => new { t.LaboratoryTestID, t.MetalClassificationID, t.ProductConditionID, t.CustomerID });
+
+        // ── Dynamic Report Format System ──
+        modelBuilder.Entity<ReportFormat>()
+            .HasIndex(rf => rf.FormatCode)
+            .HasFilter("[IsActive] = 1 AND [FormatCode] IS NOT NULL")
+            .IsUnique()
+            .HasDatabaseName("IX_ReportFormat_FormatCode");
+
+        modelBuilder.Entity<ReportFormatSection>()
+            .HasOne(s => s.ReportFormat)
+            .WithMany(f => f.Sections)
+            .HasForeignKey(s => s.ReportFormatID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ReportFormatMapping>()
+            .HasOne(m => m.ReportFormat)
+            .WithMany(f => f.Mappings)
+            .HasForeignKey(m => m.ReportFormatID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ReportFormatMapping>()
+            .HasOne(m => m.LaboratoryTest)
+            .WithMany()
+            .HasForeignKey(m => m.LaboratoryTestID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<ReportFormatMapping>()
+            .HasOne(m => m.TestMethod)
+            .WithMany()
+            .HasForeignKey(m => m.TestMethodID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<GeneratedReport>()
+            .HasOne(g => g.ReportFormat)
+            .WithMany()
+            .HasForeignKey(g => g.ReportFormatID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<GeneratedReport>()
+            .HasOne(g => g.Sample)
+            .WithMany()
+            .HasForeignKey(g => g.SampleID)
+            .OnDelete(DeleteBehavior.Restrict);
 
     }
 

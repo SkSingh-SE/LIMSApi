@@ -48,6 +48,16 @@ namespace LIMSApi.ServiceWORepo
         public async Task<object> ProcessPaymentAsync(PaymentRequestDto dto)
         {
             // =============================
+            // CHECK GATEWAY ENABLED
+            // =============================
+            var gatewayConfig = await _db.Configurations
+                .FirstOrDefaultAsync(c => c.KeyName == "PaymentGatewayEnabled" && c.IsActive);
+            if (gatewayConfig == null || !string.Equals(gatewayConfig.Value, "true", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("Payment gateway is not configured. Use manual payment recording via Account → Record Payment.");
+            }
+
+            // =============================
             // VERIFY PAYMENT
             // =============================
             if (!string.IsNullOrEmpty(dto.RazorpayPaymentId))

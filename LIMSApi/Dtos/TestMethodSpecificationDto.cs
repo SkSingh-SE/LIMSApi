@@ -21,7 +21,7 @@ namespace LIMSApi.Dtos
         public long TestMethodSpecificationID { get; set; }
         public int Status { get; set; }
         public string Version { get; set; }
-        public int? Year { get; set; }
+        public string? Year { get; set; }
         public DateTime? EffectiveDate { get; set; }
         public DateTime? SupersededDate { get; set; }
         public DateTime? ReviewDate { get; set; }

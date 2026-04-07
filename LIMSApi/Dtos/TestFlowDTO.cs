@@ -35,6 +35,9 @@
         public long TestMethodId { get; set; }      // General/Chemical Method ID
         public long LaboratoryTestId { get; set; }  // LaboratoryTests table ID
 
+        // Equipment tracking (ISO 17025)
+        public string? EquipmentIdsJson { get; set; }
+
         public List<TestResultParameterDto> Parameters { get; set; } = new();
     }
     public class TestResultParameterDto

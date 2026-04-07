@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 
 namespace LIMSApi.Models
 {
-    public class LabScopeSpecification
+    public class LabScopeSpecification : AuditProperty
     {
         [Key]
         public long ID { get; set; }

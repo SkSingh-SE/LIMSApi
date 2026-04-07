@@ -29,6 +29,12 @@ public partial class EquipmentMaster : AuditProperty
     public bool IntermediateCheckRequired { get; set; } = false;
     public string? IntermediateCheckInterval { get; set; }
 
+    // Lab Room linkage (Phase 8)
+    public long? LabRoomID { get; set; }
+
+    [ForeignKey(nameof(LabRoomID))]
+    public virtual LabRoom? LabRoom { get; set; }
+
     // Phase 7.1: Calibration & Maintenance enhancements
     public DateTime? LastCalibrationDate { get; set; }
     public int? CalibrationFrequencyDays { get; set; }

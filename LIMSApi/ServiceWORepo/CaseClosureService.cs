@@ -58,12 +58,46 @@ namespace LIMSApi.ServiceWORepo
                 return (false, "Pending amendments exist. All amendments must be resolved before case closure.");
 
             // Check if all samples have reports dispatched
-            var allSamplesDispatched = inward.SampleDetails.All(s => 
+            var allSamplesDispatched = inward.SampleDetails.All(s =>
                 s.SampleStatus == SampleStatus.REPORT_DISPATCHED.ToString() ||
                 s.SampleStatus == SampleStatus.CASE_CLOSED.ToString());
 
             if (!allSamplesDispatched)
                 return (false, "Not all reports have been dispatched. All reports must be dispatched before case closure.");
+
+            // Check all reports are in Approved or Dispatched status (NABL Clause 7.8)
+            var reportHeaders = await _db.ReportHeaders
+                .Where(r => sampleIds.Contains(r.SampleID) && r.IsActive)
+                .ToListAsync();
+
+            var pendingReports = reportHeaders
+                .Where(r => r.Status != "Approved" && r.Status != "Dispatched" && r.Status != "Generated")
+                .ToList();
+
+            if (pendingReports.Any())
+                return (false, $"Reports not yet approved: {pendingReports.Count} report(s) are still in '{pendingReports.First().Status}' status.");
+
+            // Check no pending Non-Conforming Work (NCW) for any test in the case
+            var sampleNos = inward.SampleDetails.Select(s => s.SampleNo).Where(s => !string.IsNullOrEmpty(s)).ToList();
+            var hasOpenNCW = false;
+            if (sampleNos.Any())
+            {
+                // Build SQL-level filter: check each sample code against NCW SampleCode field
+                var openNCWQuery = _db.NablNonConformingWorks
+                    .Where(ncw => ncw.IsActive && !ncw.IsObsolete
+                        && (ncw.Status == "Draft" || ncw.Status == "Submitted" || ncw.Status == "Under Review")
+                        && ncw.SampleCode != null);
+
+                // Check if any NCW references any of our sample numbers
+                foreach (var sn in sampleNos)
+                {
+                    hasOpenNCW = await openNCWQuery.AnyAsync(ncw => ncw.SampleCode!.Contains(sn));
+                    if (hasOpenNCW) break;
+                }
+            }
+
+            if (hasOpenNCW)
+                return (false, "Open Non-Conforming Work (NCW) exists for this case. Resolve all NCWs before closure.");
 
             // Check credit approval for credit customers
             if (inward.Customer?.CustomerType?.Equals("Credit", StringComparison.OrdinalIgnoreCase) == true)
@@ -117,21 +151,27 @@ namespace LIMSApi.ServiceWORepo
             await _db.SaveChangesAsync();
             _logger.LogInformation("Case {CaseNo} closed successfully", inward.CaseNo);
 
-            // Notify case creator
-            await _notificationService.CreateNotificationAsync(new Notification
+            // Notifications (fire-and-forget — must not block case closure)
+            try
             {
-                UserID = inward.CreatedBy,
-                Title = "Case Closed",
-                Message = $"Case {inward.CaseNo} has been closed.",
-                Type = NotificationType.System,
-                EntityID = inward.ID,
-                EntityType = "SampleInward"
-            });
+                await _notificationService.CreateNotificationAsync(new Notification
+                {
+                    UserID = inward.CreatedBy,
+                    Title = "Case Closed",
+                    Message = $"Case {inward.CaseNo} has been closed.",
+                    Type = NotificationType.System,
+                    EntityID = inward.ID,
+                    EntityType = "SampleInward"
+                });
 
-            // Notify Accounts team
-            await _notificationService.NotifyByRoleAsync("Accounts",
-                "Case Closed", $"Case {inward.CaseNo} has been closed.",
-                "SampleInward", inward.ID);
+                await _notificationService.NotifyByRoleAsync("Accounts",
+                    "Case Closed", $"Case {inward.CaseNo} has been closed.",
+                    "SampleInward", inward.ID);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Notification failed for case closure {CaseNo}", inward.CaseNo);
+            }
         }
     }
 }

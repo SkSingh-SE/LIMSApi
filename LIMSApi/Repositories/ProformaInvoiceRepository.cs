@@ -71,6 +71,14 @@ namespace LIMSApi.Repositories
                 var customerState = inward?.State?.Trim().ToLower() ?? "";
                 var customerGstExempt = inward?.Customer?.GSTNA ?? false;
 
+                // SpecialAccountingCase: SEZ or No GST = exempt from GST
+                var specialCase = inward?.Customer?.SpecialAccountingCase ?? "";
+                if (specialCase.Equals("SEZ", StringComparison.OrdinalIgnoreCase)
+                    || specialCase.Equals("No GST applicable", StringComparison.OrdinalIgnoreCase))
+                {
+                    customerGstExempt = true;
+                }
+
                 // Determine inter-state from company state vs customer state
                 var isInterState = !string.IsNullOrEmpty(companyState)
                     && !string.IsNullOrEmpty(customerState)
@@ -241,6 +249,8 @@ namespace LIMSApi.Repositories
                 // ===========================
                 //  6. INSERT PI HEADER
                 // ===========================
+                var currentFY = await _context.FinancialYears.FirstOrDefaultAsync(f => f.IsCurrent);
+
                 var piHeader = new ProformaInvoiceHeader
                 {
                     InwardID = inwardId,
@@ -255,6 +265,7 @@ namespace LIMSApi.Repositories
                     IGST = igst,
                     TaxAmount = taxAmount,
                     GrandTotal = grandTotal,
+                    FinancialYearId = currentFY?.Id,
 
                     CreatedBy = loggedInUser.UserId
                 };

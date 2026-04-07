@@ -86,6 +86,14 @@ namespace LIMSApi.Services
                         throw new ArgumentException($"Purchase Order {po.PONumber} has expired on {po.ValidUntil.Value:dd-MMM-yyyy}.");
                 }
 
+                // Auto-set PI requirement from customer preference
+                var customer = await _context.Customers.FindAsync(model.CustomerID);
+                if (customer?.PerformaInvoiceRequiredBeforeTesting == true)
+                {
+                    model.AdvancePIRequired = true;
+                    model.HoldTestingUntilPIApproved = true;
+                }
+
                 var entity = new SampleInward
                 {
                     CaseNo = caseAndSample.caseNo,
@@ -168,6 +176,8 @@ namespace LIMSApi.Services
                         Details = s.Details,
                         MetalClassificationID = s.MetalClassificationID,
                         ProductConditionID = s.ProductConditionID,
+                        ProductFormID = s.ProductFormID,
+                        SpecimenOrientationID = s.SpecimenOrientationID,
                         Remarks = s.Remarks,
                         Quantity = s.Quantity,
                         UploadReferenceID = s.UploadReferenceID,
@@ -325,15 +335,14 @@ namespace LIMSApi.Services
         /// </summary>
         private bool ValidateMandatoryInformation(SampleInward inward)
         {
-            // Check mandatory fields
+            // Check mandatory fields (GstNo excluded — can be empty when customer has GSTNA=true)
             if (string.IsNullOrWhiteSpace(inward.CaseNo) ||
                 inward.CustomerID == 0 ||
                 string.IsNullOrWhiteSpace(inward.Address) ||
                 string.IsNullOrWhiteSpace(inward.City) ||
                 string.IsNullOrWhiteSpace(inward.State) ||
                 string.IsNullOrWhiteSpace(inward.PinCode) ||
-                string.IsNullOrWhiteSpace(inward.Country) ||
-                string.IsNullOrWhiteSpace(inward.GstNo))
+                string.IsNullOrWhiteSpace(inward.Country))
             {
                 return false;
             }
@@ -369,6 +378,21 @@ namespace LIMSApi.Services
                 var entity = await _SampleInwardRepository.GetSampleInwardWithPlans(model.ID);
                 if (entity == null)
                     throw new Exception("Sample Inward not found");
+
+                // Validate PO if provided
+                if (model.PurchaseOrderId.HasValue)
+                {
+                    var po = await _context.CustomerPurchaseOrders
+                        .FirstOrDefaultAsync(p => p.ID == model.PurchaseOrderId.Value && p.IsActive);
+                    if (po == null)
+                        throw new ArgumentException("Selected Purchase Order not found.");
+                    if (po.CustomerId != model.CustomerID)
+                        throw new ArgumentException("Purchase Order does not belong to the selected customer.");
+                    if (po.Status != "Active")
+                        throw new ArgumentException($"Purchase Order {po.PONumber} is {po.Status}. Only active POs can be linked.");
+                    if (po.ValidUntil.HasValue && po.ValidUntil.Value < DateTime.UtcNow)
+                        throw new ArgumentException($"Purchase Order {po.PONumber} has expired on {po.ValidUntil.Value:dd-MMM-yyyy}.");
+                }
 
                 // Update scalar fields
                 entity.CustomerID = model.CustomerID;
@@ -489,6 +513,8 @@ namespace LIMSApi.Services
                         existingSample.Details = s.Details;
                         existingSample.MetalClassificationID = s.MetalClassificationID;
                         existingSample.ProductConditionID = s.ProductConditionID;
+                        existingSample.ProductFormID = s.ProductFormID;
+                        existingSample.SpecimenOrientationID = s.SpecimenOrientationID;
                         existingSample.TpiAgencyID = s.TpiAgencyID;
                         existingSample.Remarks = s.Remarks;
                         existingSample.Quantity = s.Quantity;
@@ -541,6 +567,8 @@ namespace LIMSApi.Services
                             Details = s.Details,
                             MetalClassificationID = s.MetalClassificationID,
                             ProductConditionID = s.ProductConditionID,
+                            ProductFormID = s.ProductFormID,
+                            SpecimenOrientationID = s.SpecimenOrientationID,
                             Remarks = s.Remarks,
                             Quantity = s.Quantity,
                             Thickness = s.Thickness,
@@ -965,6 +993,8 @@ namespace LIMSApi.Services
 
                     sample.MetalClassificationID = sampleDto.MetalClassificationID;
                     sample.ProductConditionID = sampleDto.ProductConditionID;
+                    sample.ProductFormID = sampleDto.ProductFormID;
+                    sample.SpecimenOrientationID = sampleDto.SpecimenOrientationID;
                     sample.PreparationRequired = sampleDto.PreparationRequired;
                     sample.MachiningRequired = sampleDto.MachiningRequired;
                     sample.MachiningAmount = sampleDto.MachiningAmount ?? 0;
@@ -1285,6 +1315,7 @@ namespace LIMSApi.Services
                 ID = sampleInward.ID,
                 CaseNo = sampleInward.CaseNo,
                 CustomerID = sampleInward.CustomerID,
+                PurchaseOrderId = sampleInward.PurchaseOrderId,
                 Address = sampleInward.Address,
                 Area = sampleInward.Area,
                 State = sampleInward.State,
@@ -1375,6 +1406,8 @@ namespace LIMSApi.Services
                         Details = s.Details,
                         MetalClassificationID = s.MetalClassificationID,
                         ProductConditionID = s.ProductConditionID,
+                        ProductFormID = s.ProductFormID,
+                        SpecimenOrientationID = s.SpecimenOrientationID,
                         Remarks = s.Remarks,
                         Quantity = s.Quantity,
                         UploadReferenceID = s.UploadReferenceID,
@@ -1386,6 +1419,7 @@ namespace LIMSApi.Services
                         OtherPreparation = s.OtherPreparation,
                         OtherPreparationCharge = s.OtherPreparationCharge,
                         TpiRequired = s.TpiRequired,
+                        TpiAgencyID = s.TpiAgencyID,
                         Specimen = s.Specimen,
                         TestInstructions = s.TestInstructions,
                         Thickness = s.Thickness,
@@ -1455,6 +1489,7 @@ namespace LIMSApi.Services
                 CaseNo = sampleInward.CaseNo,
                 CustomerID = sampleInward.CustomerID,
                 CustomerName = sampleInward?.Customer?.Name,
+                PurchaseOrderId = sampleInward.PurchaseOrderId,
                 Address = sampleInward.Address,
                 Area = sampleInward.Area,
                 State = sampleInward.State,
@@ -1553,6 +1588,8 @@ namespace LIMSApi.Services
                         Details = s.Details,
                         MetalClassificationID = s.MetalClassificationID,
                         ProductConditionID = s.ProductConditionID,
+                        ProductFormID = s.ProductFormID,
+                        SpecimenOrientationID = s.SpecimenOrientationID,
                         Remarks = s.Remarks,
                         Quantity = s.Quantity,
                         UploadReferenceID = s.UploadReferenceID,
@@ -1564,6 +1601,9 @@ namespace LIMSApi.Services
                         OtherPreparation = s.OtherPreparation,
                         OtherPreparationCharge = s.OtherPreparationCharge,
                         TpiRequired = s.TpiRequired,
+                        TpiAgencyID = s.TpiAgencyID,
+                        Specimen = s.Specimen,
+                        TestInstructions = s.TestInstructions,
                         Thickness = s.Thickness,
                         Diameter = s.Diameter,
                         Width = s.Width,

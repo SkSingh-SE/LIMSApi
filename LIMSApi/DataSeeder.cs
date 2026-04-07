@@ -20,43 +20,44 @@ public static class DataSeeder
 
         try
         {
-            // Each method uses IF NOT EXISTS internally — safe to run every startup.
-            // No duplicates will be created even on repeated runs.
-            logger.LogInformation("DataSeeder: checking and applying seed data...");
+            // Quick check: if Admin role exists, first-time seeding was already done
+            var alreadySeeded = await db.Database
+                .SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM RoleMasters WHERE Name = N'Admin' AND IsActive = 1")
+                .FirstAsync();
 
-            // Ensure schema is up-to-date (handles columns missing from older DBs)
-            await EnsureSchemaAsync(db);
+            if (alreadySeeded == 0)
+            {
+                logger.LogInformation("DataSeeder: first-time deployment detected — seeding core data...");
 
-            await SeedRolesAsync(db);
-            await SeedMenusAsync(db);
-            await SeedPermissionsAsync(db);
-            await SeedRoleMenuMappingsAsync(db);
-            await SeedConfigurationsAsync(db);
+                await SeedRolesAsync(db);
+                await SeedMenusAsync(db);
+                await SeedPermissionsAsync(db);
+                await SeedRoleMenuMappingsAsync(db);
+                await SeedConfigurationsAsync(db);
+                await SeedCurrenciesAsync(db);
+                await SeedDispatchModesAsync(db);
+                await SeedAdminUserAsync(db, logger);
+
+                logger.LogInformation("DataSeeder: core seeding complete.");
+            }
+            else
+            {
+                logger.LogInformation("DataSeeder: core seed data already present — skipping core.");
+            }
+
+            // Always ensure admin user exists (idempotent — checks before creating)
             await SeedAdminUserAsync(db, logger);
 
-            logger.LogInformation("DataSeeder: seed check complete.");
+            // Master data (ProductForm, SpecimenType, etc.) always runs — idempotent with IF NOT EXISTS checks
+            await SeedMasterDataAsync(db);
+            await SeedFinancialYearsAsync(db);
+            await BackfillFinancialYearIdsAsync(db, logger);
+            logger.LogInformation("DataSeeder: master data seed complete.");
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "DataSeeder: error during seeding");
         }
-    }
-
-    // ───────────────────────────────────────────────
-    // 0. ENSURE SCHEMA — add missing columns for older databases
-    // ───────────────────────────────────────────────
-    private static async Task EnsureSchemaAsync(LIMSContext db)
-    {
-        await db.Database.ExecuteSqlRawAsync(@"
-            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'EmployeeMasters') AND name = N'ProfileImagePath')
-                ALTER TABLE EmployeeMasters ADD ProfileImagePath NVARCHAR(MAX) NULL;
-
-            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'EmployeeMasters') AND name = N'DigitalSignature')
-                ALTER TABLE EmployeeMasters ADD DigitalSignature NVARCHAR(MAX) NULL;
-
-            IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'EmployeeMasters') AND name = N'EmployeeStatus')
-                ALTER TABLE EmployeeMasters ADD EmployeeStatus NVARCHAR(MAX) NULL;
-        ");
     }
 
     // ───────────────────────────────────────────────
@@ -177,6 +178,7 @@ public static class DataSeeder
             IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 124) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (124,N'Record Payment',NULL,0,N'/account/record-payment',NULL,1012);
             IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 125) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (125,N'Aging Report',NULL,0,N'/account/aging-report',NULL,1012);
             IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 126) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (126,N'Outstanding Report',NULL,0,N'/account/outstanding-report',NULL,1012);
+            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 127) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (127,N'Customer Purchase Orders',NULL,0,N'/accounts/purchase-orders',NULL,1012);
 
             -- ══════ Level 2: Sub-children ══════
             -- Under Material Specification (200)
@@ -187,6 +189,7 @@ public static class DataSeeder
             IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 33)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (33,N'Product Specification',NULL,0,N'/product-specification',NULL,202);
             IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 34)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (34,N'Custom Product Specification',NULL,0,N'/custom-product-specification',NULL,202);
             -- Under Sample Preparation (500)
+            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 130) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (130,N'Preparation Queue',NULL,0,N'/sample/preparation',NULL,500);
             IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 43)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (43,N'Sample Cutting',NULL,0,N'/sample/cutting',NULL,500);
             IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 46)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (46,N'Machining Charges',NULL,0,N'/sample/machining',NULL,500);
             IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 44)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (44,N'Cutting Price Master',NULL,0,N'/cutting-price-master',NULL,500);
@@ -227,6 +230,8 @@ public static class DataSeeder
             IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 23)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (23,N'Heat Treatment',NULL,0,N'/heat-treatment',NULL,201);
             IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 26)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (26,N'Product Condition',NULL,0,N'/product-condition',NULL,201);
             IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 27)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (27,N'Specimen Orientation',NULL,0,N'/specimen-orientation',NULL,201);
+            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 128) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (128,N'Specimen Type',NULL,0,N'/specimen-type',NULL,201);
+            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 129) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (129,N'Product Form',NULL,0,N'/product-form',NULL,201);
             IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 22)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (22,N'Dimensional Factor',NULL,0,N'/dimesional-factor',NULL,201);
             IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 29)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (29,N'Universal Code Type',NULL,0,N'/universal-code-type',NULL,201);
             -- Personnel (7301)
@@ -324,6 +329,8 @@ public static class DataSeeder
             (N'CanReadHeatTreatment',N'View Heat Treatment',23,N'Read'),
             (N'CanReadProductCondition',N'View Product Condition',26,N'Read'),
             (N'CanReadSpecimenOrientation',N'View Specimen Orientation',27,N'Read'),
+            (N'CanReadSpecimenType',N'View Specimen Type',128,N'Read'),
+            (N'CanReadProductForm',N'View Product Form',129,N'Read'),
             (N'CanReadDimensionalFactors',N'View Dimensional Factors',22,N'Read'),
             (N'CanReadUniversalCode',N'View Universal Code',29,N'Read'),
             (N'CanReadProductSpecification',N'View Product Specification',33,N'Read'),
@@ -433,6 +440,7 @@ public static class DataSeeder
             (N'CanReadRecordPayment',N'View Record Payment',124,N'Read'),
             (N'CanReadAgingReport',N'View Aging Report',125,N'Read'),
             (N'CanReadOutstandingReport',N'View Outstanding Report',126,N'Read'),
+            (N'CanReadCustomerPO',N'View Customer Purchase Orders',127,N'Read'),
 
             -- ═══════════════════════════════════════
             -- ACTION PERMISSIONS (frontend role-helper)
@@ -565,11 +573,68 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
             IF NOT EXISTS (SELECT 1 FROM Configurations WHERE KeyName = N'Customer Type' AND CompanyCode = N'LIMS')
                 INSERT INTO Configurations (KeyName, GroupName, [Value], ValueType, [Description], CreatedBy, CreatedOn, CompanyCode, IsActive)
                 VALUES (N'Customer Type', N'CUSTOMER', N'Walk in,Credit Customer,Relationship Credit Customer', N'csv', N'Available customer types for the customer master form', 0, GETUTCDATE(), N'LIMS', 1);
+
+            IF NOT EXISTS (SELECT 1 FROM Configurations WHERE KeyName = N'PaymentGatewayEnabled' AND CompanyCode = N'LIMS')
+                INSERT INTO Configurations (KeyName, GroupName, [Value], ValueType, [Description], CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'PaymentGatewayEnabled', N'BILLING', N'false', N'boolean', N'Enable/disable Razorpay payment gateway. Set to true when credentials are configured.', 0, GETUTCDATE(), N'LIMS', 1);
+
+            IF NOT EXISTS (SELECT 1 FROM Configurations WHERE KeyName = N'Entity Type' AND CompanyCode = N'LIMS')
+                INSERT INTO Configurations (KeyName, GroupName, [Value], ValueType, [Description], CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Entity Type', N'dropdown', N'Request Review|Report Review|Report Amendment|Test Result Verification', N'string', N'Entity types used for workflow configuration. Each value is a fixed entity type.', 0, GETUTCDATE(), N'LIMS', 1);
         ");
     }
 
     // ───────────────────────────────────────────────
-    // 6. ADMIN USER  (Department → Designation → Employee → User)
+    // 5b. DEFAULT CURRENCIES
+    // ───────────────────────────────────────────────
+    private static async Task SeedCurrenciesAsync(LIMSContext db)
+    {
+        await db.Database.ExecuteSqlRawAsync(@"
+            IF NOT EXISTS (SELECT 1 FROM CurrencyMasters WHERE Code = N'INR' AND IsActive = 1)
+                INSERT INTO CurrencyMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Indian Rupee', N'INR', 0, GETUTCDATE(), N'LIMS', 1);
+
+            IF NOT EXISTS (SELECT 1 FROM CurrencyMasters WHERE Code = N'USD' AND IsActive = 1)
+                INSERT INTO CurrencyMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'US Dollar', N'USD', 0, GETUTCDATE(), N'LIMS', 1);
+
+        ");
+
+        //IF NOT EXISTS(SELECT 1 FROM CurrencyMasters WHERE Code = N'EUR' AND IsActive = 1)
+        //        INSERT INTO CurrencyMasters(Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive)
+        //        VALUES(N'Euro', N'EUR', 0, GETUTCDATE(), N'LIMS', 1);
+
+        //IF NOT EXISTS(SELECT 1 FROM CurrencyMasters WHERE Code = N'GBP' AND IsActive = 1)
+        //        INSERT INTO CurrencyMasters(Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive)
+        //        VALUES(N'British Pound', N'GBP', 0, GETUTCDATE(), N'LIMS', 1);
+    }
+
+    // ───────────────────────────────────────────────
+    // 7. DISPATCH MODES
+    // ───────────────────────────────────────────────
+    private static async Task SeedDispatchModesAsync(LIMSContext db)
+    {
+        await db.Database.ExecuteSqlRawAsync(@"
+            IF NOT EXISTS (SELECT 1 FROM DispatchModeMasters WHERE Name = N'Email')
+                INSERT INTO DispatchModeMasters (Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Email', N'Report sent via email', 0, GETUTCDATE(), N'LIMS', 1);
+
+            IF NOT EXISTS (SELECT 1 FROM DispatchModeMasters WHERE Name = N'WhatsApp')
+                INSERT INTO DispatchModeMasters (Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'WhatsApp', N'Report sent via WhatsApp', 0, GETUTCDATE(), N'LIMS', 1);
+
+            IF NOT EXISTS (SELECT 1 FROM DispatchModeMasters WHERE Name = N'Courier')
+                INSERT INTO DispatchModeMasters (Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Courier', N'Report dispatched via courier service', 0, GETUTCDATE(), N'LIMS', 1);
+
+            IF NOT EXISTS (SELECT 1 FROM DispatchModeMasters WHERE Name = N'Self Pickup')
+                INSERT INTO DispatchModeMasters (Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Self Pickup', N'Collected by customer in person', 0, GETUTCDATE(), N'LIMS', 1);
+        ");
+    }
+
+    // ───────────────────────────────────────────────
+    // 8. ADMIN USER  (Department → Designation → Employee → User)
     //    Password: Admin@123 (ForcePasswordChange = true)
     // ───────────────────────────────────────────────
     private static async Task SeedAdminUserAsync(LIMSContext db, ILogger logger)
@@ -623,12 +688,13 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
             {
                 Name = "System Admin",
                 EmailId = "admin@lims.com",
+                Gender = "Male",
                 DesignationID = desig.ID,
                 DepartmentID = dept.ID,
                 DateOfJoin = DateTime.UtcNow,
+                DateOfBirth = new DateTime(1990, 1, 1),
                 RoleID = adminRole.ID,
                 MobileNo = "0000000000",
-                // Required address fields (placeholder — update via Settings)
                 ResidentialPinCode = "000000",
                 ResidentialAreaID = 0,
                 PermanentPinCode = "000000",
@@ -657,5 +723,230 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
         await db.SaveChangesAsync();
 
         logger.LogInformation("DataSeeder: Admin user created (admin / Admin@123). Password change required on first login.");
+    }
+
+    // ───────────────────────────────────────────────
+    // 9. MASTER DATA (ProductForm, SpecimenType, SpecimenOrientation, HeatTreatment, ProductCondition)
+    // ───────────────────────────────────────────────
+    private static async Task SeedMasterDataAsync(LIMSContext db)
+    {
+        await db.Database.ExecuteSqlRawAsync(@"
+            -- Product Form Master (Rod, Sheet, Bar, Pipe, etc.)
+            IF NOT EXISTS (SELECT 1 FROM ProductFormMasters WHERE Name = N'Sheet' AND IsActive = 1)
+                INSERT INTO ProductFormMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Sheet', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductFormMasters WHERE Name = N'Plate' AND IsActive = 1)
+                INSERT INTO ProductFormMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Plate', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductFormMasters WHERE Name = N'Bar' AND IsActive = 1)
+                INSERT INTO ProductFormMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Bar', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductFormMasters WHERE Name = N'Rod' AND IsActive = 1)
+                INSERT INTO ProductFormMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Rod', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductFormMasters WHERE Name = N'Pipe' AND IsActive = 1)
+                INSERT INTO ProductFormMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Pipe', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductFormMasters WHERE Name = N'Tube' AND IsActive = 1)
+                INSERT INTO ProductFormMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Tube', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductFormMasters WHERE Name = N'Wire' AND IsActive = 1)
+                INSERT INTO ProductFormMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Wire', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductFormMasters WHERE Name = N'Strip' AND IsActive = 1)
+                INSERT INTO ProductFormMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Strip', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductFormMasters WHERE Name = N'Forging' AND IsActive = 1)
+                INSERT INTO ProductFormMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Forging', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductFormMasters WHERE Name = N'Casting' AND IsActive = 1)
+                INSERT INTO ProductFormMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Casting', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductFormMasters WHERE Name = N'Coil' AND IsActive = 1)
+                INSERT INTO ProductFormMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Coil', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductFormMasters WHERE Name = N'Flat' AND IsActive = 1)
+                INSERT INTO ProductFormMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Flat', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductFormMasters WHERE Name = N'Section' AND IsActive = 1)
+                INSERT INTO ProductFormMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Section', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductFormMasters WHERE Name = N'Angle' AND IsActive = 1)
+                INSERT INTO ProductFormMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Angle', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductFormMasters WHERE Name = N'Channel' AND IsActive = 1)
+                INSERT INTO ProductFormMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Channel', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductFormMasters WHERE Name = N'Beam' AND IsActive = 1)
+                INSERT INTO ProductFormMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Beam', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductFormMasters WHERE Name = N'Fastener' AND IsActive = 1)
+                INSERT INTO ProductFormMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Fastener', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductFormMasters WHERE Name = N'Weld Joint' AND IsActive = 1)
+                INSERT INTO ProductFormMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Weld Joint', 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- Specimen Type Master (Round, Flat, Sub-size, etc.)
+            IF NOT EXISTS (SELECT 1 FROM SpecimenTypeMasters WHERE Name = N'Round' AND IsActive = 1)
+                INSERT INTO SpecimenTypeMasters (Name, NormalCharge, HardCharge, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Round', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM SpecimenTypeMasters WHERE Name = N'Flat' AND IsActive = 1)
+                INSERT INTO SpecimenTypeMasters (Name, NormalCharge, HardCharge, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Flat', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM SpecimenTypeMasters WHERE Name = N'Sub-Size' AND IsActive = 1)
+                INSERT INTO SpecimenTypeMasters (Name, NormalCharge, HardCharge, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Sub-Size', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM SpecimenTypeMasters WHERE Name = N'Full Section' AND IsActive = 1)
+                INSERT INTO SpecimenTypeMasters (Name, NormalCharge, HardCharge, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Full Section', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM SpecimenTypeMasters WHERE Name = N'Tubular' AND IsActive = 1)
+                INSERT INTO SpecimenTypeMasters (Name, NormalCharge, HardCharge, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Tubular', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM SpecimenTypeMasters WHERE Name = N'Charpy V-Notch' AND IsActive = 1)
+                INSERT INTO SpecimenTypeMasters (Name, NormalCharge, HardCharge, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Charpy V-Notch', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM SpecimenTypeMasters WHERE Name = N'Charpy U-Notch' AND IsActive = 1)
+                INSERT INTO SpecimenTypeMasters (Name, NormalCharge, HardCharge, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Charpy U-Notch', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM SpecimenTypeMasters WHERE Name = N'Izod' AND IsActive = 1)
+                INSERT INTO SpecimenTypeMasters (Name, NormalCharge, HardCharge, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Izod', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM SpecimenTypeMasters WHERE Name = N'Weld Specimen' AND IsActive = 1)
+                INSERT INTO SpecimenTypeMasters (Name, NormalCharge, HardCharge, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Weld Specimen', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM SpecimenTypeMasters WHERE Name = N'Machined' AND IsActive = 1)
+                INSERT INTO SpecimenTypeMasters (Name, NormalCharge, HardCharge, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Machined', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- Specimen Orientation Master
+            IF NOT EXISTS (SELECT 1 FROM SpecimenOrientationMasters WHERE Name = N'Longitudinal' AND IsActive = 1)
+                INSERT INTO SpecimenOrientationMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Longitudinal', N'L', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM SpecimenOrientationMasters WHERE Name = N'Transverse' AND IsActive = 1)
+                INSERT INTO SpecimenOrientationMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Transverse', N'T', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM SpecimenOrientationMasters WHERE Name = N'Through Thickness' AND IsActive = 1)
+                INSERT INTO SpecimenOrientationMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Through Thickness', N'Z', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM SpecimenOrientationMasters WHERE Name = N'Diagonal' AND IsActive = 1)
+                INSERT INTO SpecimenOrientationMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Diagonal', N'D', 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- Heat Treatment Master
+            IF NOT EXISTS (SELECT 1 FROM HeatTreatmentMasters WHERE Name = N'As Rolled' AND IsActive = 1)
+                INSERT INTO HeatTreatmentMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'As Rolled', N'AR', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM HeatTreatmentMasters WHERE Name = N'Normalized' AND IsActive = 1)
+                INSERT INTO HeatTreatmentMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Normalized', N'N', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM HeatTreatmentMasters WHERE Name = N'Quenched & Tempered' AND IsActive = 1)
+                INSERT INTO HeatTreatmentMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Quenched & Tempered', N'QT', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM HeatTreatmentMasters WHERE Name = N'Annealed' AND IsActive = 1)
+                INSERT INTO HeatTreatmentMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Annealed', N'A', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM HeatTreatmentMasters WHERE Name = N'Solution Annealed' AND IsActive = 1)
+                INSERT INTO HeatTreatmentMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Solution Annealed', N'SA', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM HeatTreatmentMasters WHERE Name = N'Stress Relieved' AND IsActive = 1)
+                INSERT INTO HeatTreatmentMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Stress Relieved', N'SR', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM HeatTreatmentMasters WHERE Name = N'Hardened' AND IsActive = 1)
+                INSERT INTO HeatTreatmentMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Hardened', N'H', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM HeatTreatmentMasters WHERE Name = N'Tempered' AND IsActive = 1)
+                INSERT INTO HeatTreatmentMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Tempered', N'T', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM HeatTreatmentMasters WHERE Name = N'Case Hardened' AND IsActive = 1)
+                INSERT INTO HeatTreatmentMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Case Hardened', N'CH', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM HeatTreatmentMasters WHERE Name = N'Carburized' AND IsActive = 1)
+                INSERT INTO HeatTreatmentMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Carburized', N'CB', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM HeatTreatmentMasters WHERE Name = N'Nitrided' AND IsActive = 1)
+                INSERT INTO HeatTreatmentMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Nitrided', N'NI', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM HeatTreatmentMasters WHERE Name = N'PWHT' AND IsActive = 1)
+                INSERT INTO HeatTreatmentMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'PWHT', N'PWHT', 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- Product Condition Master
+            IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'Hot Rolled' AND IsActive = 1)
+                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Hot Rolled', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'Cold Rolled' AND IsActive = 1)
+                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Cold Rolled', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'Cold Drawn' AND IsActive = 1)
+                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Cold Drawn', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'Hot Forged' AND IsActive = 1)
+                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Hot Forged', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'As Cast' AND IsActive = 1)
+                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'As Cast', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'Machined' AND IsActive = 1)
+                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Machined', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'As Welded' AND IsActive = 1)
+                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'As Welded', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'PWHT Treated' AND IsActive = 1)
+                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'PWHT Treated', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'Galvanized' AND IsActive = 1)
+                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Galvanized', 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'Pickled' AND IsActive = 1)
+                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Pickled', 0, GETUTCDATE(), N'LIMS', 1);
+        ");
+    }
+
+    // ───────────────────────────────────────────────
+    // 10. FINANCIAL YEARS (current + previous FY)
+    // ───────────────────────────────────────────────
+    private static async Task SeedFinancialYearsAsync(LIMSContext db)
+    {
+        // Determine current financial year (Apr-Mar cycle)
+        var now = DateTime.UtcNow;
+        var fyStartYear = now.Month >= 4 ? now.Year : now.Year - 1;
+
+        // Seed from 2020 to current+1 FY
+        for (int startYr = 2020; startYr <= fyStartYear + 1; startYr++)
+        {
+            var fy = $"{startYr}-{startYr + 1}";
+            var isCurrent = startYr == fyStartYear ? 1 : 0;
+
+            await db.Database.ExecuteSqlRawAsync($@"
+                IF NOT EXISTS (SELECT 1 FROM FinancialYears WHERE Year = N'{fy}')
+                    INSERT INTO FinancialYears (Year, StartDate, EndDate, IsCurrent, OrganizationId, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                    VALUES (N'{fy}', '{startYr}-04-01', '{startYr + 1}-03-31', {isCurrent}, 0, 0, GETUTCDATE(), N'LIMS', 1);
+            ");
+        }
+    }
+
+    // ───────────────────────────────────────────────
+    // 11. BACKFILL FinancialYearId on billing tables
+    // ───────────────────────────────────────────────
+    private static async Task BackfillFinancialYearIdsAsync(LIMSContext db, ILogger logger)
+    {
+        // Backfill InvoiceCases — match by created date to FY date range
+        var backfilled = await db.Database.ExecuteSqlRawAsync(@"
+            UPDATE ic SET ic.FinancialYearId = fy.Id
+            FROM InvoiceCases ic
+            CROSS APPLY (
+                SELECT TOP 1 Id FROM FinancialYears
+                WHERE ic.CreatedOn >= StartDate AND ic.CreatedOn <= EndDate
+                ORDER BY StartDate DESC
+            ) fy
+            WHERE ic.FinancialYearId IS NULL;
+        ");
+        if (backfilled > 0)
+            logger.LogInformation("DataSeeder: backfilled FinancialYearId on {Count} InvoiceCases", backfilled);
+
+        // Backfill TaxInvoices
+        backfilled = await db.Database.ExecuteSqlRawAsync(@"
+            UPDATE t SET t.FinancialYearId = fy.Id
+            FROM TaxInvoices t
+            CROSS APPLY (
+                SELECT TOP 1 Id FROM FinancialYears
+                WHERE t.InvoiceDate >= StartDate AND t.InvoiceDate <= EndDate
+                ORDER BY StartDate DESC
+            ) fy
+            WHERE t.FinancialYearId IS NULL;
+        ");
+        if (backfilled > 0)
+            logger.LogInformation("DataSeeder: backfilled FinancialYearId on {Count} TaxInvoices", backfilled);
+
+        // Backfill ProformaInvoiceHeaders
+        backfilled = await db.Database.ExecuteSqlRawAsync(@"
+            UPDATE p SET p.FinancialYearId = fy.Id
+            FROM ProformaInvoiceHeader p
+            CROSS APPLY (
+                SELECT TOP 1 Id FROM FinancialYears
+                WHERE p.PIDate >= StartDate AND p.PIDate <= EndDate
+                ORDER BY StartDate DESC
+            ) fy
+            WHERE p.FinancialYearId IS NULL;
+        ");
+        if (backfilled > 0)
+            logger.LogInformation("DataSeeder: backfilled FinancialYearId on {Count} ProformaInvoiceHeaders", backfilled);
+
+        // Backfill CreditNotes
+        backfilled = await db.Database.ExecuteSqlRawAsync(@"
+            UPDATE c SET c.FinancialYearId = fy.Id
+            FROM CreditNotes c
+            CROSS APPLY (
+                SELECT TOP 1 Id FROM FinancialYears
+                WHERE c.CreditNoteDate >= StartDate AND c.CreditNoteDate <= EndDate
+                ORDER BY StartDate DESC
+            ) fy
+            WHERE c.FinancialYearId IS NULL;
+        ");
+        if (backfilled > 0)
+            logger.LogInformation("DataSeeder: backfilled FinancialYearId on {Count} CreditNotes", backfilled);
+
+        // Backfill DebitNotes
+        backfilled = await db.Database.ExecuteSqlRawAsync(@"
+            UPDATE d SET d.FinancialYearId = fy.Id
+            FROM DebitNotes d
+            CROSS APPLY (
+                SELECT TOP 1 Id FROM FinancialYears
+                WHERE d.DebitNoteDate >= StartDate AND d.DebitNoteDate <= EndDate
+                ORDER BY StartDate DESC
+            ) fy
+            WHERE d.FinancialYearId IS NULL;
+        ");
+        if (backfilled > 0)
+            logger.LogInformation("DataSeeder: backfilled FinancialYearId on {Count} DebitNotes", backfilled);
     }
 }

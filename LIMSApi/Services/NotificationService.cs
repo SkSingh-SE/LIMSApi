@@ -32,32 +32,44 @@ namespace LIMSApi.Services
         {
             await _repo.AddNotificationAsync(notification);
 
-            // Push real-time via SignalR
-            if(notification.UserID != null)
+            // Push real-time via SignalR (don't fail if push fails)
+            try
             {
-                await _hub.Clients.User(notification.UserID.ToString())
-                .SendAsync("ReceiveNotification", notification);
+                if (notification.UserID != null)
+                {
+                    await _hub.Clients.User(notification.UserID.ToString())
+                        .SendAsync("ReceiveNotification", notification);
+                }
             }
-            // Send email if needed
-            if (notification.UserID != null && !string.IsNullOrWhiteSpace(notification.Email))
-            {
-                var subject = $"New Notification: {notification.Title}";
-                var body = $"<h3>{notification.Title}</h3><p>{notification.Message}</p>";
+            catch { /* SignalR push failed — notification is saved in DB, user will see it on next load */ }
 
-                await _emailService.SendEmailAsync(notification.Email, subject, body);
-            }
-
-            // Push notification
-            if (notification.UserID != null && notification.UserID.HasValue)
+            // Send email if needed (don't fail if email fails)
+            try
             {
-                await _pushNotificationService.SendPushNotificationAsync(
-                    notification.UserID.Value,
-                    notification.Title,
-                    notification.Message,
-                    notification.EntityType,
-                    notification.EntityID ?? 0
-                );
+                if (notification.UserID != null && !string.IsNullOrWhiteSpace(notification.Email))
+                {
+                    var subject = $"New Notification: {notification.Title}";
+                    var body = $"<h3>{notification.Title}</h3><p>{notification.Message}</p>";
+                    await _emailService.SendEmailAsync(notification.Email, subject, body);
+                }
             }
+            catch { /* Email failed — notification is saved in DB */ }
+
+            // Push notification (don't fail if push fails)
+            try
+            {
+                if (notification.UserID != null && notification.UserID.HasValue)
+                {
+                    await _pushNotificationService.SendPushNotificationAsync(
+                        notification.UserID.Value,
+                        notification.Title,
+                        notification.Message,
+                        notification.EntityType,
+                        notification.EntityID ?? 0
+                    );
+                }
+            }
+            catch { /* Web push failed — notification is saved in DB */ }
         }
 
         public async Task NotifyByRoleAsync(string roleName, string title, string message, string? entityType = null, long? entityId = null)
@@ -75,16 +87,20 @@ namespace LIMSApi.Services
 
             foreach (var emp in employees)
             {
-                await CreateNotificationAsync(new Notification
+                try
                 {
-                    UserID = emp.ID,
-                    Email = emp.EmailId,
-                    Title = title,
-                    Message = message,
-                    Type = NotificationType.System,
-                    EntityType = entityType,
-                    EntityID = entityId
-                });
+                    await CreateNotificationAsync(new Notification
+                    {
+                        UserID = emp.ID,
+                        Email = emp.EmailId,
+                        Title = title,
+                        Message = message,
+                        Type = NotificationType.System,
+                        EntityType = entityType,
+                        EntityID = entityId
+                    });
+                }
+                catch { /* Skip failed employee, continue notifying others */ }
             }
         }
 

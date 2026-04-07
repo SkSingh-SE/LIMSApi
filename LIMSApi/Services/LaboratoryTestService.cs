@@ -29,7 +29,7 @@ namespace LIMSApi.Services
             if (string.IsNullOrWhiteSpace(model.Name))
                 throw new ArgumentException("TestMethod name should not be empty!");
 
-            bool exists = await _testMethodRepository.ExistsByName(model.SubGroup);
+            bool exists = await _testMethodRepository.ExistsByName(model.Name);
             if (exists)
                 throw new InvalidOperationException($"SubGroup {model.SubGroup} already exists!");
 

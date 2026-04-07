@@ -29,6 +29,12 @@ namespace LIMSApi.Models
 
         public bool IsGenerated { get; set; } = true;
 
+        // Financial Year linkage
+        public long? FinancialYearId { get; set; }
+
+        [ForeignKey(nameof(FinancialYearId))]
+        public virtual FinancialYear? FinancialYearEntity { get; set; }
+
         [ForeignKey("InwardID")]
         public virtual SampleInward? SampleInward { get; set; }
         public ICollection<ProformaInvoiceDetail> Details { get; set; } = new List<ProformaInvoiceDetail>();

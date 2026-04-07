@@ -27,7 +27,14 @@ namespace LIMSApi.Services
 
             bool exists = await _parameterRepository.ExistsByName(model.Name);
             if (exists)
-                throw new InvalidOperationException("ProductCondition already exists!");
+                throw new InvalidOperationException("Product Condition Name already exists!");
+
+            if (!string.IsNullOrWhiteSpace(model.Code))
+            {
+                bool codeExists = await _parameterRepository.ExistsByCode(model.Code);
+                if (codeExists)
+                    throw new InvalidOperationException("Product Condition Code already exists!");
+            }
 
             await _parameterRepository.AddProductCondition(model);
             _logger.LogInformation("ProductCondition '{ProductConditionName}' created successfully.", model.Name);
@@ -40,7 +47,14 @@ namespace LIMSApi.Services
 
             bool exists = await _parameterRepository.ExistsByNameAndNotId(model.Name, model.ID);
             if (exists)
-                throw new InvalidOperationException("Same ProductCondition already exists!");
+                throw new InvalidOperationException("Product Condition Name already exists!");
+
+            if (!string.IsNullOrWhiteSpace(model.Code))
+            {
+                bool codeExists = await _parameterRepository.ExistsByCodeAndNotId(model.Code, model.ID);
+                if (codeExists)
+                    throw new InvalidOperationException("Product Condition Code already exists!");
+            }
 
             var existingProductCondition = await _parameterRepository.GetProductConditionById(model.ID);
             if (existingProductCondition == null)

@@ -105,16 +105,7 @@ namespace LIMSApi.Repositories
                 _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
             }
 
-            // Total Records Count
-            int totalRecords = await _query.CountAsync();
-
-            // Apply Pagination
-            var items = await _query
-                .Skip((filter.PageNumber - 1) * filter.PageSize)
-                .Take(filter.PageSize)
-                .ToListAsync();
-
-            return new PagedResponse<object>(items.Cast<object>().ToList(), totalRecords, filter.PageNumber, filter.PageSize);
+            return await _query.Cast<object>().ToPagedAsync(filter);
         }
 
         public async Task<List<CustomDropdown>> GetMenuDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
@@ -125,8 +116,15 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Title != null && x.Title.ToLower().Contains(search)) || x.ID.ToString().Contains(search));
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim().ToLower();
+                    _query = _query.Where(x => (x.Title != null && x.Title.ToLower().Contains(search)));
+                }
             }
 
             var skip = pageNo * pageSize;
@@ -148,8 +146,15 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Title != null && x.Title.ToLower().Contains(search)) || x.ID.ToString().Contains(search));
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim().ToLower();
+                    _query = _query.Where(x => (x.Title != null && x.Title.ToLower().Contains(search)));
+                }
             }
 
             var skip = pageNo * pageSize;
@@ -267,16 +272,7 @@ namespace LIMSApi.Repositories
                 _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
             }
 
-            // Total Records Count
-            int totalRecords = await _query.CountAsync();
-
-            // Apply Pagination
-            var items = await _query
-                .Skip((filter.PageNumber - 1) * filter.PageSize)
-                .Take(filter.PageSize)
-                .ToListAsync();
-
-            return new PagedResponse<object>(items.Cast<object>().ToList(), totalRecords, filter.PageNumber, filter.PageSize);
+            return await _query.Cast<object>().ToPagedAsync(filter);
         }
     }
 }
