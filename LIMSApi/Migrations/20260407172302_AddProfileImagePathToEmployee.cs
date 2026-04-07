@@ -10,11 +10,15 @@ namespace LIMSApi.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "ProfileImagePath",
-                table: "EmployeeMasters",
-                type: "nvarchar(max)",
-                nullable: true);
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (
+                    SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_NAME = 'EmployeeMasters' AND COLUMN_NAME = 'ProfileImagePath'
+                )
+                BEGIN
+                    ALTER TABLE [EmployeeMasters] ADD [ProfileImagePath] nvarchar(max) NULL;
+                END
+            ");
         }
 
         /// <inheritdoc />

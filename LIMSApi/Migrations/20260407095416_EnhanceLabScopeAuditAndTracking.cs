@@ -11,130 +11,44 @@ namespace LIMSApi.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "CompanyCode",
-                table: "LabScopeSpecifications",
-                type: "nvarchar(max)",
-                nullable: false,
-                defaultValue: "LIMS");
+            // LabScopeSpecifications columns (conditional)
+            migrationBuilder.Sql(@"IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='LabScopeSpecifications' AND COLUMN_NAME='CompanyCode') ALTER TABLE [LabScopeSpecifications] ADD [CompanyCode] nvarchar(max) NOT NULL DEFAULT 'LIMS';");
+            migrationBuilder.Sql(@"IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='LabScopeSpecifications' AND COLUMN_NAME='CreatedBy') ALTER TABLE [LabScopeSpecifications] ADD [CreatedBy] bigint NOT NULL DEFAULT 0;");
+            migrationBuilder.Sql(@"IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='LabScopeSpecifications' AND COLUMN_NAME='CreatedOn') ALTER TABLE [LabScopeSpecifications] ADD [CreatedOn] datetime2 NOT NULL DEFAULT '0001-01-01';");
+            migrationBuilder.Sql(@"IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='LabScopeSpecifications' AND COLUMN_NAME='IsActive') ALTER TABLE [LabScopeSpecifications] ADD [IsActive] bit NOT NULL DEFAULT 1;");
+            migrationBuilder.Sql(@"IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='LabScopeSpecifications' AND COLUMN_NAME='ModifiedBy') ALTER TABLE [LabScopeSpecifications] ADD [ModifiedBy] bigint NULL;");
+            migrationBuilder.Sql(@"IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='LabScopeSpecifications' AND COLUMN_NAME='ModifiedOn') ALTER TABLE [LabScopeSpecifications] ADD [ModifiedOn] datetime2 NULL;");
 
-            migrationBuilder.AddColumn<long>(
-                name: "CreatedBy",
-                table: "LabScopeSpecifications",
-                type: "bigint",
-                nullable: false,
-                defaultValue: 0L);
+            // LabScopeSpecificationParameters columns (conditional)
+            migrationBuilder.Sql(@"IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='LabScopeSpecificationParameters' AND COLUMN_NAME='CompanyCode') ALTER TABLE [LabScopeSpecificationParameters] ADD [CompanyCode] nvarchar(max) NOT NULL DEFAULT 'LIMS';");
+            migrationBuilder.Sql(@"IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='LabScopeSpecificationParameters' AND COLUMN_NAME='CreatedBy') ALTER TABLE [LabScopeSpecificationParameters] ADD [CreatedBy] bigint NOT NULL DEFAULT 0;");
+            migrationBuilder.Sql(@"IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='LabScopeSpecificationParameters' AND COLUMN_NAME='CreatedOn') ALTER TABLE [LabScopeSpecificationParameters] ADD [CreatedOn] datetime2 NOT NULL DEFAULT '0001-01-01';");
+            migrationBuilder.Sql(@"IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='LabScopeSpecificationParameters' AND COLUMN_NAME='IsActive') ALTER TABLE [LabScopeSpecificationParameters] ADD [IsActive] bit NOT NULL DEFAULT 1;");
+            migrationBuilder.Sql(@"IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='LabScopeSpecificationParameters' AND COLUMN_NAME='ModifiedBy') ALTER TABLE [LabScopeSpecificationParameters] ADD [ModifiedBy] bigint NULL;");
+            migrationBuilder.Sql(@"IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='LabScopeSpecificationParameters' AND COLUMN_NAME='ModifiedOn') ALTER TABLE [LabScopeSpecificationParameters] ADD [ModifiedOn] datetime2 NULL;");
 
-            migrationBuilder.AddColumn<DateTime>(
-                name: "CreatedOn",
-                table: "LabScopeSpecifications",
-                type: "datetime2",
-                nullable: false,
-                defaultValue: new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified));
+            // LabScopeMasters columns (conditional)
+            migrationBuilder.Sql(@"IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='LabScopeMasters' AND COLUMN_NAME='NextReviewDate') ALTER TABLE [LabScopeMasters] ADD [NextReviewDate] datetime2 NULL;");
+            migrationBuilder.Sql(@"IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='LabScopeMasters' AND COLUMN_NAME='ScopeRemarks') ALTER TABLE [LabScopeMasters] ADD [ScopeRemarks] nvarchar(500) NULL;");
+            migrationBuilder.Sql(@"IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='LabScopeMasters' AND COLUMN_NAME='ValidFrom') ALTER TABLE [LabScopeMasters] ADD [ValidFrom] datetime2 NULL;");
+            migrationBuilder.Sql(@"IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='LabScopeMasters' AND COLUMN_NAME='ValidUntil') ALTER TABLE [LabScopeMasters] ADD [ValidUntil] datetime2 NULL;");
 
-            migrationBuilder.AddColumn<bool>(
-                name: "IsActive",
-                table: "LabScopeSpecifications",
-                type: "bit",
-                nullable: false,
-                defaultValue: true);
-
-            migrationBuilder.AddColumn<long>(
-                name: "ModifiedBy",
-                table: "LabScopeSpecifications",
-                type: "bigint",
-                nullable: true);
-
-            migrationBuilder.AddColumn<DateTime>(
-                name: "ModifiedOn",
-                table: "LabScopeSpecifications",
-                type: "datetime2",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "CompanyCode",
-                table: "LabScopeSpecificationParameters",
-                type: "nvarchar(max)",
-                nullable: false,
-                defaultValue: "LIMS");
-
-            migrationBuilder.AddColumn<long>(
-                name: "CreatedBy",
-                table: "LabScopeSpecificationParameters",
-                type: "bigint",
-                nullable: false,
-                defaultValue: 0L);
-
-            migrationBuilder.AddColumn<DateTime>(
-                name: "CreatedOn",
-                table: "LabScopeSpecificationParameters",
-                type: "datetime2",
-                nullable: false,
-                defaultValue: new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified));
-
-            migrationBuilder.AddColumn<bool>(
-                name: "IsActive",
-                table: "LabScopeSpecificationParameters",
-                type: "bit",
-                nullable: false,
-                defaultValue: true);
-
-            migrationBuilder.AddColumn<long>(
-                name: "ModifiedBy",
-                table: "LabScopeSpecificationParameters",
-                type: "bigint",
-                nullable: true);
-
-            migrationBuilder.AddColumn<DateTime>(
-                name: "ModifiedOn",
-                table: "LabScopeSpecificationParameters",
-                type: "datetime2",
-                nullable: true);
-
-            migrationBuilder.AddColumn<DateTime>(
-                name: "NextReviewDate",
-                table: "LabScopeMasters",
-                type: "datetime2",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "ScopeRemarks",
-                table: "LabScopeMasters",
-                type: "nvarchar(500)",
-                maxLength: 500,
-                nullable: true);
-
-            migrationBuilder.AddColumn<DateTime>(
-                name: "ValidFrom",
-                table: "LabScopeMasters",
-                type: "datetime2",
-                nullable: true);
-
-            migrationBuilder.AddColumn<DateTime>(
-                name: "ValidUntil",
-                table: "LabScopeMasters",
-                type: "datetime2",
-                nullable: true);
-
-            migrationBuilder.CreateTable(
-                name: "LabScopeChangeLogs",
-                columns: table => new
-                {
-                    ID = table.Column<long>(type: "bigint", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    LabScopeID = table.Column<long>(type: "bigint", nullable: false),
-                    ChangeType = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
-                    EntityName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
-                    OldValue = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
-                    NewValue = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
-                    Remarks = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
-                    ChangedBy = table.Column<long>(type: "bigint", nullable: false),
-                    ChangedOn = table.Column<DateTime>(type: "datetime2", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_LabScopeChangeLogs", x => x.ID);
-                });
+            // LabScopeChangeLogs table (conditional)
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='LabScopeChangeLogs')
+                CREATE TABLE [LabScopeChangeLogs] (
+                    [ID] bigint IDENTITY(1,1) NOT NULL,
+                    [LabScopeID] bigint NOT NULL,
+                    [ChangeType] nvarchar(50) NOT NULL,
+                    [EntityName] nvarchar(200) NULL,
+                    [OldValue] nvarchar(500) NULL,
+                    [NewValue] nvarchar(500) NULL,
+                    [Remarks] nvarchar(500) NULL,
+                    [ChangedBy] bigint NOT NULL,
+                    [ChangedOn] datetime2 NOT NULL,
+                    CONSTRAINT [PK_LabScopeChangeLogs] PRIMARY KEY ([ID])
+                );
+            ");
         }
 
         /// <inheritdoc />
