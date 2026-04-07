@@ -1,9 +1,9 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.ComponentModel.DataAnnotations;
 
 namespace LIMSApi.Models
 {
-    public class LabScopeSpecificationParameter
+    public class LabScopeSpecificationParameter : AuditProperty
     {
         [Key]
         public long ID { get; set; }

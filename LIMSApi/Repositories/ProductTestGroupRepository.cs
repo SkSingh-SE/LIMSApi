@@ -148,7 +148,7 @@ namespace LIMSApi.Repositories
                                   ptg.LaboratoryTestID,
                                   LaboratoryTestName = lt != null ? lt.Name : string.Empty,
                                   ptg.TestMethodStandardID,
-                                  TestMethodSpecificationName = tms != null ? tms.Name : string.Empty,
+                                  TestMethodStandardName = tms != null ? tms.Name : string.Empty,
                                   ptg.IsPerBatch,
                                   ptg.Year,
                                   ptg.Remark

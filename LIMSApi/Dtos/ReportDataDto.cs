@@ -46,12 +46,26 @@ namespace LIMSApi.Dtos
         public string SampleDescription { get; set; } = string.Empty;
         public string MaterialSpec { get; set; } = string.Empty;
         public string Grade { get; set; } = string.Empty;
+        public string? ProductForm { get; set; }
+        public string? SpecimenOrientation { get; set; }
+        public string? HeatTreatment { get; set; }
+        public string? HeatNo { get; set; }
+        public string? BatchNo { get; set; }
+        public int? Quantity { get; set; }
 
         // ── Sample Dimensions ──
         public decimal? Thickness { get; set; }
         public decimal? Diameter { get; set; }
         public decimal? Width { get; set; }
         public decimal? Length { get; set; }
+        public decimal? CrossSectionArea { get; set; }
+        public decimal? GaugeLength { get; set; }
+
+        // ── Test Conditions (per first test header) ──
+        public decimal? RoomTemperature { get; set; }
+        public decimal? RoomHumidity { get; set; }
+        public string? EquipmentUsed { get; set; }
+        public string? LabRoom { get; set; }
 
         // ── Dates ──
         public string DateReceived { get; set; } = string.Empty;
@@ -133,6 +147,7 @@ namespace LIMSApi.Dtos
         public bool? IsWithinNablScope { get; set; }
         public string? NablScopeStatus { get; set; } // WithinScope / OutsideScope / NotAccredited
         public decimal? ExpandedUncertainty { get; set; }
+        public decimal? CoverageFactor { get; set; }
         public string? ConformityResult { get; set; } // Conforms / Does not conform / null
 
         /// <summary>For chemical multi-column pivot: identifies which test group (e.g., "GTAW", "SMAW")</summary>

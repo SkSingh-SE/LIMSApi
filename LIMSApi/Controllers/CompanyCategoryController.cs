@@ -50,12 +50,8 @@ namespace LIMSApi.Controllers
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteCustomerTypeMaster(long id)
         {
-            var entity = await _testMethodService.GetCustomerTypeDetails(id);
-            if (entity == null)
-            {
-                throw new InvalidOperationException("CustomerTypeMaster not found!");
-            }
-            return Ok(new { message = $"CustomerTypeMaster '{entity.Name}' created successfully" });
+            await _testMethodService.RemoveCustomerType(id);
+            return Ok(new { message = "Company Category deleted successfully." });
         }
 
         [HttpGet("dropdown")]

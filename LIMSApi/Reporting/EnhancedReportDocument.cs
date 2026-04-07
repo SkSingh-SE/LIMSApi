@@ -180,6 +180,14 @@ namespace LIMSApi.Reporting
 
                 col.Item().PaddingVertical(2);
 
+                // 3b. Test Conditions (Environment + Equipment)
+                if (_data.RoomTemperature.HasValue || _data.RoomHumidity.HasValue
+                    || !string.IsNullOrWhiteSpace(_data.EquipmentUsed) || !string.IsNullOrWhiteSpace(_data.LabRoom))
+                {
+                    col.Item().Element(ComposeTestConditions);
+                    col.Item().PaddingVertical(2);
+                }
+
                 // 4. Test Sections
                 if (_data.TestSections?.Any() == true)
                 {
@@ -353,6 +361,27 @@ namespace LIMSApi.Reporting
                         : Safe(_data.Grade);
                     AddCustomerInfoFullRow(table, "Specification", specValue);
 
+                    // Heat No + Batch No
+                    if (!string.IsNullOrWhiteSpace(_data.HeatNo) || !string.IsNullOrWhiteSpace(_data.BatchNo))
+                    {
+                        AddCustomerInfoRow(table, "Heat No", Safe(_data.HeatNo),
+                            "Batch No", Safe(_data.BatchNo));
+                    }
+
+                    // Product Form + Specimen Orientation
+                    if (!string.IsNullOrWhiteSpace(_data.ProductForm) || !string.IsNullOrWhiteSpace(_data.SpecimenOrientation))
+                    {
+                        AddCustomerInfoRow(table, "Product Form", Safe(_data.ProductForm),
+                            "Orientation", Safe(_data.SpecimenOrientation));
+                    }
+
+                    // Heat Treatment + Quantity
+                    if (!string.IsNullOrWhiteSpace(_data.HeatTreatment) || _data.Quantity.HasValue)
+                    {
+                        AddCustomerInfoRow(table, "Heat Treatment", Safe(_data.HeatTreatment),
+                            "Quantity", _data.Quantity?.ToString() ?? "-");
+                    }
+
                     // Dimensions (if any provided)
                     var dimensions = BuildDimensionString();
                     if (!string.IsNullOrWhiteSpace(dimensions))
@@ -401,6 +430,53 @@ namespace LIMSApi.Reporting
                 .Border(CellBorderWidth).BorderColor(BorderColor)
                 .Padding(CellPadding)
                 .Text(value).FontSize(FontTableCell);
+        }
+
+        // ────────────────────────────────────────────────
+        // 3b. TEST CONDITIONS
+        // ────────────────────────────────────────────────
+
+        private void ComposeTestConditions(IContainer container)
+        {
+            container.Border(CellBorderWidth).BorderColor(BorderColor).Column(col =>
+            {
+                col.Item()
+                    .Background(PrimaryColor)
+                    .Padding(CellPadding)
+                    .AlignCenter()
+                    .Text("TEST CONDITIONS")
+                    .FontSize(FontSectionHeader).Bold().FontColor(Colors.White);
+
+                col.Item().Table(table =>
+                {
+                    table.ColumnsDefinition(c =>
+                    {
+                        c.RelativeColumn(1.2f);
+                        c.RelativeColumn(2f);
+                        c.RelativeColumn(1.2f);
+                        c.RelativeColumn(2f);
+                    });
+
+                    // Temperature + Humidity
+                    AddCustomerInfoRow(table,
+                        "Temperature",
+                        _data.RoomTemperature.HasValue ? $"{_data.RoomTemperature.Value} °C" : "-",
+                        "Humidity",
+                        _data.RoomHumidity.HasValue ? $"{_data.RoomHumidity.Value} %" : "-");
+
+                    // Equipment Used
+                    if (!string.IsNullOrWhiteSpace(_data.EquipmentUsed))
+                    {
+                        AddCustomerInfoFullRow(table, "Equipment Used", _data.EquipmentUsed);
+                    }
+
+                    // Lab Room
+                    if (!string.IsNullOrWhiteSpace(_data.LabRoom))
+                    {
+                        AddCustomerInfoFullRow(table, "Lab Room", _data.LabRoom);
+                    }
+                });
+            });
         }
 
         // ────────────────────────────────────────────────
@@ -1133,6 +1209,10 @@ namespace LIMSApi.Reporting
                 parts.Add($"Width: {_data.Width.Value} mm");
             if (_data.Length.HasValue && _data.Length.Value > 0)
                 parts.Add($"Length: {_data.Length.Value} mm");
+            if (_data.CrossSectionArea.HasValue && _data.CrossSectionArea.Value > 0)
+                parts.Add($"C/S Area: {_data.CrossSectionArea.Value} mm²");
+            if (_data.GaugeLength.HasValue && _data.GaugeLength.Value > 0)
+                parts.Add($"G.L.: {_data.GaugeLength.Value} mm");
             return string.Join(" | ", parts);
         }
 

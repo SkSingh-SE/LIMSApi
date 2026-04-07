@@ -50,12 +50,8 @@ namespace LIMSApi.Controllers
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteTPIMaster(long id)
         {
-            var entity = await _testMethodService.GetTPIDetails(id);
-            if (entity == null)
-            {
-                throw new InvalidOperationException("TPIMaster not found!");
-            }
-            return Ok(new { status = "success", message = $"TPIMaster '{entity.AgencyName}' deleted successfully." });
+            await _testMethodService.RemoveTPI(id);
+            return Ok(new { message = "TPI deleted successfully." });
         }
 
         [HttpGet("dropdown")]

@@ -52,12 +52,8 @@ namespace LIMSApi.Controllers
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteCustomerMaster(long id)
         {
-            var entity = await _customerService.GetCustomerDetails(id);
-            if (entity == null)
-            {
-                throw new InvalidOperationException("Customer not found!");
-            }
-            return Ok(new { message = $"Customer '{entity.Name}' created successfully" });
+            await _customerService.RemoveCustomer(id);
+            return Ok(new { message = "Customer deleted successfully." });
         }
 
         [HttpGet("dropdown")]

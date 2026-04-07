@@ -109,6 +109,8 @@ namespace LIMSApi.Dtos
         public string Details { get; set; }
         public long? MetalClassificationID { get; set; }
         public long? ProductConditionID { get; set; }
+        public long? ProductFormID { get; set; }
+        public long? SpecimenOrientationID { get; set; }
         public string? Remarks { get; set; }
         public int Quantity { get; set; }
         public bool Disabled { get; set; }

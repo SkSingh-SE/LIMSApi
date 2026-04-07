@@ -54,7 +54,8 @@ namespace LIMSApi.Repositories
         public async Task<PagedResponse<object>> GetAllChemicalParameters(PageFilter filter)
         {
             var _query = (from c in _context.ParameterMasters
-                          join u in _context.ParameterUnitMasters on c.ParameterUnitID equals u.ID
+                          join u in _context.ParameterUnitMasters on c.ParameterUnitID equals u.ID into unitGroup
+                          from u in unitGroup.DefaultIfEmpty()
                           join cat in _context.ParameterCategoryMasters on c.ParameterCategoryID equals cat.ID into catGroup
                           from cat in catGroup.DefaultIfEmpty()
                           where c.IsActive && c.ParameterType == "Chemical"
@@ -66,8 +67,8 @@ namespace LIMSApi.Repositories
                               c.Symbol,
                               c.AliasName,
                               c.ElementType,
-                              UnitName = u.Name,
-                              Factor = u.ConversaionFactor,
+                              UnitName = u != null ? u.Name : "",
+                              Factor = u != null ? u.ConversaionFactor : "1",
                               CategoryName = cat != null ? cat.Name : "",
                               c.DecimalPrecision,
                               c.CreatedOn,
@@ -90,7 +91,8 @@ namespace LIMSApi.Repositories
         public async Task<PagedResponse<object>> GetAllMechanicalParameters(PageFilter filter)
         {
             var _query = (from c in _context.ParameterMasters
-                          join u in _context.ParameterUnitMasters on c.ParameterUnitID equals u.ID
+                          join u in _context.ParameterUnitMasters on c.ParameterUnitID equals u.ID into unitGroup
+                          from u in unitGroup.DefaultIfEmpty()
                           join cat in _context.ParameterCategoryMasters on c.ParameterCategoryID equals cat.ID into catGroup
                           from cat in catGroup.DefaultIfEmpty()
                           where c.IsActive && c.ParameterType == "Mechanical"
@@ -101,8 +103,8 @@ namespace LIMSApi.Repositories
                               c.Code,
                               c.AliasName,
                               c.ElementType,
-                              UnitName = u.Name,
-                              Factor = u.ConversaionFactor,
+                              UnitName = u != null ? u.Name : "",
+                              Factor = u != null ? u.ConversaionFactor : "1",
                               CategoryName = cat != null ? cat.Name : "",
                               c.DecimalPrecision,
                               c.CreatedOn,
@@ -125,7 +127,8 @@ namespace LIMSApi.Repositories
         public async Task<PagedResponse<object>> ParameterList(PageFilter filter)
         {
             var _query = (from c in _context.ParameterMasters
-                          join u in _context.ParameterUnitMasters on c.ParameterUnitID equals u.ID
+                          join u in _context.ParameterUnitMasters on c.ParameterUnitID equals u.ID into unitGroup
+                          from u in unitGroup.DefaultIfEmpty()
                           where c.IsActive
                           select new
                           {
@@ -134,10 +137,10 @@ namespace LIMSApi.Repositories
                               c.AliasName,
                               c.ElementType,
                               ParameterType = c.ParameterType,
-                              UnitName = u.Name,
+                              UnitName = u != null ? u.Name : "",
                               Min = 0, // Placeholder for Min value, replace with actual value if available
                               Max = 0, // Placeholder for Max value, replace with actual value if available
-                              Factor = u.ConversaionFactor,
+                              Factor = u != null ? u.ConversaionFactor : "1",
                               c.CreatedOn,
                               c.ModifiedOn
                           }).AsQueryable().ApplyFilters(filter.Filter);
@@ -201,15 +204,16 @@ namespace LIMSApi.Repositories
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.ParameterMasters 
-                         join u in _context.ParameterUnitMasters on a.ParameterUnitID equals u.ID
+            var _query = from a in _context.ParameterMasters
+                         join u in _context.ParameterUnitMasters on a.ParameterUnitID equals u.ID into unitGroup
+                         from u in unitGroup.DefaultIfEmpty()
                          where a.IsActive && a.ParameterType == "Chemical" select new
                          {
                              a.Name,
                              a.ID,
                              a.ParameterType,
                              unitID = a.ParameterUnitID,
-                             unit = u.Name
+                             unit = u != null ? u.Name : ""
                          };
 
             if (!string.IsNullOrWhiteSpace(searchTerm))

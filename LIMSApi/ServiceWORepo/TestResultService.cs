@@ -24,8 +24,9 @@ namespace LIMSApi.ServiceWORepo
         private readonly Services.Interface.IPriceCalculationService _priceCalculationService;
         private readonly ILogger<TestResultService> _logger;
         private readonly INablScopeValidationService _nablScopeService;
+        private readonly IReportAutoGenerationService _reportAutoGenService;
 
-        public TestResultService(LIMSContext db, FormulaEvaluator formulaEvaluator, IFileUploadService fileUploadService, IWorkflowService workflowService, ISampleStatusService sampleStatusService, Services.Interface.IPriceCalculationService priceCalculationService, ILogger<TestResultService> logger, INablScopeValidationService nablScopeService)
+        public TestResultService(LIMSContext db, FormulaEvaluator formulaEvaluator, IFileUploadService fileUploadService, IWorkflowService workflowService, ISampleStatusService sampleStatusService, Services.Interface.IPriceCalculationService priceCalculationService, ILogger<TestResultService> logger, INablScopeValidationService nablScopeService, IReportAutoGenerationService reportAutoGenService)
         {
             _db = db;
             _formulaEvaluator = formulaEvaluator;
@@ -36,6 +37,7 @@ namespace LIMSApi.ServiceWORepo
             _priceCalculationService = priceCalculationService;
             _logger = logger;
             _nablScopeService = nablScopeService;
+            _reportAutoGenService = reportAutoGenService;
         }
 
 
@@ -561,6 +563,9 @@ namespace LIMSApi.ServiceWORepo
                     .ThenInclude(c => c!.Customer)
                 .Include(s => s.AdditionalDetails)
                 .Include(s => s.ProductCondition)
+                    .ThenInclude(pc => pc!.LinkedHeatTreatment)
+                .Include(s => s.SpecimenOrientation)
+                .Include(s => s.ProductForm)
                 .Include(s => s.TestPlans)
                     .ThenInclude(tp => tp.GeneralTests)
                         .ThenInclude(gt => gt.Methods)
@@ -855,11 +860,25 @@ namespace LIMSApi.ServiceWORepo
                     metalClassification = sample.MetalClassificationID.HasValue ? (await _db.MetalClassificationMasters.FindAsync(sample.MetalClassificationID.Value))?.Name : null,
                     productConditionID = sample.ProductConditionID,
                     productCondition = sample.ProductCondition?.Name,
+                    specimenOrientation = sample.SpecimenOrientation?.Name,
+                    productForm = sample.ProductForm?.Name,
+                    heatTreatment = sample.ProductCondition?.LinkedHeatTreatment?.Name,
                     remarks = sample.Remarks,
+                    quantity = sample.Quantity,
                     thickness = sample.Thickness,
                     diameter = sample.Diameter,
                     width = sample.Width,
                     length = sample.Length,
+                    crossSectionArea = sample.Diameter.HasValue && sample.Diameter > 0
+                        ? Math.Round((decimal)(Math.PI / 4) * sample.Diameter.Value * sample.Diameter.Value, 4)
+                        : sample.Thickness.HasValue && sample.Width.HasValue && sample.Thickness > 0 && sample.Width > 0
+                            ? Math.Round(sample.Thickness.Value * sample.Width.Value, 4)
+                            : (decimal?)null,
+                    gaugeLength = sample.Diameter.HasValue && sample.Diameter > 0
+                        ? Math.Round(5.65m * (decimal)Math.Sqrt((double)((decimal)(Math.PI / 4) * sample.Diameter.Value * sample.Diameter.Value)), 2)
+                        : sample.Thickness.HasValue && sample.Width.HasValue && sample.Thickness > 0 && sample.Width > 0
+                            ? Math.Round(5.65m * (decimal)Math.Sqrt((double)(sample.Thickness.Value * sample.Width.Value)), 2)
+                            : (decimal?)null,
                     additionalDetails = sample.AdditionalDetails.Select(ad => new { ad.Label, ad.Value })
                 },
                 plans = resultPlans
@@ -1071,7 +1090,7 @@ namespace LIMSApi.ServiceWORepo
                             {
                                 ParameterID = pm.ID,
                                 ParameterName = pm.Name,
-                                Unit = pm.ParameterUnit?.Name ?? "%",
+                                Unit = pm.ParameterUnit?.Name ?? "",
                                 Value = null,
                                 IsCalculated = false,
                                 IsAdditional = false,
@@ -2521,6 +2540,9 @@ namespace LIMSApi.ServiceWORepo
                             CurrentStepId = wi != null ? (long?)wi.CurrentStepID : null,
                         };
 
+            // Filters
+            query = query.ApplyFilters(filter.Filter);
+
             // Search
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
@@ -2529,13 +2551,18 @@ namespace LIMSApi.ServiceWORepo
                     (x.SampleNo != null && x.SampleNo.ToLower().Contains(search)) ||
                     (x.CaseNo != null && x.CaseNo.ToLower().Contains(search)) ||
                     (x.TestName != null && x.TestName.ToLower().Contains(search)) ||
-                    (x.PerformedBy != null && x.PerformedBy.ToLower().Contains(search)));
+                    (x.PerformedBy != null && x.PerformedBy.ToLower().Contains(search)) ||
+                    (x.Status != null && x.Status.ToLower().Contains(search)));
             }
 
             int totalRecords = await query.CountAsync();
 
-            var rawData = await query
-                .OrderByDescending(x => x.CompletedAt)
+            // Sort
+            var sortedQuery = !string.IsNullOrWhiteSpace(filter.SortByColumn)
+                ? query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}")
+                : query.OrderByDescending(x => x.CompletedAt);
+
+            var rawData = await sortedQuery
                 .Skip((filter.PageNumber - 1) * filter.PageSize)
                 .Take(filter.PageSize)
                 .ToListAsync();
@@ -2639,6 +2666,22 @@ namespace LIMSApi.ServiceWORepo
             {
                 await _sampleStatusService.ForceAutoStatusAsync(
                     header.SampleID, SampleStatus.TESTING_VERIFIED, loggedInUser.EmployeeID);
+
+                // ── Config-Driven Report Auto-Generation (guarded by toggle) ──
+                try
+                {
+                    var useConfigDriven = await _db.Configurations
+                        .AnyAsync(c => c.KeyName == "USE_CONFIG_DRIVEN_REPORTING" && c.Value == "true" && c.IsActive);
+                    if (useConfigDriven)
+                    {
+                        await _reportAutoGenService.GenerateAsync(header.SampleID);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Config-driven report auto-gen failed for sample {SampleId}", header.SampleID);
+                    // Swallow — report failure must not block test verification
+                }
             }
         }
 
@@ -2846,10 +2889,21 @@ namespace LIMSApi.ServiceWORepo
                 .ToListAsync();
         }
 
+        private async Task EnsureMachiningNotInvoicedAsync(long sampleId)
+        {
+            var isInvoiced = await _db.SampleDetails
+                .Where(s => s.ID == sampleId)
+                .Select(s => s.SampleInward!.IsInvoiceGenerated)
+                .FirstOrDefaultAsync();
+            if (isInvoiced)
+                throw new InvalidOperationException("Machining charges cannot be modified after invoice generation.");
+        }
+
         public async Task<MachiningChargeLineDto> AddMachiningItem(long sampleId, MachiningChargeItemDto dto)
         {
             var sample = await _db.SampleDetails.FindAsync(sampleId);
             if (sample == null) throw new Exception("Sample not found.");
+            await EnsureMachiningNotInvoicedAsync(sampleId);
 
             var item = new MachiningChargeItem
             {
@@ -2879,6 +2933,7 @@ namespace LIMSApi.ServiceWORepo
         {
             var item = await _db.MachiningChargeItems.FindAsync(itemId);
             if (item == null) throw new Exception("Machining charge item not found.");
+            await EnsureMachiningNotInvoicedAsync(item.SampleID);
 
             item.Description = dto.Description;
             item.Amount = dto.Amount;
@@ -2901,6 +2956,7 @@ namespace LIMSApi.ServiceWORepo
         {
             var item = await _db.MachiningChargeItems.FindAsync(itemId);
             if (item == null) throw new Exception("Machining charge item not found.");
+            await EnsureMachiningNotInvoicedAsync(item.SampleID);
 
             item.IsActive = false;
             item.ModifiedOn = DateTime.UtcNow;

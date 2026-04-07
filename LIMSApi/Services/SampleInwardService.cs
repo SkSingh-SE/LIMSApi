@@ -176,6 +176,8 @@ namespace LIMSApi.Services
                         Details = s.Details,
                         MetalClassificationID = s.MetalClassificationID,
                         ProductConditionID = s.ProductConditionID,
+                        ProductFormID = s.ProductFormID,
+                        SpecimenOrientationID = s.SpecimenOrientationID,
                         Remarks = s.Remarks,
                         Quantity = s.Quantity,
                         UploadReferenceID = s.UploadReferenceID,
@@ -511,6 +513,8 @@ namespace LIMSApi.Services
                         existingSample.Details = s.Details;
                         existingSample.MetalClassificationID = s.MetalClassificationID;
                         existingSample.ProductConditionID = s.ProductConditionID;
+                        existingSample.ProductFormID = s.ProductFormID;
+                        existingSample.SpecimenOrientationID = s.SpecimenOrientationID;
                         existingSample.TpiAgencyID = s.TpiAgencyID;
                         existingSample.Remarks = s.Remarks;
                         existingSample.Quantity = s.Quantity;
@@ -563,6 +567,8 @@ namespace LIMSApi.Services
                             Details = s.Details,
                             MetalClassificationID = s.MetalClassificationID,
                             ProductConditionID = s.ProductConditionID,
+                            ProductFormID = s.ProductFormID,
+                            SpecimenOrientationID = s.SpecimenOrientationID,
                             Remarks = s.Remarks,
                             Quantity = s.Quantity,
                             Thickness = s.Thickness,
@@ -987,6 +993,8 @@ namespace LIMSApi.Services
 
                     sample.MetalClassificationID = sampleDto.MetalClassificationID;
                     sample.ProductConditionID = sampleDto.ProductConditionID;
+                    sample.ProductFormID = sampleDto.ProductFormID;
+                    sample.SpecimenOrientationID = sampleDto.SpecimenOrientationID;
                     sample.PreparationRequired = sampleDto.PreparationRequired;
                     sample.MachiningRequired = sampleDto.MachiningRequired;
                     sample.MachiningAmount = sampleDto.MachiningAmount ?? 0;
@@ -1398,6 +1406,8 @@ namespace LIMSApi.Services
                         Details = s.Details,
                         MetalClassificationID = s.MetalClassificationID,
                         ProductConditionID = s.ProductConditionID,
+                        ProductFormID = s.ProductFormID,
+                        SpecimenOrientationID = s.SpecimenOrientationID,
                         Remarks = s.Remarks,
                         Quantity = s.Quantity,
                         UploadReferenceID = s.UploadReferenceID,
@@ -1409,6 +1419,7 @@ namespace LIMSApi.Services
                         OtherPreparation = s.OtherPreparation,
                         OtherPreparationCharge = s.OtherPreparationCharge,
                         TpiRequired = s.TpiRequired,
+                        TpiAgencyID = s.TpiAgencyID,
                         Specimen = s.Specimen,
                         TestInstructions = s.TestInstructions,
                         Thickness = s.Thickness,
@@ -1577,6 +1588,8 @@ namespace LIMSApi.Services
                         Details = s.Details,
                         MetalClassificationID = s.MetalClassificationID,
                         ProductConditionID = s.ProductConditionID,
+                        ProductFormID = s.ProductFormID,
+                        SpecimenOrientationID = s.SpecimenOrientationID,
                         Remarks = s.Remarks,
                         Quantity = s.Quantity,
                         UploadReferenceID = s.UploadReferenceID,
@@ -1588,6 +1601,9 @@ namespace LIMSApi.Services
                         OtherPreparation = s.OtherPreparation,
                         OtherPreparationCharge = s.OtherPreparationCharge,
                         TpiRequired = s.TpiRequired,
+                        TpiAgencyID = s.TpiAgencyID,
+                        Specimen = s.Specimen,
+                        TestInstructions = s.TestInstructions,
                         Thickness = s.Thickness,
                         Diameter = s.Diameter,
                         Width = s.Width,

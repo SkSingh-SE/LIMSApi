@@ -169,6 +169,10 @@ namespace LIMSApi.Services
             existingEmployee.AccountHolderName = model.AccountHolderName;
             existingEmployee.EmailId = model.EmailId;
             existingEmployee.Password = model.Password;
+            existingEmployee.RelevantExperienceYears = model.RelevantExperienceYears;
+            existingEmployee.QualificationSummary = model.QualificationSummary;
+            existingEmployee.Experience = model.Experience;
+            existingEmployee.CompetencyLevel = model.CompetencyLevel;
 
             // Derive RoleID from Designation
             var designation = model.DesignationID.HasValue

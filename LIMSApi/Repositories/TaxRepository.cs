@@ -46,12 +46,12 @@ namespace LIMSApi.Repositories
         {
             var _query = (from c in _context.TaxMasters where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c).AsQueryable().ApplyFilters(filter.Filter);
 
-            _query = _query.AsQueryable().ApplyFilters(filter.Filter);
-
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                _query = _query.Where(x =>
+                    (x.Name != null && x.Name.ToLower().Contains(search))
+                    || x.Rate.ToString().Contains(search));
             }
 
             if (filter.SortByColumn != null)

@@ -92,6 +92,7 @@ namespace LIMSApi.Repositories
                 || x.AliasName.Contains(search)
                 || x.SpecificationCode.Contains(search)
                 || x.MaterialSpecification.Contains(search)
+                || (x.ModifiedOn.HasValue && x.ModifiedOn.Value.ToString().Contains(search))
                 );
             }
             if (filter.SortByColumn != null)

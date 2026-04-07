@@ -1,14 +1,14 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
-using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Twilio.TwiML.Voice;
 
 namespace LIMSApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class LabScopeMasterController : ControllerBase
     {
         private readonly ILabScopeService _labScopeService;

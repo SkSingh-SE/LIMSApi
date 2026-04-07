@@ -45,6 +45,9 @@ public static class DataSeeder
                 logger.LogInformation("DataSeeder: core seed data already present — skipping core.");
             }
 
+            // Always ensure admin user exists (idempotent — checks before creating)
+            await SeedAdminUserAsync(db, logger);
+
             // Master data (ProductForm, SpecimenType, etc.) always runs — idempotent with IF NOT EXISTS checks
             await SeedMasterDataAsync(db);
             await SeedFinancialYearsAsync(db);
@@ -685,12 +688,13 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
             {
                 Name = "System Admin",
                 EmailId = "admin@lims.com",
+                Gender = "Male",
                 DesignationID = desig.ID,
                 DepartmentID = dept.ID,
                 DateOfJoin = DateTime.UtcNow,
+                DateOfBirth = new DateTime(1990, 1, 1),
                 RoleID = adminRole.ID,
                 MobileNo = "0000000000",
-                // Required address fields (placeholder — update via Settings)
                 ResidentialPinCode = "000000",
                 ResidentialAreaID = 0,
                 PermanentPinCode = "000000",
@@ -713,7 +717,7 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
             EmployeeID = emp.ID,
             IsLoginEnabled = true,
             AccountStatus = "Active",
-            ForcePasswordChange = true
+            ForcePasswordChange = false
         };
         db.UserMasters.Add(user);
         await db.SaveChangesAsync();
