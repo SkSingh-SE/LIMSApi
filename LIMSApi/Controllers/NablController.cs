@@ -19,6 +19,22 @@ namespace LIMSApi.Controllers
             _auditService = auditService;
         }
 
+        // ─── Form Defaults & Reviewers ──────────────────────────────────
+
+        [HttpGet("form-defaults/{formType}")]
+        public async Task<IActionResult> FormDefaults(string formType)
+        {
+            var defaults = await _service.GetFormDefaults(formType);
+            return Ok(defaults);
+        }
+
+        [HttpGet("suggested-reviewers")]
+        public async Task<IActionResult> SuggestedReviewers()
+        {
+            var reviewers = await _service.GetSuggestedReviewers();
+            return Ok(reviewers);
+        }
+
         // ─── CRUD ────────────────────────────────────────────────────────
 
         [HttpPost("{formType}/list")]

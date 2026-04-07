@@ -3412,5 +3412,54 @@ namespace LIMSApi.Services
                 _ => throw new ArgumentException($"Unknown form type: {formType}")
             };
         }
+
+        // ─── Form Defaults & Suggested Reviewers ────────────────────────
+
+        public async Task<object> GetFormDefaults(string formType)
+        {
+            var org = await _context.Organizations.FirstOrDefaultAsync();
+            var nabl = await _context.NablAccreditations.FirstOrDefaultAsync();
+            var employee = await _context.EmployeeMasters
+                .FirstOrDefaultAsync(e => e.ID == loggedInUser.EmployeeID);
+
+            var formCode = FormCodeMap.TryGetValue(formType, out var code) ? code : formType;
+
+            return new
+            {
+                formCode,
+                companyName = org?.LabName ?? "",
+                companyAddress = org?.LabAddress ?? "",
+                contactEmail = org?.ContactEmail ?? "",
+                contactPhone = org?.ContactPhone ?? "",
+                organizationLogo = org?.OrganizationLogo ?? "",
+                nablTcNumber = nabl?.CertificateNumber ?? "",
+                nablLogo = nabl?.LogoPath ?? "",
+                preparedBy = employee?.Name ?? loggedInUser.Name ?? "",
+                preparedById = loggedInUser.EmployeeID
+            };
+        }
+
+        public async Task<object> GetSuggestedReviewers()
+        {
+            // Get employees with Reviewer or Approver roles, or Lab Manager / Quality Manager designations
+            var employees = await _context.EmployeeMasters
+                .Where(e => e.IsActive && e.CompanyCode == loggedInUser.CompanyCode)
+                .Select(e => new
+                {
+                    id = e.ID,
+                    name = e.Name,
+                    designation = e.Designation != null ? e.Designation.Name : "",
+                    department = e.Department != null ? e.Department.Name : ""
+                })
+                .ToListAsync();
+
+            // For now, return all active employees as potential reviewers/approvers
+            // The frontend can filter by role/designation as needed
+            return new
+            {
+                reviewers = employees,
+                approvers = employees
+            };
+        }
     }
 }
