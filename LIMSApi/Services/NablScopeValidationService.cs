@@ -1,5 +1,6 @@
 using LIMSApi.Data;
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
 using Microsoft.EntityFrameworkCore;
@@ -9,19 +10,22 @@ namespace LIMSApi.Services
     public class NablScopeValidationService : INablScopeValidationService
     {
         private readonly LIMSContext _db;
+        private readonly LoggedInUserDTO _loggedInUser;
 
         public NablScopeValidationService(LIMSContext db)
         {
             _db = db;
+            _loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
         public async Task<NablScopeCheckResult> CheckParameterScope(long laboratoryTestId, long parameterId, decimal value)
         {
-            // Find LabScopeMaster for this laboratory test (active, with parameters)
+            // G15: Add CompanyCode filter for multi-tenant safety
             var labScope = await _db.LabScopeMasters
                 .Include(ls => ls.Specifications)
                     .ThenInclude(s => s.Parameters)
-                .Where(ls => ls.LaboratoryTestID == laboratoryTestId && ls.IsActive)
+                .Where(ls => ls.LaboratoryTestID == laboratoryTestId && ls.IsActive
+                    && ls.CompanyCode == _loggedInUser.CompanyCode)
                 .OrderByDescending(ls => ls.Specifications.SelectMany(s => s.Parameters).Count())
                 .FirstOrDefaultAsync();
 
@@ -35,13 +39,18 @@ namespace LIMSApi.Services
                 };
             }
 
+            // G7: Sort specs so version-matched ones are checked first (prefer specific version over generic)
+            var sortedSpecs = labScope.Specifications
+                .OrderByDescending(s => s.TestMethodSpecificationVersionID.HasValue)
+                .ToList();
+
             // Search ALL specifications — if value is within ANY spec's range, it's in scope
             // Track the widest range across all specs for display
             NablScopeCheckResult? bestMatch = null;
             decimal? widestLower = null;
             decimal? widestUpper = null;
 
-            foreach (var spec in labScope.Specifications)
+            foreach (var spec in sortedSpecs)
             {
                 var scopeParam = spec.Parameters.FirstOrDefault(p => p.ParameterID == parameterId);
                 if (scopeParam == null) continue;
@@ -157,12 +166,21 @@ namespace LIMSApi.Services
             var labTest = await _db.LaboratoryTests.FindAsync(laboratoryTestId);
             if (labTest == null) return null;
 
-            // Search NablMeasurementUncertainty by parameter name and test method
+            // G2: Search by exact match first, then Contains fallback
+            var paramName = paramMaster.Name.Trim().ToLower();
             var uncertainty = await _db.NablMeasurementUncertainties
-                .Where(u => u.IsActive &&
-                    u.TestParameter != null &&
-                    u.TestParameter.ToLower().Contains(paramMaster.Name.ToLower()))
+                .Where(u => u.IsActive && u.TestParameter != null
+                    && u.TestParameter.Trim().ToLower() == paramName)
                 .FirstOrDefaultAsync();
+
+            // Fallback to Contains only if exact match not found
+            if (uncertainty == null)
+            {
+                uncertainty = await _db.NablMeasurementUncertainties
+                    .Where(u => u.IsActive && u.TestParameter != null
+                        && u.TestParameter.ToLower().Contains(paramName))
+                    .FirstOrDefaultAsync();
+            }
 
             if (uncertainty == null) return null;
 
@@ -207,7 +225,8 @@ namespace LIMSApi.Services
         public async Task<bool> CheckParameterScopeExists(long laboratoryTestId, long parameterId)
         {
             return await _db.LabScopeMasters
-                .Where(ls => ls.LaboratoryTestID == laboratoryTestId && ls.IsActive)
+                .Where(ls => ls.LaboratoryTestID == laboratoryTestId && ls.IsActive
+                    && ls.CompanyCode == _loggedInUser.CompanyCode)
                 .SelectMany(ls => ls.Specifications)
                 .SelectMany(s => s.Parameters)
                 .AnyAsync(p => p.ParameterID == parameterId);
