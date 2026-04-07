@@ -337,6 +337,7 @@ builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IPushNotificationService, PushNotificationService>();
 builder.Services.AddScoped<ISampleStatusService, SampleStatusService>();
 builder.Services.AddScoped<ICuttingService, CuttingService>();
+builder.Services.AddScoped<ISamplePreparationService, SamplePreparationService>();
 builder.Services.AddScoped<IPricingEngine, PricingEngine>();
 builder.Services.AddScoped<IPriceCalculationService, PriceCalculationService>();
 builder.Services.AddScoped<IFinancialYearService, FinancialYearService>();
@@ -355,6 +356,8 @@ builder.Services.AddScoped<FormulaEvaluator>();
 builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IReportTemplateService, ReportTemplateService>();
 builder.Services.AddScoped<IReportBlockGenerator, ReportBlockGenerator>();
+builder.Services.AddScoped<IReportFormatService, ReportFormatService>();
+builder.Services.AddScoped<IReportAutoGenerationService, ReportAutoGenerationService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<ICustomerAmendmentService, CustomerAmendmentService>();
 builder.Services.AddScoped<IAccountService, AccountService>();
@@ -504,6 +507,11 @@ RecurringJob.AddOrUpdate<VersionReviewReminderJob>(
     "version-review-reminder",
     x => x.Execute(),
     "0 9 * * MON"); // Every Monday at 9 AM
+
+RecurringJob.AddOrUpdate<FinancialYearRolloverJob>(
+    "financial-year-rollover",
+    x => x.Execute(),
+    "0 0 1 4 *"); // April 1st at midnight
 
 // --------------------
 // Endpoints

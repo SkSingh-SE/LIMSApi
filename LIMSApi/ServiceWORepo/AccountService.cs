@@ -85,8 +85,13 @@ namespace LIMSApi.ServiceWORepo
                      CustomerName = c.Name,
                      CustomerType = c.CustomerType, // Walk-in / Credit
 
-                     PIStatus =  i.AdvancePIRequired ? i.PIReceived ? "Completed" :  _db.ProformaInvoiceHeader.Any(x => x.InwardID == i.ID) ? "Generated" : "Pending" : "Completed",
+                     PIStatus = i.AdvancePIRequired ? i.PIReceived ? "Completed" : _db.ProformaInvoiceHeader.Any(x => x.InwardID == i.ID) ? "Generated" : "Pending" : "Completed",
                      InvoiceStatus = i.IsInvoiceGenerated ? "Completed" : "Pending",
+                     PaymentStatus = _db.PaymentOrders.Any(po => po.InwardID == i.ID && po.Status != LIMSApi.Helpers.Enums.PaymentStatus.Paid)
+                         ? "Pending"
+                         : _db.PaymentOrders.Any(po => po.InwardID == i.ID)
+                             ? "Paid"
+                             : i.IsInvoiceGenerated ? "Pending" : "N/A",
                      i.CreatedOn,
                      i.ModifiedOn
                  })
@@ -99,11 +104,12 @@ namespace LIMSApi.ServiceWORepo
                 var search = filter.searchTerm.Trim().ToLower();
 
                 query = query.Where(x =>
-                    x.CaseNo.ToLower().Contains(search) ||
-                    x.CustomerName.ToLower().Contains(search) ||
-                    x.CustomerType.ToLower().Contains(search) ||
-                    x.PIStatus.ToLower().Contains(search) ||
-                    x.InvoiceStatus.ToLower().Contains(search)
+                    (x.CaseNo != null && x.CaseNo.ToLower().Contains(search)) ||
+                    (x.CustomerName != null && x.CustomerName.ToLower().Contains(search)) ||
+                    (x.CustomerType != null && x.CustomerType.ToLower().Contains(search)) ||
+                    (x.PIStatus != null && x.PIStatus.ToLower().Contains(search)) ||
+                    (x.InvoiceStatus != null && x.InvoiceStatus.ToLower().Contains(search)) ||
+                    (x.PaymentStatus != null && x.PaymentStatus.ToLower().Contains(search))
                 );
             }
 
@@ -402,6 +408,8 @@ namespace LIMSApi.ServiceWORepo
             // Calculate balance payable after advance adjustment
             var balancePayable = grandTotal - advancePayment;
 
+            var currentFY = await _db.FinancialYears.FirstOrDefaultAsync(f => f.IsCurrent);
+
             var invoice = new TaxInvoice
             {
                 InvoiceNo = await GenerateInvoiceNoAsync(),
@@ -415,7 +423,8 @@ namespace LIMSApi.ServiceWORepo
                 CGST = cgst,
                 SGST = sgst,
                 IGST = igst,
-                GrandTotal = grandTotal
+                GrandTotal = grandTotal,
+                FinancialYearId = currentFY?.Id
             };
 
             _db.TaxInvoices.Add(invoice);

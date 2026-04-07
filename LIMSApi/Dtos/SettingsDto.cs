@@ -46,8 +46,16 @@ namespace LIMSApi.Dtos
     }
     public sealed class FinancialYearDto
     {
+        public long? Id { get; set; }
         public DateOnly StartDate { get; set; }
         public DateOnly EndDate { get; set; }
+        public bool IsCurrent { get; set; }
+    }
+    public sealed class FinancialYearDropdownDto
+    {
+        public long Id { get; set; }
+        public string Year { get; set; } = string.Empty;
+        public bool IsCurrent { get; set; }
     }
     public sealed class SignatoryDto
     {

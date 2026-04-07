@@ -249,6 +249,8 @@ namespace LIMSApi.Repositories
                 // ===========================
                 //  6. INSERT PI HEADER
                 // ===========================
+                var currentFY = await _context.FinancialYears.FirstOrDefaultAsync(f => f.IsCurrent);
+
                 var piHeader = new ProformaInvoiceHeader
                 {
                     InwardID = inwardId,
@@ -263,6 +265,7 @@ namespace LIMSApi.Repositories
                     IGST = igst,
                     TaxAmount = taxAmount,
                     GrandTotal = grandTotal,
+                    FinancialYearId = currentFY?.Id,
 
                     CreatedBy = loggedInUser.UserId
                 };

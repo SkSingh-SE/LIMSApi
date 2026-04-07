@@ -39,6 +39,12 @@ namespace LIMSApi.Models
         public long? ApprovedBy { get; set; }
         public DateTime? ApprovedOn { get; set; }
 
+        // Financial Year linkage
+        public long? FinancialYearId { get; set; }
+
+        [ForeignKey(nameof(FinancialYearId))]
+        public virtual FinancialYear? FinancialYearEntity { get; set; }
+
         [ForeignKey(nameof(TaxInvoiceID))]
         public virtual TaxInvoice? TaxInvoice { get; set; }
 

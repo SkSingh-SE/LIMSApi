@@ -41,6 +41,12 @@ namespace LIMSApi.Models
         [Column(TypeName = "decimal(18,2)")]
         public decimal BalanceAmount { get; set; }
 
+        // Financial Year linkage
+        public long? FinancialYearId { get; set; }
+
+        [ForeignKey(nameof(FinancialYearId))]
+        public virtual FinancialYear? FinancialYearEntity { get; set; }
+
         [ForeignKey(nameof(CustomerID))]
         public virtual Customer? Customer { get; set; }
 

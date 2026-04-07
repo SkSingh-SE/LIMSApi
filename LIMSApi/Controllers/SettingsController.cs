@@ -108,6 +108,38 @@ namespace LIMSApi.Controllers
             await _service.DeleteSignatoryAsync(id, cancellationToken);
             return Ok();
         }
+
+        // =====================
+        // Financial Year Management
+        // =====================
+
+        [HttpGet("financial-years")]
+        public async Task<IActionResult> GetAllFinancialYears(CancellationToken cancellationToken = default)
+        {
+            var list = await _service.GetAllFinancialYearsAsync(cancellationToken);
+            return Ok(list);
+        }
+
+        [HttpGet("financial-years/dropdown")]
+        public async Task<IActionResult> GetFinancialYearsDropdown(CancellationToken cancellationToken = default)
+        {
+            var list = await _service.GetFinancialYearsDropdownAsync(cancellationToken);
+            return Ok(list);
+        }
+
+        [HttpPut("financial-years/{id}/set-default")]
+        public async Task<IActionResult> SetDefaultFinancialYear(long id, CancellationToken cancellationToken = default)
+        {
+            await _service.SetDefaultFinancialYearAsync(id, cancellationToken);
+            return Ok(new { message = "Default Financial Year updated successfully." });
+        }
+
+        [HttpDelete("financial-years/{id}")]
+        public async Task<IActionResult> DeleteFinancialYear(long id, CancellationToken cancellationToken = default)
+        {
+            await _service.DeleteFinancialYearAsync(id, cancellationToken);
+            return Ok(new { message = "Financial Year deleted successfully." });
+        }
     }
 
 }

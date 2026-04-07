@@ -47,6 +47,12 @@ namespace LIMSApi.Models
         [MaxLength(10)]
         public string SACCode { get; set; } = "998346";
 
+        // Financial Year linkage
+        public long? FinancialYearId { get; set; }
+
+        [ForeignKey(nameof(FinancialYearId))]
+        public virtual FinancialYear? FinancialYearEntity { get; set; }
+
         [ForeignKey(nameof(InwardID))]
         public SampleInward? Inward { get; set; }
 

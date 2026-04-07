@@ -47,11 +47,14 @@ namespace LIMSApi.Repositories
             var _query = from c in _context.InvoiceCases
                          join l in _context.LaboratoryTests on c.LaboratoryTestID equals l.ID into ltGroup
                          from lt in ltGroup.DefaultIfEmpty()
+                         join fy in _context.FinancialYears on c.FinancialYearId equals fy.Id into fyGroup
+                         from fy in fyGroup.DefaultIfEmpty()
                          where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
                          select new
                          {
                              c.ID,
-                             c.FinancialYear,
+                             c.FinancialYearId,
+                             FinancialYear = fy != null ? fy.Year : "",
                              LaboratoryTest = lt != null ? lt.Name : "",
                              TierCount = _context.InvoiceCasePrices.Count(p => p.InvoiceCaseID == c.ID),
                              c.ModifiedOn,
@@ -117,19 +120,19 @@ namespace LIMSApi.Repositories
             return data;
         }
 
-        public async Task<bool> ExistsByFinancialAndName(string financialYear, string name)
+        public async Task<bool> ExistsByFinancialAndName(long? financialYearId, string name)
         {
-            return await _context.InvoiceCases.Include(y => y.InvoiceCasePrices).AnyAsync(x => x.FinancialYear == financialYear && x.InvoiceCasePrices.Any(p => p.Name == name) && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.InvoiceCases.Include(y => y.InvoiceCasePrices).AnyAsync(x => x.FinancialYearId == financialYearId && x.InvoiceCasePrices.Any(p => p.Name == name) && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
-        public async Task<bool> ExistsByFinancialYearAndTest(string financialYear, long laboratoryTestId)
+        public async Task<bool> ExistsByFinancialYearAndTest(long? financialYearId, long laboratoryTestId)
         {
-            return await _context.InvoiceCases.AnyAsync(x => x.FinancialYear == financialYear && x.LaboratoryTestID == laboratoryTestId && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.InvoiceCases.AnyAsync(x => x.FinancialYearId == financialYearId && x.LaboratoryTestID == laboratoryTestId && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
-        public async Task<bool> ExistsByFinancialYearAndTestNotId(string financialYear, long laboratoryTestId, long excludeId)
+        public async Task<bool> ExistsByFinancialYearAndTestNotId(long? financialYearId, long laboratoryTestId, long excludeId)
         {
-            return await _context.InvoiceCases.AnyAsync(x => x.FinancialYear == financialYear && x.LaboratoryTestID == laboratoryTestId && x.ID != excludeId && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.InvoiceCases.AnyAsync(x => x.FinancialYearId == financialYearId && x.LaboratoryTestID == laboratoryTestId && x.ID != excludeId && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
     }
 }

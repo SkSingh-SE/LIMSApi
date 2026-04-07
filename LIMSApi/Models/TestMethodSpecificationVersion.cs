@@ -15,7 +15,8 @@ namespace LIMSApi.Models
         [MaxLength(50)]
         public string Version { get; set; } = string.Empty;
 
-        public int? Year { get; set; }
+        [MaxLength(20)]
+        public string? Year { get; set; }
 
         [Required]
         [Column(TypeName = "varchar(20)")]

@@ -77,7 +77,7 @@ namespace LIMSApi.Repositories
                              StandardOrganizationName = s.Name,
                              c.TestMethodStandard,
                              CurrentVersion = activeVersion != null ? activeVersion.Version : "",
-                             CurrentVersionYear = activeVersion != null ? activeVersion.Year : (int?)null,
+                             CurrentVersionYear = activeVersion != null ? activeVersion.Year : (string?)null,
                              c.IsDisabled,
                              c.CreatedBy,
                              c.CreatedOn,
@@ -93,7 +93,8 @@ namespace LIMSApi.Repositories
                                      || (x.StandardOrganizationName != null && x.StandardOrganizationName.ToLower().Contains(search))
                                      || (x.TestMethodStandard != null && x.TestMethodStandard.ToLower().Contains(search))
                                      || (x.CurrentVersion != null && x.CurrentVersion.ToLower().Contains(search))
-                                     || (x.CurrentVersionYear != null && x.CurrentVersionYear.ToString()!.Contains(search)));
+                                     || (x.CurrentVersionYear != null && x.CurrentVersionYear.ToString()!.Contains(search))
+                                     || (x.IsDisabled ? "disabled" : "active").Contains(search));
             }
 
             if (filter.SortByColumn != null)

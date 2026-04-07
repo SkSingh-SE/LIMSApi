@@ -7,8 +7,12 @@ namespace LIMSApi.Models
     {
         [Key]
         public long ID { get; set; }
-        [Required, StringLength(20)]
-        public required string FinancialYear { get; set; }
+
+        public long? FinancialYearId { get; set; }
+
+        [ForeignKey(nameof(FinancialYearId))]
+        public virtual FinancialYear? FinancialYearEntity { get; set; }
+
         public long LaboratoryTestID { get; set; }
 
         [ForeignKey(nameof(LaboratoryTestID))]

@@ -29,14 +29,20 @@ namespace LIMSApi.ServiceWORepo
         /// </summary>
         private async Task<InvoiceCase?> GetInvoiceCaseForTestAsync(long laboratoryTestId)
         {
-            var currentFY = await _fyService.GetCurrentFinancialYearAsync();
+            // Find the current FY entity
+            var currentFYEntity = await _db.FinancialYears.FirstOrDefaultAsync(f => f.IsCurrent);
 
-            // Try current FY first
-            var invoiceCase = await _db.InvoiceCases
-                .Where(ic => ic.LaboratoryTestID == laboratoryTestId && ic.IsActive && ic.FinancialYear == currentFY)
-                .Include(ic => ic.InvoiceCasePrices)
-                    .ThenInclude(p => p.Configuration)
-                .FirstOrDefaultAsync();
+            // Try current FY first (if one is set)
+            InvoiceCase? invoiceCase = null;
+            if (currentFYEntity != null)
+            {
+                invoiceCase = await _db.InvoiceCases
+                    .Where(ic => ic.LaboratoryTestID == laboratoryTestId && ic.IsActive && ic.FinancialYearId == currentFYEntity.Id)
+                    .Include(ic => ic.InvoiceCasePrices)
+                        .ThenInclude(p => p.Configuration)
+                    .Include(ic => ic.FinancialYearEntity)
+                    .FirstOrDefaultAsync();
+            }
 
             if (invoiceCase != null) return invoiceCase;
 
@@ -45,11 +51,12 @@ namespace LIMSApi.ServiceWORepo
                 .Where(ic => ic.LaboratoryTestID == laboratoryTestId && ic.IsActive)
                 .Include(ic => ic.InvoiceCasePrices)
                     .ThenInclude(p => p.Configuration)
+                .Include(ic => ic.FinancialYearEntity)
                 .FirstOrDefaultAsync();
 
             if (invoiceCase != null)
-                _logger.LogWarning("No InvoiceCase for FY {FY} and LabTest {LabTestId}. Using fallback FY {FallbackFY}.",
-                    currentFY, laboratoryTestId, invoiceCase.FinancialYear);
+                _logger.LogWarning("No InvoiceCase for current FY and LabTest {LabTestId}. Using fallback FY {FallbackFY}.",
+                    laboratoryTestId, invoiceCase.FinancialYearEntity?.Year);
 
             return invoiceCase;
         }
@@ -81,7 +88,7 @@ namespace LIMSApi.ServiceWORepo
             }
             else if (!invoiceCase.InvoiceCasePrices.Any())
             {
-                message = $"Invoice Case (FY: {invoiceCase.FinancialYear}) exists but has no price entries configured. Please add price tiers in Configuration > Invoice Case.";
+                message = $"Invoice Case (FY: {invoiceCase.FinancialYearEntity?.Year}) exists but has no price entries configured. Please add price tiers in Configuration > Invoice Case.";
                 _logger.LogWarning("InvoiceCase {CaseId} has no prices for Header {HeaderId}", invoiceCase.ID, headerId);
             }
             else
@@ -201,7 +208,7 @@ namespace LIMSApi.ServiceWORepo
             }
             else if (!invoiceCase.InvoiceCasePrices.Any())
             {
-                message = $"Invoice Case (FY: {invoiceCase.FinancialYear}) exists but has no price entries configured. Please add price tiers in Configuration > Invoice Case.";
+                message = $"Invoice Case (FY: {invoiceCase.FinancialYearEntity?.Year}) exists but has no price entries configured. Please add price tiers in Configuration > Invoice Case.";
             }
             else
             {

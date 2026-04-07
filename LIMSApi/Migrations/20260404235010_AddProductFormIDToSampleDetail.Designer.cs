@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20260404235010_AddProductFormIDToSampleDetail")]
+    partial class AddProductFormIDToSampleDetail
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -55,9 +58,6 @@ namespace LIMSApi.Migrations
                     b.Property<long>("CustomerID")
                         .HasColumnType("bigint");
 
-                    b.Property<long?>("FinancialYearId")
-                        .HasColumnType("bigint");
-
                     b.Property<long>("InwardID")
                         .HasColumnType("bigint");
 
@@ -97,8 +97,6 @@ namespace LIMSApi.Migrations
                     b.HasIndex("AdjustedToInvoiceID");
 
                     b.HasIndex("CustomerID");
-
-                    b.HasIndex("FinancialYearId");
 
                     b.HasIndex("InwardID");
 
@@ -1145,9 +1143,6 @@ namespace LIMSApi.Migrations
                     b.Property<long>("CustomerID")
                         .HasColumnType("bigint");
 
-                    b.Property<long?>("FinancialYearId")
-                        .HasColumnType("bigint");
-
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -1179,8 +1174,6 @@ namespace LIMSApi.Migrations
                     b.HasKey("ID");
 
                     b.HasIndex("CustomerID");
-
-                    b.HasIndex("FinancialYearId");
 
                     b.HasIndex("TaxInvoiceID");
 
@@ -1888,9 +1881,6 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
-                    b.Property<long?>("FinancialYearId")
-                        .HasColumnType("bigint");
-
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -1922,8 +1912,6 @@ namespace LIMSApi.Migrations
                     b.HasKey("ID");
 
                     b.HasIndex("CustomerID");
-
-                    b.HasIndex("FinancialYearId");
 
                     b.HasIndex("TaxInvoiceID");
 
@@ -3465,8 +3453,10 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<long?>("FinancialYearId")
-                        .HasColumnType("bigint");
+                    b.Property<string>("FinancialYear")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -3481,8 +3471,6 @@ namespace LIMSApi.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("ID");
-
-                    b.HasIndex("FinancialYearId");
 
                     b.HasIndex("LaboratoryTestID");
 
@@ -13590,7 +13578,7 @@ namespace LIMSApi.Migrations
                     b.Property<string>("ParameterType")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<long?>("ParameterUnitID")
+                    b.Property<long>("ParameterUnitID")
                         .HasColumnType("bigint");
 
                     b.Property<string>("Symbol")
@@ -14446,9 +14434,6 @@ namespace LIMSApi.Migrations
                     b.Property<decimal?>("DiscountPercentage")
                         .HasColumnType("decimal(5,2)");
 
-                    b.Property<long?>("FinancialYearId")
-                        .HasColumnType("bigint");
-
                     b.Property<decimal>("GrandTotal")
                         .HasColumnType("decimal(18,2)");
 
@@ -14487,8 +14472,6 @@ namespace LIMSApi.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.HasKey("ID");
-
-                    b.HasIndex("FinancialYearId");
 
                     b.HasIndex("InwardID");
 
@@ -15906,120 +15889,6 @@ namespace LIMSApi.Migrations
                     b.ToTable("InwardDispatchModes");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.SamplePreparation", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<DateTime?>("AssignedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<long?>("AssignedToEmployeeID")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("CompanyCode")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("CompletedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<long>("CreatedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<decimal>("CuttingChargesTotal")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<long?>("EquipmentID")
-                        .HasColumnType("bigint");
-
-                    b.Property<decimal?>("Humidity")
-                        .HasColumnType("decimal(5,1)");
-
-                    b.Property<long>("InwardID")
-                        .HasColumnType("bigint");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<decimal>("MachiningChargesTotal")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<long?>("ModifiedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime?>("ModifiedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<decimal>("OtherChargesTotal")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("PostConditionNotes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<string>("PreConditionNotes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<string>("PreparationInstructions")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<string>("PreparationMethod")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<long?>("PreparedByEmployeeID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("SampleID")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime?>("StartedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
-
-                    b.Property<decimal?>("Temperature")
-                        .HasColumnType("decimal(5,1)");
-
-                    b.Property<string>("VerificationRemarks")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<long?>("VerifiedByEmployeeID")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime?>("VerifiedOn")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("AssignedToEmployeeID");
-
-                    b.HasIndex("EquipmentID");
-
-                    b.HasIndex("InwardID");
-
-                    b.HasIndex("PreparedByEmployeeID");
-
-                    b.HasIndex("SampleID");
-
-                    b.HasIndex("VerifiedByEmployeeID");
-
-                    b.ToTable("SamplePreparations");
-                });
-
             modelBuilder.Entity("LIMSApi.Models.SamplePreparationMaster", b =>
                 {
                     b.Property<long>("ID")
@@ -16999,9 +16868,6 @@ namespace LIMSApi.Migrations
                     b.Property<decimal?>("DiscountPercentage")
                         .HasColumnType("decimal(5,2)");
 
-                    b.Property<long?>("FinancialYearId")
-                        .HasColumnType("bigint");
-
                     b.Property<decimal>("GrandTotal")
                         .HasColumnType("decimal(18,2)");
 
@@ -17058,8 +16924,6 @@ namespace LIMSApi.Migrations
                     b.HasKey("ID");
 
                     b.HasIndex("CustomerID");
-
-                    b.HasIndex("FinancialYearId");
 
                     b.HasIndex("InwardID");
 
@@ -17344,9 +17208,8 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<string>("Year")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                    b.Property<int?>("Year")
+                        .HasColumnType("int");
 
                     b.HasKey("ID");
 
@@ -18628,10 +18491,6 @@ namespace LIMSApi.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.HasOne("LIMSApi.Models.FinancialYear", "FinancialYearEntity")
-                        .WithMany()
-                        .HasForeignKey("FinancialYearId");
-
                     b.HasOne("LIMSApi.Models.SampleInward", "Inward")
                         .WithMany()
                         .HasForeignKey("InwardID")
@@ -18641,8 +18500,6 @@ namespace LIMSApi.Migrations
                     b.Navigation("AdjustedToInvoice");
 
                     b.Navigation("Customer");
-
-                    b.Navigation("FinancialYearEntity");
 
                     b.Navigation("Inward");
                 });
@@ -18814,10 +18671,6 @@ namespace LIMSApi.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.HasOne("LIMSApi.Models.FinancialYear", "FinancialYearEntity")
-                        .WithMany()
-                        .HasForeignKey("FinancialYearId");
-
                     b.HasOne("LIMSApi.Models.TaxInvoice", "TaxInvoice")
                         .WithMany()
                         .HasForeignKey("TaxInvoiceID")
@@ -18825,8 +18678,6 @@ namespace LIMSApi.Migrations
                         .IsRequired();
 
                     b.Navigation("Customer");
-
-                    b.Navigation("FinancialYearEntity");
 
                     b.Navigation("TaxInvoice");
                 });
@@ -18992,10 +18843,6 @@ namespace LIMSApi.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.HasOne("LIMSApi.Models.FinancialYear", "FinancialYearEntity")
-                        .WithMany()
-                        .HasForeignKey("FinancialYearId");
-
                     b.HasOne("LIMSApi.Models.TaxInvoice", "TaxInvoice")
                         .WithMany()
                         .HasForeignKey("TaxInvoiceID")
@@ -19003,8 +18850,6 @@ namespace LIMSApi.Migrations
                         .IsRequired();
 
                     b.Navigation("Customer");
-
-                    b.Navigation("FinancialYearEntity");
 
                     b.Navigation("TaxInvoice");
                 });
@@ -19281,17 +19126,11 @@ namespace LIMSApi.Migrations
 
             modelBuilder.Entity("LIMSApi.Models.InvoiceCase", b =>
                 {
-                    b.HasOne("LIMSApi.Models.FinancialYear", "FinancialYearEntity")
-                        .WithMany()
-                        .HasForeignKey("FinancialYearId");
-
                     b.HasOne("LIMSApi.Models.LaboratoryTest", "LaboratoryTest")
                         .WithMany()
                         .HasForeignKey("LaboratoryTestID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("FinancialYearEntity");
 
                     b.Navigation("LaboratoryTest");
                 });
@@ -19926,7 +19765,8 @@ namespace LIMSApi.Migrations
                     b.HasOne("LIMSApi.Models.ParameterUnitMaster", "ParameterUnit")
                         .WithMany()
                         .HasForeignKey("ParameterUnitID")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("DefaultTestMethod");
 
@@ -20136,17 +19976,11 @@ namespace LIMSApi.Migrations
 
             modelBuilder.Entity("LIMSApi.Models.ProformaInvoiceHeader", b =>
                 {
-                    b.HasOne("LIMSApi.Models.FinancialYear", "FinancialYearEntity")
-                        .WithMany()
-                        .HasForeignKey("FinancialYearId");
-
                     b.HasOne("LIMSApi.Models.SampleInward", "SampleInward")
                         .WithMany()
                         .HasForeignKey("InwardID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("FinancialYearEntity");
 
                     b.Navigation("SampleInward");
                 });
@@ -20418,53 +20252,6 @@ namespace LIMSApi.Migrations
                     b.Navigation("SampleInward");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.SamplePreparation", b =>
-                {
-                    b.HasOne("LIMSApi.Models.EmployeeMaster", "AssignedTo")
-                        .WithMany()
-                        .HasForeignKey("AssignedToEmployeeID")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("LIMSApi.Models.EquipmentMaster", "Equipment")
-                        .WithMany()
-                        .HasForeignKey("EquipmentID")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("LIMSApi.Models.SampleInward", "SampleInward")
-                        .WithMany()
-                        .HasForeignKey("InwardID")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("LIMSApi.Models.EmployeeMaster", "PreparedBy")
-                        .WithMany()
-                        .HasForeignKey("PreparedByEmployeeID")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("LIMSApi.Models.SampleDetail", "Sample")
-                        .WithMany()
-                        .HasForeignKey("SampleID")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("LIMSApi.Models.EmployeeMaster", "VerifiedBy")
-                        .WithMany()
-                        .HasForeignKey("VerifiedByEmployeeID")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.Navigation("AssignedTo");
-
-                    b.Navigation("Equipment");
-
-                    b.Navigation("PreparedBy");
-
-                    b.Navigation("Sample");
-
-                    b.Navigation("SampleInward");
-
-                    b.Navigation("VerifiedBy");
-                });
-
             modelBuilder.Entity("LIMSApi.Models.SamplePreparationMaster", b =>
                 {
                     b.HasOne("LIMSApi.Models.LaboratoryTest", "LaboratoryTest")
@@ -20631,10 +20418,6 @@ namespace LIMSApi.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("LIMSApi.Models.FinancialYear", "FinancialYearEntity")
-                        .WithMany()
-                        .HasForeignKey("FinancialYearId");
-
                     b.HasOne("LIMSApi.Models.SampleInward", "Inward")
                         .WithMany()
                         .HasForeignKey("InwardID")
@@ -20647,8 +20430,6 @@ namespace LIMSApi.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Customer");
-
-                    b.Navigation("FinancialYearEntity");
 
                     b.Navigation("Inward");
 
