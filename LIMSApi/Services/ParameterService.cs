@@ -199,54 +199,5 @@ namespace LIMSApi.Services
             return Convert.ToDecimal(result);
         }
 
-    //    public async Task SaveTestResultAsync(
-    //long resultHeaderId,
-    //List<SampleTestResultValue> manualValues)
-    //    {
-    //        // 1️⃣ Save Manual Values First
-    //        _context.SampleTestResultValues.AddRange(manualValues);
-    //        await _context.SaveChangesAsync();
-
-    //        // 2️⃣ Build Parameter Value Map
-    //        var valueMap = manualValues
-    //            .Where(x => x.Value.HasValue)
-    //            .ToDictionary(
-    //                x => x.TestParameterID,
-    //                x => x.Value!.Value
-    //            );
-
-    //        // 3️⃣ Fetch Calculated Parameters Used in This Test
-    //        var calculatedParams = await _context.TestParameters
-    //            .Where(x => x.IsCalculated && x.IsActive)
-    //            .ToListAsync();
-
-    //        foreach (var param in calculatedParams)
-    //        {
-    //            var formula = param.Formula;
-
-    //            // 4️⃣ Evaluate Formula
-    //            var calculatedValue = EvaluateFormula(formula, valueMap);
-
-    //            // 5️⃣ Save Calculated Value
-    //            var calcResult = new SampleTestResultValue
-    //            {
-    //                ResultHeaderID = resultHeaderId,
-    //                TestParameterID = param.ID,
-    //                Value = calculatedValue,
-    //                IsPass = true // will be updated by spec check next
-    //            };
-
-    //            _context.SampleTestResultValues.Add(calcResult);
-
-    //            // Update dictionary for dependent formulas
-    //            valueMap[param.ID] = calculatedValue;
-    //        }
-
-    //        await _context.SaveChangesAsync();
-
-    //        // 6️⃣ Apply Min / Max Specification
-    //        await ApplySpecificationValidationAsync(resultHeaderId);
-    //    }
-
     }
 }

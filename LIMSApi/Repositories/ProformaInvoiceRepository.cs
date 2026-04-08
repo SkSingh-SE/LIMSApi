@@ -572,10 +572,6 @@ namespace LIMSApi.Repositories
                     };
                 }
 
-                //var html = BuildHtml(pi);
-                //var result = ConvertHtmlToPdf(html);
-                //return result;
-
                 // Fetch GST config for state code
                 var pdfGstConfig = await _context.GstConfigs.FirstOrDefaultAsync();
 
@@ -623,103 +619,6 @@ namespace LIMSApi.Repositories
                 throw;
             }
         }
-
-        //private string BuildHtml(ProformaInvoiceHeader pi)
-        //{
-        //    var templatePath = Path.Combine(
-        //        Directory.GetCurrentDirectory(), "Templates", "PI_Template.html");
-
-        //    var html = File.ReadAllText(templatePath);
-
-        //    var logoPath = Path.Combine(
-        //        Directory.GetCurrentDirectory(), "Assets", "logo.png");
-
-        //    var signPath = Path.Combine(
-        //        Directory.GetCurrentDirectory(), "Assets", "signature.png");
-
-        //    html = html
-        //        .Replace("{{LogoPath}}", $"file:///{logoPath.Replace("\\", "/")}")
-        //        .Replace("{{SignaturePath}}", $"file:///{signPath.Replace("\\", "/")}")
-        //        .Replace("{{InvoiceNo}}", pi.PINo)
-        //        .Replace("{{InvoiceDate}}", pi.PIDate.ToString("dd-MM-yyyy"))
-        //        .Replace("{{CustomerName}}", pi.SampleInward.Customer.Name)
-        //        .Replace("{{CustomerAddress}}", pi.SampleInward.Address)
-        //        .Replace("{{CustomerGST}}", pi.SampleInward.GstNo)
-        //        .Replace("{{State}}", pi.SampleInward.State)
-        //        .Replace("{{StateCode}}", "24")
-        //        .Replace("{{ReceivedDate}}", pi.SampleInward.CreatedOn.ToString("dd-MM-yyyy"))
-        //        .Replace("{{RefNo}}", pi.SampleInward.CaseNo)
-        //        .Replace("{{PI_ROWS}}", BuildPIRows(pi))
-        //        .Replace("{{SubTotal}}", pi.SubTotal.ToString("0.00"))
-        //        .Replace("{{CGST}}", pi.CGST.ToString("0.00"))
-        //        .Replace("{{SGST}}", pi.SGST.ToString("0.00"))
-        //        .Replace("{{IGST}}", pi.IGST.ToString("0.00"))
-        //        .Replace("{{GrandTotal}}", pi.GrandTotal.ToString("0.00"))
-        //        .Replace("{{AmountInWords}}", NumberToWords((long)pi.GrandTotal));
-
-        //    return html;
-        //}
-        //private string BuildPIRows(ProformaInvoiceHeader pi)
-        //{
-        //    var rows = "";
-
-        //    var details = pi.Details?.ToList();
-
-        //    //  Fallback dummy rows if empty
-        //    if (details == null || !details.Any())
-        //    {
-        //        return @"
-        //<tr>
-        //    <td>1</td>
-        //    <td>Sample Machining Charges</td>
-        //    <td class='center'>1</td>
-        //    <td class='right'>500.00</td>
-        //    <td class='right'>500.00</td>
-        //</tr>
-        //<tr>
-        //    <td>2</td>
-        //    <td>Chemical Testing Charges</td>
-        //    <td class='center'>1</td>
-        //    <td class='right'>500.00</td>
-        //    <td class='right'>500.00</td>
-        //</tr>";
-        //    }
-
-        //    foreach (var d in details)
-        //    {
-        //        rows += $@"
-        //<tr>
-        //    <td>{d.SampleID}</td>
-        //    <td>{d.Description}</td>
-        //    <td class='center'>{d.Quantity}</td>
-        //    <td class='right'>{d.Rate:0.00}</td>
-        //    <td class='right'>{d.Amount:0.00}</td>
-        //</tr>";
-        //    }
-
-        //    return rows;
-        //}
-
-
-        ////  Convert HTML to PDF
-        //private byte[] ConvertHtmlToPdf(string html)
-        //{
-        //    var doc = new HtmlToPdfDocument()
-        //    {
-        //        GlobalSettings = {
-        //        PaperSize = PaperKind.A4,
-        //        Orientation = Orientation.Portrait
-        //    },
-        //        Objects = {
-        //        new ObjectSettings {
-        //            HtmlContent = html,
-        //            WebSettings = { DefaultEncoding = "utf-8" }
-        //        }
-        //    }
-        //    };
-
-        //    return _converter.Convert(doc);
-        //}
 
         private string NumberToWords(long number)
         {
