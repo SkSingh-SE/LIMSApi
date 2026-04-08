@@ -599,6 +599,9 @@ namespace LIMSApi.ServiceWORepo
                     var spec1Name = gt.Specification1.HasValue ? await GetSpecificationNameWithGrade(gt.Specification1.Value) : string.Empty;
                     var spec2Name = gt.Specification2.HasValue ? await GetSpecificationNameWithGrade(gt.Specification2.Value) : string.Empty;
 
+                    // Cache standard names per method
+                    var standardNameCache = new Dictionary<long, string?>();
+
                     foreach (var method in gt.Methods)
                     {
                         var labTestId = method.LaboratoryTestID;
@@ -688,7 +691,14 @@ namespace LIMSApi.ServiceWORepo
                                 laboratoryTest = labTestName,
                                 sequenceNo = header.SequenceNo,
                                 totalSpecimens = totalSpecimens,
-                                standard = method.StandardID,
+                                        standard = method.StandardID,
+                                standardName = method.StandardID > 0
+                                    ? (standardNameCache.TryGetValue(method.StandardID, out var sn) ? sn
+                                        : (standardNameCache[method.StandardID] = await _db.StandardOrganizationMasters
+                                            .Where(s => s.ID == method.StandardID)
+                                            .Select(s => s.Name)
+                                            .FirstOrDefaultAsync()))
+                                    : null,
                                 reportNo = method.ReportNo,
                                 specification1 = gt.Specification1,
                                 specification2 = gt.Specification2,

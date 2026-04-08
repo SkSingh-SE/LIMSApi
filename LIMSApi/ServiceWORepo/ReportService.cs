@@ -730,7 +730,7 @@ namespace LIMSApi.ServiceWORepo
             {
                 TestResultHeaderId = test.headerId,
                 TestName = testName,
-                TestMethod = test.standard,
+                TestMethod = test.standardName != null ? (string?)test.standardName : (test.standard != null ? test.standard.ToString() : null),
                 ReportNo = test.reportNo,
                 Specification1Name = test.specfication1Name,
                 Specification2Name = test.specfication2Name,
