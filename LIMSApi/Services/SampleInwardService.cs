@@ -960,6 +960,17 @@ namespace LIMSApi.Services
                         "Cannot submit for review: No 'Request Review' workflow is configured. " +
                         "Please ask an administrator to set up the review workflow before submitting plans.");
 
+                // Validate: at least one sample must have a plan with at least one test
+                var hasAnyTest = model.SampleDetails?.Any(s =>
+                    s.TestPlans?.Any(tp =>
+                        (tp.GeneralTests?.Any(gt => gt.Methods?.Any(m => m.Cancel != true) == true) == true) ||
+                        (tp.ChemicalTests?.Any(ct => ct.TestTypes?.Any(t => t.Value) == true || ct.Elements?.Count > 0) == true)
+                    ) == true
+                ) == true;
+
+                if (!hasAnyTest)
+                    throw new InvalidOperationException("Cannot submit for review: At least one test (General or Chemical) must be added to the plan.");
+
                 await ModifySamplePlan(model);
 
 
@@ -1324,7 +1335,9 @@ namespace LIMSApi.Services
                         SampleNo = s.SampleNo,
                         Details = s.Details,
                         MetalClassificationID = s.MetalClassificationID,
+                        MetalClassificationName = s.MetalClassification?.Name,
                         ProductConditionID = s.ProductConditionID,
+                        ProductConditionName = s.ProductCondition?.Name,
                         ProductFormID = s.ProductFormID,
                         SpecimenOrientationID = s.SpecimenOrientationID,
                         Remarks = s.Remarks,
@@ -1396,9 +1409,10 @@ namespace LIMSApi.Services
                             SampleTestPlanID = ct.SampleTestPlanID,
                             ReportNo = ct.ReportNo,
                             UlrNo = ct.UlrNo,
+                            MetalClassificationID = ct.MetalClassificationID,
                             Specification1 = ct.Specification1,
                             Specification2 = ct.Specification2,
-                            TestTypes = ct.TestTypes.ToDictionary(tt => tt.LaboratoryTestID?.ToString() ?? tt.Name, tt => tt.IsSelected),
+                            TestTypes = ct.TestTypes.ToDictionary(tt => tt.Name, tt => tt.IsSelected),
                             Elements = ct.Elements.Select(e => new ChemicalTestElementDto
                             {
                                 ID = e.ID,
