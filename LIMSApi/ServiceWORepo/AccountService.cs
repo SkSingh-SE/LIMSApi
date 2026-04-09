@@ -39,35 +39,107 @@ namespace LIMSApi.ServiceWORepo
 
         public async Task<AccountDashboardDto> GetDashboardAsync()
         {
-            var piPending = await _db.SampleInwards
+            var user = LoggedInUserProvider.CurrentUser;
+            var companyCode = user?.CompanyCode ?? "";
+
+            // Base query — active inwards for this company
+            var inwards = _db.SampleInwards.Where(x => x.IsActive && x.CompanyCode == companyCode);
+
+            // Case status counts
+            var piPending = await inwards
                 .Where(x => !x.PIReceived && x.AdvancePIRequired)
                 .CountAsync();
 
-            var invoicePending = await _db.SampleInwards
-                .Where(x =>!x.IsInvoiceGenerated)
+            // Invoice pending: only cases where testing is done (all samples report approved) but invoice not yet generated
+            var invoicePending = await inwards
+                .Where(x => !x.IsInvoiceGenerated
+                    && x.SampleDetails.Any()
+                    && x.SampleDetails.All(s => s.SampleStatus == "FINAL_REPORT_APPROVED"
+                        || s.SampleStatus == "PAYMENT_PENDING"
+                        || s.SampleStatus == "COMPLETED"))
                 .CountAsync();
 
             var paymentPending = await _db.PaymentOrders
-                .Where(x => x.Status == PaymentStatus.Pending)
+                .Where(x => x.Status == PaymentStatus.Pending
+                    && x.InwardID.HasValue
+                    && inwards.Any(i => i.ID == x.InwardID))
                 .Select(x => x.InwardID)
                 .Distinct()
                 .CountAsync();
 
-            var fullySettled = await _db.SampleInwards
-                .Where(x =>
-                    x.IsInvoiceGenerated &&
-                    !_db.PaymentOrders.Any(p =>
-                        p.InwardID == x.ID &&
-                        p.Status != PaymentStatus.Paid
-                    ))
+            var fullySettled = await inwards
+                .Where(x => x.IsInvoiceGenerated
+                    && !_db.PaymentOrders.Any(p => p.InwardID == x.ID && p.Status != PaymentStatus.Paid))
                 .CountAsync();
+
+            // Financial summary
+            var totalRevenue = await _db.TaxInvoices
+                .Where(t => t.IsActive && t.CompanyCode == companyCode)
+                .SumAsync(t => (decimal?)t.GrandTotal) ?? 0;
+
+            var today = DateTime.UtcNow.Date;
+
+            var todayCollection = await _db.CustomerLedgers
+                .Where(l => l.IsActive && l.CompanyCode == companyCode
+                    && l.TransactionType == "Credit" && l.Date >= today)
+                .SumAsync(l => (decimal?)l.CreditAmount) ?? 0;
+
+            // Outstanding: sum of all debit - credit per customer where balance > 0
+            var totalOutstanding = await _db.CustomerLedgers
+                .Where(l => l.IsActive && l.CompanyCode == companyCode)
+                .GroupBy(l => l.CustomerId)
+                .Select(g => new { Balance = g.Sum(l => l.DebitAmount) - g.Sum(l => l.CreditAmount) })
+                .Where(g => g.Balance > 0)
+                .SumAsync(g => (decimal?)g.Balance) ?? 0;
+
+            // Overdue: invoices past due date and not fully paid
+            var totalOverdue = await _db.TaxInvoices
+                .Where(t => t.IsActive && t.CompanyCode == companyCode
+                    && t.PaymentDueDate != null && t.PaymentDueDate < today
+                    && t.Status != "Paid")
+                .SumAsync(t => (decimal?)t.GrandTotal) ?? 0;
+
+            // Customer type breakdown
+            var breakdown = await (
+                from i in inwards
+                join c in _db.Customers on i.CustomerID equals c.ID
+                group i by c.CustomerType into g
+                select new CustomerTypeBreakdownDto
+                {
+                    Type = g.Key,
+                    CaseCount = g.Count()
+                }
+            ).ToListAsync();
+
+            // Add outstanding per customer type
+            var outstandingByType = await (
+                from l in _db.CustomerLedgers.Where(l => l.IsActive && l.CompanyCode == companyCode)
+                join c in _db.Customers on l.CustomerId equals c.ID
+                group l by c.CustomerType into g
+                select new
+                {
+                    Type = g.Key,
+                    Outstanding = g.Sum(l => l.DebitAmount) - g.Sum(l => l.CreditAmount)
+                }
+            ).ToListAsync();
+
+            foreach (var b in breakdown)
+            {
+                var match = outstandingByType.FirstOrDefault(o => o.Type == b.Type);
+                b.OutstandingAmount = match != null && match.Outstanding > 0 ? match.Outstanding : 0;
+            }
 
             return new AccountDashboardDto
             {
                 PiPendingCount = piPending,
                 InvoicePendingCount = invoicePending,
                 PaymentPendingCount = paymentPending,
-                FullySettledCount = fullySettled
+                FullySettledCount = fullySettled,
+                TotalRevenue = totalRevenue,
+                TotalOutstanding = totalOutstanding,
+                TotalOverdue = totalOverdue,
+                TodayCollection = todayCollection,
+                CustomerTypeBreakdown = breakdown
             };
         }
 
@@ -81,7 +153,9 @@ namespace LIMSApi.ServiceWORepo
                  select new
                  {
                      i.ID,
+                     InwardId = i.ID,
                      i.CaseNo,
+                     CustomerID = c.ID,
                      CustomerName = c.Name,
                      CustomerType = c.CustomerType, // Walk-in / Credit
 
@@ -615,6 +689,82 @@ namespace LIMSApi.ServiceWORepo
             };
         }
 
+        public async Task<InvoiceDetailsDto> GetInvoiceDetailsAsync(long invoiceId)
+        {
+            var invoice = await _db.TaxInvoices
+                .Include(i => i.Customer)
+                .Include(i => i.Inward)
+                .FirstOrDefaultAsync(i => i.ID == invoiceId);
+
+            if (invoice == null)
+                throw new KeyNotFoundException($"Invoice {invoiceId} not found.");
+
+            var chargeEvents = await _db.ChargeEvents
+                .Where(e => e.TaxInvoiceID == invoiceId)
+                .OrderBy(e => e.ID)
+                .Select(e => new InvoiceChargeLineDto
+                {
+                    Id = e.ID,
+                    ChargeType = e.ChargeType,
+                    Description = e.Description ?? e.ChargeType,
+                    Amount = e.Amount
+                })
+                .ToListAsync();
+
+            var adHocLines = await _db.InvoiceLineItems
+                .Where(li => li.TaxInvoiceID == invoiceId)
+                .OrderBy(li => li.ID)
+                .Select(li => new InvoiceAdHocLineDto
+                {
+                    Id = li.ID,
+                    Description = li.Description ?? "",
+                    Amount = li.Amount,
+                    TaxPercent = li.TaxPercent,
+                    TaxAmount = li.TaxAmount,
+                    TotalAmount = li.TotalAmount
+                })
+                .ToListAsync();
+
+            var advance = invoice.Inward?.AdvancePayment ?? 0;
+            var poNo = invoice.PurchaseOrderId.HasValue
+                ? (await _db.CustomerPurchaseOrders.FindAsync(invoice.PurchaseOrderId.Value))?.PONumber
+                : null;
+
+            return new InvoiceDetailsDto
+            {
+                InvoiceId = invoice.ID,
+                InvoiceNo = invoice.InvoiceNo,
+                InvoiceDate = invoice.InvoiceDate,
+                Status = invoice.Status,
+                SACCode = invoice.SACCode,
+                PaymentTerms = invoice.PaymentTerms,
+                PaymentDueDate = invoice.PaymentDueDate,
+                PdfPath = invoice.PdfPath,
+                CustomerId = invoice.CustomerID,
+                CustomerName = invoice.Customer?.Name ?? "",
+                CustomerAddress = invoice.Customer?.Address ?? "",
+                CustomerGSTIN = invoice.Customer?.GSTNo ?? "",
+                CustomerState = invoice.Customer?.StateID > 0
+                    ? (await _db.StateMasters.FindAsync(invoice.Customer.StateID))?.Name ?? ""
+                    : "",
+                InwardId = invoice.InwardID,
+                CaseNo = invoice.Inward?.CaseNo ?? "",
+                SubTotal = invoice.SubTotal,
+                DiscountPercentage = invoice.DiscountPercentage,
+                DiscountAmount = invoice.DiscountAmount,
+                TaxableAmount = invoice.SubTotal - invoice.DiscountAmount,
+                CGST = invoice.CGST,
+                SGST = invoice.SGST,
+                IGST = invoice.IGST,
+                GrandTotal = invoice.GrandTotal,
+                AdvanceAdjusted = advance,
+                BalancePayable = invoice.GrandTotal - advance,
+                PurchaseOrderNo = poNo,
+                ChargeLines = chargeEvents,
+                AdHocLines = adHocLines
+            };
+        }
+
         public async Task<long> GenerateProformaInvoiceAsync(long inwardId)
         {
             var proformaInvoiceId = await _proformaInvoiceRepository.GeneratePIAsync(inwardId);
@@ -707,6 +857,14 @@ namespace LIMSApi.ServiceWORepo
         {
             return await _db.InvoiceLineItems
                 .Where(x => x.ProformaInvoiceHeaderID == proformaInvoiceHeaderId)
+                .OrderByDescending(x => x.ID)
+                .ToListAsync();
+        }
+
+        public async Task<List<InvoiceLineItem>> GetLineItemsByTaxInvoiceIdAsync(long taxInvoiceId)
+        {
+            return await _db.InvoiceLineItems
+                .Where(x => x.TaxInvoiceID == taxInvoiceId)
                 .OrderByDescending(x => x.ID)
                 .ToListAsync();
         }
