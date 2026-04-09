@@ -100,6 +100,7 @@ namespace LIMSApi.ServiceWORepo
                             AmendmentRequestId = amendment != null ? amendment.ID : 0L,
                             sampleId = sample.ID,
                             sample.SampleNo,
+                            InwardId = inward.ID,
                             inward.CaseNo,
                             inward.CustomerID,
                             Customer = inward.Customer != null
