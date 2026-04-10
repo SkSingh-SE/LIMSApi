@@ -50,6 +50,7 @@ namespace LIMSApi.Services
                     SampleNo = sd.SampleNo,
                     InwardID = si.ID,
                     CaseNo = si.CaseNo,
+                    CustomerID = c.ID,
                     CustomerName = c.Name,
                     SampleDescription = sd.Details,
                     MaterialClassification = sd.MetalClassification != null ? sd.MetalClassification.Name : null,

@@ -21,29 +21,6 @@ namespace LIMSApi.Repositories
 
         public async Task AddTestGroup(TestGroup model)
         {
-            //model.CreatedOn = DateTime.UtcNow;
-            //model.CreatedBy = loggedInUser.EmployeeID;
-            //model.CompanyCode = loggedInUser.CompanyCode;
-            //await _context.TestGroups.AddAsync(model);
-            //await _context.SaveChangesAsync();
-            //if (model.TestGroupMappings != null && model.TestGroupMappings.Any())
-            //{
-            //    foreach (var mapping in model.TestGroupMappings)
-            //    {
-            //        mapping.TestGroupID = model.ID;
-
-            //        if (_context.TestGroupMappings.Any(x => x.ID == mapping.ID))
-            //        {
-            //            _context.TestGroupMappings.Update(mapping);
-            //        }
-            //        else
-            //        {
-            //            _context.TestGroupMappings.Add(mapping);
-            //        }
-            //    }
-
-            //    await _context.SaveChangesAsync();
-            //}
             foreach (var mapping in model.TestGroupMappings)
             {
                 mapping.TestGroupID = model.ID; 
@@ -70,13 +47,6 @@ namespace LIMSApi.Repositories
         public async Task UpdateTestGroup(TestGroup model)
         {
             _context.TestGroups.Update(model);
-            //if(model.TestGroupMappings != null && model.TestGroupMappings.Any())
-            //{
-            //    foreach (var mapping in model.TestGroupMappings)
-            //    {
-            //        _context.TestGroupMappings.Update(mapping);
-            //    }
-            //}
             await _context.SaveChangesAsync();
 
         }

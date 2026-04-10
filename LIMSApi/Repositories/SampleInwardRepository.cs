@@ -25,20 +25,10 @@ namespace LIMSApi.Repositories
 
         public async Task AddSampleInward(SampleInward model)
         {
-            using var trx = await _context.Database.BeginTransactionAsync();
-            try
-            {
-                model.CreatedOn = DateTime.UtcNow;
-                model.CompanyCode = loggedInUser.CompanyCode;
-                await _context.SampleInwards.AddAsync(model);
-                await _context.SaveChangesAsync();
-                await trx.CommitAsync();
-            }
-            catch
-            {
-                await trx.RollbackAsync();
-                throw;
-            }
+            model.CreatedOn = DateTime.UtcNow;
+            model.CompanyCode = loggedInUser.CompanyCode;
+            await _context.SampleInwards.AddAsync(model);
+            await _context.SaveChangesAsync();
         }
 
         public async Task DeleteSampleInward(long id)
@@ -83,6 +73,10 @@ namespace LIMSApi.Repositories
                 .Include(x => x.SampleDetails)
                     .ThenInclude(sd => sd.AdditionalDetails)
                 .Include(x => x.SampleDetails)
+                    .ThenInclude(sd => sd.MetalClassification)
+                .Include(x => x.SampleDetails)
+                    .ThenInclude(sd => sd.ProductCondition)
+                .Include(x => x.SampleDetails)
                     .ThenInclude(sd => sd.TestPlans)
                         .ThenInclude(tp => tp.GeneralTests)
                             .ThenInclude(gt => gt.Methods)
@@ -106,20 +100,10 @@ namespace LIMSApi.Repositories
 
         public async Task UpdateSampleInward(SampleInward model)
         {
-            using var trx = await _context.Database.BeginTransactionAsync();
-            try
-            {
-                model.ModifiedOn = DateTime.UtcNow;
-                model.CompanyCode = loggedInUser.CompanyCode;
-                _context.SampleInwards.Update(model);
-                await _context.SaveChangesAsync();
-                await trx.CommitAsync();
-            }
-            catch
-            {
-                await trx.RollbackAsync();
-                throw;
-            }
+            model.ModifiedOn = DateTime.UtcNow;
+            model.CompanyCode = loggedInUser.CompanyCode;
+            _context.SampleInwards.Update(model);
+            await _context.SaveChangesAsync();
         }
 
 
@@ -185,116 +169,6 @@ namespace LIMSApi.Repositories
             query = query.AsQueryable().ApplyFilters(filter.Filter);
             return await ApplyPagingFilteringSorting(query, filter);
         }
-
-        //public async Task<PagedResponse<object>> GetReviewList(PageFilter filter)
-        //{
-        //    var userId = loggedInUser.EmployeeID;
-
-        //    var query = from inward in _context.SampleInwards
-        //                join instance in _context.WorkflowInstances
-        //                    on new { inward.ID, EntityType = WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Request_Review) }
-        //                    equals new { ID = instance.EntityID, instance.EntityType }
-        //                join step in _context.WorkflowSteps
-        //                    on instance.CurrentStepID equals step.ID
-        //                where inward.IsActive
-        //                      && inward.CompanyCode == loggedInUser.CompanyCode
-        //                      && instance.Status != "Cancelled"
-        //                select new
-        //                {
-        //                    inward.ID,
-        //                    inward.CaseNo,
-        //                    CustomerName = inward.Customer != null ? inward.Customer.Name : string.Empty,
-        //                    Reviewer = inward.ReviewedBy,
-        //                    ReviewStatus = inward.ReviewStatus,
-        //                    InwardStatus = inward.InwardStatus,
-
-        //                    CurrentStageStatus = inward.InwardStatus,
-
-        //                    ActionStatus = ActionStatusResolver.Resolve(WorkflowListType.Review, inward.InwardStatus).ToString(),
-
-        //                    CurrentStep = step.Name,
-        //                    AssignedToValue = step.AssignedToValue,
-        //                    ModifiedOn = inward.ModifiedOn,
-        //                    ModifiedBy = _context.EmployeeMasters
-        //                                .Where(e => e.ID == inward.ModifiedBy)
-        //                                .Select(e => e.Name)
-        //                                .FirstOrDefault(),
-
-        //                    CanTakeAction = FilterHelper.IsUserApprover(step.AssignedToValue, userId),
-        //                    //  Workflow Actions (dynamic from transitions)
-        //                    Actions = step.Transitions
-        //                        .Where(t => t.IsActive)
-        //                        .Select(t => new
-        //                        {
-        //                            ID = instance.ID,
-        //                            Name = t.Alias ?? t.Action,
-        //                            Action = t.Action
-        //                        })
-        //                };
-
-        //    //// Apply custom filters (your extension method)
-        //    //query = query.AsQueryable().ApplyFilters(filter.Filter);
-
-        //    //// Search
-        //    //if (!string.IsNullOrWhiteSpace(filter.searchTerm))
-        //    //{
-        //    //    var search = filter.searchTerm.Trim().ToLower();
-
-        //    //    query = query.Where(x =>
-        //    //        EF.Functions.Like(EF.Property<string>(x, "CaseNo") ?? "", $"%{search}%") ||
-        //    //        EF.Functions.Like(EF.Property<string>(x, "CustomerName") ?? "", $"%{search}%") ||
-        //    //        EF.Functions.Like(EF.Property<string>(x, "ContactPersonName") ?? "", $"%{search}%") ||
-        //    //        EF.Functions.Like(EF.Property<string>(x, "ContactEmail") ?? "", $"%{search}%") ||
-        //    //        EF.Functions.Like(EF.Property<string>(x, "ContactPhone") ?? "", $"%{search}%") ||
-        //    //        EF.Functions.Like(EF.Property<string>(x, "InwardStatus") ?? "", $"%{search}%") ||
-        //    //        EF.Functions.Like(EF.Property<string>(x, "ReviewStatus") ?? "", $"%{search}%") ||
-        //    //        EF.Functions.Like(EF.Property<string>(x, "ModifiedBy") ?? "", $"%{search}%") ||
-        //    //        EF.Functions.Like(EF.Property<DateTime?>(x, "CollectionTime")
-        //    //            .ToString() ?? "", $"%{search}%")
-        //    //    );
-        //    //}
-
-        //    //// Sorting
-        //    //if (!string.IsNullOrWhiteSpace(filter.SortByColumn))
-        //    //{
-        //    //    string order = filter.SortOrder == "asc" ? "ascending" : "descending";
-        //    //    query = query.OrderBy($"{filter.SortByColumn} {order}");
-        //    //}
-
-        //    //// Total Count
-        //    //int totalRecords = await query.CountAsync();
-        //    //var data = await query.ToListAsync();
-        //    //var result = data.Select(x => new
-        //    //{
-        //    //    x.ID,
-        //    //    x.CaseNo,
-        //    //    x.CustomerName,
-        //    //    x.Reviewer,
-        //    //    x.ReviewStatus,
-        //    //    x.InwardStatus,
-        //    //    x.CurrentStep,
-        //    //    x.ModifiedOn,
-        //    //    x.ModifiedBy,
-
-        //    //    Actions = FilterHelper.IsUserApprover(x.AssignedToValue, userId)
-        //    //            ? x.Actions : Enumerable.Empty<object>()
-
-        //    //});
-
-        //    //// Pagination
-        //    //var items = result
-        //    //    .Skip((filter.PageNumber - 1) * filter.PageSize)
-        //    //    .Take(filter.PageSize).ToList<object>();
-
-        //    //return new PagedResponse<object>(
-        //    //    items,
-        //    //    totalRecords,
-        //    //    filter.PageNumber,
-        //    //    filter.PageSize
-        //    //);
-
-        //    return await ApplyPagingFilteringSorting(query, filter);
-        //}
 
         public async Task<PagedResponse<object>> GetReviewList(PageFilter filter)
         {

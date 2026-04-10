@@ -622,20 +622,26 @@ namespace LIMSApi.Services
             if (!samples.Any())
                 throw new Exception("No samples found for this inward.");
 
-            // Check if all samples have FINAL_REPORT_APPROVED status
-            var allSamplesApproved = samples.All(s => 
-                s.SampleStatus == SampleStatus.FINAL_REPORT_APPROVED.ToString());
+            // Check if all samples have reached report approval stage
+            // Accept FINAL_REPORT_APPROVED and statuses that come after it
+            var approvedStatuses = new HashSet<string>
+            {
+                "FINAL_REPORT_APPROVED", "REPORT_DISPATCHED",
+                "ADVANCE_PAYMENT_COMPLETED",
+                "PAYMENT_PENDING", "PAYMENT_COMPLETED", "COMPLETED", "CASE_CLOSED"
+            };
+            var allSamplesApproved = samples.All(s => approvedStatuses.Contains(s.SampleStatus ?? ""));
 
             if (!allSamplesApproved)
             {
                 var unapprovedSamples = samples
-                    .Where(s => s.SampleStatus != SampleStatus.FINAL_REPORT_APPROVED.ToString())
-                    .Select(s => s.SampleNo)
+                    .Where(s => !approvedStatuses.Contains(s.SampleStatus ?? ""))
+                    .Select(s => $"{s.SampleNo} ({s.SampleStatus})")
                     .ToList();
-                
+
                 throw new InvalidOperationException(
-                    $"Cannot create price snapshot. Not all samples have been approved (FINAL_REPORT_APPROVED). " +
-                    $"Unapproved samples: {string.Join(", ", unapprovedSamples)}");
+                    $"Cannot create price snapshot. Not all samples have completed reporting. " +
+                    $"Pending samples: {string.Join(", ", unapprovedSamples)}");
             }
 
             // Get all DRAFT ChargeEvents (including Customer Amendment ChargeEvents)

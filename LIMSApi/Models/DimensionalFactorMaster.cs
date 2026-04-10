@@ -30,7 +30,7 @@ public partial class DimensionalFactorMaster : AuditProperty
     public virtual ParameterUnitMaster? ParameterUnit { get; set; }
 
     [ForeignKey("DefaultTestMethodID")]
-    public virtual TestMethodStandard? DefaultTestMethod { get; set; }
+    public virtual TestMethodSpecification? DefaultTestMethod { get; set; }
 
     public virtual ICollection<DimensionalFactorProductForm> ApplicableForms { get; set; } = new List<DimensionalFactorProductForm>();
 }

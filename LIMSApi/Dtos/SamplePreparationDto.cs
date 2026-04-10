@@ -7,6 +7,7 @@ namespace LIMSApi.Dtos
         public string SampleNo { get; set; } = string.Empty;
         public long InwardID { get; set; }
         public string CaseNo { get; set; } = string.Empty;
+        public long CustomerID { get; set; }
         public string? CustomerName { get; set; }
         public string? SampleDescription { get; set; }
         public string? MaterialClassification { get; set; }

@@ -171,6 +171,7 @@ public static class DataSeeder
             IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 65)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (65,N'Workflow',NULL,0,N'/workflow',NULL,1010);
             -- Reporting (1011)
             IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 66)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (66,N'Reporting Dashboard',NULL,0,N'/reporting/dashboard',NULL,1011);
+            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 67)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (67,N'Report Formats',NULL,0,N'/report-format',NULL,1011);
             -- Accounts (1012)
             IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 121) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (121,N'Accounts Dashboard',NULL,0,N'/accounts/dashboard',NULL,1012);
             IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 122) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (122,N'Case Accounts',NULL,0,N'/accounts/cases',NULL,1012);
@@ -433,6 +434,8 @@ public static class DataSeeder
             (N'CanReadWorkflow',N'View Workflow',65,N'Read'),
             -- ── Reporting ──
             (N'CanReadReporting',N'View Reporting',66,N'Read'),
+            (N'CanReadReportFormat',N'View Report Formats',67,N'Read'),
+            (N'CanManageReportFormat',N'Manage Report Formats',67,N'Manage'),
             -- ── Accounts ──
             (N'CanReadAccountsDashboard',N'View Accounts Dashboard',121,N'Read'),
             (N'CanReadCaseAccounts',N'View Case Accounts',122,N'Read'),
@@ -581,6 +584,10 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
             IF NOT EXISTS (SELECT 1 FROM Configurations WHERE KeyName = N'Entity Type' AND CompanyCode = N'LIMS')
                 INSERT INTO Configurations (KeyName, GroupName, [Value], ValueType, [Description], CreatedBy, CreatedOn, CompanyCode, IsActive)
                 VALUES (N'Entity Type', N'dropdown', N'Request Review|Report Review|Report Amendment|Test Result Verification', N'string', N'Entity types used for workflow configuration. Each value is a fixed entity type.', 0, GETUTCDATE(), N'LIMS', 1);
+
+            IF NOT EXISTS (SELECT 1 FROM Configurations WHERE KeyName = N'USE_CONFIG_DRIVEN_REPORTING' AND CompanyCode = N'LIMS')
+                INSERT INTO Configurations (KeyName, GroupName, [Value], ValueType, [Description], CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'USE_CONFIG_DRIVEN_REPORTING', N'Report', N'false', N'boolean', N'Enable config-driven report auto-generation on test verification. When true, uses ReportFormat designer; when false, uses legacy reporting system.', 0, GETUTCDATE(), N'LIMS', 1);
         ");
     }
 

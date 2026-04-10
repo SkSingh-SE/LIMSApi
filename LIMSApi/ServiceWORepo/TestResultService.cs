@@ -57,8 +57,10 @@ namespace LIMSApi.ServiceWORepo
                 {
                     sample.ID,
                     sample.SampleNo,
+                    InwardId = inward.ID,
                     inward.CaseNo,
                     sample.SampleStatus,
+                    CustomerID = inward.CustomerID,
                     CustomerName = inward.Customer != null ? inward.Customer.Name : "",
                     Material = sample.MetalClassificationID != null ? _db.MetalClassificationMasters.Where(x => x.ID == sample.MetalClassificationID.Value).Select(m => m.Name).FirstOrDefault() : string.Empty,
                     Condition = sample.ProductConditionID != null ? _db.ProductConditionMasters.Where(x => x.ID == sample.ProductConditionID.Value).Select(m => m.Name).FirstOrDefault() : string.Empty,
@@ -135,7 +137,9 @@ namespace LIMSApi.ServiceWORepo
             {
                 x.ID,
                 x.SampleNo,
+                x.InwardId,
                 x.CaseNo,
+                x.CustomerID,
                 x.CustomerName,
                 x.Material,
                 x.Condition,
@@ -599,6 +603,9 @@ namespace LIMSApi.ServiceWORepo
                     var spec1Name = gt.Specification1.HasValue ? await GetSpecificationNameWithGrade(gt.Specification1.Value) : string.Empty;
                     var spec2Name = gt.Specification2.HasValue ? await GetSpecificationNameWithGrade(gt.Specification2.Value) : string.Empty;
 
+                    // Cache standard names per method
+                    var standardNameCache = new Dictionary<long, string?>();
+
                     foreach (var method in gt.Methods)
                     {
                         var labTestId = method.LaboratoryTestID;
@@ -688,7 +695,14 @@ namespace LIMSApi.ServiceWORepo
                                 laboratoryTest = labTestName,
                                 sequenceNo = header.SequenceNo,
                                 totalSpecimens = totalSpecimens,
-                                standard = method.StandardID,
+                                        standard = method.StandardID,
+                                standardName = method.StandardID > 0
+                                    ? (standardNameCache.TryGetValue(method.StandardID, out var sn) ? sn
+                                        : (standardNameCache[method.StandardID] = await _db.StandardOrganizationMasters
+                                            .Where(s => s.ID == method.StandardID)
+                                            .Select(s => s.Name)
+                                            .FirstOrDefaultAsync()))
+                                    : null,
                                 reportNo = method.ReportNo,
                                 specification1 = gt.Specification1,
                                 specification2 = gt.Specification2,
@@ -779,6 +793,10 @@ namespace LIMSApi.ServiceWORepo
                                 chemicalTestId = ct.ID,
                                 labTestId = labTestId,
                                 laboratoryTest = (await _db.LaboratoryTests.FindAsync(labTestId))?.Name ?? "Chemical Test",
+                                sequenceNo = 1,
+                                totalSpecimens = 1,
+                                standard = (long?)null,
+                                standardName = (string?)null,
                                 specification1 = ct.Specification1,
                                 specification2 = ct.Specification2,
                                 specfication1Name = ct.Specification1.HasValue ? await GetSpecificationNameWithGrade(ct.Specification1.Value) : string.Empty,
@@ -2521,6 +2539,7 @@ namespace LIMSApi.ServiceWORepo
                             h.ID,
                             SampleId = sample.ID,
                             sample.SampleNo,
+                            InwardId = inward.ID,
                             inward.CaseNo,
                             TestName = _db.LaboratoryTests
                                 .Where(t => t.ID == h.LaboratoryTestID)
@@ -2613,6 +2632,7 @@ namespace LIMSApi.ServiceWORepo
                     headerId = item.ID,
                     item.SampleId,
                     item.SampleNo,
+                    item.InwardId,
                     item.CaseNo,
                     testName = testLabel,
                     item.ParametersCount,

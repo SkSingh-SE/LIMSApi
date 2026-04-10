@@ -238,19 +238,30 @@ namespace LIMSApi.Services
                 }
                 // Validate mandatory information
                 var isComplete = ValidateMandatoryInformation(entity);
-                
-                await _SampleInwardRepository.AddSampleInward(entity);
-                _logger.LogInformation("SampleInward '{Case}' created successfully.", model.CaseNo);
 
-                // Process queued jobs
-                foreach (var job in statusJobs)
+                await using var trx = await _context.Database.BeginTransactionAsync();
+                try
                 {
-                    await job();
-                }
+                    await _SampleInwardRepository.AddSampleInward(entity);
+                    _logger.LogInformation("SampleInward '{Case}' created successfully.", model.CaseNo);
 
-                // Set InwardStatus based on validation
-                var inwardStatus = isComplete ? InwardStatus.INWARD_COMPLETED : InwardStatus.INWARD_REGISTERED;
-                await _sampleStatusService.UpdateInwardStatus(entity.ID, inwardStatus, loggedInUser.EmployeeID);
+                    // Process queued jobs
+                    foreach (var job in statusJobs)
+                    {
+                        await job();
+                    }
+
+                    // Set InwardStatus based on validation
+                    var inwardStatus = isComplete ? InwardStatus.INWARD_COMPLETED : InwardStatus.INWARD_REGISTERED;
+                    await _sampleStatusService.UpdateInwardStatus(entity.ID, inwardStatus, loggedInUser.EmployeeID);
+
+                    await trx.CommitAsync();
+                }
+                catch
+                {
+                    await trx.RollbackAsync();
+                    throw;
+                }
 
                 // ── Notifications (fire AFTER save — failures must not roll back inward) ──
                 try
@@ -611,31 +622,42 @@ namespace LIMSApi.Services
                     }
                 }
 
-                await _SampleInwardRepository.UpdateSampleInward(entity);
-                _logger.LogInformation("SampleInward '{Case}' updated successfully.", entity.CaseNo);
-                foreach (var job in statusJobs)
+                await using var trx = await _context.Database.BeginTransactionAsync();
+                try
                 {
-                    await job();
-                }
-
-                // Re-validate and update status
-                var isComplete = ValidateMandatoryInformation(entity);
-                var inwardStatus = isComplete ? InwardStatus.INWARD_COMPLETED : InwardStatus.INWARD_REGISTERED;
-                await _sampleStatusService.UpdateInwardStatus(entity.ID, inwardStatus, loggedInUser.EmployeeID);
-
-                // Send acknowledgment email if just completed
-                if (isComplete && entity.InwardStatus != InwardStatus.INWARD_COMPLETED.ToString())
-                {
-                    var contact = entity.Contacts.FirstOrDefault(c => !string.IsNullOrEmpty(c.EmailId));
-                    if (contact != null)
+                    await _SampleInwardRepository.UpdateSampleInward(entity);
+                    _logger.LogInformation("SampleInward '{Case}' updated successfully.", entity.CaseNo);
+                    foreach (var job in statusJobs)
                     {
-                        var emailBody = await _templateService.GetTemplateAsync(MessageTemplateKey.SAMPLE_INWARD_UPDATED, NotificationType.Email, new
-                        {
-                            CustomerName = entity.Customer.Name,
-                            CaseNo = entity.CaseNo
-                        });
-                        await _emailService.SendEmailAsync(contact.EmailId, $"Sample Inward Completed - {entity.CaseNo}", emailBody);
+                        await job();
                     }
+
+                    // Re-validate and update status
+                    var isComplete = ValidateMandatoryInformation(entity);
+                    var inwardStatus = isComplete ? InwardStatus.INWARD_COMPLETED : InwardStatus.INWARD_REGISTERED;
+                    await _sampleStatusService.UpdateInwardStatus(entity.ID, inwardStatus, loggedInUser.EmployeeID);
+
+                    await trx.CommitAsync();
+
+                    // Send acknowledgment email if just completed (outside transaction — email failure must not rollback)
+                    if (isComplete && entity.InwardStatus != InwardStatus.INWARD_COMPLETED.ToString())
+                    {
+                        var contact = entity.Contacts.FirstOrDefault(c => !string.IsNullOrEmpty(c.EmailId));
+                        if (contact != null)
+                        {
+                            var emailBody = await _templateService.GetTemplateAsync(MessageTemplateKey.SAMPLE_INWARD_UPDATED, NotificationType.Email, new
+                            {
+                                CustomerName = entity.Customer.Name,
+                                CaseNo = entity.CaseNo
+                            });
+                            await _emailService.SendEmailAsync(contact.EmailId, $"Sample Inward Completed - {entity.CaseNo}", emailBody);
+                        }
+                    }
+                }
+                catch
+                {
+                    await trx.RollbackAsync();
+                    throw;
                 }
             }
             catch (Exception ex)
@@ -646,269 +668,6 @@ namespace LIMSApi.Services
         }
 
 
-
-
-
-        //public async Task ModifySamplePlan(PlanDto model)
-        //{
-        //    if (model == null) throw new ArgumentNullException(nameof(model));
-
-        //    const string tcPrefix = "TC5098";
-        //    string labLocation = "0";
-        //    string year = DateTime.UtcNow.Year.ToString()[^2..];
-
-        //    var statusJobs = new List<Func<Task>>();
-        //    await using var trx = await _context.Database.BeginTransactionAsync();
-        //    try
-        //    {
-        //        var entity = await _context.SampleInwards
-        //            .Include(i => i.SampleDetails)
-        //                .ThenInclude(sd => sd.TestPlans)
-        //                    .ThenInclude(tp => tp.GeneralTests)
-        //                        .ThenInclude(gt => gt.Methods)
-        //            .Include(i => i.SampleDetails)
-        //                .ThenInclude(sd => sd.TestPlans)
-        //                    .ThenInclude(tp => tp.ChemicalTests)
-        //                        .ThenInclude(ct => ct.Elements)
-        //            .Include(i => i.SampleDetails)
-        //                .ThenInclude(sd => sd.TestPlans)
-        //                    .ThenInclude(tp => tp.ChemicalTests)
-        //                        .ThenInclude(ct => ct.TestTypes)
-        //            .FirstOrDefaultAsync(x => x.ID == model.ID);
-
-        //        if (entity == null)
-        //            throw new Exception($"Sample Inward {model.ID} not found.");
-
-        //        entity.StatementOfConformity = model.StatementOfConformity;
-        //        entity.DecisionRule = model.DecisionRule;
-        //        entity.ModifiedOn = DateTime.UtcNow;
-
-        //        // =====================================================
-        //        // STEP 1: BUILD INCOMING ID SETS (AUTHORITATIVE)
-        //        // =====================================================
-        //        var incomingGeneralIds = model.SampleDetails
-        //            .SelectMany(s => s.TestPlans)
-        //            .SelectMany(p => p.GeneralTests)
-        //            .Where(g => g.ID > 0)
-        //            .Select(g => g.ID)
-        //            .ToHashSet();
-
-        //        var incomingChemicalIds = model.SampleDetails
-        //            .SelectMany(s => s.TestPlans)
-        //            .SelectMany(p => p.ChemicalTests)
-        //            .Where(c => c.ID > 0)
-        //            .Select(c => c.ID)
-        //            .ToHashSet();
-
-        //        // =====================================================
-        //        // STEP 2: DELETE MISSING GENERAL TESTS (FIRST)
-        //        // =====================================================
-        //        var generalToDelete = entity.SampleDetails
-        //            .SelectMany(s => s.TestPlans)
-        //            .SelectMany(p => p.GeneralTests)
-        //            .Where(gt => gt.ID > 0 && !incomingGeneralIds.Contains(gt.ID))
-        //            .ToList();
-
-        //        foreach (var gt in generalToDelete)
-        //        {
-        //            _context.GeneralTestMethods.RemoveRange(gt.Methods);
-        //            _context.GeneralTests.Remove(gt);
-        //        }
-
-        //        // =====================================================
-        //        // STEP 3: DELETE MISSING CHEMICAL TESTS
-        //        // =====================================================
-        //        var chemicalToDelete = entity.SampleDetails
-        //            .SelectMany(s => s.TestPlans)
-        //            .SelectMany(p => p.ChemicalTests)
-        //            .Where(ct => ct.ID > 0 && !incomingChemicalIds.Contains(ct.ID))
-        //            .ToList();
-
-        //        foreach (var ct in chemicalToDelete)
-        //        {
-        //            _context.ChemicalTestElements.RemoveRange(ct.Elements);
-        //            _context.ChemicalTestTypes.RemoveRange(ct.TestTypes);
-        //            _context.ChemicalTests.Remove(ct);
-        //        }
-
-
-        //        // =====================================================
-        //        // STEP 4: UPSERT PER SAMPLE / PER PLAN
-        //        // =====================================================
-        //        foreach (var sampleDto in model.SampleDetails)
-        //        {
-        //            var sample = entity.SampleDetails
-        //                .First(s => s.SampleNo == sampleDto.SampleNo);
-
-        //            // ---------- SAMPLE PROPERTY UPDATES (UNCHANGED) ----------
-        //            sample.MetalClassificationID = sampleDto.MetalClassificationID;
-        //            sample.ProductConditionID = sampleDto.ProductConditionID;
-        //            sample.PreparationRequired = sampleDto.PreparationRequired;
-        //            sample.MachiningRequired = sampleDto.MachiningRequired;
-        //            sample.MachiningAmount = sampleDto.MachiningAmount ?? 0;
-        //            sample.OtherPreparation = sampleDto.OtherPreparation;
-        //            sample.OtherPreparationCharge = sampleDto.OtherPreparationCharge ?? 0;
-        //            sample.TpiRequired = sampleDto.TpiRequired;
-        //            sample.TpiAgencyID = sampleDto.TpiAgencyID;
-
-        //            statusJobs.Add(async () =>
-        //            {
-        //                await _sampleStatusService.ForceAutoStatusAsync(
-        //                    sample.ID,
-        //                    SampleStatus.INWARD_COMPLETED,
-        //                    loggedInUser.EmployeeID
-        //                );
-        //            });
-
-        //            // =====================================================
-        //            // 🔥 NEW: DELETE EXISTING PLANS FOR THIS SAMPLE
-        //            // =====================================================
-        //            //var existingPlans = sample.TestPlans.ToList();
-
-        //            //_context.GeneralTestMethods.RemoveRange(
-        //            //    existingPlans.SelectMany(p => p.GeneralTests)
-        //            //                 .SelectMany(g => g.Methods));
-
-        //            //_context.GeneralTests.RemoveRange(
-        //            //    existingPlans.SelectMany(p => p.GeneralTests));
-
-        //            //_context.ChemicalTestElements.RemoveRange(
-        //            //    existingPlans.SelectMany(p => p.ChemicalTests)
-        //            //                 .SelectMany(c => c.Elements));
-
-        //            //_context.ChemicalTestTypes.RemoveRange(
-        //            //    existingPlans.SelectMany(p => p.ChemicalTests)
-        //            //                 .SelectMany(c => c.TestTypes));
-
-        //            //_context.ChemicalTests.RemoveRange(
-        //            //    existingPlans.SelectMany(p => p.ChemicalTests));
-
-        //            //_context.TestPlans.RemoveRange(existingPlans);
-
-        //            sample.TestPlans.Clear();
-
-        //            // =====================================================
-        //            // CREATE ONE NEW PLAN
-        //            // =====================================================
-        //            var planDto = sampleDto.TestPlans.FirstOrDefault();
-        //            if (planDto == null) continue;
-
-        //            var plan = new SampleTestPlan
-        //            {
-        //                SampleID = sample.ID,
-        //                SampleNo = sample.SampleNo,
-        //                GeneralTests = new List<GeneralTest>(),
-        //                ChemicalTests = new List<ChemicalTest>()
-        //            };
-
-        //            sample.TestPlans.Add(plan);
-
-        //            int ulrCounter = 1;
-
-        //            // ---------- GENERAL TEST (ONLY ONE) ----------
-        //            if (planDto.GeneralTests?.Any() == true)
-        //            {
-        //                var gDto = planDto.GeneralTests.First();
-
-        //                var general = new GeneralTest
-        //                {
-        //                    Specification1 = gDto.Specification1,
-        //                    Specification2 = gDto.Specification2,
-        //                    Methods = new List<GeneralTestMethod>()
-        //                };
-
-        //                foreach (var mDto in gDto.Methods)
-        //                {
-        //                    general.Methods.Add(new GeneralTestMethod
-        //                    {
-        //                        LaboratoryTestID = mDto.TestMethodID ?? 0,
-        //                        TestCaseID = mDto.TestCaseID ?? 0,
-        //                        StandardID = mDto.StandardID ?? 0,
-        //                        Quantity = mDto.Quantity,
-        //                        ReportNo = string.IsNullOrWhiteSpace(mDto.ReportNo) ? $"{sample.SampleNo}-{ulrCounter}": mDto.ReportNo,
-        //                        UlrNo = GenerateUlr(mDto.UlrNo, tcPrefix, year, labLocation, sample.SampleNo, ref ulrCounter),
-        //                        Cancel = mDto.Cancel
-        //                    });
-        //                }
-
-        //                plan.GeneralTests.Add(general);
-        //            }
-
-        //            // ---------- CHEMICAL TEST (ONLY ONE) ----------
-        //            if (planDto.ChemicalTests?.Any() == true)
-        //            {
-        //                var cDto = planDto.ChemicalTests.First();
-
-        //                var chem = new ChemicalTest
-        //                {
-        //                    Specification1 = cDto.Specification1,
-        //                    Specification2 = cDto.Specification2,
-        //                    TestMethod = cDto.TestMethod,
-        //                    ReportNo = string.IsNullOrWhiteSpace(cDto.ReportNo)? $"{sample.SampleNo}-C": cDto.ReportNo,
-        //                    UlrNo = GenerateUlr(cDto.UlrNo, tcPrefix, year, labLocation, sample.SampleNo, ref ulrCounter),
-        //                    Elements = new List<ChemicalTestElement>(),
-        //                    TestTypes = new List<ChemicalTestType>()
-        //                };
-
-        //                foreach (var e in cDto.Elements)
-        //                {
-        //                    chem.Elements.Add(new ChemicalTestElement
-        //                    {
-        //                        ParameterID = e.ParameterID,
-        //                        SpecificationLineID = e.SpecificationLineID,
-        //                        ParameterUnitID = e.ParameterUnitID,
-        //                        ParameterUnit = e.ParameterUnit,
-        //                        MinValue = e.MinValue,
-        //                        MaxValue = e.MaxValue,
-        //                        Selected = e.Selected
-        //                    });
-        //                }
-
-        //                foreach (var kvp in cDto.TestTypes)
-        //                {
-        //                    if (!long.TryParse(kvp.Key, out var labTestId)) continue;
-
-        //                    var labTest = await _context.LaboratoryTests
-        //                        .FirstOrDefaultAsync(x => x.ID == labTestId);
-
-        //                    chem.TestTypes.Add(new ChemicalTestType
-        //                    {
-        //                        LaboratoryTestID = labTestId,
-        //                        Name = labTest?.Name ?? "",
-        //                        IsSelected = kvp.Value
-        //                    });
-        //                }
-
-        //                plan.ChemicalTests.Add(chem);
-        //            }
-        //        }
-
-
-        //        // =====================================================
-        //        // STEP 5: DELETE EMPTY PLANS (LAST, SAFE)
-        //        // =====================================================
-        //        var emptyPlans = entity.SampleDetails
-        //            .SelectMany(s => s.TestPlans)
-        //            .Where(p => !p.GeneralTests.Any() && !p.ChemicalTests.Any())
-        //            .ToList();
-
-        //        _context.TestPlans.RemoveRange(emptyPlans);
-
-        //        await _context.SaveChangesAsync();
-        //        await trx.CommitAsync();
-
-        //        foreach (var job in statusJobs)
-        //        {
-        //            await job();
-        //        }
-        //        await _sampleStatusService.UpdateInwardStatus(entity.ID, InwardStatus.INWARD_COMPLETED, loggedInUser.EmployeeID);
-        //    }
-        //    catch
-        //    {
-        //        await trx.RollbackAsync();
-        //        throw;
-        //    }
-        //}
 
         public async Task ModifySamplePlan(PlanDto model)
         {
@@ -922,7 +681,10 @@ namespace LIMSApi.Services
             string year = DateTime.UtcNow.Year.ToString()[^2..];
 
             var statusJobs = new List<Func<Task>>();
-            await using var trx = await _context.Database.BeginTransactionAsync();
+
+            // If caller (e.g. SubmitPlanForReview) already started a transaction, reuse it
+            var ownsTransaction = _context.Database.CurrentTransaction == null;
+            var trx = ownsTransaction ? await _context.Database.BeginTransactionAsync() : null;
 
             try
             {
@@ -1139,9 +901,11 @@ namespace LIMSApi.Services
                             });
                         }
 
+                        var addedLabTestIds = new HashSet<long>();
                         foreach (var kvp in cDto.TestTypes)
                         {
                             if (!long.TryParse(kvp.Key, out var labTestId)) continue;
+                            if (!addedLabTestIds.Add(labTestId)) continue; // skip duplicates
 
                             var labTest = await _context.LaboratoryTests
                                 .FirstOrDefaultAsync(x => x.ID == labTestId);
@@ -1179,7 +943,7 @@ namespace LIMSApi.Services
                 }
 
                 await _context.SaveChangesAsync();
-                await trx.CommitAsync();
+                if (ownsTransaction && trx != null) await trx.CommitAsync();
 
                 foreach (var job in statusJobs)
                     await job();
@@ -1191,8 +955,12 @@ namespace LIMSApi.Services
             }
             catch
             {
-                await trx.RollbackAsync();
+                if (ownsTransaction && trx != null) await trx.RollbackAsync();
                 throw;
+            }
+            finally
+            {
+                if (ownsTransaction && trx != null) await trx.DisposeAsync();
             }
         }
 
@@ -1211,25 +979,32 @@ namespace LIMSApi.Services
 
         public async Task SubmitPlanForReview(PlanDto model)
         {
+            // Pre-check: Verify "Request Review" workflow exists BEFORE making any changes.
+            var reviewEntityType = WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Request_Review);
+            var workflowExists = await _workflowService.WorkflowExistsForEntityType(reviewEntityType);
+            if (!workflowExists)
+                throw new InvalidOperationException(
+                    "Cannot submit for review: No 'Request Review' workflow is configured. " +
+                    "Please ask an administrator to set up the review workflow before submitting plans.");
+
+            // Validate: at least one sample must have a plan with at least one test
+            var hasAnyTest = model.SampleDetails?.Any(s =>
+                s.TestPlans?.Any(tp =>
+                    (tp.GeneralTests?.Any(gt => gt.Methods?.Any(m => m.Cancel != true) == true) == true) ||
+                    (tp.ChemicalTests?.Any(ct => ct.TestTypes?.Any(t => t.Value) == true || ct.Elements?.Count > 0) == true)
+                ) == true
+            ) == true;
+
+            if (!hasAnyTest)
+                throw new InvalidOperationException("Cannot submit for review: At least one test (General or Chemical) must be added to the plan.");
+
+            await using var trx = await _context.Database.BeginTransactionAsync();
             try
             {
-                // Pre-check: Verify "Request Review" workflow exists BEFORE making any changes.
-                // Without this, plan data gets saved but workflow creation fails,
-                // leaving the system in an inconsistent state (PlanStatus="Submitted" with nothing to approve).
-                var reviewEntityType = WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Request_Review);
-                var workflowExists = await _workflowService.WorkflowExistsForEntityType(reviewEntityType);
-                if (!workflowExists)
-                    throw new InvalidOperationException(
-                        "Cannot submit for review: No 'Request Review' workflow is configured. " +
-                        "Please ask an administrator to set up the review workflow before submitting plans.");
-
                 await ModifySamplePlan(model);
-
-
                 var entity = await _SampleInwardRepository.GetSampleInwardWithPlans(model.ID);
                 if (entity == null)
                     throw new Exception("Sample Inward not found");
-
 
                 entity.ReviewStatus = "Pending for Approval";
                 entity.ReviewedBy = loggedInUser.EmployeeID;
@@ -1279,10 +1054,13 @@ namespace LIMSApi.Services
                     await job();
                 }
                 await _sampleStatusService.UpdateInwardStatus(entity.ID, InwardStatus.UNDER_REVIEW, loggedInUser.EmployeeID);
+
+                await trx.CommitAsync();
                 _logger.LogInformation("Plan submitted for review for inward {ID}", model.ID);
             }
-            catch (Exception ex)
+            catch
             {
+                await trx.RollbackAsync();
                 throw;
             }
         }
@@ -1587,7 +1365,9 @@ namespace LIMSApi.Services
                         SampleNo = s.SampleNo,
                         Details = s.Details,
                         MetalClassificationID = s.MetalClassificationID,
+                        MetalClassificationName = s.MetalClassification?.Name,
                         ProductConditionID = s.ProductConditionID,
+                        ProductConditionName = s.ProductCondition?.Name,
                         ProductFormID = s.ProductFormID,
                         SpecimenOrientationID = s.SpecimenOrientationID,
                         Remarks = s.Remarks,
@@ -1659,9 +1439,12 @@ namespace LIMSApi.Services
                             SampleTestPlanID = ct.SampleTestPlanID,
                             ReportNo = ct.ReportNo,
                             UlrNo = ct.UlrNo,
+                            MetalClassificationID = ct.MetalClassificationID,
                             Specification1 = ct.Specification1,
                             Specification2 = ct.Specification2,
-                            TestTypes = ct.TestTypes.ToDictionary(tt => tt.LaboratoryTestID?.ToString() ?? tt.Name, tt => tt.IsSelected),
+                            TestTypes = ct.TestTypes
+                                .GroupBy(tt => tt.LaboratoryTestID.ToString())
+                                .ToDictionary(g => g.Key, g => g.First().IsSelected),
                             Elements = ct.Elements.Select(e => new ChemicalTestElementDto
                             {
                                 ID = e.ID,

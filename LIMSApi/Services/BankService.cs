@@ -44,10 +44,6 @@ namespace LIMSApi.Services
             model.IFSCCode = model.IFSCCode.Trim().ToUpper();
             model.BranchName = model.BranchName.Trim();
 
-            bool exists = await _bankRepository.ExistsByName(model.BankName);
-            if (exists)
-                throw new InvalidOperationException("Bank already exists!");
-
             bool accountExists = await _bankRepository.ExistsByAccountNumber(model.AccountNumber.Trim());
             if (accountExists)
                 throw new InvalidOperationException("A bank with this account number already exists!");
@@ -84,10 +80,6 @@ namespace LIMSApi.Services
             model.AccountHolderName = model.AccountHolderName.Trim();
             model.IFSCCode = model.IFSCCode.Trim().ToUpper();
             model.BranchName = model.BranchName.Trim();
-
-            bool exists = await _bankRepository.ExistsByNameAndNotId(model.BankName, model.ID);
-            if (exists)
-                throw new InvalidOperationException("Same Bank already exists!");
 
             bool accountExists = await _bankRepository.ExistsByAccountNumberAndNotId(model.AccountNumber.Trim(), model.ID);
             if (accountExists)

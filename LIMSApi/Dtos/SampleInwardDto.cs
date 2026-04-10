@@ -108,7 +108,9 @@ namespace LIMSApi.Dtos
         public string SampleNo { get; set; }
         public string Details { get; set; }
         public long? MetalClassificationID { get; set; }
+        public string? MetalClassificationName { get; set; }
         public long? ProductConditionID { get; set; }
+        public string? ProductConditionName { get; set; }
         public long? ProductFormID { get; set; }
         public long? SpecimenOrientationID { get; set; }
         public string? Remarks { get; set; }
@@ -197,6 +199,8 @@ namespace LIMSApi.Dtos
         public string? ReportNo { get; set; } = "";
         public string? UlrNo { get; set; } = "";
         public Dictionary<string, bool> TestTypes { get; set; } = new();
+        public long? MetalClassificationID { get; set; }
+        public string? MetalClassificationName { get; set; }
         public long? Specification1 { get; set; }
         public long? Specification2 { get; set; }
         public List<ChemicalTestElementDto> Elements { get; set; } = new();

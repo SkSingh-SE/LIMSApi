@@ -105,6 +105,7 @@ namespace LIMSApi.Repositories
                 // ===========================
                 var piTestDetails = new List<ProformaInvoiceDetail>();
                 decimal totalTestAmount = 0;
+                var pricingErrors = new List<string>();
 
                 var sampleDetails = await _context.SampleDetails
                     .Where(x => x.InwardID == inwardId)
@@ -134,7 +135,8 @@ namespace LIMSApi.Repositories
                                         method.LaboratoryTestID,
                                         gt,
                                         method,
-                                        plan.ID
+                                        plan.ID,
+                                        sd
                                     );
 
                                     var amount = rate * method.Quantity;
@@ -153,10 +155,12 @@ namespace LIMSApi.Repositories
                                         InvoiceCaseConfigID = configId
                                     });
                                 }
-                                catch
+                                catch (Exception ex)
                                 {
-                                    // Log error and continue with next method
-                                    // You may want to add logging here
+                                    System.Diagnostics.Debug.WriteLine(
+                                        $"[PI] GeneralTest pricing FAILED for LabTestID={method.LaboratoryTestID}, " +
+                                        $"Method={method.ID}, Plan={plan.ID}: {ex.Message}");
+                                    pricingErrors.Add($"Test LabID={method.LaboratoryTestID}: {ex.Message}");
                                     continue;
                                 }
                             }
@@ -197,10 +201,11 @@ namespace LIMSApi.Repositories
                                         InvoiceCaseConfigID = configId
                                     });
                                 }
-                                catch
+                                catch (Exception ex)
                                 {
-                                    // Log error and continue with next test type
-                                    // You may want to add logging here
+                                    System.Diagnostics.Debug.WriteLine(
+                                        $"[PI] ChemicalTest pricing FAILED for LabTestID={tt.LaboratoryTestID}: {ex.Message}");
+                                    pricingErrors.Add($"Chemical LabID={tt.LaboratoryTestID}: {ex.Message}");
                                     continue;
                                 }
                             }
@@ -213,6 +218,25 @@ namespace LIMSApi.Repositories
                 //  5. GRAND TOTAL (with customer discount)
                 // ===========================
                 var subTotal = cuttingAmount + machiningAmount + totalTestAmount;
+
+                // Warn if no test pricing found — PI will be ₹0 for test charges
+                if (totalTestAmount == 0 && piTestDetails.Count == 0)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[PI Generation] WARNING: No test pricing found for Inward {inwardId}. " +
+                        "Check InvoiceCaseConfiguration for matching test entries.");
+                }
+
+                if (subTotal <= 0)
+                {
+                    var errorDetail = pricingErrors.Any()
+                        ? " Errors: " + string.Join("; ", pricingErrors)
+                        : "";
+                    throw new InvalidOperationException(
+                        "Cannot generate Proforma Invoice: Total amount is ₹0. " +
+                        "Please configure pricing (Invoice Case Configuration) for the planned tests." +
+                        errorDetail);
+                }
 
                 // Customer discount (applied before GST — standard Indian taxation)
                 decimal discountPct = 0;
@@ -333,20 +357,74 @@ namespace LIMSApi.Repositories
             long laboratoryTestId,
             GeneralTest generalTest,
             GeneralTestMethod method,
-            long testPlanId)
+            long testPlanId,
+            SampleDetail? sample = null)
         {
-            // Get all InvoiceCaseConfigurations linked to this LaboratoryTest
-            var configs = await _context.LaboratoryTestInvoiceCase
-                .Where(lt => lt.LabTestID == laboratoryTestId)
-                .Include(lt => lt.InvoiceCaseConfiguration)
-                .Where(lt => lt.InvoiceCaseConfiguration != null && lt.InvoiceCaseConfiguration.IsActive)
-                .Select(lt => lt.InvoiceCaseConfiguration!)
+            // Get current financial year
+            var currentFY = await _context.FinancialYears.FirstOrDefaultAsync(f => f.IsCurrent);
+
+            // Get InvoiceCase for this test + current FY (source of truth for pricing)
+            var invoiceCase = await _context.InvoiceCases
+                .Where(ic => ic.LaboratoryTestID == laboratoryTestId && ic.IsActive
+                    && (currentFY == null || ic.FinancialYearId == currentFY.Id))
+                .FirstOrDefaultAsync();
+
+            // Fallback: any active InvoiceCase for this test (regardless of FY)
+            if (invoiceCase == null)
+                invoiceCase = await _context.InvoiceCases
+                    .Where(ic => ic.LaboratoryTestID == laboratoryTestId && ic.IsActive)
+                    .OrderByDescending(ic => ic.ID)
+                    .FirstOrDefaultAsync();
+
+            if (invoiceCase == null)
+                throw new Exception($"No Invoice Case found for LaboratoryTest {laboratoryTestId}");
+
+            // Get all prices for this InvoiceCase (FY-specific prices)
+            var allPrices = await _context.InvoiceCasePrices
+                .Where(p => p.InvoiceCaseID == invoiceCase.ID)
+                .Include(p => p.Configuration)
+                .Where(p => p.Configuration != null)
                 .ToListAsync();
 
-            if (!configs.Any())
-                throw new Exception($"No pricing configuration found for LaboratoryTest {laboratoryTestId}");
+            if (!allPrices.Any())
+                throw new Exception($"No pricing entries found for LaboratoryTest {laboratoryTestId} in current financial year");
 
-            // Get SpecificationLines for this GeneralTest (mechanical type)
+            // ── Priority 1: SizeAndLoad — use sample dimensions ──
+            if (sample != null)
+            {
+                decimal sizeValue = sample.Diameter ?? sample.Thickness ?? sample.Width ?? 0;
+                if (sizeValue > 0)
+                {
+                    var sizeLoadPrices = allPrices.Where(p =>
+                        p.Configuration!.SelectionType == "SizeAndLoad"
+                        || p.Configuration.SelectionType == "SizeLoad"
+                        || p.Configuration.SelectionType == "Size with load").ToList();
+
+                    foreach (var price in sizeLoadPrices)
+                    {
+                        decimal.TryParse(price.Configuration!.Start, out var start);
+                        decimal.TryParse(price.Configuration.End, out var end);
+                        if (sizeValue >= start && (end == 0 || sizeValue <= end))
+                            return (price.Price, price.InvoiceCaseConfigID, price.Configuration.SelectionType, sizeValue);
+                    }
+                }
+            }
+
+            // ── Priority 2: FlatRate / Flat / Other ──
+            var flatPrice = allPrices.FirstOrDefault(p =>
+                p.Configuration!.SelectionType == "FlatRate"
+                || p.Configuration.SelectionType == "Flat"
+                || p.Configuration.SelectionType == "Other");
+            if (flatPrice != null)
+                return (flatPrice.Price, flatPrice.InvoiceCaseConfigID, flatPrice.Configuration!.SelectionType, null);
+
+            // ── Priority 3: Hours ──
+            var hoursPrice = allPrices.FirstOrDefault(p =>
+                p.Configuration!.SelectionType == "Hours");
+            if (hoursPrice != null)
+                return (hoursPrice.Price, hoursPrice.InvoiceCaseConfigID, hoursPrice.Configuration!.SelectionType, null);
+
+            // ── Priority 4: Element-based (use specification lines) ──
             var specificationLines = await _context.SpecificationLines
                 .Where(sl => (sl.SpecificationGradeID == generalTest.Specification1 ||
                              (generalTest.Specification2.HasValue && sl.SpecificationGradeID == generalTest.Specification2.Value))
@@ -355,14 +433,12 @@ namespace LIMSApi.Repositories
                 .Include(sl => sl.Parameter)
                 .ToListAsync();
 
-            // Get sample ID from the test plan
             var testPlan = await _context.TestPlans
                 .FirstOrDefaultAsync(tp => tp.ID == testPlanId);
 
             if (testPlan == null)
                 throw new Exception($"TestPlan {testPlanId} not found");
 
-            // Try to get TestResultParameter values if test results are available
             var testResultHeader = await _context.TestResultHeaders
                 .Where(trh => trh.LaboratoryTestID == laboratoryTestId
                              && trh.TestPlanID == testPlanId
@@ -370,7 +446,9 @@ namespace LIMSApi.Repositories
                 .Include(trh => trh.Parameters)
                 .FirstOrDefaultAsync();
 
-            // For each configuration, try to find matching parameter and calculate rate
+            // Get distinct configs from FY-filtered prices
+            var configs = allPrices.Select(p => p.Configuration!).DistinctBy(c => c.ID).ToList();
+
             foreach (var config in configs.OrderBy(c => c.SelectionType))
             {
                 try
@@ -384,13 +462,9 @@ namespace LIMSApi.Repositories
 
                     if (parameterValue.HasValue)
                     {
-                        var (rate, configId) = await MatchConfigAndGetRateAsync(
-                            laboratoryTestId,
-                            config,
-                            parameterValue.Value
-                        );
-
-                        return (rate, configId, config.SelectionType, parameterValue.Value);
+                        var matchingPrice = allPrices.FirstOrDefault(p => p.InvoiceCaseConfigID == config.ID);
+                        if (matchingPrice != null)
+                            return (matchingPrice.Price, config.ID, config.SelectionType, parameterValue.Value);
                     }
                 }
                 catch
@@ -398,6 +472,11 @@ namespace LIMSApi.Repositories
                     continue;
                 }
             }
+
+            // Last resort: return first available price from this FY
+            var anyPrice = allPrices.FirstOrDefault();
+            if (anyPrice != null)
+                return (anyPrice.Price, anyPrice.InvoiceCaseConfigID, anyPrice.Configuration?.SelectionType, null);
 
             throw new Exception($"No matching pricing configuration found for LaboratoryTest {laboratoryTestId} with available parameters");
         }
@@ -572,10 +651,6 @@ namespace LIMSApi.Repositories
                     };
                 }
 
-                //var html = BuildHtml(pi);
-                //var result = ConvertHtmlToPdf(html);
-                //return result;
-
                 // Fetch GST config for state code
                 var pdfGstConfig = await _context.GstConfigs.FirstOrDefaultAsync();
 
@@ -623,103 +698,6 @@ namespace LIMSApi.Repositories
                 throw;
             }
         }
-
-        //private string BuildHtml(ProformaInvoiceHeader pi)
-        //{
-        //    var templatePath = Path.Combine(
-        //        Directory.GetCurrentDirectory(), "Templates", "PI_Template.html");
-
-        //    var html = File.ReadAllText(templatePath);
-
-        //    var logoPath = Path.Combine(
-        //        Directory.GetCurrentDirectory(), "Assets", "logo.png");
-
-        //    var signPath = Path.Combine(
-        //        Directory.GetCurrentDirectory(), "Assets", "signature.png");
-
-        //    html = html
-        //        .Replace("{{LogoPath}}", $"file:///{logoPath.Replace("\\", "/")}")
-        //        .Replace("{{SignaturePath}}", $"file:///{signPath.Replace("\\", "/")}")
-        //        .Replace("{{InvoiceNo}}", pi.PINo)
-        //        .Replace("{{InvoiceDate}}", pi.PIDate.ToString("dd-MM-yyyy"))
-        //        .Replace("{{CustomerName}}", pi.SampleInward.Customer.Name)
-        //        .Replace("{{CustomerAddress}}", pi.SampleInward.Address)
-        //        .Replace("{{CustomerGST}}", pi.SampleInward.GstNo)
-        //        .Replace("{{State}}", pi.SampleInward.State)
-        //        .Replace("{{StateCode}}", "24")
-        //        .Replace("{{ReceivedDate}}", pi.SampleInward.CreatedOn.ToString("dd-MM-yyyy"))
-        //        .Replace("{{RefNo}}", pi.SampleInward.CaseNo)
-        //        .Replace("{{PI_ROWS}}", BuildPIRows(pi))
-        //        .Replace("{{SubTotal}}", pi.SubTotal.ToString("0.00"))
-        //        .Replace("{{CGST}}", pi.CGST.ToString("0.00"))
-        //        .Replace("{{SGST}}", pi.SGST.ToString("0.00"))
-        //        .Replace("{{IGST}}", pi.IGST.ToString("0.00"))
-        //        .Replace("{{GrandTotal}}", pi.GrandTotal.ToString("0.00"))
-        //        .Replace("{{AmountInWords}}", NumberToWords((long)pi.GrandTotal));
-
-        //    return html;
-        //}
-        //private string BuildPIRows(ProformaInvoiceHeader pi)
-        //{
-        //    var rows = "";
-
-        //    var details = pi.Details?.ToList();
-
-        //    //  Fallback dummy rows if empty
-        //    if (details == null || !details.Any())
-        //    {
-        //        return @"
-        //<tr>
-        //    <td>1</td>
-        //    <td>Sample Machining Charges</td>
-        //    <td class='center'>1</td>
-        //    <td class='right'>500.00</td>
-        //    <td class='right'>500.00</td>
-        //</tr>
-        //<tr>
-        //    <td>2</td>
-        //    <td>Chemical Testing Charges</td>
-        //    <td class='center'>1</td>
-        //    <td class='right'>500.00</td>
-        //    <td class='right'>500.00</td>
-        //</tr>";
-        //    }
-
-        //    foreach (var d in details)
-        //    {
-        //        rows += $@"
-        //<tr>
-        //    <td>{d.SampleID}</td>
-        //    <td>{d.Description}</td>
-        //    <td class='center'>{d.Quantity}</td>
-        //    <td class='right'>{d.Rate:0.00}</td>
-        //    <td class='right'>{d.Amount:0.00}</td>
-        //</tr>";
-        //    }
-
-        //    return rows;
-        //}
-
-
-        ////  Convert HTML to PDF
-        //private byte[] ConvertHtmlToPdf(string html)
-        //{
-        //    var doc = new HtmlToPdfDocument()
-        //    {
-        //        GlobalSettings = {
-        //        PaperSize = PaperKind.A4,
-        //        Orientation = Orientation.Portrait
-        //    },
-        //        Objects = {
-        //        new ObjectSettings {
-        //            HtmlContent = html,
-        //            WebSettings = { DefaultEncoding = "utf-8" }
-        //        }
-        //    }
-        //    };
-
-        //    return _converter.Convert(doc);
-        //}
 
         private string NumberToWords(long number)
         {

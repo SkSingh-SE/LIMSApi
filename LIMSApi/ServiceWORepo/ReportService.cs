@@ -100,6 +100,7 @@ namespace LIMSApi.ServiceWORepo
                             AmendmentRequestId = amendment != null ? amendment.ID : 0L,
                             sampleId = sample.ID,
                             sample.SampleNo,
+                            InwardId = inward.ID,
                             inward.CaseNo,
                             inward.CustomerID,
                             Customer = inward.Customer != null
@@ -730,7 +731,7 @@ namespace LIMSApi.ServiceWORepo
             {
                 TestResultHeaderId = test.headerId,
                 TestName = testName,
-                TestMethod = test.standard,
+                TestMethod = test.standardName != null ? (string?)test.standardName : (test.standard != null ? test.standard.ToString() : null),
                 ReportNo = test.reportNo,
                 Specification1Name = test.specfication1Name,
                 Specification2Name = test.specfication2Name,

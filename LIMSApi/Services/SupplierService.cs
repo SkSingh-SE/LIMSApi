@@ -101,6 +101,10 @@ namespace LIMSApi.Services
             existingSupplier.EmailId3 = model.EmailId3;
             existingSupplier.ProductType = model.ProductType;
             existingSupplier.Address = model.Address;
+            existingSupplier.IsBlacklisted = model.IsBlacklisted;
+            existingSupplier.ReasonForBlacklisting = model.ReasonForBlacklisting;
+            existingSupplier.BlacklistDate = model.BlacklistDate;
+            existingSupplier.BlacklistedBy = model.BlacklistedBy;
 
             existingSupplier.ModifiedOn = DateTime.UtcNow;
 
