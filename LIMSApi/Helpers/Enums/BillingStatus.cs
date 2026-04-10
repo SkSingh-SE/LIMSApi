@@ -7,6 +7,7 @@ namespace LIMSApi.Helpers.Enums
     {
         PRICE_DRAFTED,
         PI_GENERATED,
+        ADVANCE_PAID,
         PRICE_SNAPSHOT,
         INVOICE_GENERATED,
         PAYMENT_PENDING,

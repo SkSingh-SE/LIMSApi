@@ -13,12 +13,14 @@ namespace LIMSApi.ServiceWORepo
         private readonly LIMSContext _db;
         private readonly BillingSettlementService _billingSettlement;
         private readonly INotificationService _notificationService;
+        private readonly ISampleStatusService _sampleStatusService;
 
-        public CustomerLedgerService(LIMSContext db, BillingSettlementService billingSettlement, INotificationService notificationService)
+        public CustomerLedgerService(LIMSContext db, BillingSettlementService billingSettlement, INotificationService notificationService, ISampleStatusService sampleStatusService)
         {
             _db = db;
             _billingSettlement = billingSettlement;
             _notificationService = notificationService;
+            _sampleStatusService = sampleStatusService;
         }
 
         // ===== LEDGER OPERATIONS =====
@@ -132,12 +134,16 @@ namespace LIMSApi.ServiceWORepo
             if (customer == null)
                 throw new Exception("Customer not found");
 
+            // Normalize date range: include full toDate day (end of day)
+            var fromDateStart = fromDate.Date;
+            var toDateEnd = toDate.Date.AddDays(1).AddTicks(-1);
+
             var openingBalance = await _db.CustomerLedgers
-                .Where(x => x.CustomerId == customerId && x.IsActive && x.Date < fromDate)
+                .Where(x => x.CustomerId == customerId && x.IsActive && x.Date < fromDateStart)
                 .SumAsync(x => x.DebitAmount - x.CreditAmount);
 
             var entries = await _db.CustomerLedgers
-                .Where(x => x.CustomerId == customerId && x.IsActive && x.Date >= fromDate && x.Date <= toDate)
+                .Where(x => x.CustomerId == customerId && x.IsActive && x.Date >= fromDateStart && x.Date <= toDateEnd)
                 .OrderBy(x => x.Date).ThenBy(x => x.Id)
                 .Select(x => new CustomerLedgerEntryDto
                 {
@@ -344,6 +350,54 @@ namespace LIMSApi.ServiceWORepo
                 dto.TransactionRef,
                 dto.InwardId
             );
+
+            // ── ADVANCE PAYMENT DETECTION ──
+            // If payment is against an inward that has no final invoice yet, treat as advance payment
+            if (dto.InwardId.HasValue && (dto.InvoiceIds == null || !dto.InvoiceIds.Any()))
+            {
+                var inward = await _db.SampleInwards
+                    .Include(i => i.SampleDetails)
+                    .FirstOrDefaultAsync(i => i.ID == dto.InwardId.Value);
+
+                if (inward != null && !inward.IsInvoiceGenerated)
+                {
+                    // Check if PI exists for this inward (advance is only against PI)
+                    var piExists = await _db.ProformaInvoiceHeader
+                        .AnyAsync(pi => pi.InwardID == inward.ID && pi.IsActive);
+
+                    if (piExists)
+                    {
+                        // Accumulate advance payment on inward
+                        inward.AdvancePayment += dto.Amount;
+                        inward.PIReceived = true;
+                        inward.BillingStatus = Helpers.Enums.BillingStatus.ADVANCE_PAID.ToString();
+
+                        // Update sample status ONLY if not already past testing stage
+                        // Never overwrite: TESTING_*, REPORT_*, FINAL_REPORT_APPROVED, PAYMENT_*, COMPLETED, CASE_CLOSED
+                        var lateStatuses = new HashSet<string>
+                        {
+                            "TESTING_IN_PROGRESS", "TESTING_COMPLETED", "TESTING_UNDER_VERIFICATION",
+                            "TESTING_VERIFIED", "TESTING_VERIFICATION_REJECTED",
+                            "REPORT_GENERATION_IN_PROGRESS", "REPORT_GENERATED", "REPORT_UNDER_REVIEW",
+                            "REPORT_REJECTED_BY_INTERNAL", "FINAL_REPORT_APPROVED", "REPORT_DISPATCHED",
+                            "PAYMENT_PENDING", "PAYMENT_COMPLETED", "COMPLETED", "CASE_CLOSED"
+                        };
+                        var employeeId = LoggedInUserProvider.CurrentUser?.EmployeeID ?? 0;
+                        foreach (var sample in inward.SampleDetails.Where(s => s.IsActive))
+                        {
+                            if (!lateStatuses.Contains(sample.SampleStatus ?? ""))
+                            {
+                                await _sampleStatusService.ForceAutoStatusAsync(
+                                    sample.ID,
+                                    Helpers.Enums.SampleStatus.ADVANCE_PAYMENT_COMPLETED,
+                                    employeeId);
+                            }
+                        }
+
+                        await _db.SaveChangesAsync();
+                    }
+                }
+            }
 
             // Unified billing settlement — single source of truth
             if (dto.InwardId.HasValue)

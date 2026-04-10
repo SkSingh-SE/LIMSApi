@@ -9,6 +9,8 @@
         public string CustomerType { get; set; } = null!;
         public string PIStatus { get; set; } = null!;
         public string InvoiceStatus { get; set; } = null!;
+        public string BillingStatus { get; set; } = "";
+        public string ReportStatus { get; set; } = "";
         public bool HasPendingPayment { get; set; }
 
         // PI details (null if not generated)

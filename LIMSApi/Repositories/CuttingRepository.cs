@@ -26,6 +26,12 @@ namespace LIMSApi.Repositories
 
             try
             {
+                // Sanitize FK values: 0 is not a valid FK, convert to null
+                foreach (var sample in model.Samples ?? Enumerable.Empty<CuttingChargeSample>())
+                {
+                    if (sample.MetalClassificationID == 0) sample.MetalClassificationID = null;
+                    if (sample.SpecimenTypeId == 0) sample.SpecimenTypeId = null;
+                }
 
                 await _context.CuttingChargeHeaders.AddAsync(model);
                 await _context.SaveChangesAsync();
@@ -162,6 +168,13 @@ namespace LIMSApi.Repositories
 
             try
             {
+                // Sanitize FK values: 0 is not a valid FK, convert to null
+                foreach (var sample in model.Samples ?? Enumerable.Empty<CuttingChargeSample>())
+                {
+                    if (sample.MetalClassificationID == 0) sample.MetalClassificationID = null;
+                    if (sample.SpecimenTypeId == 0) sample.SpecimenTypeId = null;
+                }
+
                 // Detach any tracked instances to avoid "entity already tracked" errors
                 _context.ChangeTracker.Clear();
 

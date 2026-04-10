@@ -57,13 +57,21 @@ namespace LIMSApi.ServiceWORepo
             if (hasPendingAmendments)
                 return (false, "Pending amendments exist. All amendments must be resolved before case closure.");
 
-            // Check if all samples have reports dispatched
-            var allSamplesDispatched = inward.SampleDetails.All(s =>
-                s.SampleStatus == SampleStatus.REPORT_DISPATCHED.ToString() ||
-                s.SampleStatus == SampleStatus.CASE_CLOSED.ToString());
+            // Check if all samples have completed the report/payment lifecycle
+            var closableStatuses = new HashSet<string>
+            {
+                SampleStatus.FINAL_REPORT_APPROVED.ToString(),
+                SampleStatus.REPORT_DISPATCHED.ToString(),
+                SampleStatus.PAYMENT_PENDING.ToString(),
+                SampleStatus.PAYMENT_COMPLETED.ToString(),
+                SampleStatus.CASE_CLOSED.ToString(),
+                SampleStatus.ADVANCE_PAYMENT_COMPLETED.ToString()
+            };
+            var allSamplesReady = inward.SampleDetails.Where(s => s.IsActive).All(s =>
+                closableStatuses.Contains(s.SampleStatus ?? ""));
 
-            if (!allSamplesDispatched)
-                return (false, "Not all reports have been dispatched. All reports must be dispatched before case closure.");
+            if (!allSamplesReady)
+                return (false, "Not all samples have completed reporting/payment. All reports must be approved before case closure.");
 
             // Check all reports are in Approved or Dispatched status (NABL Clause 7.8)
             var reportHeaders = await _db.ReportHeaders
@@ -71,7 +79,7 @@ namespace LIMSApi.ServiceWORepo
                 .ToListAsync();
 
             var pendingReports = reportHeaders
-                .Where(r => r.Status != "Approved" && r.Status != "Dispatched" && r.Status != "Generated")
+                .Where(r => r.Status != "Approved" && r.Status != "Completed" && r.Status != "Dispatched" && r.Status != "Generated")
                 .ToList();
 
             if (pendingReports.Any())

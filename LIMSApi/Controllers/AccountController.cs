@@ -86,8 +86,15 @@ namespace LIMSApi.Controllers
         }
 
         // -----------------------------------
-        // ZONE 4: SEND INVOICE
+        // ZONE 4: INVOICE DETAILS & SEND
         // -----------------------------------
+        [HttpGet("invoices/{invoiceId}")]
+        public async Task<IActionResult> GetInvoiceDetails(long invoiceId)
+        {
+            var result = await _accountService.GetInvoiceDetailsAsync(invoiceId);
+            return Ok(result);
+        }
+
         [HttpPost("invoices/{invoiceId}/send")]
         public async Task<IActionResult> SendInvoice(long invoiceId, bool email = true, bool whatsapp = false)
         {
@@ -168,6 +175,13 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> GetLineItems(long proformaInvoiceHeaderId)
         {
             var result = await _accountService.GetLineItemsAsync(proformaInvoiceHeaderId);
+            return Ok(result);
+        }
+
+        [HttpGet("tax-invoice-line-items/{taxInvoiceId}")]
+        public async Task<IActionResult> GetLineItemsByTaxInvoice(long taxInvoiceId)
+        {
+            var result = await _accountService.GetLineItemsByTaxInvoiceIdAsync(taxInvoiceId);
             return Ok(result);
         }
 

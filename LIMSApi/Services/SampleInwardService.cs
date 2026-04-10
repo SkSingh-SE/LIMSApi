@@ -238,19 +238,30 @@ namespace LIMSApi.Services
                 }
                 // Validate mandatory information
                 var isComplete = ValidateMandatoryInformation(entity);
-                
-                await _SampleInwardRepository.AddSampleInward(entity);
-                _logger.LogInformation("SampleInward '{Case}' created successfully.", model.CaseNo);
 
-                // Process queued jobs
-                foreach (var job in statusJobs)
+                await using var trx = await _context.Database.BeginTransactionAsync();
+                try
                 {
-                    await job();
-                }
+                    await _SampleInwardRepository.AddSampleInward(entity);
+                    _logger.LogInformation("SampleInward '{Case}' created successfully.", model.CaseNo);
 
-                // Set InwardStatus based on validation
-                var inwardStatus = isComplete ? InwardStatus.INWARD_COMPLETED : InwardStatus.INWARD_REGISTERED;
-                await _sampleStatusService.UpdateInwardStatus(entity.ID, inwardStatus, loggedInUser.EmployeeID);
+                    // Process queued jobs
+                    foreach (var job in statusJobs)
+                    {
+                        await job();
+                    }
+
+                    // Set InwardStatus based on validation
+                    var inwardStatus = isComplete ? InwardStatus.INWARD_COMPLETED : InwardStatus.INWARD_REGISTERED;
+                    await _sampleStatusService.UpdateInwardStatus(entity.ID, inwardStatus, loggedInUser.EmployeeID);
+
+                    await trx.CommitAsync();
+                }
+                catch
+                {
+                    await trx.RollbackAsync();
+                    throw;
+                }
 
                 // ── Notifications (fire AFTER save — failures must not roll back inward) ──
                 try
@@ -611,31 +622,42 @@ namespace LIMSApi.Services
                     }
                 }
 
-                await _SampleInwardRepository.UpdateSampleInward(entity);
-                _logger.LogInformation("SampleInward '{Case}' updated successfully.", entity.CaseNo);
-                foreach (var job in statusJobs)
+                await using var trx = await _context.Database.BeginTransactionAsync();
+                try
                 {
-                    await job();
-                }
-
-                // Re-validate and update status
-                var isComplete = ValidateMandatoryInformation(entity);
-                var inwardStatus = isComplete ? InwardStatus.INWARD_COMPLETED : InwardStatus.INWARD_REGISTERED;
-                await _sampleStatusService.UpdateInwardStatus(entity.ID, inwardStatus, loggedInUser.EmployeeID);
-
-                // Send acknowledgment email if just completed
-                if (isComplete && entity.InwardStatus != InwardStatus.INWARD_COMPLETED.ToString())
-                {
-                    var contact = entity.Contacts.FirstOrDefault(c => !string.IsNullOrEmpty(c.EmailId));
-                    if (contact != null)
+                    await _SampleInwardRepository.UpdateSampleInward(entity);
+                    _logger.LogInformation("SampleInward '{Case}' updated successfully.", entity.CaseNo);
+                    foreach (var job in statusJobs)
                     {
-                        var emailBody = await _templateService.GetTemplateAsync(MessageTemplateKey.SAMPLE_INWARD_UPDATED, NotificationType.Email, new
-                        {
-                            CustomerName = entity.Customer.Name,
-                            CaseNo = entity.CaseNo
-                        });
-                        await _emailService.SendEmailAsync(contact.EmailId, $"Sample Inward Completed - {entity.CaseNo}", emailBody);
+                        await job();
                     }
+
+                    // Re-validate and update status
+                    var isComplete = ValidateMandatoryInformation(entity);
+                    var inwardStatus = isComplete ? InwardStatus.INWARD_COMPLETED : InwardStatus.INWARD_REGISTERED;
+                    await _sampleStatusService.UpdateInwardStatus(entity.ID, inwardStatus, loggedInUser.EmployeeID);
+
+                    await trx.CommitAsync();
+
+                    // Send acknowledgment email if just completed (outside transaction — email failure must not rollback)
+                    if (isComplete && entity.InwardStatus != InwardStatus.INWARD_COMPLETED.ToString())
+                    {
+                        var contact = entity.Contacts.FirstOrDefault(c => !string.IsNullOrEmpty(c.EmailId));
+                        if (contact != null)
+                        {
+                            var emailBody = await _templateService.GetTemplateAsync(MessageTemplateKey.SAMPLE_INWARD_UPDATED, NotificationType.Email, new
+                            {
+                                CustomerName = entity.Customer.Name,
+                                CaseNo = entity.CaseNo
+                            });
+                            await _emailService.SendEmailAsync(contact.EmailId, $"Sample Inward Completed - {entity.CaseNo}", emailBody);
+                        }
+                    }
+                }
+                catch
+                {
+                    await trx.RollbackAsync();
+                    throw;
                 }
             }
             catch (Exception ex)
@@ -659,7 +681,10 @@ namespace LIMSApi.Services
             string year = DateTime.UtcNow.Year.ToString()[^2..];
 
             var statusJobs = new List<Func<Task>>();
-            await using var trx = await _context.Database.BeginTransactionAsync();
+
+            // If caller (e.g. SubmitPlanForReview) already started a transaction, reuse it
+            var ownsTransaction = _context.Database.CurrentTransaction == null;
+            var trx = ownsTransaction ? await _context.Database.BeginTransactionAsync() : null;
 
             try
             {
@@ -876,9 +901,11 @@ namespace LIMSApi.Services
                             });
                         }
 
+                        var addedLabTestIds = new HashSet<long>();
                         foreach (var kvp in cDto.TestTypes)
                         {
                             if (!long.TryParse(kvp.Key, out var labTestId)) continue;
+                            if (!addedLabTestIds.Add(labTestId)) continue; // skip duplicates
 
                             var labTest = await _context.LaboratoryTests
                                 .FirstOrDefaultAsync(x => x.ID == labTestId);
@@ -916,7 +943,7 @@ namespace LIMSApi.Services
                 }
 
                 await _context.SaveChangesAsync();
-                await trx.CommitAsync();
+                if (ownsTransaction && trx != null) await trx.CommitAsync();
 
                 foreach (var job in statusJobs)
                     await job();
@@ -928,8 +955,12 @@ namespace LIMSApi.Services
             }
             catch
             {
-                await trx.RollbackAsync();
+                if (ownsTransaction && trx != null) await trx.RollbackAsync();
                 throw;
+            }
+            finally
+            {
+                if (ownsTransaction && trx != null) await trx.DisposeAsync();
             }
         }
 
@@ -948,36 +979,32 @@ namespace LIMSApi.Services
 
         public async Task SubmitPlanForReview(PlanDto model)
         {
+            // Pre-check: Verify "Request Review" workflow exists BEFORE making any changes.
+            var reviewEntityType = WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Request_Review);
+            var workflowExists = await _workflowService.WorkflowExistsForEntityType(reviewEntityType);
+            if (!workflowExists)
+                throw new InvalidOperationException(
+                    "Cannot submit for review: No 'Request Review' workflow is configured. " +
+                    "Please ask an administrator to set up the review workflow before submitting plans.");
+
+            // Validate: at least one sample must have a plan with at least one test
+            var hasAnyTest = model.SampleDetails?.Any(s =>
+                s.TestPlans?.Any(tp =>
+                    (tp.GeneralTests?.Any(gt => gt.Methods?.Any(m => m.Cancel != true) == true) == true) ||
+                    (tp.ChemicalTests?.Any(ct => ct.TestTypes?.Any(t => t.Value) == true || ct.Elements?.Count > 0) == true)
+                ) == true
+            ) == true;
+
+            if (!hasAnyTest)
+                throw new InvalidOperationException("Cannot submit for review: At least one test (General or Chemical) must be added to the plan.");
+
+            await using var trx = await _context.Database.BeginTransactionAsync();
             try
             {
-                // Pre-check: Verify "Request Review" workflow exists BEFORE making any changes.
-                // Without this, plan data gets saved but workflow creation fails,
-                // leaving the system in an inconsistent state (PlanStatus="Submitted" with nothing to approve).
-                var reviewEntityType = WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Request_Review);
-                var workflowExists = await _workflowService.WorkflowExistsForEntityType(reviewEntityType);
-                if (!workflowExists)
-                    throw new InvalidOperationException(
-                        "Cannot submit for review: No 'Request Review' workflow is configured. " +
-                        "Please ask an administrator to set up the review workflow before submitting plans.");
-
-                // Validate: at least one sample must have a plan with at least one test
-                var hasAnyTest = model.SampleDetails?.Any(s =>
-                    s.TestPlans?.Any(tp =>
-                        (tp.GeneralTests?.Any(gt => gt.Methods?.Any(m => m.Cancel != true) == true) == true) ||
-                        (tp.ChemicalTests?.Any(ct => ct.TestTypes?.Any(t => t.Value) == true || ct.Elements?.Count > 0) == true)
-                    ) == true
-                ) == true;
-
-                if (!hasAnyTest)
-                    throw new InvalidOperationException("Cannot submit for review: At least one test (General or Chemical) must be added to the plan.");
-
                 await ModifySamplePlan(model);
-
-
                 var entity = await _SampleInwardRepository.GetSampleInwardWithPlans(model.ID);
                 if (entity == null)
                     throw new Exception("Sample Inward not found");
-
 
                 entity.ReviewStatus = "Pending for Approval";
                 entity.ReviewedBy = loggedInUser.EmployeeID;
@@ -1027,10 +1054,13 @@ namespace LIMSApi.Services
                     await job();
                 }
                 await _sampleStatusService.UpdateInwardStatus(entity.ID, InwardStatus.UNDER_REVIEW, loggedInUser.EmployeeID);
+
+                await trx.CommitAsync();
                 _logger.LogInformation("Plan submitted for review for inward {ID}", model.ID);
             }
-            catch (Exception ex)
+            catch
             {
+                await trx.RollbackAsync();
                 throw;
             }
         }
@@ -1412,7 +1442,9 @@ namespace LIMSApi.Services
                             MetalClassificationID = ct.MetalClassificationID,
                             Specification1 = ct.Specification1,
                             Specification2 = ct.Specification2,
-                            TestTypes = ct.TestTypes.ToDictionary(tt => tt.Name, tt => tt.IsSelected),
+                            TestTypes = ct.TestTypes
+                                .GroupBy(tt => tt.LaboratoryTestID.ToString())
+                                .ToDictionary(g => g.Key, g => g.First().IsSelected),
                             Elements = ct.Elements.Select(e => new ChemicalTestElementDto
                             {
                                 ID = e.ID,

@@ -59,17 +59,25 @@ namespace LIMSApi.ServiceWORepo
                         || s.SampleStatus == "COMPLETED"))
                 .CountAsync();
 
-            var paymentPending = await _db.PaymentOrders
-                .Where(x => x.Status == PaymentStatus.Pending
-                    && x.InwardID.HasValue
-                    && inwards.Any(i => i.ID == x.InwardID))
-                .Select(x => x.InwardID)
-                .Distinct()
+            // Payment Pending: invoice generated but total payments < invoice amount
+            var paymentPending = await inwards
+                .Where(x => x.IsInvoiceGenerated
+                    && x.BillingStatus != "PAYMENT_COMPLETED"
+                    && _db.CustomerLedgers
+                        .Where(l => l.InwardId == x.ID && l.TransactionType == "Payment" && l.CreditAmount > 0)
+                        .Sum(l => (decimal?)l.CreditAmount ?? 0) < _db.TaxInvoices
+                        .Where(t => t.InwardID == x.ID)
+                        .Sum(t => (decimal?)t.GrandTotal ?? 0))
                 .CountAsync();
 
             var fullySettled = await inwards
                 .Where(x => x.IsInvoiceGenerated
-                    && !_db.PaymentOrders.Any(p => p.InwardID == x.ID && p.Status != PaymentStatus.Paid))
+                    && (x.BillingStatus == "PAYMENT_COMPLETED"
+                        || _db.CustomerLedgers
+                            .Where(l => l.InwardId == x.ID && l.TransactionType == "Payment" && l.CreditAmount > 0)
+                            .Sum(l => (decimal?)l.CreditAmount) >= _db.TaxInvoices
+                            .Where(t => t.InwardID == x.ID)
+                            .Sum(t => (decimal?)t.GrandTotal)))
                 .CountAsync();
 
             // Financial summary
@@ -161,11 +169,15 @@ namespace LIMSApi.ServiceWORepo
 
                      PIStatus = i.AdvancePIRequired ? i.PIReceived ? "Completed" : _db.ProformaInvoiceHeader.Any(x => x.InwardID == i.ID) ? "Generated" : "Pending" : "Completed",
                      InvoiceStatus = i.IsInvoiceGenerated ? "Completed" : "Pending",
-                     PaymentStatus = _db.PaymentOrders.Any(po => po.InwardID == i.ID && po.Status != LIMSApi.Helpers.Enums.PaymentStatus.Paid)
-                         ? "Pending"
-                         : _db.PaymentOrders.Any(po => po.InwardID == i.ID)
+                     PaymentStatus = !i.IsInvoiceGenerated ? "N/A"
+                         : (i.BillingStatus == "PAYMENT_COMPLETED"
+                            || (_db.CustomerLedgers
+                                .Where(l => l.InwardId == i.ID && l.TransactionType == "Payment" && l.CreditAmount > 0)
+                                .Sum(l => (decimal?)l.CreditAmount) ?? 0) >= (_db.TaxInvoices
+                                .Where(t => t.InwardID == i.ID)
+                                .Sum(t => (decimal?)t.GrandTotal) ?? 0))
                              ? "Paid"
-                             : i.IsInvoiceGenerated ? "Pending" : "N/A",
+                             : "Pending",
                      i.CreatedOn,
                      i.ModifiedOn
                  })
@@ -216,6 +228,7 @@ namespace LIMSApi.ServiceWORepo
         {
             var inward = await _db.SampleInwards
                 .Include(x => x.Customer)
+                .Include(x => x.SampleDetails)
                 .FirstOrDefaultAsync(x => x.ID == inwardId);
 
             if (inward == null)
@@ -245,7 +258,7 @@ namespace LIMSApi.ServiceWORepo
                 .OrderByDescending(i => i.InvoiceDate)
                 .FirstOrDefaultAsync();
 
-            // Load advance payments
+            // Load advance payments from PaymentOrders (Razorpay online)
             var advancePayments = await _db.PaymentOrders
                 .Where(p => p.InwardID == inwardId && p.PaymentType == PaymentType.Advance)
                 .OrderByDescending(p => p.CreatedOn)
@@ -259,6 +272,32 @@ namespace LIMSApi.ServiceWORepo
                 })
                 .ToListAsync();
 
+            // Include manual advance payments from ledger (credit entries before invoice was generated)
+            var manualAdvances = await _db.CustomerLedgers
+                .Where(l => l.InwardId == inwardId && l.TransactionType == "Payment" && l.CreditAmount > 0
+                    && l.InvoiceId == null) // Exclude payments against final invoice (those are balance payments)
+                .OrderByDescending(l => l.Date)
+                .Select(l => new AdvancePaymentSummary
+                {
+                    Id = l.Id,
+                    Amount = l.CreditAmount,
+                    Date = l.Date,
+                    PaymentMode = l.PaymentMode ?? "Manual",
+                    Status = "Paid"
+                })
+                .ToListAsync();
+
+            advancePayments.AddRange(manualAdvances);
+
+            // Determine report status — check ReportHeaders as source of truth
+            // (SampleStatus can be overwritten by advance payment or other status changes)
+            var activeSampleIds = inward.SampleDetails.Where(s => s.IsActive).Select(s => s.ID).ToList();
+            var hasAnyReportHeader = await _db.ReportHeaders.AnyAsync(r => activeSampleIds.Contains(r.SampleID));
+            var allReportsApproved = hasAnyReportHeader && await _db.ReportHeaders
+                .Where(r => activeSampleIds.Contains(r.SampleID))
+                .AllAsync(r => r.Status == "Approved" || r.Status == "Completed" || r.Status == "Dispatched");
+            var reportStatus = allReportsApproved ? "FINAL_REPORT_APPROVED" : "PENDING";
+
             return new CaseAccountSummaryDto
             {
                 InwardID = inward.ID,
@@ -268,6 +307,8 @@ namespace LIMSApi.ServiceWORepo
                 CustomerId = inward.CustomerID,
                 PIStatus = piStatus,
                 InvoiceStatus = inward.IsInvoiceGenerated ? "Completed" : "Pending",
+                BillingStatus = inward.BillingStatus ?? "",
+                ReportStatus = reportStatus,
                 HasPendingPayment = hasPendingPayment,
 
                 ProformaInvoice = pi != null ? new ProformaInvoiceSummary
@@ -392,13 +433,100 @@ namespace LIMSApi.ServiceWORepo
             if (inward.IsInvoiceGenerated)
                 throw new Exception("Invoice already generated");
 
-            // Validate price snapshot exists
+            // Check for existing price snapshot, auto-create if not exists
             var snapshotEvents = await _db.ChargeEvents
                 .Where(x => x.InwardID == inwardId && x.Status == ChargeEventStatus.SNAPSHOT.ToString())
                 .ToListAsync();
 
             if (!snapshotEvents.Any())
-                throw new Exception("Price snapshot not created. Please create snapshot before generating invoice.");
+            {
+                // Auto-create snapshot from TestResultHeader saved prices (source of truth)
+                // This avoids re-running the pricing engine which may fail if configs changed
+                var testHeaders = await _db.TestResultHeaders
+                    .Include(h => h.Sample)
+                    .Where(h => h.Sample != null && h.Sample.InwardID == inwardId
+                        && h.CalculatedPrice != null && h.CalculatedPrice > 0)
+                    .ToListAsync();
+
+                if (testHeaders.Any())
+                {
+                    // Create SNAPSHOT ChargeEvents directly from saved test prices
+                    foreach (var header in testHeaders)
+                    {
+                        var finalPrice = header.OverridePrice ?? header.CalculatedPrice ?? 0;
+                        if (finalPrice <= 0) continue;
+
+                        var labTest = await _db.LaboratoryTests.FindAsync(header.LaboratoryTestID);
+                        var description = labTest?.SubGroup ?? "Test";
+                        if (header.SequenceNo > 1 || testHeaders.Count(h => h.LaboratoryTestID == header.LaboratoryTestID) > 1)
+                            description += $" - Specimen {header.SequenceNo}";
+
+                        _db.ChargeEvents.Add(new ChargeEvent
+                        {
+                            InwardID = inwardId,
+                            SampleID = header.SampleID,
+                            ChargeType = "Test",
+                            Description = description,
+                            Amount = finalPrice,
+                            Status = ChargeEventStatus.SNAPSHOT.ToString(),
+                            SnapshotDate = DateTime.UtcNow,
+                            CreatedOn = DateTime.UtcNow
+                        });
+                    }
+
+                    // Also add cutting/machining charges if any
+                    var cuttingTotal = await _db.CuttingChargeHeaders
+                        .Where(c => c.InwardID == inwardId && c.IsActive)
+                        .SumAsync(c => (decimal?)c.GrandTotal) ?? 0;
+                    if (cuttingTotal > 0)
+                    {
+                        _db.ChargeEvents.Add(new ChargeEvent
+                        {
+                            InwardID = inwardId,
+                            ChargeType = "Cutting",
+                            Description = "Cutting Charges",
+                            Amount = cuttingTotal,
+                            Status = ChargeEventStatus.SNAPSHOT.ToString(),
+                            SnapshotDate = DateTime.UtcNow,
+                            CreatedOn = DateTime.UtcNow
+                        });
+                    }
+
+                    await _db.SaveChangesAsync();
+
+                    // Update billing status
+                    var inwardForStatus = await _db.SampleInwards.FindAsync(inwardId);
+                    if (inwardForStatus != null)
+                    {
+                        inwardForStatus.BillingStatus = BillingStatus.PRICE_SNAPSHOT.ToString();
+                        await _db.SaveChangesAsync();
+                    }
+                }
+                else
+                {
+                    // Fallback: try pricing engine (may fail if config not set up)
+                    try
+                    {
+                        await _priceCalculationService.CalculateAndCreateChargeEventsAsync(inwardId);
+                        await _priceCalculationService.CreatePriceSnapshotAsync(inwardId);
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new InvalidOperationException(
+                            $"No test pricing found. Either calculate price on Test Result page first, " +
+                            $"or configure Invoice Case pricing. Detail: {ex.Message}");
+                    }
+                }
+
+                // Re-fetch snapshot events
+                snapshotEvents = await _db.ChargeEvents
+                    .Where(x => x.InwardID == inwardId && x.Status == ChargeEventStatus.SNAPSHOT.ToString())
+                    .ToListAsync();
+
+                if (!snapshotEvents.Any())
+                    throw new InvalidOperationException(
+                        "No charges could be created. Please calculate price on the Test Result page first.");
+            }
 
             // Calculate totals from SNAPSHOT ChargeEvents
             var subTotal = snapshotEvents.Sum(x => x.Amount);
@@ -418,7 +546,7 @@ namespace LIMSApi.ServiceWORepo
 
             // ── GST from System Configuration (calculated on discounted subtotal) ──
             var gstConfig = await _db.GstConfigs.FirstOrDefaultAsync();
-            var gstApplicable = gstConfig != null;
+            var gstApplicable = gstConfig?.DefaultGstRate > 0 || gstConfig == null; // Default: GST applicable
             var gstRate = gstConfig?.DefaultGstRate ?? 18m;
             var halfRate = gstRate / 2m;
             var companyState = gstConfig?.State?.Trim().ToLower() ?? "";
@@ -470,17 +598,10 @@ namespace LIMSApi.ServiceWORepo
 
             // ADVANCE PAYMENT ADJUSTMENT
             var advancePayment = inward.AdvancePayment;
-            
-            // Validate: Advance payment should not exceed final amount
-            if (advancePayment > grandTotal)
-            {
-                throw new InvalidOperationException(
-                    $"Advance payment ({advancePayment:C}) exceeds final invoice amount ({grandTotal:C}). " +
-                    $"Cannot generate invoice.");
-            }
 
-            // Calculate balance payable after advance adjustment
-            var balancePayable = grandTotal - advancePayment;
+            // If advance exceeds grand total, cap adjustment at grand total (excess stays as credit)
+            var advanceAdjusted = Math.Min(advancePayment, grandTotal);
+            var balancePayable = grandTotal - advanceAdjusted;
 
             var currentFY = await _db.FinancialYears.FirstOrDefaultAsync(f => f.IsCurrent);
 
@@ -798,16 +919,20 @@ namespace LIMSApi.ServiceWORepo
             var customer = await _db.Customers.FindAsync(customerId)
                 ?? throw new KeyNotFoundException($"Customer with ID {customerId} not found.");
 
+            // Normalize date range: periodStart = start-of-day, periodEnd = end-of-day
+            var periodStartDay = periodStart.Date;
+            var periodEndDay = periodEnd.Date.AddDays(1).AddTicks(-1);
+
             // Opening balance = sum of all ledger entries BEFORE periodStart
             var prePeriodEntries = await _db.CustomerLedgers
-                .Where(l => l.CustomerId == customerId && l.Date < periodStart && l.IsActive)
+                .Where(l => l.CustomerId == customerId && l.Date < periodStartDay && l.IsActive)
                 .ToListAsync();
 
             decimal openingBalance = prePeriodEntries.Sum(l => l.DebitAmount - l.CreditAmount);
 
             // Entries within the period
             var periodEntries = await _db.CustomerLedgers
-                .Where(l => l.CustomerId == customerId && l.Date >= periodStart && l.Date <= periodEnd && l.IsActive)
+                .Where(l => l.CustomerId == customerId && l.Date >= periodStartDay && l.Date <= periodEndDay && l.IsActive)
                 .OrderBy(l => l.Date)
                 .ThenBy(l => l.Id)
                 .ToListAsync();

@@ -399,7 +399,6 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("verify/{headerId}")]
-        [RequirePermission("TEST_RESULT_VERIFY")]
         public async Task<IActionResult> VerifyTest(long headerId, [FromBody] VerificationActionDto dto)
         {
             await _service.VerifyTest(headerId, dto?.Comments);
@@ -407,7 +406,6 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("reject-verification/{headerId}")]
-        [RequirePermission("TEST_RESULT_VERIFY")]
         public async Task<IActionResult> RejectVerification(long headerId, [FromBody] VerificationActionDto dto)
         {
             await _service.RejectVerification(headerId, dto?.Comments);

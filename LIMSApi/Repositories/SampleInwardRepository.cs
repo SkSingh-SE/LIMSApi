@@ -25,20 +25,10 @@ namespace LIMSApi.Repositories
 
         public async Task AddSampleInward(SampleInward model)
         {
-            using var trx = await _context.Database.BeginTransactionAsync();
-            try
-            {
-                model.CreatedOn = DateTime.UtcNow;
-                model.CompanyCode = loggedInUser.CompanyCode;
-                await _context.SampleInwards.AddAsync(model);
-                await _context.SaveChangesAsync();
-                await trx.CommitAsync();
-            }
-            catch
-            {
-                await trx.RollbackAsync();
-                throw;
-            }
+            model.CreatedOn = DateTime.UtcNow;
+            model.CompanyCode = loggedInUser.CompanyCode;
+            await _context.SampleInwards.AddAsync(model);
+            await _context.SaveChangesAsync();
         }
 
         public async Task DeleteSampleInward(long id)
@@ -110,20 +100,10 @@ namespace LIMSApi.Repositories
 
         public async Task UpdateSampleInward(SampleInward model)
         {
-            using var trx = await _context.Database.BeginTransactionAsync();
-            try
-            {
-                model.ModifiedOn = DateTime.UtcNow;
-                model.CompanyCode = loggedInUser.CompanyCode;
-                _context.SampleInwards.Update(model);
-                await _context.SaveChangesAsync();
-                await trx.CommitAsync();
-            }
-            catch
-            {
-                await trx.RollbackAsync();
-                throw;
-            }
+            model.ModifiedOn = DateTime.UtcNow;
+            model.CompanyCode = loggedInUser.CompanyCode;
+            _context.SampleInwards.Update(model);
+            await _context.SaveChangesAsync();
         }
 
 
