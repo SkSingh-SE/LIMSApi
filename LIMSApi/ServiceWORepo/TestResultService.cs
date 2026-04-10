@@ -57,8 +57,10 @@ namespace LIMSApi.ServiceWORepo
                 {
                     sample.ID,
                     sample.SampleNo,
+                    InwardId = inward.ID,
                     inward.CaseNo,
                     sample.SampleStatus,
+                    CustomerID = inward.CustomerID,
                     CustomerName = inward.Customer != null ? inward.Customer.Name : "",
                     Material = sample.MetalClassificationID != null ? _db.MetalClassificationMasters.Where(x => x.ID == sample.MetalClassificationID.Value).Select(m => m.Name).FirstOrDefault() : string.Empty,
                     Condition = sample.ProductConditionID != null ? _db.ProductConditionMasters.Where(x => x.ID == sample.ProductConditionID.Value).Select(m => m.Name).FirstOrDefault() : string.Empty,
@@ -135,7 +137,9 @@ namespace LIMSApi.ServiceWORepo
             {
                 x.ID,
                 x.SampleNo,
+                x.InwardId,
                 x.CaseNo,
+                x.CustomerID,
                 x.CustomerName,
                 x.Material,
                 x.Condition,
@@ -2535,6 +2539,7 @@ namespace LIMSApi.ServiceWORepo
                             h.ID,
                             SampleId = sample.ID,
                             sample.SampleNo,
+                            InwardId = inward.ID,
                             inward.CaseNo,
                             TestName = _db.LaboratoryTests
                                 .Where(t => t.ID == h.LaboratoryTestID)
@@ -2627,6 +2632,7 @@ namespace LIMSApi.ServiceWORepo
                     headerId = item.ID,
                     item.SampleId,
                     item.SampleNo,
+                    item.InwardId,
                     item.CaseNo,
                     testName = testLabel,
                     item.ParametersCount,
