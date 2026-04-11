@@ -52,6 +52,10 @@ public static class DataSeeder
             await SeedMasterDataAsync(db);
             await SeedFinancialYearsAsync(db);
             await BackfillFinancialYearIdsAsync(db, logger);
+
+            // Role-Permission defaults — idempotent, runs every startup to pick up new permissions
+            await SeedRolePermissionDefaultsAsync(db, logger);
+
             logger.LogInformation("DataSeeder: master data seed complete.");
         }
         catch (Exception ex)
@@ -955,5 +959,172 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
         ");
         if (backfilled > 0)
             logger.LogInformation("DataSeeder: backfilled FinancialYearId on {Count} DebitNotes", backfilled);
+    }
+
+    // ───────────────────────────────────────────────────────
+    // ROLE-PERMISSION DEFAULTS
+    // Idempotent — inserts only missing (Role, Permission) pairs.
+    // Admin role is NOT populated (bypasses via RequirePermissionAttribute).
+    //
+    // Role → permission map (DB names must match Permissions.cs catalog):
+    //
+    //   Accounts    → all Account.* + read Inward/Plan/Report/Customer
+    //   FrontDesk   → Inward CRUD, Plan read, Customer CRUD, Courier read
+    //   Technical   → Plan CRUD, Review, SamplePrep, Inward read, most masters read
+    //   Lab         → Testing CRUD, Equipment read, Parameter read, Inward read
+    //   LabManager  → nearly all (except admin/user/role management)
+    // ───────────────────────────────────────────────────────
+    private static async Task SeedRolePermissionDefaultsAsync(LIMSContext db, ILogger logger)
+    {
+        // Map: Role name → list of permission names
+        var roleMap = new Dictionary<string, string[]>
+        {
+            ["Accounts"] = new[]
+            {
+                // Account module (owned by other agent — still grant read/manage)
+                "CanReadAccount", "CanManageAccount",
+                "CanReadAccountsDashboard", "CanReadCaseAccounts",
+                "CanReadCustomerLedger", "CanReadRecordPayment",
+                "CanReadAgingReport", "CanReadOutstandingReport",
+                "CanReadCustomerPO",
+                "CanGeneratePI", "CanGenerateInvoice", "CanManageInvoice",
+                "INVOICE_GENERATE",
+                // Read flow stages for context
+                "CanReadSampleInward", "CanReadPlan", "CanReadReview",
+                "CanReadReporting", "CanReadCustomerMaster",
+                // Masters needed for invoice cases / PO
+                "CanReadInvoiceCase", "CanReadInvoiceCaseConfig",
+                "CanReadTax", "CanReadBank",
+            },
+
+            ["FrontDesk"] = new[]
+            {
+                // Sample inward full CRUD
+                "CanReadSampleInward", "CanCreateSampleInward",
+                "CanUpdateSampleInward", "CanDeleteSampleInward",
+                "CanManageSampleInward",
+                // Customer CRUD
+                "CanReadCustomerMaster", "CanCreateCustomerMaster",
+                "CanUpdateCustomerMaster", "CanManageCustomerMaster",
+                // Read plan for status visibility
+                "CanReadPlan", "CanReadReview",
+                // Masters typically needed at inward
+                "CanReadCourier", "CanReadTPI", "CanReadCompanyCategory",
+                "CanReadMaterialSpecification", "CanReadProductSpecification",
+                "CanReadMetalClassification", "CanReadHeatTreatment",
+                "CanReadProductCondition", "CanReadSpecimenOrientation",
+                "CanReadProductForm", "CanReadLaboratoryTest",
+            },
+
+            ["Technical"] = new[]
+            {
+                // Plan management
+                "CanReadPlan", "CanManagePlan", "CanApprovePlan", "CanRejectPlan",
+                "CanReadReview", "CanApproveReview", "CanRejectReview", "CanManageReview",
+                // Sample prep
+                "CanReadSampleCutting", "CanManageSampleCutting",
+                // Inward read (plan upstream)
+                "CanReadSampleInward",
+                // Testing read
+                "CanReadTesting", "CanReadTestingDashboard", "CanReadTestResults",
+                // Reporting read
+                "CanReadReporting",
+                // Most masters read
+                "CanReadMaterialSpecification", "CanReadProductSpecification",
+                "CanReadLaboratoryTest", "CanReadTestMethodSpecification",
+                "CanReadChemicalParameter", "CanReadMechanicalParameter",
+                "CanReadParameterUnit", "CanReadMetalClassification",
+                "CanReadHeatTreatment", "CanReadProductCondition",
+                "CanReadSpecimenOrientation", "CanReadProductForm",
+                "CanReadDimensionalFactors", "CanReadStandardOrganization",
+                "CanReadEquipment", "CanReadCalibrationAgency",
+            },
+
+            ["Lab"] = new[]
+            {
+                // Testing CRUD
+                "CanReadTesting", "CanManageTesting", "CanPerformTest",
+                "CanReadTestingDashboard", "CanReadTestResults",
+                "CanReadPerformTest", "CanReadLongTermTracking",
+                "TEST_RESULT_SAVE",
+                // Read upstream
+                "CanReadSampleInward", "CanReadPlan", "CanReadSampleCutting",
+                // Masters
+                "CanReadLaboratoryTest", "CanReadTestMethodSpecification",
+                "CanReadChemicalParameter", "CanReadMechanicalParameter",
+                "CanReadParameterUnit", "CanReadEquipment",
+                "CanReadDimensionalFactors",
+                // Reporting read (for traceability)
+                "CanReadReporting",
+            },
+
+            ["LabManager"] = new[]
+            {
+                // Manage everything in flow
+                "CanReadSampleInward", "CanManageSampleInward",
+                "CanCreateSampleInward", "CanUpdateSampleInward", "CanDeleteSampleInward",
+                "CanReadPlan", "CanManagePlan", "CanApprovePlan", "CanRejectPlan",
+                "CanReadReview", "CanApproveReview", "CanRejectReview", "CanManageReview",
+                "CanReadSampleCutting", "CanManageSampleCutting",
+                "CanReadTesting", "CanManageTesting", "CanPerformTest",
+                "CanReadTestingDashboard", "CanReadTestResults",
+                "TEST_RESULT_SAVE", "TEST_RESULT_VERIFY", "TEST_PRICE_OVERRIDE",
+                "CanReadReporting", "CanManageReporting",
+                "CanApproveReport", "CanAmendReport",
+                "CanReadReportFormat", "CanManageReportFormat",
+                // Lab Scope
+                "CanReadLabScopeMaster", "CanCreateLabScopeMaster",
+                "CanUpdateLabScopeMaster", "CanDeleteLabScopeMaster",
+                "CanManageLabScopeMaster",
+                // All masters — read + manage (too many to list, but catalog has them)
+                "CanReadCustomerMaster", "CanManageCustomerMaster",
+                "CanReadEmployee", "CanReadDepartment", "CanReadDesignation",
+                "CanReadEquipment", "CanReadCalibrationAgency",
+                "CanReadMaterialSpecification", "CanReadProductSpecification",
+                "CanReadLaboratoryTest", "CanReadTestMethodSpecification",
+                "CanReadChemicalParameter", "CanReadMechanicalParameter",
+                "CanReadParameterUnit", "CanReadMetalClassification",
+                "CanReadHeatTreatment", "CanReadProductCondition",
+                "CanReadSpecimenOrientation", "CanReadProductForm",
+                "CanReadDimensionalFactors", "CanReadStandardOrganization",
+                "CanReadCompanyCategory", "CanReadTax", "CanReadBank",
+                "CanReadCourier", "CanReadTPI", "CanReadSupplier",
+                "CanReadOEM", "CanReadUniversalCode", "CanReadInvoiceCase",
+                // Workflow view
+                "CanReadWorkflow",
+            },
+        };
+
+        int inserted = 0;
+        foreach (var (roleName, permissionNames) in roleMap)
+        {
+            var permList = string.Join(",", permissionNames.Select(p => $"N'{p}'"));
+            var sql = $@"
+                DECLARE @roleId BIGINT = (SELECT TOP 1 ID FROM RoleMasters WHERE Name = N'{roleName}' AND IsActive = 1);
+                IF @roleId IS NULL
+                BEGIN
+                    PRINT 'Role {roleName} not found — skipping';
+                    RETURN;
+                END
+
+                INSERT INTO RolePermissions (RoleID, PermissionID, IsGranted, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                SELECT @roleId, p.ID, 1, 0, GETUTCDATE(), N'LIMS', 1
+                FROM PermissionMasters p
+                WHERE p.Name IN ({permList})
+                  AND NOT EXISTS (
+                      SELECT 1 FROM RolePermissions rp
+                      WHERE rp.RoleID = @roleId AND rp.PermissionID = p.ID AND rp.IsActive = 1
+                  );
+            ";
+            var count = await db.Database.ExecuteSqlRawAsync(sql);
+            if (count > 0)
+            {
+                inserted += count;
+                logger.LogInformation("DataSeeder: seeded {Count} role permissions for {Role}", count, roleName);
+            }
+        }
+
+        if (inserted > 0)
+            logger.LogInformation("DataSeeder: inserted {Total} role-permission defaults total", inserted);
     }
 }

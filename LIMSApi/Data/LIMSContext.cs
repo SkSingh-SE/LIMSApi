@@ -122,6 +122,7 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<VendorMaster> VendorMasters { get; set; }
     public virtual DbSet<PermissionMaster> PermissionMasters { get; set; }
     public virtual DbSet<UserPermission> UserPermissions { get; set; }
+    public virtual DbSet<RolePermission> RolePermissions { get; set; }
     public virtual DbSet<Workflow> Workflows { get; set; }
     public virtual DbSet<WorkflowStep> WorkflowSteps { get; set; }
     public virtual DbSet<WorkflowTransition> WorkflowTransitions { get; set; }
@@ -271,6 +272,25 @@ public partial class LIMSContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // RolePermission — one (Role, Permission) pair only when active
+        modelBuilder.Entity<RolePermission>()
+            .HasIndex(x => new { x.RoleID, x.PermissionID })
+            .IsUnique()
+            .HasFilter("[IsActive] = 1")
+            .HasDatabaseName("IX_RolePermission_Role_Permission");
+
+        modelBuilder.Entity<RolePermission>()
+            .HasOne(x => x.Role)
+            .WithMany()
+            .HasForeignKey(x => x.RoleID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<RolePermission>()
+            .HasOne(x => x.Permission)
+            .WithMany()
+            .HasForeignKey(x => x.PermissionID)
+            .OnDelete(DeleteBehavior.NoAction);
+
         modelBuilder.Entity<MetalClassificationParameter>().HasKey(x => new { x.MetalClassificationID, x.ParameterID });
 
         modelBuilder.Entity<ParameterSpecimenOrientation>().HasKey(x => new { x.ParameterID, x.SpecimenOrientationID });
