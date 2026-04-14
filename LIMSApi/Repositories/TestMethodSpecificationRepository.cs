@@ -88,11 +88,11 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search))
-                                     || (x.StandardOrganizationName != null && x.StandardOrganizationName.ToLower().Contains(search))
-                                     || (x.TestMethodStandard != null && x.TestMethodStandard.ToLower().Contains(search))
-                                     || (x.CurrentVersion != null && x.CurrentVersion.ToLower().Contains(search))
+                var search = filter.searchTerm.Trim();
+                _query = _query.Where(x => (x.Name != null && x.Name.Contains(search))
+                                     || (x.StandardOrganizationName != null && x.StandardOrganizationName.Contains(search))
+                                     || (x.TestMethodStandard != null && x.TestMethodStandard.Contains(search))
+                                     || (x.CurrentVersion != null && x.CurrentVersion.Contains(search))
                                      || (x.CurrentVersionYear != null && x.CurrentVersionYear.ToString()!.Contains(search))
                                      || (x.IsDisabled ? "disabled" : "active").Contains(search));
             }
@@ -119,8 +119,8 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
                 }
             }
 

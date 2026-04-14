@@ -95,7 +95,7 @@ namespace LIMSApi.ServiceWORepo
             // ----------------------------------------------------------
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
+                var search = filter.searchTerm.Trim();
 
                 query = query.Where(x =>
                     EF.Functions.Like(EF.Property<string>(x, "SampleNo") ?? "", $"%{search}%") ||
@@ -1796,7 +1796,7 @@ namespace LIMSApi.ServiceWORepo
             // --------------------------------------------------------
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
+                var search = filter.searchTerm.Trim();
 
                 query = query.Where(x =>
                     EF.Functions.Like(EF.Property<string>(x, "SampleNo") ?? "", $"%{search}%") ||
@@ -2565,13 +2565,13 @@ namespace LIMSApi.ServiceWORepo
             // Search
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
+                var search = filter.searchTerm.Trim();
                 query = query.Where(x =>
-                    (x.SampleNo != null && x.SampleNo.ToLower().Contains(search)) ||
-                    (x.CaseNo != null && x.CaseNo.ToLower().Contains(search)) ||
-                    (x.TestName != null && x.TestName.ToLower().Contains(search)) ||
-                    (x.PerformedBy != null && x.PerformedBy.ToLower().Contains(search)) ||
-                    (x.Status != null && x.Status.ToLower().Contains(search)));
+                    (x.SampleNo != null && x.SampleNo.Contains(search)) ||
+                    (x.CaseNo != null && x.CaseNo.Contains(search)) ||
+                    (x.TestName != null && x.TestName.Contains(search)) ||
+                    (x.PerformedBy != null && x.PerformedBy.Contains(search)) ||
+                    (x.Status != null && x.Status.Contains(search)));
             }
 
             int totalRecords = await query.CountAsync();

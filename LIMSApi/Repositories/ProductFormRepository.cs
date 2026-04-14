@@ -26,7 +26,7 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllProductForms(PageFilter filter) {
             var _query = (from c in _context.ProductFormMasters where c.IsActive select c).AsQueryable().ApplyFilters(filter.Filter);
-            if (!string.IsNullOrWhiteSpace(filter.searchTerm)) { var search = filter.searchTerm.Trim().ToLower(); _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search))); }
+            if (!string.IsNullOrWhiteSpace(filter.searchTerm)) { var search = filter.searchTerm.Trim(); _query = _query.Where(x => (x.Name != null && x.Name.Contains(search))); }
             if (filter.SortByColumn != null) { _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}"); }
             return await _query.Cast<object>().ToPagedAsync(filter);
         }
@@ -42,8 +42,8 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
                 }
             }
             var skip = pageNo * pageSize;

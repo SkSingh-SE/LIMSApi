@@ -1,5 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -19,6 +21,7 @@ namespace LIMSApi.Controllers
             _MetalClassificationService = MetalClassificationRepo;
         }
 
+        [RequirePermission(Permissions.MetalClassification.Read)]
         [HttpPost("list")]
         public async Task<IActionResult> MetalClassificationList(PageFilter filter)
         {
@@ -26,6 +29,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.MetalClassification.Read)]
         [HttpGet("details/{id}")]
         public async Task<ActionResult<MetalClassificationMaster>> GetMetalClassificationMaster(long id)
         {
@@ -35,6 +39,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.MetalClassification.Update)]
         [HttpPut("update")]
         public async Task<IActionResult> PutMetalClassificationMaster(MetalClassificationMaster model)
         {
@@ -47,6 +52,7 @@ namespace LIMSApi.Controllers
             
         }
 
+        [RequirePermission(Permissions.MetalClassification.Create)]
         [HttpPost("create")]
         public async Task<ActionResult<MetalClassificationMaster>> PostMetalClassificationMaster(MetalClassificationMaster model)
         {
@@ -59,6 +65,7 @@ namespace LIMSApi.Controllers
             
         }
 
+        [RequirePermission(Permissions.MetalClassification.Delete)]
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteMetalClassificationMaster(long id)
         {

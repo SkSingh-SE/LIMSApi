@@ -1,4 +1,6 @@
 ﻿using LIMSApi.Dtos;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Http;
@@ -18,6 +20,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("list")]
+        [RequirePermission(Permissions.Bank.Read)]
         public async Task<IActionResult> BankList(PageFilter filter)
         {
             return Ok(await _remarkService.FetchBankList(filter));
@@ -25,6 +28,7 @@ namespace LIMSApi.Controllers
 
 
         [HttpGet("details/{id}")]
+        [RequirePermission(Permissions.Bank.Read)]
         public async Task<ActionResult<BankMaster>> GetBankMaster(long id)
         {
             var entity = await _remarkService.GetBankDetails(id);
@@ -34,6 +38,7 @@ namespace LIMSApi.Controllers
 
 
         [HttpPut("update")]
+        [RequirePermission(Permissions.Bank.Update)]
         public async Task<IActionResult> PutBankMaster(BankMaster model)
         {
             await _remarkService.ModifyBank(model);
@@ -41,6 +46,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("create")]
+        [RequirePermission(Permissions.Bank.Create)]
         public async Task<ActionResult<BankMaster>> PostBankMaster(BankMaster model)
         {
             await _remarkService.CreateBank(model);
@@ -48,6 +54,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpDelete("delete/{id}")]
+        [RequirePermission(Permissions.Bank.Delete)]
         public async Task<IActionResult> DeleteBankMaster(long id)
         {
             var entity = await _remarkService.GetBankDetails(id);

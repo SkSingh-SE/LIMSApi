@@ -1,4 +1,6 @@
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.ServiceWORepo;
 using Microsoft.AspNetCore.Mvc;
 
@@ -19,6 +21,7 @@ namespace LIMSApi.Controllers
 
         // GET api/customerledger/{customerId}?from=&to=
         [HttpGet("{customerId}")]
+        [RequirePermission(Permissions.Account.ReadCustomerLedger)]
         public async Task<IActionResult> GetLedger(long customerId, [FromQuery] DateTime? from = null, [FromQuery] DateTime? to = null)
         {
             var result = await _ledgerService.GetCustomerLedger(customerId, from, to);
@@ -27,6 +30,7 @@ namespace LIMSApi.Controllers
 
         // POST api/customerledger/{customerId}/list (paginated)
         [HttpPost("{customerId}/list")]
+        [RequirePermission(Permissions.Account.ReadCustomerLedger)]
         public async Task<IActionResult> GetLedgerPaged(long customerId, [FromBody] PageFilter filter)
         {
             var result = await _ledgerService.GetLedgerEntries(customerId, filter);
@@ -35,6 +39,7 @@ namespace LIMSApi.Controllers
 
         // GET api/customerledger/{customerId}/balance
         [HttpGet("{customerId}/balance")]
+        [RequirePermission(Permissions.Account.ReadCustomerLedger)]
         public async Task<IActionResult> GetBalance(long customerId)
         {
             var result = await _ledgerService.GetCustomerBalance(customerId);
@@ -43,6 +48,7 @@ namespace LIMSApi.Controllers
 
         // GET api/customerledger/{customerId}/statement?from=&to=
         [HttpGet("{customerId}/statement")]
+        [RequirePermission(Permissions.Account.ReadCustomerLedger)]
         public async Task<IActionResult> GetStatement(long customerId, [FromQuery] DateTime from, [FromQuery] DateTime to)
         {
             var result = await _ledgerService.GetCustomerStatement(customerId, from, to);
@@ -53,6 +59,7 @@ namespace LIMSApi.Controllers
 
         // POST api/customerledger/payment
         [HttpPost("payment")]
+        [RequirePermission(Permissions.Account.RecordPayment)]
         public async Task<IActionResult> RecordPayment([FromBody] RecordPaymentDto dto)
         {
             var result = await _ledgerService.RecordPayment(dto);
@@ -61,6 +68,7 @@ namespace LIMSApi.Controllers
 
         // GET api/customerledger/receipt/{receiptId}
         [HttpGet("receipt/{receiptId}")]
+        [RequirePermission(Permissions.Account.ReadReceipt)]
         public async Task<IActionResult> GetReceipt(long receiptId)
         {
             var result = await _ledgerService.GetReceipt(receiptId);
@@ -71,6 +79,7 @@ namespace LIMSApi.Controllers
 
         // GET api/customerledger/{customerId}/receipts
         [HttpGet("{customerId}/receipts")]
+        [RequirePermission(Permissions.Account.ReadReceipt)]
         public async Task<IActionResult> GetReceipts(long customerId)
         {
             var result = await _ledgerService.GetPaymentReceipts(customerId);
@@ -79,6 +88,7 @@ namespace LIMSApi.Controllers
 
         // POST api/customerledger/{customerId}/receipts-paged
         [HttpPost("{customerId}/receipts-paged")]
+        [RequirePermission(Permissions.Account.ReadReceipt)]
         public async Task<IActionResult> GetReceiptsPaged(long customerId, [FromBody] PageFilter filter)
         {
             var result = await _ledgerService.GetReceiptsPaged(customerId, filter);
@@ -89,6 +99,7 @@ namespace LIMSApi.Controllers
 
         // GET api/customerledger/aging-report
         [HttpGet("aging-report")]
+        [RequirePermission(Permissions.Account.ReadAging)]
         public async Task<IActionResult> GetAgingReport([FromQuery] DateTime? asOfDate = null)
         {
             var result = await _ledgerService.GetAgingReport(asOfDate);
@@ -97,6 +108,7 @@ namespace LIMSApi.Controllers
 
         // GET api/customerledger/outstanding-report
         [HttpGet("outstanding-report")]
+        [RequirePermission(Permissions.Account.ReadOutstanding)]
         public async Task<IActionResult> GetOutstandingReport()
         {
             var result = await _ledgerService.GetOutstandingReport();
@@ -105,6 +117,7 @@ namespace LIMSApi.Controllers
 
         // GET api/customerledger/collection-summary?from=&to=
         [HttpGet("collection-summary")]
+        [RequirePermission(Permissions.Account.ReadCollectionSummary)]
         public async Task<IActionResult> GetCollectionSummary([FromQuery] DateTime from, [FromQuery] DateTime to)
         {
             var result = await _ledgerService.GetCollectionSummary(from, to);
@@ -115,6 +128,7 @@ namespace LIMSApi.Controllers
 
         // GET api/customerledger/{customerId}/credit-status
         [HttpGet("{customerId}/credit-status")]
+        [RequirePermission(Permissions.Account.ReadCreditStatus)]
         public async Task<IActionResult> GetCreditStatus(long customerId)
         {
             var result = await _ledgerService.GetCreditStatus(customerId);
@@ -123,6 +137,7 @@ namespace LIMSApi.Controllers
 
         // GET api/customerledger/{customerId}/check-credit?amount=
         [HttpGet("{customerId}/check-credit")]
+        [RequirePermission(Permissions.Account.ReadCreditStatus)]
         public async Task<IActionResult> CheckCreditLimit(long customerId, [FromQuery] decimal amount)
         {
             var withinLimit = await _ledgerService.CheckCreditLimit(customerId, amount);

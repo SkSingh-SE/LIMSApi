@@ -72,13 +72,13 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
+                var search = filter.searchTerm.Trim();
                 _query = _query.Where(x =>
-                    (x.SpecimenType != null && x.SpecimenType.ToLower().Contains(search))
-                    || (x.Dimensions != null && x.Dimensions.ToLower().Contains(search))
-                    || (x.MaterialType != null && x.MaterialType.ToLower().Contains(search))
-                    || (x.TestMethodStandardName != null && x.TestMethodStandardName.ToLower().Contains(search))
-                    || (x.LaboratoryTestName != null && x.LaboratoryTestName.ToLower().Contains(search)));
+                    (x.SpecimenType != null && x.SpecimenType.Contains(search))
+                    || (x.Dimensions != null && x.Dimensions.Contains(search))
+                    || (x.MaterialType != null && x.MaterialType.Contains(search))
+                    || (x.TestMethodStandardName != null && x.TestMethodStandardName.Contains(search))
+                    || (x.LaboratoryTestName != null && x.LaboratoryTestName.Contains(search)));
             }
 
             if (filter.SortByColumn != null)
@@ -105,9 +105,9 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.SpecimenType != null && x.SpecimenType.ToLower().Contains(search))
-                    || (x.Dimensions != null && x.Dimensions.ToLower().Contains(search)));
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.SpecimenType != null && x.SpecimenType.Contains(search))
+                    || (x.Dimensions != null && x.Dimensions.Contains(search)));
                 }
             }
 

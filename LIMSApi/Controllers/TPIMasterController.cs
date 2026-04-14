@@ -1,5 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -17,6 +19,7 @@ namespace LIMSApi.Controllers
             _testMethodService = testMethodService;
         }
 
+        [RequirePermission(Permissions.TPI.Read)]
         [HttpPost("list")]
         public async Task<IActionResult> TPIMasterList(PageFilter filter)
         {
@@ -24,6 +27,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.TPI.Read)]
         [HttpGet("details/{id}")]
         public async Task<ActionResult<TPIMaster>> GetTPIMaster(long id)
         {
@@ -33,6 +37,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.TPI.Update)]
         [HttpPut("update")]
         public async Task<IActionResult> PutTPIMaster(TPIMaster model)
         {
@@ -40,6 +45,7 @@ namespace LIMSApi.Controllers
             return Ok(new { status = "success", message = $"TPIMaster '{model.AgencyName}' updated successfully." });
         }
 
+        [RequirePermission(Permissions.TPI.Create)]
         [HttpPost("create")]
         public async Task<ActionResult<TPIMaster>> PostTPIMaster(TPIMaster model)
         {
@@ -47,6 +53,7 @@ namespace LIMSApi.Controllers
             return Ok(new { status = "success", message = $"TPIMaster '{model.AgencyName}' created successfully." });
         }
 
+        [RequirePermission(Permissions.TPI.Delete)]
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteTPIMaster(long id)
         {

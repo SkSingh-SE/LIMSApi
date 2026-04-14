@@ -1,5 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -19,6 +21,7 @@ namespace LIMSApi.Controllers
             _departmentService = departmentService;
         }
 
+        [RequirePermission(Permissions.Department.Read)]
         [HttpPost("list")]
         public async Task<IActionResult> DepartmentList(PageFilter filter)
         {
@@ -26,6 +29,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.Department.Read)]
         [HttpGet("details/{id}")]
         public async Task<ActionResult<DepartmentMaster>> GetDepartmentMaster(long id)
         {
@@ -35,6 +39,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.Department.Update)]
         [HttpPut("update")]
         public async Task<IActionResult> PutDepartmentMaster(DepartmentMaster model)
         {
@@ -42,6 +47,7 @@ namespace LIMSApi.Controllers
             return Ok( new { message = $"Department '{model.Name}' updated successfully." });
         }
 
+        [RequirePermission(Permissions.Department.Create)]
         [HttpPost("create")]
         public async Task<ActionResult<DepartmentMaster>> PostDepartmentMaster(DepartmentMaster model)
         {
@@ -49,6 +55,7 @@ namespace LIMSApi.Controllers
             return Ok(new { message =  $"Department '{model.Name}' created successfully" });
         }
 
+        [RequirePermission(Permissions.Department.Delete)]
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteDepartmentMaster(long id)
         {

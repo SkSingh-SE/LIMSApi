@@ -479,7 +479,158 @@ public static class DataSeeder
             (N'TEST_RESULT_SAVE',N'Save Test Result',59,N'Action'),
             (N'TEST_PRICE_OVERRIDE',N'Override Test Price',59,N'Action'),
             (N'TEST_RESULT_VERIFY',N'Verify Test Result',59,N'Action'),
-            (N'INVOICE_GENERATE',N'Generate Invoice (Backend)',122,N'Action');
+            (N'INVOICE_GENERATE',N'Generate Invoice (Backend)',122,N'Action'),
+
+            -- ═══════════════════════════════════════
+            -- CRUD expansions for Group D Phase 2
+            -- ═══════════════════════════════════════
+            -- Masters CRUD (existing had Read only — add Create/Update/Delete/Manage)
+            (N'CanCreateBank',N'Create Bank',15,N'Create'),
+            (N'CanUpdateBank',N'Update Bank',15,N'Update'),
+            (N'CanDeleteBank',N'Delete Bank',15,N'Delete'),
+            (N'CanManageBank',N'Manage Bank',15,N'Manage'),
+            (N'CanCreateCourier',N'Create Courier',16,N'Create'),
+            (N'CanUpdateCourier',N'Update Courier',16,N'Update'),
+            (N'CanDeleteCourier',N'Delete Courier',16,N'Delete'),
+            (N'CanManageCourier',N'Manage Courier',16,N'Manage'),
+            (N'CanCreateTPI',N'Create TPI',17,N'Create'),
+            (N'CanUpdateTPI',N'Update TPI',17,N'Update'),
+            (N'CanDeleteTPI',N'Delete TPI',17,N'Delete'),
+            (N'CanManageTPI',N'Manage TPI',17,N'Manage'),
+            (N'CanCreateSupplier',N'Create Supplier',18,N'Create'),
+            (N'CanUpdateSupplier',N'Update Supplier',18,N'Update'),
+            (N'CanDeleteSupplier',N'Delete Supplier',18,N'Delete'),
+            (N'CanManageSupplier',N'Manage Supplier',18,N'Manage'),
+            (N'CanCreateEquipment',N'Create Equipment',19,N'Create'),
+            (N'CanUpdateEquipment',N'Update Equipment',19,N'Update'),
+            (N'CanDeleteEquipment',N'Delete Equipment',19,N'Delete'),
+            (N'CanManageEquipment',N'Manage Equipment',19,N'Manage'),
+            (N'CanCreateOEM',N'Create OEM',20,N'Create'),
+            (N'CanUpdateOEM',N'Update OEM',20,N'Update'),
+            (N'CanDeleteOEM',N'Delete OEM',20,N'Delete'),
+            (N'CanManageOEM',N'Manage OEM',20,N'Manage'),
+            (N'CanCreateCalibrationAgency',N'Create Calibration Agency',21,N'Create'),
+            (N'CanUpdateCalibrationAgency',N'Update Calibration Agency',21,N'Update'),
+            (N'CanDeleteCalibrationAgency',N'Delete Calibration Agency',21,N'Delete'),
+            (N'CanManageCalibrationAgency',N'Manage Calibration Agency',21,N'Manage'),
+            (N'CanCreateDepartment',N'Create Department',11,N'Create'),
+            (N'CanUpdateDepartment',N'Update Department',11,N'Update'),
+            (N'CanDeleteDepartment',N'Delete Department',11,N'Delete'),
+            (N'CanManageDepartment',N'Manage Department',11,N'Manage'),
+            (N'CanCreateEmployee',N'Create Employee',12,N'Create'),
+            (N'CanUpdateEmployee',N'Update Employee',12,N'Update'),
+            (N'CanDeleteEmployee',N'Delete Employee',12,N'Delete'),
+            (N'CanManageEmployee',N'Manage Employee',12,N'Manage'),
+            (N'CanCreateDesignation',N'Create Designation',13,N'Create'),
+            (N'CanUpdateDesignation',N'Update Designation',13,N'Update'),
+            (N'CanDeleteDesignation',N'Delete Designation',13,N'Delete'),
+            (N'CanManageDesignation',N'Manage Designation',13,N'Manage'),
+            (N'CanCreateTax',N'Create Tax',14,N'Create'),
+            (N'CanUpdateTax',N'Update Tax',14,N'Update'),
+            (N'CanDeleteTax',N'Delete Tax',14,N'Delete'),
+            (N'CanManageTax',N'Manage Tax',14,N'Manage'),
+
+            -- Technical masters
+            (N'CanCreateMaterialSpecification',N'Create Material Spec',31,N'Create'),
+            (N'CanUpdateMaterialSpecification',N'Update Material Spec',31,N'Update'),
+            (N'CanDeleteMaterialSpecification',N'Delete Material Spec',31,N'Delete'),
+            (N'CanManageMaterialSpecification',N'Manage Material Spec',31,N'Manage'),
+            (N'CanCreateProductSpecification',N'Create Product Spec',33,N'Create'),
+            (N'CanUpdateProductSpecification',N'Update Product Spec',33,N'Update'),
+            (N'CanDeleteProductSpecification',N'Delete Product Spec',33,N'Delete'),
+            (N'CanManageProductSpecification',N'Manage Product Spec',33,N'Manage'),
+            (N'CanCreateLaboratoryTest',N'Create Laboratory Test',35,N'Create'),
+            (N'CanUpdateLaboratoryTest',N'Update Laboratory Test',35,N'Update'),
+            (N'CanDeleteLaboratoryTest',N'Delete Laboratory Test',35,N'Delete'),
+            (N'CanManageLaboratoryTest',N'Manage Laboratory Test',35,N'Manage'),
+            (N'CanCreateTestMethodSpecification',N'Create Test Method Spec',36,N'Create'),
+            (N'CanUpdateTestMethodSpecification',N'Update Test Method Spec',36,N'Update'),
+            (N'CanDeleteTestMethodSpecification',N'Delete Test Method Spec',36,N'Delete'),
+            (N'CanManageTestMethodSpecification',N'Manage Test Method Spec',36,N'Manage'),
+            (N'CanCreateMetalClassification',N'Create Metal Classification',30,N'Create'),
+            (N'CanUpdateMetalClassification',N'Update Metal Classification',30,N'Update'),
+            (N'CanDeleteMetalClassification',N'Delete Metal Classification',30,N'Delete'),
+            (N'CanManageMetalClassification',N'Manage Metal Classification',30,N'Manage'),
+            (N'CanCreateCompanyCategory',N'Create Company Category',38,N'Create'),
+            (N'CanUpdateCompanyCategory',N'Update Company Category',38,N'Update'),
+            (N'CanDeleteCompanyCategory',N'Delete Company Category',38,N'Delete'),
+            (N'CanManageCompanyCategory',N'Manage Company Category',38,N'Manage'),
+            (N'CanCreateCustomerMaster',N'Create Customer',39,N'Create'),
+            (N'CanUpdateCustomerMaster',N'Update Customer',39,N'Update'),
+            (N'CanDeleteCustomerMaster',N'Delete Customer',39,N'Delete'),
+            (N'CanManageCustomerMaster',N'Manage Customer',39,N'Manage'),
+
+            -- Parameter
+            (N'CanCreateParameter',N'Create Parameter',24,N'Create'),
+            (N'CanUpdateParameter',N'Update Parameter',24,N'Update'),
+            (N'CanDeleteParameter',N'Delete Parameter',24,N'Delete'),
+            (N'CanManageParameter',N'Manage Parameter',24,N'Manage'),
+
+            -- Flow — Plan workflow actions
+            (N'CanApprovePlan',N'Approve Plan Change',41,N'Action'),
+            (N'CanRejectPlan',N'Reject Plan Change',41,N'Action'),
+            (N'CanManagePlan',N'Manage Plan',41,N'Manage'),
+            (N'CanApproveReview',N'Approve Review',42,N'Action'),
+            (N'CanRejectReview',N'Reject Review',42,N'Action'),
+            (N'CanManageReview',N'Manage Review',42,N'Manage'),
+
+            -- Sample Preparation
+            (N'CanCreateSampleCutting',N'Create Cutting',43,N'Create'),
+            (N'CanUpdateSampleCutting',N'Update Cutting',43,N'Update'),
+            (N'CanManageSampleCutting',N'Manage Sample Prep',43,N'Manage'),
+
+            -- Role / Menu / User (Admin section)
+            (N'CanCreateRole',N'Create Role',63,N'Create'),
+            (N'CanUpdateRole',N'Update Role',63,N'Update'),
+            (N'CanDeleteRole',N'Delete Role',63,N'Delete'),
+            (N'CanCreateMenu',N'Create Menu',61,N'Create'),
+            (N'CanUpdateMenu',N'Update Menu',61,N'Update'),
+            (N'CanDeleteMenu',N'Delete Menu',61,N'Delete'),
+            (N'CanAssignMenuPermission',N'Assign Menu Permission',62,N'Action'),
+            (N'CanReadUser',N'Read User',64,N'Read'),
+            (N'CanCreateUser',N'Create User',64,N'Create'),
+            (N'CanUpdateUser',N'Update User',64,N'Update'),
+            (N'CanDeleteUser',N'Delete User',64,N'Delete'),
+            (N'CanAssignUserPermission',N'Assign User Permission',64,N'Action'),
+            (N'CanResetUserPassword',N'Reset User Password',64,N'Action'),
+            (N'CanManageSettings',N'Manage Settings',60,N'Manage'),
+            (N'CanReadAdmin',N'Read Admin',63,N'Read'),
+            (N'CanCreateAdmin',N'Create Admin',63,N'Create'),
+            (N'CanUpdateAdmin',N'Update Admin',63,N'Update'),
+            (N'CanDeleteAdmin',N'Delete Admin',63,N'Delete'),
+            (N'CanManageAdmin',N'Manage Admin',63,N'Manage'),
+
+            -- Account / Billing expansions
+            (N'CanCalculatePricing',N'Calculate Case Pricing',122,N'Action'),
+            (N'CanValidatePricing',N'Validate Case Pricing',122,N'Action'),
+            (N'CanReadInvoiceLineItem',N'Read Invoice Line Items',122,N'Read'),
+            (N'CanManageInvoiceLineItem',N'Manage Invoice Line Items',122,N'Manage'),
+            (N'CanCloseCase',N'Close Case',122,N'Action'),
+            (N'CanRecordPayment',N'Record Payment',124,N'Action'),
+            (N'CanReadReceipt',N'Read Receipt',124,N'Read'),
+            (N'CanReadCollectionSummary',N'Read Collection Summary',125,N'Read'),
+            (N'CanReadCreditStatus',N'Read Credit Status',125,N'Read'),
+            (N'CanProcessPayment',N'Process Payment',124,N'Action'),
+            (N'CanValidatePayment',N'Validate Payment Token',124,N'Action'),
+            (N'CanSendPaymentLink',N'Send Payment Link',124,N'Action'),
+
+            -- Invoice Case / Config / CustomerPO / CuttingPrice CRUD
+            (N'CanCreateInvoiceCase',N'Create Invoice Case',37,N'Create'),
+            (N'CanUpdateInvoiceCase',N'Update Invoice Case',37,N'Update'),
+            (N'CanDeleteInvoiceCase',N'Delete Invoice Case',37,N'Delete'),
+            (N'CanManageInvoiceCase',N'Manage Invoice Case',37,N'Manage'),
+            (N'CanCreateInvoiceCaseConfig',N'Create Invoice Case Config',47,N'Create'),
+            (N'CanUpdateInvoiceCaseConfig',N'Update Invoice Case Config',47,N'Update'),
+            (N'CanDeleteInvoiceCaseConfig',N'Delete Invoice Case Config',47,N'Delete'),
+            (N'CanManageInvoiceCaseConfig',N'Manage Invoice Case Config',47,N'Manage'),
+            (N'CanCreateCustomerPO',N'Create Customer PO',127,N'Create'),
+            (N'CanUpdateCustomerPO',N'Update Customer PO',127,N'Update'),
+            (N'CanDeleteCustomerPO',N'Delete Customer PO',127,N'Delete'),
+            (N'CanManageCustomerPO',N'Manage Customer PO',127,N'Manage'),
+            (N'CanCreateCuttingPrice',N'Create Cutting Price',44,N'Create'),
+            (N'CanUpdateCuttingPrice',N'Update Cutting Price',44,N'Update'),
+            (N'CanDeleteCuttingPrice',N'Delete Cutting Price',44,N'Delete'),
+            (N'CanManageCuttingPrice',N'Manage Cutting Price',44,N'Manage');
 
             -- Insert only permissions that don't already exist (by name)
             INSERT INTO PermissionMasters (Name, DisplayName, MenuID, Type)
@@ -981,19 +1132,49 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
         {
             ["Accounts"] = new[]
             {
-                // Account module (owned by other agent — still grant read/manage)
+                // Top-level account
                 "CanReadAccount", "CanManageAccount",
                 "CanReadAccountsDashboard", "CanReadCaseAccounts",
-                "CanReadCustomerLedger", "CanReadRecordPayment",
-                "CanReadAgingReport", "CanReadOutstandingReport",
-                "CanReadCustomerPO",
+
+                // Invoice generation + line items
                 "CanGeneratePI", "CanGenerateInvoice", "CanManageInvoice",
                 "INVOICE_GENERATE",
-                // Read flow stages for context
+                "CanReadInvoiceLineItem", "CanManageInvoiceLineItem",
+
+                // Pricing
+                "CanCalculatePricing", "CanValidatePricing",
+                "TEST_PRICE_OVERRIDE",
+
+                // Case closure
+                "CanCloseCase",
+
+                // Ledger / receipts / payments
+                "CanReadCustomerLedger", "CanRecordPayment", "CanReadReceipt",
+                "CanProcessPayment", "CanValidatePayment", "CanSendPaymentLink",
+
+                // Reports
+                "CanReadAgingReport", "CanReadOutstandingReport",
+                "CanReadCollectionSummary", "CanReadCreditStatus",
+
+                // Customer PO — full CRUD (Accounts manages PO)
+                "CanReadCustomerPO", "CanCreateCustomerPO",
+                "CanUpdateCustomerPO", "CanDeleteCustomerPO", "CanManageCustomerPO",
+
+                // Invoice Case + Config — full CRUD
+                "CanReadInvoiceCase", "CanCreateInvoiceCase",
+                "CanUpdateInvoiceCase", "CanDeleteInvoiceCase", "CanManageInvoiceCase",
+                "CanReadInvoiceCaseConfig", "CanCreateInvoiceCaseConfig",
+                "CanUpdateInvoiceCaseConfig", "CanDeleteInvoiceCaseConfig", "CanManageInvoiceCaseConfig",
+
+                // Cutting price (for quoting)
+                "CanReadCuttingPrice", "CanCreateCuttingPrice",
+                "CanUpdateCuttingPrice", "CanDeleteCuttingPrice", "CanManageCuttingPrice",
+
+                // Read flow stages for context (can see but not act)
                 "CanReadSampleInward", "CanReadPlan", "CanReadReview",
                 "CanReadReporting", "CanReadCustomerMaster",
-                // Masters needed for invoice cases / PO
-                "CanReadInvoiceCase", "CanReadInvoiceCaseConfig",
+
+                // Masters used in invoice cases / PO
                 "CanReadTax", "CanReadBank",
             },
 
@@ -1060,36 +1241,61 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
 
             ["LabManager"] = new[]
             {
-                // Manage everything in flow
-                "CanReadSampleInward", "CanManageSampleInward",
-                "CanCreateSampleInward", "CanUpdateSampleInward", "CanDeleteSampleInward",
-                "CanReadPlan", "CanManagePlan", "CanApprovePlan", "CanRejectPlan",
+                // Flow — full manage
+                "CanReadSampleInward", "CanCreateSampleInward",
+                "CanUpdateSampleInward", "CanDeleteSampleInward", "CanManageSampleInward",
+                "CanReadPlan", "CanCreatePlan", "CanUpdatePlan", "CanDeletePlan",
+                "CanManagePlan", "CanApprovePlan", "CanRejectPlan",
                 "CanReadReview", "CanApproveReview", "CanRejectReview", "CanManageReview",
-                "CanReadSampleCutting", "CanManageSampleCutting",
+                "CanReadSampleCutting", "CanCreateSampleCutting", "CanUpdateSampleCutting",
+                "CanManageSampleCutting",
                 "CanReadTesting", "CanManageTesting", "CanPerformTest",
-                "CanReadTestingDashboard", "CanReadTestResults",
+                "CanReadTestingDashboard", "CanReadTestResults", "CanReadPerformTest",
+                "CanReadLongTermTracking",
                 "TEST_RESULT_SAVE", "TEST_RESULT_VERIFY", "TEST_PRICE_OVERRIDE",
                 "CanReadReporting", "CanManageReporting",
                 "CanApproveReport", "CanAmendReport",
                 "CanReadReportFormat", "CanManageReportFormat",
-                // Lab Scope
+
+                // Lab Scope — full CRUD
                 "CanReadLabScopeMaster", "CanCreateLabScopeMaster",
                 "CanUpdateLabScopeMaster", "CanDeleteLabScopeMaster",
                 "CanManageLabScopeMaster",
-                // All masters — read + manage (too many to list, but catalog has them)
-                "CanReadCustomerMaster", "CanManageCustomerMaster",
-                "CanReadEmployee", "CanReadDepartment", "CanReadDesignation",
-                "CanReadEquipment", "CanReadCalibrationAgency",
-                "CanReadMaterialSpecification", "CanReadProductSpecification",
-                "CanReadLaboratoryTest", "CanReadTestMethodSpecification",
-                "CanReadChemicalParameter", "CanReadMechanicalParameter",
-                "CanReadParameterUnit", "CanReadMetalClassification",
-                "CanReadHeatTreatment", "CanReadProductCondition",
-                "CanReadSpecimenOrientation", "CanReadProductForm",
-                "CanReadDimensionalFactors", "CanReadStandardOrganization",
-                "CanReadCompanyCategory", "CanReadTax", "CanReadBank",
-                "CanReadCourier", "CanReadTPI", "CanReadSupplier",
-                "CanReadOEM", "CanReadUniversalCode", "CanReadInvoiceCase",
+
+                // Masters — FULL CRUD (LabManager can add/edit/delete any master)
+                "CanReadCustomerMaster", "CanCreateCustomerMaster",
+                "CanUpdateCustomerMaster", "CanDeleteCustomerMaster", "CanManageCustomerMaster",
+                "CanReadEmployee", "CanCreateEmployee", "CanUpdateEmployee", "CanDeleteEmployee", "CanManageEmployee",
+                "CanReadDepartment", "CanCreateDepartment", "CanUpdateDepartment", "CanDeleteDepartment", "CanManageDepartment",
+                "CanReadDesignation", "CanCreateDesignation", "CanUpdateDesignation", "CanDeleteDesignation", "CanManageDesignation",
+                "CanReadEquipment", "CanCreateEquipment", "CanUpdateEquipment", "CanDeleteEquipment", "CanManageEquipment",
+                "CanReadCalibrationAgency", "CanCreateCalibrationAgency", "CanUpdateCalibrationAgency", "CanDeleteCalibrationAgency", "CanManageCalibrationAgency",
+                "CanReadMaterialSpecification", "CanCreateMaterialSpecification", "CanUpdateMaterialSpecification", "CanDeleteMaterialSpecification", "CanManageMaterialSpecification",
+                "CanReadProductSpecification", "CanCreateProductSpecification", "CanUpdateProductSpecification", "CanDeleteProductSpecification", "CanManageProductSpecification",
+                "CanReadLaboratoryTest", "CanCreateLaboratoryTest", "CanUpdateLaboratoryTest", "CanDeleteLaboratoryTest", "CanManageLaboratoryTest",
+                "CanReadTestMethodSpecification", "CanCreateTestMethodSpecification", "CanUpdateTestMethodSpecification", "CanDeleteTestMethodSpecification", "CanManageTestMethodSpecification",
+                "CanReadChemicalParameter", "CanReadMechanicalParameter", "CanCreateParameter", "CanUpdateParameter", "CanDeleteParameter", "CanManageParameter",
+                "CanReadParameterUnit",
+                "CanReadMetalClassification", "CanCreateMetalClassification", "CanUpdateMetalClassification", "CanDeleteMetalClassification", "CanManageMetalClassification",
+                "CanReadHeatTreatment", "CanReadProductCondition", "CanReadSpecimenOrientation",
+                "CanReadProductForm", "CanReadDimensionalFactors", "CanReadStandardOrganization",
+                "CanReadCompanyCategory", "CanCreateCompanyCategory", "CanUpdateCompanyCategory", "CanDeleteCompanyCategory", "CanManageCompanyCategory",
+                "CanReadTax", "CanCreateTax", "CanUpdateTax", "CanDeleteTax", "CanManageTax",
+                "CanReadBank", "CanCreateBank", "CanUpdateBank", "CanDeleteBank", "CanManageBank",
+                "CanReadCourier", "CanCreateCourier", "CanUpdateCourier", "CanDeleteCourier", "CanManageCourier",
+                "CanReadTPI", "CanCreateTPI", "CanUpdateTPI", "CanDeleteTPI", "CanManageTPI",
+                "CanReadSupplier", "CanCreateSupplier", "CanUpdateSupplier", "CanDeleteSupplier", "CanManageSupplier",
+                "CanReadOEM", "CanCreateOEM", "CanUpdateOEM", "CanDeleteOEM", "CanManageOEM",
+                "CanReadUniversalCode",
+
+                // Invoice Case / Config — read only (Accounts manages)
+                "CanReadInvoiceCase", "CanReadInvoiceCaseConfig",
+                "CanReadCustomerPO", "CanReadCuttingPrice",
+
+                // Account visibility (read, no manage)
+                "CanReadAccount", "CanReadAccountsDashboard", "CanReadCaseAccounts",
+                "CanReadCustomerLedger", "CanReadAgingReport", "CanReadOutstandingReport",
+
                 // Workflow view
                 "CanReadWorkflow",
             },

@@ -1,5 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Helpers;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
@@ -27,6 +29,7 @@ namespace LIMSApi.Controllers
             _fileUploadService = fileUploadService;
         }
 
+        [RequirePermission(Permissions.Employee.Read)]
         [HttpPost("list")]
         public async Task<IActionResult> EmployeeList(PageFilter filter)
         {
@@ -34,6 +37,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.Employee.Read)]
         [HttpGet("details/{id}")]
         public async Task<ActionResult<EmployeeMaster>> GetEmployeeMaster(long id)
         {
@@ -43,6 +47,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.Employee.Update)]
         [HttpPut("update")]
         public async Task<IActionResult> PutEmployeeMaster(EmployeeMaster model)
         {
@@ -50,6 +55,7 @@ namespace LIMSApi.Controllers
             return Ok(new { message = $"Employee '{model.Name}' updated successfully" });
         }
 
+        [RequirePermission(Permissions.Employee.Create)]
         [HttpPost("create")]
         public async Task<ActionResult<EmployeeMaster>> PostEmployeeMaster(EmployeeMaster model)
         {
@@ -83,6 +89,7 @@ namespace LIMSApi.Controllers
             return Ok(new { message = $"Employee Qualifications updated successfully" });
         }
 
+        [RequirePermission(Permissions.Employee.Delete)]
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteEmployeeMaster(long id)
         {

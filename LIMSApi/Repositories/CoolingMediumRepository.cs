@@ -47,8 +47,8 @@ namespace LIMSApi.Repositories
             var _query = (from c in _context.CoolingMediumMasters where c.IsActive select c).AsQueryable().ApplyFilters(filter.Filter);
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                var search = filter.searchTerm.Trim();
+                _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
             }
             if (filter.SortByColumn != null)
             {
@@ -69,8 +69,8 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
                 }
             }
             var skip = pageNo * pageSize;

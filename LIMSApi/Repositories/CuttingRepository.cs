@@ -113,10 +113,14 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.ToLower();
+                // Rely on SQL Server CI collation — no LOWER() wrap.
+                // For numeric columns (GrandTotal), parse search as decimal and do exact equality
+                // rather than CAST(col AS varchar) LIKE '%..%' which is non-sargable.
+                var search = filter.searchTerm.Trim();
+                decimal? searchAmount = decimal.TryParse(search, out var amt) ? amt : (decimal?)null;
                 query = query.Where(x =>
-                    x.CaseNo.ToLower().Contains(search) ||
-                    (x.GrandTotal != null && x.GrandTotal.ToString().Contains(search))
+                    x.CaseNo.Contains(search) ||
+                    (searchAmount != null && x.GrandTotal == searchAmount)
                 );
             }
 

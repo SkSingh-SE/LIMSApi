@@ -81,9 +81,9 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
+                var search = filter.searchTerm.Trim();
                 baseQuery = baseQuery.Where(x =>
-                    x.LaboratoryTestName != null && x.LaboratoryTestName.ToLower().Contains(search));
+                    x.LaboratoryTestName != null && x.LaboratoryTestName.Contains(search));
             }
 
             if (filter.SortByColumn != null)

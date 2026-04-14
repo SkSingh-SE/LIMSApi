@@ -41,11 +41,12 @@ namespace LIMSApi.ServiceWORepo
             // Search
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var term = filter.searchTerm.ToLower();
+                // Rely on SQL Server CI collation — no LOWER() on columns (keeps indexes sargable).
+                var term = filter.searchTerm.Trim();
                 query = query.Where(f =>
-                    f.FormatCode.ToLower().Contains(term) ||
-                    f.FormatName.ToLower().Contains(term) ||
-                    (f.Description != null && f.Description.ToLower().Contains(term)));
+                    f.FormatCode.Contains(term) ||
+                    f.FormatName.Contains(term) ||
+                    (f.Description != null && f.Description.Contains(term)));
             }
 
             // Sort
@@ -361,10 +362,11 @@ namespace LIMSApi.ServiceWORepo
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var term = searchTerm.ToLower();
+                // Rely on SQL Server CI collation — no LOWER() on columns (keeps indexes sargable).
+                var term = searchTerm.Trim();
                 query = query.Where(f =>
-                    f.FormatCode.ToLower().Contains(term) ||
-                    f.FormatName.ToLower().Contains(term));
+                    f.FormatCode.Contains(term) ||
+                    f.FormatName.Contains(term));
             }
 
             return await query

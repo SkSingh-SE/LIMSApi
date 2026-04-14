@@ -1,5 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -17,6 +19,7 @@ namespace LIMSApi.Controllers
             _oemService = supplierService;
         }
 
+        [RequirePermission(Permissions.OEM.Read)]
         [HttpPost("list")]
         public async Task<IActionResult> OEMList(PageFilter filter)
         {
@@ -24,6 +27,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.OEM.Read)]
         [HttpGet("details/{id}")]
         public async Task<ActionResult<OEMMaster>> GetOEMMaster(long id)
         {
@@ -33,6 +37,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.OEM.Update)]
         [HttpPut("update")]
         public async Task<IActionResult> PutOEMMaster(OEMMaster model)
         {
@@ -44,6 +49,7 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [RequirePermission(Permissions.OEM.Create)]
         [HttpPost("create")]
         public async Task<ActionResult<OEMMaster>> PostOEMMaster(OEMMaster model)
         {
@@ -55,6 +61,7 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [RequirePermission(Permissions.OEM.Delete)]
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteOEMMaster(long id)
         {

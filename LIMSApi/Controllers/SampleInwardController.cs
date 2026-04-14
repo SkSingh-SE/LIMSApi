@@ -1,5 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Services;
 using LIMSApi.Services.Interface;
 using LIMSApi.ServiceWORepo;
@@ -24,6 +26,7 @@ namespace LIMSApi.Controllers
             _paymentGatingService = paymentGatingService;
         }
 
+        [RequirePermission(Permissions.Inward.Read)]
         [HttpPost("list")]
         public async Task<IActionResult> SampleInwardList(PageFilter filter)
         {
@@ -43,6 +46,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.Inward.Read)]
         [HttpGet("details/{id}")]
         public async Task<IActionResult> GetSampleInward(long id)
         {
@@ -60,6 +64,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.Inward.Update)]
         [HttpPut("update")]
         public async Task<IActionResult> PutSampleInward([FromForm] SampleInwardDto model)
         {
@@ -93,6 +98,7 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [RequirePermission(Permissions.Inward.Create)]
         [HttpPost("create")]
         public async Task<ActionResult<SampleInward>> PostSampleInward([FromForm] SampleInwardDto model)
         {
@@ -116,6 +122,7 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [RequirePermission(Permissions.Inward.Delete)]
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteSampleInward(long id)
         {

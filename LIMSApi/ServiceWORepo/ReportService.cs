@@ -164,15 +164,15 @@ namespace LIMSApi.ServiceWORepo
             // ----------------------------------------------------------
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
+                var search = filter.searchTerm.Trim();
 
                 query = query.Where(x =>
-                    x.SampleNo.ToLower().Contains(search) ||
-                    x.CaseNo.ToLower().Contains(search) ||
-                    x.Customer.ToLower().Contains(search) ||
-                    x.Material.ToLower().Contains(search) ||
-                    x.Condition.ToLower().Contains(search) ||
-                    x.ReportNo.ToLower().Contains(search)
+                    x.SampleNo.Contains(search) ||
+                    x.CaseNo.Contains(search) ||
+                    x.Customer.Contains(search) ||
+                    x.Material.Contains(search) ||
+                    x.Condition.Contains(search) ||
+                    x.ReportNo.Contains(search)
                 );
             }
 

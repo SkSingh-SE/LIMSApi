@@ -1,5 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -19,6 +21,7 @@ namespace LIMSApi.Controllers
             _calibrationService = calibrationService;
         }
 
+        [RequirePermission(Permissions.CalibrationAgency.Read)]
         [HttpPost("list")]
         public async Task<IActionResult> CalibrationAgencyList(PageFilter filter)
         {
@@ -26,6 +29,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.CalibrationAgency.Read)]
         [HttpGet("details/{id}")]
         public async Task<ActionResult<CalibrationAgencyMaster>> GetCalibrationAgencyMaster(long id)
         {
@@ -35,6 +39,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.CalibrationAgency.Update)]
         [HttpPut("update")]
         public async Task<IActionResult> PutCalibrationAgencyMaster(CalibrationAgencyMaster model)
         {
@@ -46,6 +51,7 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [RequirePermission(Permissions.CalibrationAgency.Create)]
         [HttpPost("create")]
         public async Task<ActionResult<CalibrationAgencyMaster>> PostCalibrationAgencyMaster(CalibrationAgencyMaster model)
         {
@@ -57,6 +63,7 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [RequirePermission(Permissions.CalibrationAgency.Delete)]
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteCalibrationAgencyMaster(long id)
         {

@@ -49,12 +49,12 @@ namespace LIMSApi.Repositories
             
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
+                var search = filter.searchTerm.Trim();
                 _query = _query.Where(x =>
-                    (x.BankName != null && x.BankName.ToLower().Contains(search)) ||
-                    (x.AccountHolderName != null && x.AccountHolderName.ToLower().Contains(search)) ||
-                    (x.AccountNumber != null && x.AccountNumber.ToLower().Contains(search)) ||
-                    (x.BranchName != null && x.BranchName.ToLower().Contains(search)));
+                    (x.BankName != null && x.BankName.Contains(search)) ||
+                    (x.AccountHolderName != null && x.AccountHolderName.Contains(search)) ||
+                    (x.AccountNumber != null && x.AccountNumber.Contains(search)) ||
+                    (x.BranchName != null && x.BranchName.Contains(search)));
             }
 
             if (filter.SortByColumn != null)
@@ -79,8 +79,8 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.BankName != null && x.BankName.ToLower().Contains(search)));
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.BankName != null && x.BankName.Contains(search)));
                 }
             }
 

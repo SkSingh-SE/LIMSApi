@@ -49,13 +49,13 @@ namespace LIMSApi.ServiceWORepo
             // Search
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
+                var search = filter.searchTerm.Trim();
                 projected = projected.Where(t =>
-                    (t.SampleInwardNumber != null && t.SampleInwardNumber.ToLower().Contains(search)) ||
-                    (t.TpiName != null && t.TpiName.ToLower().Contains(search)) ||
-                    (t.SampleNo != null && t.SampleNo.ToLower().Contains(search)) ||
-                    (t.Stage != null && t.Stage.ToLower().Contains(search)) ||
-                    (t.Status != null && t.Status.ToLower().Contains(search))
+                    (t.SampleInwardNumber != null && t.SampleInwardNumber.Contains(search)) ||
+                    (t.TpiName != null && t.TpiName.Contains(search)) ||
+                    (t.SampleNo != null && t.SampleNo.Contains(search)) ||
+                    (t.Stage != null && t.Stage.Contains(search)) ||
+                    (t.Status != null && t.Status.Contains(search))
                 );
             }
 

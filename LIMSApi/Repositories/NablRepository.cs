@@ -594,12 +594,13 @@ namespace LIMSApi.Repositories
             // (covers inherited NablFormBase fields + entity-specific fields, excludes CompanyCode/RejectionRemarks)
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
+                var search = filter.searchTerm.Trim();
                 var props = GetSearchableStringProps(typeof(T));
                 if (props.Length > 0)
                 {
+                    // Rely on SQL Server CI collation — no LOWER() wrap (keeps columns sargable).
                     var predicate = string.Join(" || ",
-                        props.Select(p => $"({p} != null && {p}.ToLower().Contains(@0))"));
+                        props.Select(p => $"({p} != null && {p}.Contains(@0))"));
                     query = query.AsQueryable().Where(predicate, search).OfType<T>();
                 }
             }

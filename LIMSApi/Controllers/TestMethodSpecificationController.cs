@@ -1,4 +1,6 @@
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Helpers.Enums;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
@@ -21,6 +23,7 @@ namespace LIMSApi.Controllers
             _testMethodService = testMethodService;
         }
 
+        [RequirePermission(Permissions.TestMethodSpecification.Read)]
         [HttpPost("list")]
         public async Task<IActionResult> TestMethodSpecificationList(PageFilter filter)
         {
@@ -28,6 +31,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.TestMethodSpecification.Read)]
         [HttpGet("details/{id}")]
         public async Task<ActionResult<TestMethodSpecification>> GetTestMethodSpecificationMaster(long id)
         {
@@ -37,6 +41,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.TestMethodSpecification.Update)]
         [HttpPut("update")]
         public async Task<IActionResult> PutTestMethodSpecificationMaster([FromForm] TestMethodSpecificationDto model)
         {
@@ -80,6 +85,7 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [RequirePermission(Permissions.TestMethodSpecification.Create)]
         [HttpPost("create")]
         public async Task<ActionResult<TestMethodSpecification>> PostTestMethodSpecificationMaster([FromForm] TestMethodSpecificationDto model)
         {
@@ -122,6 +128,7 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [RequirePermission(Permissions.TestMethodSpecification.Delete)]
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteTestMethodSpecificationMaster(long id)
         {

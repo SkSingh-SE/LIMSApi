@@ -1,4 +1,6 @@
 ﻿using LIMSApi.Dtos;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
@@ -20,11 +22,13 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("chemical-list")]
+        [RequirePermission(Permissions.Parameter.ReadChemical)]
         public async Task<IActionResult> ChemicalParameterList(PageFilter filter)
         {
             return Ok(await _parameterService.FetchChemicalParameterList(filter));
         }
         [HttpPost("mechanical-list")]
+        [RequirePermission(Permissions.Parameter.ReadMechanical)]
         public async Task<IActionResult> MechanicalParameterList(PageFilter filter)
         {
             return Ok(await _parameterService.FetchMechanicalParameterList(filter));
@@ -32,6 +36,7 @@ namespace LIMSApi.Controllers
 
 
         [HttpGet("details/{id}")]
+        [RequirePermission(Permissions.Parameter.ReadChemical)]
         public async Task<ActionResult<ParameterMaster>> GetParameterMaster(long id)
         {
             var entity = await _parameterService.GetParameterDetails(id);
@@ -41,6 +46,7 @@ namespace LIMSApi.Controllers
 
 
         [HttpPut("update")]
+        [RequirePermission(Permissions.Parameter.Update)]
         public async Task<IActionResult> PutParameterMaster(ParameterMaster model)
         {
             await _parameterService.ModifyParameter(model);
@@ -52,6 +58,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("create")]
+        [RequirePermission(Permissions.Parameter.Create)]
         public async Task<ActionResult<ParameterMaster>> PostParameterMaster(ParameterMaster model)
         {
             await _parameterService.CreateParameter(model);
@@ -63,6 +70,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpDelete("delete/{id}")]
+        [RequirePermission(Permissions.Parameter.Delete)]
         public async Task<IActionResult> DeleteParameterMaster(long id)
         {
             var entity = await _parameterService.GetParameterDetails(id);

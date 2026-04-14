@@ -1,5 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -17,6 +19,7 @@ namespace LIMSApi.Controllers
             _roleService = roleService;
         }
 
+        [RequirePermission(Permissions.Role.Read)]
         [HttpPost("list")]
         public async Task<IActionResult> RoleList(PageFilter filter)
         {
@@ -24,6 +27,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.Role.Read)]
         [HttpGet("details/{id}")]
         public async Task<ActionResult<RoleMaster>> GetRoleMaster(long id)
         {
@@ -33,6 +37,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.Role.Update)]
         [HttpPut("update")]
         public async Task<IActionResult> PutRoleMaster(RoleMaster model)
         {
@@ -44,6 +49,7 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [RequirePermission(Permissions.Role.Create)]
         [HttpPost("create")]
         public async Task<ActionResult<RoleMaster>> PostRoleMaster(RoleMaster model)
         {
@@ -55,6 +61,7 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [RequirePermission(Permissions.Role.Delete)]
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteRoleMaster(long id)
         {

@@ -1,5 +1,7 @@
 ﻿using LIMSApi.Data;
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Http;
@@ -21,6 +23,7 @@ namespace LIMSApi.Controllers
             _context = context;
         }
 
+        [RequirePermission(Permissions.MaterialSpecification.Read)]
         [HttpPost("list")]
         public async Task<IActionResult> SpecificationHeaderList(PageFilter filter)
         {
@@ -34,6 +37,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.MaterialSpecification.Read)]
         [HttpGet("details/{id}")]
         public async Task<ActionResult<SpecificationHeader>> GetSpecificationHeader(long id)
         {
@@ -43,6 +47,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.MaterialSpecification.Update)]
         [HttpPut("update")]
         public async Task<IActionResult> PutSpecificationHeader(SpecificationHeader model)
         {
@@ -54,6 +59,7 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [RequirePermission(Permissions.MaterialSpecification.Create)]
         [HttpPost("create")]
         public async Task<ActionResult<SpecificationHeader>> PostSpecificationHeader(SpecificationHeader model)
         {
@@ -65,6 +71,7 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [RequirePermission(Permissions.MaterialSpecification.Delete)]
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteSpecificationHeader(long id)
         {

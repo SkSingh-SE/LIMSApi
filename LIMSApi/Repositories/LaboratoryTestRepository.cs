@@ -75,11 +75,11 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
+                var search = filter.searchTerm.Trim();
                 _query = _query.Where(x =>
-                                    (!string.IsNullOrEmpty(x.Name) && x.Name.ToLower().Contains(search)) ||
-                                    (!string.IsNullOrEmpty(x.DepartmentName) && x.DepartmentName.ToLower().Contains(search)) ||
-                                    (!string.IsNullOrEmpty(x.SubGroup) && x.SubGroup.ToLower().Contains(search))
+                                    (!string.IsNullOrEmpty(x.Name) && x.Name.Contains(search)) ||
+                                    (!string.IsNullOrEmpty(x.DepartmentName) && x.DepartmentName.Contains(search)) ||
+                                    (!string.IsNullOrEmpty(x.SubGroup) && x.SubGroup.Contains(search))
                                     );
             }
 
@@ -113,8 +113,8 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.SubGroup != null && x.SubGroup.ToLower().Contains(search)));
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.SubGroup != null && x.SubGroup.Contains(search)));
                 }
             }
 
@@ -142,7 +142,7 @@ namespace LIMSApi.Repositories
                              Department = d.Name
                          };
 
-            _query = _query.Where(x => x.Department.ToString().ToLower().Contains("chemical"));
+            _query = _query.Where(x => x.Department.Contains("Chemical"));
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
@@ -151,8 +151,8 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.SubGroup != null && x.SubGroup.ToLower().Contains(search)));
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.SubGroup != null && x.SubGroup.Contains(search)));
                 }
             }
 
@@ -186,8 +186,8 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var search = searchTerm.Trim().ToLower();
-                query = query.Where(n => n.ToLower().Contains(search));
+                var search = searchTerm.Trim();
+                query = query.Where(n => n.Contains(search));
             }
 
             return await query.OrderBy(n => n).Take(pageSize).ToListAsync();

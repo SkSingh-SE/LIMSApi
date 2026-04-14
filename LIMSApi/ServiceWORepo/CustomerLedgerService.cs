@@ -78,10 +78,10 @@ namespace LIMSApi.ServiceWORepo
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
+                var search = filter.searchTerm.Trim();
                 query = query.Where(x =>
-                    (x.ReferenceNo != null && x.ReferenceNo.ToLower().Contains(search)) ||
-                    (x.Description != null && x.Description.ToLower().Contains(search)));
+                    (x.ReferenceNo != null && x.ReferenceNo.Contains(search)) ||
+                    (x.Description != null && x.Description.Contains(search)));
             }
 
             int totalRecords = await query.CountAsync();

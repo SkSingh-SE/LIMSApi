@@ -1,4 +1,6 @@
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,6 +20,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpGet("history/{planId}")]
+        [RequirePermission(Permissions.Plan.Read)]
         public async Task<IActionResult> GetPlanHistory(long planId)
         {
             var history = await _planService.GetPlanHistory(planId);
@@ -25,6 +28,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("request-replan/{planId}")]
+        [RequirePermission(Permissions.Plan.Update)]
         public async Task<IActionResult> RequestReplan(long planId, [FromBody] ReplanRequestDto dto)
         {
             await _planService.RequestReplan(planId, dto.Reason);
@@ -36,6 +40,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("approve-replan/{requestId}")]
+        [RequirePermission(Permissions.Plan.Approve)]
         public async Task<IActionResult> ApproveReplan(long requestId, [FromBody] ReplanApprovalDto dto)
         {
             await _planService.ApproveReplan(requestId, dto.Remarks);
@@ -47,6 +52,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("reject-replan/{requestId}")]
+        [RequirePermission(Permissions.Plan.Reject)]
         public async Task<IActionResult> RejectReplan(long requestId, [FromBody] ReplanApprovalDto dto)
         {
             await _planService.RejectReplan(requestId, dto.Remarks);

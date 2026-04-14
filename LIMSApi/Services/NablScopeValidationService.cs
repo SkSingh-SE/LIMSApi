@@ -167,10 +167,11 @@ namespace LIMSApi.Services
             if (labTest == null) return null;
 
             // G2: Search by exact match first, then Contains fallback
-            var paramName = paramMaster.Name.Trim().ToLower();
+            var paramName = paramMaster.Name.Trim();
+            // Rely on SQL Server CI collation — no LOWER() on columns (keeps indexes sargable).
             var uncertainty = await _db.NablMeasurementUncertainties
                 .Where(u => u.IsActive && u.TestParameter != null
-                    && u.TestParameter.Trim().ToLower() == paramName)
+                    && u.TestParameter.Trim() == paramName)
                 .FirstOrDefaultAsync();
 
             // Fallback to Contains only if exact match not found
@@ -178,7 +179,7 @@ namespace LIMSApi.Services
             {
                 uncertainty = await _db.NablMeasurementUncertainties
                     .Where(u => u.IsActive && u.TestParameter != null
-                        && u.TestParameter.ToLower().Contains(paramName))
+                        && u.TestParameter.Contains(paramName))
                     .FirstOrDefaultAsync();
             }
 

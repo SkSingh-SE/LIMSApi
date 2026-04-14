@@ -87,12 +87,12 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.SpecificationName != null && x.SpecificationName.ToLower().Contains(search))
+                // Date column excluded from free-text search — use the date column filter instead.
+                var search = filter.searchTerm.Trim();
+                _query = _query.Where(x => (x.SpecificationName != null && x.SpecificationName.Contains(search))
                 || x.AliasName.Contains(search)
                 || x.SpecificationCode.Contains(search)
                 || x.MaterialSpecification.Contains(search)
-                || (x.ModifiedOn.HasValue && x.ModifiedOn.Value.ToString().Contains(search))
                 );
             }
             if (filter.SortByColumn != null)
@@ -120,8 +120,8 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.SpecificationName != null && x.SpecificationName.ToLower().Contains(search))
+                var search = filter.searchTerm.Trim();
+                _query = _query.Where(x => (x.SpecificationName != null && x.SpecificationName.Contains(search))
                 || x.AliasName.Contains(search)
                 || x.SpecificationCode.Contains(search)
                 || x.MaterialSpecification.Contains(search)
@@ -149,8 +149,8 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.SpecificationName != null && x.SpecificationName.ToLower().Contains(search)));
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.SpecificationName != null && x.SpecificationName.Contains(search)));
                 }
             }
 

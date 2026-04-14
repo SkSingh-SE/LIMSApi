@@ -83,10 +83,10 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
+                var search = filter.searchTerm.Trim();
                 _query = _query.Where(x =>
-                    x.PONumber.ToLower().Contains(search) ||
-                    x.CustomerName.ToLower().Contains(search));
+                    x.PONumber.Contains(search) ||
+                    x.CustomerName.Contains(search));
             }
 
             if (filter.SortByColumn != null)
@@ -116,8 +116,8 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => x.PONumber.ToLower().Contains(search));
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => x.PONumber.Contains(search));
                 }
             }
 

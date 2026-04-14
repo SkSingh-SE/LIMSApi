@@ -69,13 +69,13 @@ namespace LIMSApi.Services
             // Search
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
+                var search = filter.searchTerm.Trim();
                 query = query.Where(x =>
-                    x.SampleNo.ToLower().Contains(search) ||
-                    x.CaseNo.ToLower().Contains(search) ||
-                    (x.CustomerName != null && x.CustomerName.ToLower().Contains(search)) ||
-                    (x.SampleDescription != null && x.SampleDescription.ToLower().Contains(search)) ||
-                    x.Status.ToLower().Contains(search));
+                    x.SampleNo.Contains(search) ||
+                    x.CaseNo.Contains(search) ||
+                    (x.CustomerName != null && x.CustomerName.Contains(search)) ||
+                    (x.SampleDescription != null && x.SampleDescription.Contains(search)) ||
+                    x.Status.Contains(search));
             }
 
             // Sort

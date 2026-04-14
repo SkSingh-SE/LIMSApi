@@ -1,5 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -17,6 +19,7 @@ namespace LIMSApi.Controllers
             _testMethodService = testMethodService;
         }
 
+        [RequirePermission(Permissions.CompanyCategory.Read)]
         [HttpPost("list")]
         public async Task<IActionResult> CustomerTypeList(PageFilter filter)
         {
@@ -24,6 +27,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.CompanyCategory.Read)]
         [HttpGet("details/{id}")]
         public async Task<ActionResult<CompanyCategoryMaster>> GetCustomerTypeMaster(long id)
         {
@@ -33,6 +37,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.CompanyCategory.Update)]
         [HttpPut("update")]
         public async Task<IActionResult> PutCustomerTypeMaster(CompanyCategoryMaster model)
         {
@@ -40,6 +45,7 @@ namespace LIMSApi.Controllers
             return Ok(new { message = $"CustomerTypeMaster '{model.Name}' updated successfully." });
         }
 
+        [RequirePermission(Permissions.CompanyCategory.Create)]
         [HttpPost("create")]
         public async Task<ActionResult<CompanyCategoryMaster>> PostCustomerTypeMaster(CompanyCategoryMaster model)
         {
@@ -47,6 +53,7 @@ namespace LIMSApi.Controllers
             return Ok(new { message = $"CustomerTypeMaster '{model.Name}' created successfully" });
         }
 
+        [RequirePermission(Permissions.CompanyCategory.Delete)]
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteCustomerTypeMaster(long id)
         {

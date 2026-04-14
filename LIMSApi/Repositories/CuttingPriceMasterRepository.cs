@@ -64,9 +64,9 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.CuttingType != null && x.CuttingType.ToLower().Contains(search))
-                    || (x.SpecimenTypeName != null && x.SpecimenTypeName.ToLower().Contains(search)));
+                var search = filter.searchTerm.Trim();
+                _query = _query.Where(x => (x.CuttingType != null && x.CuttingType.Contains(search))
+                    || (x.SpecimenTypeName != null && x.SpecimenTypeName.Contains(search)));
             }
 
             if (filter.SortByColumn != null)
@@ -91,8 +91,8 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.CuttingType != null && x.CuttingType.ToLower().Contains(search)));
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.CuttingType != null && x.CuttingType.Contains(search)));
                 }
             }
 

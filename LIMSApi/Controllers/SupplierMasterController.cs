@@ -1,5 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -17,6 +19,7 @@ namespace LIMSApi.Controllers
             _supplierService = supplierService;
         }
 
+        [RequirePermission(Permissions.Supplier.Read)]
         [HttpPost("list")]
         public async Task<IActionResult> SupplierList(PageFilter filter)
         {
@@ -24,6 +27,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.Supplier.Read)]
         [HttpGet("details/{id}")]
         public async Task<ActionResult<SupplierMaster>> GetSupplierMaster(long id)
         {
@@ -33,6 +37,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.Supplier.Update)]
         [HttpPut("update")]
         public async Task<IActionResult> PutSupplierMaster(SupplierMaster model)
         {
@@ -44,6 +49,7 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [RequirePermission(Permissions.Supplier.Create)]
         [HttpPost("create")]
         public async Task<ActionResult<SupplierMaster>> PostSupplierMaster([FromForm] SupplierMaster model)
         {
@@ -55,6 +61,7 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [RequirePermission(Permissions.Supplier.Delete)]
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteSupplierMaster(long id)
         {

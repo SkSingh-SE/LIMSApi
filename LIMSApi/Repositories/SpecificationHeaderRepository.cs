@@ -43,6 +43,7 @@ namespace LIMSApi.Repositories
             return await _context.SpecificationHeaders
                  .Include(x => x.Grades)
                      .ThenInclude(sl => sl.SpecificationLines)
+                         .ThenInclude(l => l.Parameter)
                  .FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
         }
 
@@ -85,14 +86,14 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Standard != null && x.Standard.ToLower().Contains(search))
-                || (x.Part != null && x.Part.ToLower().Contains(search))
-                || (x.StandardYear != null && x.StandardYear.ToLower().Contains(search))
-                || (x.UNSSteelNumber != null && x.UNSSteelNumber.ToLower().Contains(search))
-                || (x.Grade != null && x.Grade.ToLower().Contains(search))
-                || (x.AliasName != null && x.AliasName.ToLower().Contains(search))
-                || (x.MetalClassificationName != null && x.MetalClassificationName.ToLower().Contains(search))
+                var search = filter.searchTerm.Trim();
+                _query = _query.Where(x => (x.Standard != null && x.Standard.Contains(search))
+                || (x.Part != null && x.Part.Contains(search))
+                || (x.StandardYear != null && x.StandardYear.Contains(search))
+                || (x.UNSSteelNumber != null && x.UNSSteelNumber.Contains(search))
+                || (x.Grade != null && x.Grade.Contains(search))
+                || (x.AliasName != null && x.AliasName.Contains(search))
+                || (x.MetalClassificationName != null && x.MetalClassificationName.Contains(search))
                 );
             }
 
@@ -135,14 +136,14 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Standard != null && x.Standard.ToLower().Contains(search))
-                || (x.Part != null && x.Part.ToLower().Contains(search))
-                || (x.StandardYear != null && x.StandardYear.ToLower().Contains(search))
-                || (x.UNSSteelNumber != null && x.UNSSteelNumber.ToLower().Contains(search))
-                || (x.Grade != null && x.Grade.ToLower().Contains(search))
-                || (x.AliasName != null && x.AliasName.ToLower().Contains(search))
-                || (x.MetalClassificationName != null && x.MetalClassificationName.ToLower().Contains(search))
+                var search = filter.searchTerm.Trim();
+                _query = _query.Where(x => (x.Standard != null && x.Standard.Contains(search))
+                || (x.Part != null && x.Part.Contains(search))
+                || (x.StandardYear != null && x.StandardYear.Contains(search))
+                || (x.UNSSteelNumber != null && x.UNSSteelNumber.Contains(search))
+                || (x.Grade != null && x.Grade.Contains(search))
+                || (x.AliasName != null && x.AliasName.Contains(search))
+                || (x.MetalClassificationName != null && x.MetalClassificationName.Contains(search))
                 );
             }
 
@@ -173,8 +174,8 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.AliasName != null && x.AliasName.ToLower().Contains(search)));
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.AliasName != null && x.AliasName.Contains(search)));
                 }
             }
 
@@ -207,7 +208,7 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var search = searchTerm.Trim().ToLower();
+                var search = searchTerm.Trim();
 
                 if (int.TryParse(search, out int id))
                 {
@@ -215,7 +216,7 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    query = query.Where(x => x.AliasName != null && x.AliasName.ToLower().Contains(search));
+                    query = query.Where(x => x.AliasName != null && x.AliasName.Contains(search));
                 }
             }
 
@@ -259,10 +260,12 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var search = searchTerm.Trim().ToLower();
+                var search = searchTerm.Trim();
+                // GradeID is a long — parse search for exact match instead of CAST LIKE.
+                long? searchId = long.TryParse(search, out var gid) ? gid : (long?)null;
                 query = query.Where(x =>
-                    (x.AliasName != null && x.AliasName.ToLower().Contains(search))
-                    || x.GradeID.ToString().Contains(search));
+                    (x.AliasName != null && x.AliasName.Contains(search))
+                    || (searchId != null && x.GradeID == searchId));
             }
 
             var skip = pageNo * pageSize;

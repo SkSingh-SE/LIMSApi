@@ -50,11 +50,11 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
+                var search = filter.searchTerm.Trim();
                 _query = _query.Where(x =>
-                    (x.AgencyName != null && x.AgencyName.ToLower().Contains(search))
-                    || x.EmailId.ToLower().Contains(search)
-                    || x.ContactNo.ToLower().Contains(search)
+                    (x.AgencyName != null && x.AgencyName.Contains(search))
+                    || x.EmailId.Contains(search)
+                    || x.ContactNo.Contains(search)
                 );
             }
 
@@ -80,8 +80,8 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.AgencyName != null && x.AgencyName.ToLower().Contains(search)));
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.AgencyName != null && x.AgencyName.Contains(search)));
                 }
             }
 

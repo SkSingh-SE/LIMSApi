@@ -256,7 +256,7 @@ namespace LIMSApi.Repositories
             // Search
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
+                var search = filter.searchTerm.Trim();
 
                 query = query.Where(x =>
                     EF.Functions.Like(EF.Property<string>(x, "CaseNo") ?? "", $"%{search}%") ||
@@ -291,8 +291,8 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var search = searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.CaseNo != null && x.CaseNo.ToLower().Contains(search)));
+                var search = searchTerm.Trim();
+                _query = _query.Where(x => (x.CaseNo != null && x.CaseNo.Contains(search)));
             }
 
             var skip = pageNo * pageSize;
@@ -320,8 +320,8 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.CaseNo != null && x.CaseNo.ToLower().Contains(search)));
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.CaseNo != null && x.CaseNo.Contains(search)));
                 }
             }
 

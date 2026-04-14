@@ -746,7 +746,7 @@ namespace LIMSApi.ServiceWORepo
 
             foreach (var param in billableParams)
             {
-                var paramNameLower = (param.ParameterName ?? "").Trim().ToLower();
+                var paramNameLower = (param.ParameterName ?? "").Trim();
                 if (string.IsNullOrWhiteSpace(paramNameLower))
                     continue;
 
@@ -786,7 +786,7 @@ namespace LIMSApi.ServiceWORepo
         {
             foreach (var param in billableParams)
             {
-                var paramName = (param.ParameterName ?? "").Trim().ToLower();
+                var paramName = (param.ParameterName ?? "").Trim();
                 if (string.IsNullOrWhiteSpace(paramName)) continue;
 
                 if (keywords.Any(k => paramName.Contains(k.ToLower())))
@@ -815,7 +815,7 @@ namespace LIMSApi.ServiceWORepo
 
             foreach (var param in billableParams)
             {
-                var paramName = (param.ParameterName ?? "").Trim().ToLower();
+                var paramName = (param.ParameterName ?? "").Trim();
                 if (string.IsNullOrWhiteSpace(paramName)) continue;
 
                 // Strict matching: exact, then token-based (no loose Contains)
@@ -872,8 +872,8 @@ namespace LIMSApi.ServiceWORepo
         /// </summary>
         private bool MatchesName(string paramNameLower, string priceName, string priceAlias)
         {
-            var priceNameLower = (priceName ?? "").Trim().ToLower();
-            var priceAliasLower = (priceAlias ?? "").Trim().ToLower();
+            var priceNameLower = (priceName ?? "").Trim();
+            var priceAliasLower = (priceAlias ?? "").Trim();
 
             // 1. Exact match
             if (paramNameLower == priceNameLower)

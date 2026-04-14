@@ -187,15 +187,15 @@ namespace LIMSApi.ServiceWORepo
             // ---------------- SEARCH ----------------
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
+                var search = filter.searchTerm.Trim();
 
                 query = query.Where(x =>
-                    (x.CaseNo != null && x.CaseNo.ToLower().Contains(search)) ||
-                    (x.CustomerName != null && x.CustomerName.ToLower().Contains(search)) ||
-                    (x.CustomerType != null && x.CustomerType.ToLower().Contains(search)) ||
-                    (x.PIStatus != null && x.PIStatus.ToLower().Contains(search)) ||
-                    (x.InvoiceStatus != null && x.InvoiceStatus.ToLower().Contains(search)) ||
-                    (x.PaymentStatus != null && x.PaymentStatus.ToLower().Contains(search))
+                    (x.CaseNo != null && x.CaseNo.Contains(search)) ||
+                    (x.CustomerName != null && x.CustomerName.Contains(search)) ||
+                    (x.CustomerType != null && x.CustomerType.Contains(search)) ||
+                    (x.PIStatus != null && x.PIStatus.Contains(search)) ||
+                    (x.InvoiceStatus != null && x.InvoiceStatus.Contains(search)) ||
+                    (x.PaymentStatus != null && x.PaymentStatus.Contains(search))
                 );
             }
 

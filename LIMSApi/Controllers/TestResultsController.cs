@@ -1,4 +1,5 @@
 ﻿using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Middleware;
 using LIMSApi.Models;
 using LIMSApi.ServiceWORepo;
@@ -34,6 +35,7 @@ namespace LIMSApi.Controllers
         // Dashboard List
         // =============================================================
         [HttpPost("list")]
+        [RequirePermission(Permissions.Testing.ReadDashboard)]
         public async Task<IActionResult> List(PageFilter filter)
         {
             return Ok(await _service.GetTestingDashboardList(filter));
@@ -43,6 +45,7 @@ namespace LIMSApi.Controllers
         // Load Parameters from Specification
         // =============================================================
         [HttpPost("load-parameters/{headerId}")]
+        [RequirePermission(Permissions.Testing.Read)]
         public async Task<IActionResult> LoadParametersFromSpec(long headerId)
         {
             var result = await _service.LoadParametersFromSpecAsync(headerId);
@@ -53,6 +56,7 @@ namespace LIMSApi.Controllers
         // Full Result Payload (Sample-wise)
         // =============================================================
         [HttpGet("full-result-payload/{sampleId}")]
+        [RequirePermission(Permissions.Testing.ReadResults)]
         public async Task<IActionResult> GetFullResultPayload(long sampleId)
         {
             try
@@ -69,6 +73,7 @@ namespace LIMSApi.Controllers
         // Header + Parameters
         // =============================================================
         [HttpGet("{headerId}")]
+        [RequirePermission(Permissions.Testing.ReadResults)]
         public async Task<IActionResult> Get(long headerId)
         {
             var header = await _service.GetHeaderAsync(headerId);
@@ -80,7 +85,7 @@ namespace LIMSApi.Controllers
         // Save Result (Draft / Progress)
         // =============================================================
         [HttpPost("save-test-result")]
-        [RequirePermission("TEST_RESULT_SAVE")]
+        [RequirePermission(Permissions.Testing.SaveResult)]
         public async Task<IActionResult> SaveTestResult(TestResultSaveDto dto)
         {
             await _service.SaveTestResult(dto);
@@ -101,6 +106,7 @@ namespace LIMSApi.Controllers
         // Start Test
         // =============================================================
         [HttpPost("start-test/{headerId}")]
+        [RequirePermission(Permissions.Testing.Perform)]
         public async Task<IActionResult> StartTest(long headerId)
         {
             var response = await _service.StartTest(headerId);
@@ -111,6 +117,7 @@ namespace LIMSApi.Controllers
         // Complete Test
         // =============================================================
         [HttpPost("complete-test/{headerId}")]
+        [RequirePermission(Permissions.Testing.Perform)]
         public async Task<IActionResult> CompleteTest(long headerId)
         {
             var response = await _service.CompleteTest(headerId);
@@ -121,6 +128,7 @@ namespace LIMSApi.Controllers
         // Update Parameter
         // =============================================================
         [HttpPost("update-parameter/{headerId}/parameter/{paramId}")]
+        [RequirePermission(Permissions.Testing.SaveResult)]
         public async Task<IActionResult> UpdateParameter(long headerId, long paramId, TestResultParameterDto param)
         {
             var response = await _service.UpdateParameterAsync(headerId, paramId, param);
@@ -138,6 +146,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("long-term/list")]
+        [RequirePermission(Permissions.Testing.Read)]
         public async Task<IActionResult> GetLongTermList(PageFilter filter)
         {
             var result = await _service.GetLongTermList(filter);
@@ -305,7 +314,7 @@ namespace LIMSApi.Controllers
         /// Override the calculated price with a manual amount and reason
         /// </summary>
         [HttpPost("override-price/{headerId}")]
-        [RequirePermission("TEST_PRICE_OVERRIDE")]
+        [RequirePermission(Permissions.Testing.PriceOverride)]
         public async Task<IActionResult> OverridePrice(long headerId, [FromBody] Dtos.PriceOverrideDto dto)
         {
             if (dto == null)
@@ -378,6 +387,7 @@ namespace LIMSApi.Controllers
         // Phase 5: Test Verification Workflow
         // =============================================================
         [HttpPost("submit-for-verification/{headerId}")]
+        [RequirePermission(Permissions.Testing.Perform)]
         public async Task<IActionResult> SubmitForVerification(long headerId)
         {
             await _service.SubmitForVerification(headerId);
@@ -385,6 +395,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("submit-sample-for-verification/{sampleId}")]
+        [RequirePermission(Permissions.Testing.Perform)]
         public async Task<IActionResult> SubmitSampleForVerification(long sampleId)
         {
             var result = await _service.SubmitSampleForVerification(sampleId);
@@ -392,6 +403,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("verification-list")]
+        [RequirePermission(Permissions.Testing.VerifyResult)]
         public async Task<IActionResult> GetVerificationList(PageFilter filter)
         {
             var result = await _service.GetVerificationList(filter);
@@ -399,6 +411,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("verify/{headerId}")]
+        [RequirePermission(Permissions.Testing.VerifyResult)]
         public async Task<IActionResult> VerifyTest(long headerId, [FromBody] VerificationActionDto dto)
         {
             await _service.VerifyTest(headerId, dto?.Comments);
@@ -406,6 +419,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("reject-verification/{headerId}")]
+        [RequirePermission(Permissions.Testing.VerifyResult)]
         public async Task<IActionResult> RejectVerification(long headerId, [FromBody] VerificationActionDto dto)
         {
             await _service.RejectVerification(headerId, dto?.Comments);
@@ -416,6 +430,7 @@ namespace LIMSApi.Controllers
         /// Workflow-based verification action (matches Report approval pattern)
         /// </summary>
         [HttpPost("verification/action")]
+        [RequirePermission(Permissions.Testing.VerifyResult)]
         public async Task<IActionResult> PerformVerificationAction([FromBody] WorkflowActionRequestDto dto)
         {
             if (dto == null || dto.Id <= 0)

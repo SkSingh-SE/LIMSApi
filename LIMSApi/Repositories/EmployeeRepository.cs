@@ -88,16 +88,15 @@ namespace LIMSApi.Repositories
             
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
+                // Date columns excluded from free-text search — use the date column filter (FilterHelper)
+                // for proper range-based searching. ToString() on a date column is non-sargable.
+                var search = filter.searchTerm.Trim();
                 _query = _query.Where(x =>
-                    (x.Name != null && x.Name.ToLower().Contains(search))
-                    || (x.EmailId != null && x.EmailId.ToLower().Contains(search))
-                    || (x.Gender != null && x.Gender.ToLower().Contains(search))
-                    || (x.DepartmentName != null && x.DepartmentName.ToLower().Contains(search))
-                    || (x.DesignationName != null && x.DesignationName.ToLower().Contains(search))
-                    || (x.DateOfJoin.HasValue && x.DateOfJoin.Value.ToString().Contains(search))
-                    || x.DateOfBirth.ToString().Contains(search)
-                    || (x.ModifiedOn.HasValue && x.ModifiedOn.Value.ToString().Contains(search))
+                    (x.Name != null && x.Name.Contains(search))
+                    || (x.EmailId != null && x.EmailId.Contains(search))
+                    || (x.Gender != null && x.Gender.Contains(search))
+                    || (x.DepartmentName != null && x.DepartmentName.Contains(search))
+                    || (x.DesignationName != null && x.DesignationName.Contains(search))
                 );
             }
 
@@ -123,8 +122,8 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => x.Name != null && x.Name.ToLower().Contains(search));
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => x.Name != null && x.Name.Contains(search));
                 }
             }
 

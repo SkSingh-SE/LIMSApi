@@ -42,7 +42,7 @@ namespace LIMSApi.Services
             if (model.IsCalculated) ValidateFormula(model.Formula);
             model.Formula = model.IsCalculated ? model.Formula : null;
             if (!string.IsNullOrWhiteSpace(model.ElementType))
-                model.ElementType = model.ElementType.Trim().ToLower();
+                model.ElementType = model.ElementType.Trim();
 
             await _parameterRepository.AddParameter(model);
             _logger.LogInformation("Parameter '{ParameterName}' created successfully.", model.Name);

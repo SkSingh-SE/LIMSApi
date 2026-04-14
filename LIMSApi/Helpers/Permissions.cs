@@ -262,23 +262,86 @@ namespace LIMSApi.Helpers
         }
 
         // ═══════════════════════════════════════════════════════
-        // ACCOUNTS — handled by separate agent (do not touch existing)
+        // ACCOUNTS — billing, invoicing, payments, ledger
         // ═══════════════════════════════════════════════════════
         public static class Account
         {
+            // Top-level
             public const string Read = "CanReadAccount";
             public const string Manage = "CanManageAccount";
+
+            // Dashboard + case list
+            public const string ReadDashboard = "CanReadAccountsDashboard";
+            public const string ReadCaseAccounts = "CanReadCaseAccounts";
+
+            // Invoice generation
             public const string GeneratePI = "CanGeneratePI";
             public const string GenerateInvoice = "CanGenerateInvoice";
             public const string GenerateInvoiceBackend = "INVOICE_GENERATE";
             public const string ManageInvoice = "CanManageInvoice";
-            public const string ReadDashboard = "CanReadAccountsDashboard";
-            public const string ReadCaseAccounts = "CanReadCaseAccounts";
+
+            // Pricing — calculation + validation
+            public const string CalculatePricing = "CanCalculatePricing";
+            public const string ValidatePricing = "CanValidatePricing";
+
+            // Invoice line items
+            public const string ReadInvoiceLineItem = "CanReadInvoiceLineItem";
+            public const string ManageInvoiceLineItem = "CanManageInvoiceLineItem";
+
+            // Case closure
+            public const string CanCloseCase = "CanCloseCase";
+
+            // Ledger + receipts
             public const string ReadCustomerLedger = "CanReadCustomerLedger";
-            public const string RecordPayment = "CanReadRecordPayment";
+            public const string RecordPayment = "CanRecordPayment";
+            public const string ReadReceipt = "CanReadReceipt";
+
+            // Reports
             public const string ReadAging = "CanReadAgingReport";
             public const string ReadOutstanding = "CanReadOutstandingReport";
-            public const string ReadCustomerPO = "CanReadCustomerPO";
+            public const string ReadCollectionSummary = "CanReadCollectionSummary";
+            public const string ReadCreditStatus = "CanReadCreditStatus";
+
+            // Payments
+            public const string ProcessPayment = "CanProcessPayment";
+            public const string ValidatePayment = "CanValidatePayment";
+            public const string SendPaymentLink = "CanSendPaymentLink";
+        }
+
+        public static class InvoiceCase
+        {
+            public const string Read = "CanReadInvoiceCase";
+            public const string Create = "CanCreateInvoiceCase";
+            public const string Update = "CanUpdateInvoiceCase";
+            public const string Delete = "CanDeleteInvoiceCase";
+            public const string Manage = "CanManageInvoiceCase";
+        }
+
+        public static class InvoiceCaseConfig
+        {
+            public const string Read = "CanReadInvoiceCaseConfig";
+            public const string Create = "CanCreateInvoiceCaseConfig";
+            public const string Update = "CanUpdateInvoiceCaseConfig";
+            public const string Delete = "CanDeleteInvoiceCaseConfig";
+            public const string Manage = "CanManageInvoiceCaseConfig";
+        }
+
+        public static class CustomerPO
+        {
+            public const string Read = "CanReadCustomerPO";
+            public const string Create = "CanCreateCustomerPO";
+            public const string Update = "CanUpdateCustomerPO";
+            public const string Delete = "CanDeleteCustomerPO";
+            public const string Manage = "CanManageCustomerPO";
+        }
+
+        public static class CuttingPrice
+        {
+            public const string Read = "CanReadCuttingPrice";
+            public const string Create = "CanCreateCuttingPrice";
+            public const string Update = "CanUpdateCuttingPrice";
+            public const string Delete = "CanDeleteCuttingPrice";
+            public const string Manage = "CanManageCuttingPrice";
         }
 
         // ═══════════════════════════════════════════════════════
@@ -298,6 +361,14 @@ namespace LIMSApi.Helpers
         // ═══════════════════════════════════════════════════════
         public static class Admin
         {
+            // Module-level flags (broad)
+            public const string Read = "CanReadAdmin";          // list-level read on any admin entity
+            public const string Create = "CanCreateAdmin";
+            public const string Update = "CanUpdateAdmin";
+            public const string Delete = "CanDeleteAdmin";
+            public const string Manage = "CanManageAdmin";
+
+            // Granular flags (existing — kept for backward compat)
             public const string ReadConfiguration = "CanReadConfiguration";
             public const string ReadMenuManagement = "CanReadMenuManagement";
             public const string ReadMenuPermission = "CanReadMenuPermission";
@@ -309,6 +380,36 @@ namespace LIMSApi.Helpers
             public const string ManageMenu = "CanManageMenu";
             public const string AssignPermission = "CanAssignPermission";
             public const string ManageSettings = "CanManageSettings";
+        }
+
+        public static class Role
+        {
+            public const string Read = "CanReadRoleManagement";
+            public const string Create = "CanCreateRole";
+            public const string Update = "CanUpdateRole";
+            public const string Delete = "CanDeleteRole";
+            public const string Manage = "CanManageRole";
+        }
+
+        public static class Menu
+        {
+            public const string Read = "CanReadMenuManagement";
+            public const string Create = "CanCreateMenu";
+            public const string Update = "CanUpdateMenu";
+            public const string Delete = "CanDeleteMenu";
+            public const string Manage = "CanManageMenu";
+            public const string AssignPermission = "CanAssignMenuPermission";
+        }
+
+        public static class User
+        {
+            public const string Read = "CanReadUser";
+            public const string Create = "CanCreateUser";
+            public const string Update = "CanUpdateUser";
+            public const string Delete = "CanDeleteUser";
+            public const string Manage = "CanManageUser";
+            public const string AssignPermission = "CanAssignUserPermission";
+            public const string ResetPassword = "CanResetUserPassword";
         }
     }
 }
