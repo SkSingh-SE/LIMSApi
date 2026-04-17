@@ -15,7 +15,7 @@ namespace LIMSApi.Models
         public string Details { get; set; } = string.Empty;
         public long? MetalClassificationID { get; set; }
         public long? ProductConditionID { get; set; }
-        public long? SpecimenOrientationID { get; set; }
+        public long? SpecimenOrientationID { get; set; } = null;
         public long? ProductFormID { get; set; }
         public string? Remarks { get; set; }
         public int Quantity { get; set; }

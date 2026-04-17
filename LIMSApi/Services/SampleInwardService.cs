@@ -257,10 +257,10 @@ namespace LIMSApi.Services
 
                     await trx.CommitAsync();
                 }
-                catch
+                catch (Exception ex)
                 {
                     await trx.RollbackAsync();
-                    throw;
+                    throw ex;
                 }
 
                 // ── Notifications (fire AFTER save — failures must not roll back inward) ──
