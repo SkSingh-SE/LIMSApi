@@ -197,7 +197,7 @@ namespace LIMSApi.Services
                         existingContactPerson.CustomerID = model.ID;
                         existingContactPerson.Salutation = contactPerson.Salutation;
                         existingContactPerson.Name = contactPerson.Name;
-                        existingContactPerson.DepartmentID = contactPerson.DepartmentID;
+                        existingContactPerson.Department = contactPerson.Department;
                         existingContactPerson.EmailId = contactPerson.EmailId;
                         existingContactPerson.MobileNo = contactPerson.MobileNo;
                         existingContactPerson.IsWhatsappNo = contactPerson.IsWhatsappNo;

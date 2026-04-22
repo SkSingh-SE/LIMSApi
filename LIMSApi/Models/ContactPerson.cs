@@ -1,6 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
 using System.ComponentModel.DataAnnotations;
-using System.Text.Json.Serialization;
 
 namespace LIMSApi.Models
 {
@@ -16,7 +14,8 @@ namespace LIMSApi.Models
         [StringLength(100)]
         public required string Name { get; set; }
 
-        public long DepartmentID { get; set; }
+        [MaxLength(100)]
+        public string? Department { get; set; }
 
         [EmailAddress]
         [MaxLength(100)]
@@ -28,11 +27,9 @@ namespace LIMSApi.Models
 
         public bool IsWhatsappNo { get; set; }
 
-        
         [MaxLength(15)]
         public string? TelephoneNo { get; set; }
 
-       
         public bool SendBill { get; set; }
 
         public bool SendReport { get; set; }
@@ -48,15 +45,9 @@ namespace LIMSApi.Models
         [StringLength(10)]
         public required string PinCode { get; set; }
 
-        [Required,StringLength(50)]
+        [Required, StringLength(50)]
         public required string Type { get; set; }
 
-        // Foreign key relationship with CustomerMaster
-       
         public long CustomerID { get; set; }
-        [ForeignKey("DepartmentID")]
-        public virtual DepartmentMaster? Department {  get; set; }
-
-
     }
 }
