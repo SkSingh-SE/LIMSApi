@@ -91,6 +91,7 @@ namespace LIMSApi.ServiceWORepo
         // -------------------------------------------------------------
         Task SubmitForVerification(long headerId);
         Task<object> SubmitSampleForVerification(long sampleId);
+        Task SubmitForReportReview(long sampleId);
         Task<PagedResponse<object>> GetVerificationList(PageFilter filter);
         Task VerifyTest(long headerId, string? comments);
         Task RejectVerification(long headerId, string? comments);

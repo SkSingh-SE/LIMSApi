@@ -22,6 +22,9 @@ namespace LIMSApi.Services
 
         public static readonly Dictionary<SampleStatus, int> WorkflowPriority = new()
             {
+                // 98 = CANCELLED (terminal, distinct from rejected)
+                { SampleStatus.SAMPLE_CANCELLED, 98 },
+
                 // 99 = REJECTED
                 { SampleStatus.REQUEST_REJECTED, 99 },
                 { SampleStatus.REPORT_REJECTED_BY_INTERNAL, 99 },
@@ -138,6 +141,14 @@ namespace LIMSApi.Services
         /// Resolves employee name from LoggedInUserProvider (already available in request scope).
         /// </summary>
         private async Task LogStatusChange(string entityType, long entityId, string? previousStatus, string newStatus, long changedBy, string source)
+            => await LogStatusChangePublic(entityType, entityId, previousStatus, newStatus, changedBy, source);
+
+        /// <summary>
+        /// Public overload — allows callers to include a remarks string (e.g. cancellation reason).
+        /// Immutable: entries are never updated or deleted.
+        /// </summary>
+        public async Task LogStatusChangePublic(string entityType, long entityId, string? previousStatus,
+            string newStatus, long changedBy, string source, string? remarks = null)
         {
             try
             {
@@ -150,7 +161,8 @@ namespace LIMSApi.Services
                     ChangedBy = changedBy,
                     ChangedByName = LoggedInUserProvider.CurrentUser?.Name,
                     ChangedOn = DateTime.UtcNow,
-                    Source = source
+                    Source = source,
+                    Remarks = remarks
                 };
 
                 _db.SampleStatusHistories.Add(entry);

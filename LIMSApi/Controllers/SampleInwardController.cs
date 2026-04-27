@@ -10,6 +10,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Twilio.TwiML.Voice;
 
+public record CancelSampleRequest(long SampleDetailId, string Reason);
+
 namespace LIMSApi.Controllers
 {
     [Route("api/[controller]")]
@@ -183,6 +185,22 @@ namespace LIMSApi.Controllers
             {
                 return StatusCode(500, ex.Message);
             }
+        }
+
+        [HttpPost("cancel-sample")]
+        [RequirePermission(Permissions.Inward.Update)]
+        public async Task<IActionResult> CancelSample([FromBody] CancelSampleRequest request)
+        {
+            await _SampleInwardService.CancelSampleAsync(request.SampleDetailId, request.Reason);
+            return Ok(new { message = "Sample cancelled successfully." });
+        }
+
+        [HttpDelete("delete-sample/{id}")]
+        [RequirePermission(Permissions.Inward.Update)]
+        public async Task<IActionResult> DeleteSample(long id)
+        {
+            await _SampleInwardService.DeleteSampleAsync(id);
+            return Ok(new { message = "Sample deleted successfully." });
         }
 
     }

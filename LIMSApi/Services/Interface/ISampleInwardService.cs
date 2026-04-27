@@ -21,6 +21,8 @@ namespace LIMSApi.Services.Interface
         Task<List<DropdwonSelector>> GetSamplePreparationInwardDropdown(string? searchTerm, int pageNo, int pageSize);
 
         Task<byte[]> GeneratePIPdfAsync(long piId);
+        Task CancelSampleAsync(long sampleDetailId, string reason);
+        Task DeleteSampleAsync(long sampleDetailId);
 
     }
 }

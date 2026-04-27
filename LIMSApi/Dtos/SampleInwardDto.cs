@@ -115,7 +115,11 @@ namespace LIMSApi.Dtos
         public long? SpecimenOrientationID { get; set; }
         public string? Remarks { get; set; }
         public int Quantity { get; set; }
-        public bool Disabled { get; set; }
+        public bool IsCancelled { get; set; }
+        public string? SampleStatus { get; set; }
+        public DateTime? CancelledOn { get; set; }
+        public long? CancelledBy { get; set; }
+        public string? CancellationReason { get; set; }
 
         // Prep flags
         public bool PreparationRequired { get; set; }

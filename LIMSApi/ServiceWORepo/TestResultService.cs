@@ -873,6 +873,7 @@ namespace LIMSApi.ServiceWORepo
                 {
                     id = sample.ID,
                     sampleNo = sample.SampleNo,
+                    sampleStatus = sample.SampleStatus,
                     details = sample.Details,
                     metalClassificationID = sample.MetalClassificationID,
                     metalClassification = sample.MetalClassificationID.HasValue ? (await _db.MetalClassificationMasters.FindAsync(sample.MetalClassificationID.Value))?.Name : null,
@@ -1557,18 +1558,8 @@ namespace LIMSApi.ServiceWORepo
                     header.PreparationDataMissing = !prepExists;
                 }
 
-                // --- Determine final status: Verification or Completed ---
-                bool verificationWorkflowExists = await _db.Workflows
-                    .AnyAsync(w => w.EntityType == "TestResult" && w.IsActive);
-
-                if (verificationWorkflowExists)
-                {
-                    header.Status = "PendingVerification";
-                }
-                else
-                {
-                    header.Status = "Completed";
-                }
+                // Fix 3C — Always mark header Completed; user explicitly submits for verification
+                header.Status = "Completed";
 
                 header.CompletedAt = DateTime.UtcNow;
                 header.TestEndTime = DateTime.UtcNow;
@@ -1630,14 +1621,10 @@ namespace LIMSApi.ServiceWORepo
 
                     await _db.SaveChangesAsync();
 
-                    // Use verification status if workflow exists, otherwise completed
-                    var sampleStatus = verificationWorkflowExists
-                        ? SampleStatus.TESTING_UNDER_VERIFICATION
-                        : SampleStatus.TESTING_COMPLETED;
-
+                    // Fix 3C — Sample moves to TESTING_COMPLETED; verification is user-triggered
                     await _sampleStatusService.ForceAutoStatusAsync(
                                 sample.ID,
-                                sampleStatus,
+                                SampleStatus.TESTING_COMPLETED,
                                 loggedInUser.EmployeeID
                             );
 
@@ -1659,8 +1646,7 @@ namespace LIMSApi.ServiceWORepo
 
                         _db.ReportHeaders.Add(report);
                         await _db.SaveChangesAsync();
-
-                        await _workflowService.StartWorkflow(report.ID,WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Report_Review));
+                        // Fix 3C — Do NOT auto-start Report Review; user triggers it via SubmitForReportReview
                     }
 
                     // 5️⃣ Check inward-level testing status (informational only - price calculation happens after approval)
@@ -2423,10 +2409,15 @@ namespace LIMSApi.ServiceWORepo
             if (header == null) throw new KeyNotFoundException("Header not found.");
             if (!header.IsActive) throw new InvalidOperationException("Header is inactive.");
 
+            // Fix 3B — Guard: workflow must be configured before marking header and starting workflow
+            if (!await _workflowService.WorkflowExistsForEntityType("TestResult"))
+                throw new InvalidOperationException(
+                    "Cannot submit for verification: No 'TestResult' workflow is configured. Contact administrator.");
+
             header.Status = "PendingVerification";
             await _db.SaveChangesAsync();
 
-            // CRITICAL #23: Only set sample status if ALL headers are submitted/verified
+            // Only set sample status if ALL headers are submitted/verified
             var allSubmitted = !await _db.TestResultHeaders.AnyAsync(h =>
                 h.SampleID == header.SampleID && h.IsActive &&
                 h.Status != "PendingVerification" && h.Status != "Verified");
@@ -2439,15 +2430,7 @@ namespace LIMSApi.ServiceWORepo
                     loggedInUser.EmployeeID);
             }
 
-            // Start workflow if configured
-            try
-            {
-                await _workflowService.StartWorkflow(headerId, "TestResult");
-            }
-            catch
-            {
-                // Workflow may not be configured — that's OK
-            }
+            await _workflowService.StartWorkflow(headerId, "TestResult");
         }
 
         /// <summary>
@@ -2488,6 +2471,11 @@ namespace LIMSApi.ServiceWORepo
                     $"Cannot submit for verification. {pendingCount} test(s) not yet completed: {string.Join(", ", pendingTests)}");
             }
 
+            // Fix 3B — Guard: workflow must be configured before submitting
+            if (!await _workflowService.WorkflowExistsForEntityType("TestResult"))
+                throw new InvalidOperationException(
+                    "Cannot submit for verification: No 'TestResult' workflow is configured. Contact administrator.");
+
             // Skip already submitted
             var toSubmit = headers.Where(h => h.Status == "Completed").ToList();
             if (!toSubmit.Any())
@@ -2508,12 +2496,53 @@ namespace LIMSApi.ServiceWORepo
                 SampleStatus.TESTING_UNDER_VERIFICATION,
                 loggedInUser.EmployeeID);
 
+            // Start verification workflow per header
+            foreach (var h in toSubmit)
+            {
+                await _workflowService.StartWorkflow(h.ID, "TestResult");
+            }
+
             return new
             {
                 Success = true,
                 Message = $"{toSubmit.Count} test(s) submitted for verification.",
                 SubmittedCount = toSubmit.Count
             };
+        }
+
+        /// <summary>
+        /// Fix 3D — Explicit user-triggered "Submit for Report Review" after all tests are verified.
+        /// </summary>
+        public async Task SubmitForReportReview(long sampleId)
+        {
+            var sample = await _db.SampleDetails.FindAsync(sampleId)
+                ?? throw new KeyNotFoundException("Sample not found.");
+
+            if (sample.SampleStatus != SampleStatus.TESTING_VERIFIED.ToString())
+                throw new InvalidOperationException(
+                    "All test results must be verified before submitting for report review.");
+
+            var reportReviewType = WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Report_Review);
+            if (!await _workflowService.WorkflowExistsForEntityType(reportReviewType))
+                throw new InvalidOperationException(
+                    "Cannot submit for report review: No 'Report Review' workflow is configured. Contact administrator.");
+
+            var report = await _db.ReportHeaders
+                .FirstOrDefaultAsync(r => r.SampleID == sampleId && r.IsActive)
+                ?? throw new InvalidOperationException("Report not found. Complete all tests first.");
+
+            if (report.Status != "Pending")
+                throw new InvalidOperationException($"Report is already in '{report.Status}' state.");
+
+            report.Status = "Under Review";
+            await _db.SaveChangesAsync();
+
+            await _sampleStatusService.ForceAutoStatusAsync(
+                sampleId,
+                SampleStatus.REPORT_UNDER_REVIEW,
+                loggedInUser.EmployeeID);
+
+            await _workflowService.StartWorkflow(report.ID, reportReviewType);
         }
 
         public async Task<PagedResponse<object>> GetVerificationList(PageFilter filter)

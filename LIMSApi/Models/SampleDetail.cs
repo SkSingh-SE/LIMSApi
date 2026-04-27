@@ -19,7 +19,13 @@ namespace LIMSApi.Models
         public long? ProductFormID { get; set; }
         public string? Remarks { get; set; }
         public int Quantity { get; set; }
-        public bool Disabled { get; set; }
+        public bool IsCancelled { get; set; }
+
+        // Cancellation tracking (populated only when IsCancelled = true)
+        public DateTime? CancelledOn { get; set; }
+        public long? CancelledBy { get; set; }
+        [MaxLength(500)]
+        public string? CancellationReason { get; set; }
 
         public bool PreparationRequired { get; set; }
         public bool MachiningRequired { get; set; }

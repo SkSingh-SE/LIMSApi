@@ -49,15 +49,15 @@ namespace LIMSApi.Repositories
                                 .Include(x => x.DispatchModes)
                                 .Include(x => x.Contacts)
                                 .Include(x => x.Addresses)
-                                .Include(x => x.SampleDetails)
+                                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
                                     .ThenInclude(sd => sd.AdditionalDetails)
-                                .Include(x => x.SampleDetails)
+                                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
                                     .ThenInclude(sd => sd.MetalClassification)
-                                .Include(x => x.SampleDetails)
+                                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
                                     .ThenInclude(sd => sd.ProductCondition)
-                                .Include(x => x.SampleDetails)
+                                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
                                     .ThenInclude(sd => sd.SpecimenOrientation)
-                                .Include(x => x.SampleDetails)
+                                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
                                     .ThenInclude(sd => sd.ProductForm)
                                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
             return sampleInward;
@@ -70,21 +70,21 @@ namespace LIMSApi.Repositories
                 .Include(x => x.DispatchModes)
                 .Include(x => x.Contacts)
                 .Include(x => x.Addresses)
-                .Include(x => x.SampleDetails)
+                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
                     .ThenInclude(sd => sd.AdditionalDetails)
-                .Include(x => x.SampleDetails)
+                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
                     .ThenInclude(sd => sd.MetalClassification)
-                .Include(x => x.SampleDetails)
+                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
                     .ThenInclude(sd => sd.ProductCondition)
-                .Include(x => x.SampleDetails)
+                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
                     .ThenInclude(sd => sd.TestPlans)
                         .ThenInclude(tp => tp.GeneralTests)
                             .ThenInclude(gt => gt.Methods)
-                .Include(x => x.SampleDetails)
+                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
                     .ThenInclude(sd => sd.TestPlans)
                         .ThenInclude(tp => tp.ChemicalTests)
                             .ThenInclude(ct => ct.Elements)
-                .Include(x => x.SampleDetails)
+                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
                     .ThenInclude(sd => sd.TestPlans)
                         .ThenInclude(tp => tp.ChemicalTests)
                             .ThenInclude(ct => ct.TestTypes)
@@ -310,7 +310,7 @@ namespace LIMSApi.Repositories
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = _context.SampleInwards.Include(x => x.SampleDetails).Where(a => a.IsActive && a.CompanyCode == loggedInUser.CompanyCode && a.SampleDetails.Any(sd => sd.PreparationRequired));
+            var _query = _context.SampleInwards.Include(x => x.SampleDetails).Where(a => a.IsActive && a.CompanyCode == loggedInUser.CompanyCode && a.SampleDetails.Any(sd => !sd.IsCancelled && sd.PreparationRequired));
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
@@ -330,7 +330,7 @@ namespace LIMSApi.Repositories
             var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
             {
                 Id = x.ID,
-                Name = $"{x.CaseNo} ({x.SampleDetails.Count(sd => sd.PreparationRequired)} Prep Samples)",
+                Name = $"{x.CaseNo} ({x.SampleDetails.Count(sd => !sd.IsCancelled && sd.PreparationRequired)} Prep Samples)",
             })).ToListAsync();
 
             return data;

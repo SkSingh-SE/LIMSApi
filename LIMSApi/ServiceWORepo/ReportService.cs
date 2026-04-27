@@ -1378,6 +1378,12 @@ namespace LIMSApi.ServiceWORepo
                     throw new InvalidOperationException(
                         "Amendment allowed only on generated reports.");
 
+                // Fix 3A — Guard: amendment workflow must be configured before creating amendment record
+                var amendmentEntityType = WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Report_Amendment);
+                if (!await _workflowService.WorkflowExistsForEntityType(amendmentEntityType))
+                    throw new InvalidOperationException(
+                        "Cannot request amendment: No 'Report Amendment' workflow is configured. Contact administrator.");
+
                 // -------------------------------------------------
                 // 1️⃣ Upload Supporting Document
                 // -------------------------------------------------

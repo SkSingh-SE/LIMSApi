@@ -65,6 +65,15 @@ namespace LIMSApi.Services
 
             if (model.ContactPersons != null)
             {
+                var contact1 = model.ContactPersons.FirstOrDefault(c => c.Type == "contact1");
+                if (contact1 == null || string.IsNullOrWhiteSpace(contact1.Name))
+                    throw new ArgumentException("Contact Person 1 name is required.");
+
+                // Remove empty optional contacts before saving
+                model.ContactPersons = model.ContactPersons
+                    .Where(c => c.Type == "contact1" || !string.IsNullOrWhiteSpace(c.Name))
+                    .ToList();
+
                 foreach (var contact in model.ContactPersons)
                 {
                     contact.CustomerID = model.ID;
@@ -171,6 +180,18 @@ namespace LIMSApi.Services
             existingCustomer.Remark = model.Remark;
             existingCustomer.ModifiedOn = DateTime.UtcNow;
             existingCustomer.ModifiedBy = loggedInUser.EmployeeID;
+
+            if (model.ContactPersons != null)
+            {
+                var contact1 = model.ContactPersons.FirstOrDefault(c => c.Type == "contact1");
+                if (contact1 == null || string.IsNullOrWhiteSpace(contact1.Name))
+                    throw new ArgumentException("Contact Person 1 name is required.");
+
+                // Remove empty optional contacts before processing
+                model.ContactPersons = model.ContactPersons
+                    .Where(c => c.Type == "contact1" || !string.IsNullOrWhiteSpace(c.Name))
+                    .ToList();
+            }
 
             // remove unwanted mappings
             if (existingCustomer.ContactPersons.Any())

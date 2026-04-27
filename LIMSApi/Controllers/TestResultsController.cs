@@ -402,6 +402,15 @@ namespace LIMSApi.Controllers
             return Ok(result);
         }
 
+        // Fix 3D — Explicit user-triggered submit for report review (after all tests verified)
+        [HttpPost("submit-for-report-review/{sampleId}")]
+        [RequirePermission(Permissions.Testing.Perform)]
+        public async Task<IActionResult> SubmitForReportReview(long sampleId)
+        {
+            await _service.SubmitForReportReview(sampleId);
+            return Ok(new { message = "Submitted for report review successfully." });
+        }
+
         [HttpPost("verification-list")]
         [RequirePermission(Permissions.Testing.VerifyResult)]
         public async Task<IActionResult> GetVerificationList(PageFilter filter)
