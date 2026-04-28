@@ -697,7 +697,9 @@ namespace LIMSApi.ServiceWORepo
                 foreach (var group in groups)
                 {
                     var selectionType = group.Key!;
-                    var isRange = selectionType.EndsWith("Range", StringComparison.OrdinalIgnoreCase);
+                    var isRange = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                        { "HoursRange", "SizeRange", "WeightRange", "TempratureRange", "LoadRange" }
+                        .Contains(selectionType);
 
                     // Find the parameter value that matches this dimension
                     decimal? paramValue = FindParameterValueForDimension(billableParams, group.First().Configuration!);

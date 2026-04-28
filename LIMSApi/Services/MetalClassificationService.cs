@@ -66,6 +66,7 @@ namespace LIMSApi.Services
             existingMetalClassification.HasChemicalParams = model.HasChemicalParams;
             existingMetalClassification.HasMechanicalParams = model.HasMechanicalParams;
             existingMetalClassification.SortOrder = model.SortOrder;
+            existingMetalClassification.MetalType = model.MetalType;
             existingMetalClassification.ModifiedOn = DateTime.UtcNow;
 
             // Replace parameters via DbContext to avoid EF NoAction cascade issue.
