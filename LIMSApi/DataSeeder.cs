@@ -770,13 +770,17 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
     {
         await db.Database.ExecuteSqlRawAsync(@"
             IF NOT EXISTS (SELECT 1 FROM CurrencyMasters WHERE Code = N'INR' AND IsActive = 1)
-                INSERT INTO CurrencyMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'Indian Rupee', N'INR', 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO CurrencyMasters (Name, Code, IsDefault, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Indian Rupee', N'INR', 1, 0, GETUTCDATE(), N'LIMS', 1);
 
             IF NOT EXISTS (SELECT 1 FROM CurrencyMasters WHERE Code = N'USD' AND IsActive = 1)
-                INSERT INTO CurrencyMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'US Dollar', N'USD', 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO CurrencyMasters (Name, Code, IsDefault, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'US Dollar', N'USD', 0, 0, GETUTCDATE(), N'LIMS', 1);
 
+            -- Ensure INR is marked as default if it already exists but IsDefault is 0
+            UPDATE CurrencyMasters SET IsDefault = 1 WHERE Code = N'INR' AND IsActive = 1 AND IsDefault = 0;
+            -- Ensure no other currency is marked as default
+            UPDATE CurrencyMasters SET IsDefault = 0 WHERE Code != N'INR' AND IsActive = 1 AND IsDefault = 1;
         ");
 
         //IF NOT EXISTS(SELECT 1 FROM CurrencyMasters WHERE Code = N'EUR' AND IsActive = 1)
