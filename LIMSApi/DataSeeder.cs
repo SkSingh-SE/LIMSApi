@@ -50,6 +50,7 @@ public static class DataSeeder
 
             // Master data (ProductForm, SpecimenType, etc.) always runs — idempotent with IF NOT EXISTS checks
             await SeedMasterDataAsync(db);
+            await SeedPriceDimensionTypesAsync(db);
             await SeedFinancialYearsAsync(db);
             await BackfillFinancialYearIdsAsync(db, logger);
 
@@ -738,7 +739,23 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
 
             IF NOT EXISTS (SELECT 1 FROM Configurations WHERE KeyName = N'Entity Type' AND CompanyCode = N'LIMS')
                 INSERT INTO Configurations (KeyName, GroupName, [Value], ValueType, [Description], CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'Entity Type', N'dropdown', N'Request Review|Report Review|Report Amendment|Test Result Verification', N'string', N'Entity types used for workflow configuration. Each value is a fixed entity type.', 0, GETUTCDATE(), N'LIMS', 1);
+                VALUES (N'Entity Type', N'dropdown', N'Request Review|Report Review|Report Amendment|Test Result Verification', N'string', N'Entity types used for workflow configuration. Values must match the exact strings used by the workflow engine.', 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- Migrate existing installs: rename old short-form TestResult to canonical Test Result Verification
+
+            UPDATE Configurations
+            SET [Value] = REPLACE([Value], N'TestResult', N'Test Result Verification')
+            WHERE KeyName = N'Entity Type' AND CompanyCode = N'LIMS'
+              AND [Value] LIKE N'%TestResult%'
+              AND [Value] NOT LIKE N'%Test Result Verification%';
+
+            -- Fix any Workflow definitions using the old short-form label
+            UPDATE Workflows SET EntityType = N'Test Result Verification'
+            WHERE EntityType = N'TestResult';
+
+            -- Fix any WorkflowInstances using the old short-form label
+            UPDATE WorkflowInstances SET EntityType = N'Test Result Verification'
+            WHERE EntityType = N'TestResult';
 
             IF NOT EXISTS (SELECT 1 FROM Configurations WHERE KeyName = N'USE_CONFIG_DRIVEN_REPORTING' AND CompanyCode = N'LIMS')
                 INSERT INTO Configurations (KeyName, GroupName, [Value], ValueType, [Description], CreatedBy, CreatedOn, CompanyCode, IsActive)
@@ -1332,5 +1349,142 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
 
         if (inserted > 0)
             logger.LogInformation("DataSeeder: inserted {Total} role-permission defaults total", inserted);
+    }
+
+    // ───────────────────────────────────────────────
+    // PRICE DIMENSION TYPES
+    // ───────────────────────────────────────────────
+    private static async Task SeedPriceDimensionTypesAsync(LIMSContext db)
+    {
+        await db.Database.ExecuteSqlRawAsync(@"
+            -- Macro: inserts a PriceDimensionType row if none with same Name exists (active or inactive)
+            DECLARE @c INT;
+
+            -- FlatRate: fixed price, no dimension auto-detect
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'FlatRate';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'FlatRate', NULL, 0, N'UserInput', NULL, N'Fixed price — no dimension value needed', 1, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- Element: count of billable parameters × unit rate
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'Element';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Element', NULL, 0, N'ParameterCount', NULL, N'Price per element — count of billable parameters', 2, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- Hours: configurable per config (ParameterLinked | TestDuration | UserInputAtEntry)
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'Hours';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Hours', N'hr', 0, N'ParameterLinked', NULL, N'Based on hours — mode configurable per config', 3, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- HoursRange: range slab variant of Hours
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'HoursRange';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'HoursRange', N'hr', 1, N'ParameterLinked', NULL, N'Based on hours range slab — mode configurable per config', 4, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- Size: reads Diameter from SampleDetail
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'Size';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Size', N'mm', 0, N'SampleDimension', N'Diameter', N'Based on sample diameter', 5, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- SizeRange: range slab on Diameter
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'SizeRange';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'SizeRange', N'mm', 1, N'SampleDimension', N'Diameter', N'Based on sample diameter range slab', 6, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- Load: auto-detect from linked param; fallback to user input handled via FallbackToUserInput on config
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'Load';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Load', N'kN', 0, N'ParameterLinked', NULL, N'Based on load — auto-detect or user input if not found', 7, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- LoadRange: range slab on load
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'LoadRange';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'LoadRange', N'kN', 1, N'ParameterLinked', NULL, N'Based on load range slab — auto-detect or user input if not found', 8, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- Temperature: linked temperature parameter
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'Temperature';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Temperature', N'°C', 0, N'ParameterLinked', NULL, N'Based on temperature from linked parameter', 9, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- TemperatureRange: range slab on temperature
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'TemperatureRange';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'TemperatureRange', N'°C', 1, N'ParameterLinked', NULL, N'Based on temperature range slab', 10, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- DayWise: linked days parameter
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'DayWise';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'DayWise', N'days', 0, N'ParameterLinked', NULL, N'Based on number of days from linked parameter', 11, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- SizeLoad: two-dimensional size + load
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'SizeLoad';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'SizeLoad', N'mm/kN', 0, N'SampleDimension', N'Diameter', N'Two-dimensional: size (from sample) + load (from param)', 12, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- SizeAndLoad: two-dimensional range variant
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'SizeAndLoad';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'SizeAndLoad', N'mm/kN', 0, N'SampleDimension', N'Diameter', N'Two-dimensional size+load range variant', 13, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- PerIndent: always ask quantity at test result entry
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'PerIndent';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'PerIndent', N'×', 0, N'UserInputAtEntry', NULL, N'Per indent — user enters count at test result entry', 14, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- PerLocation: always ask quantity at test result entry
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'PerLocation';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'PerLocation', N'×', 0, N'UserInputAtEntry', NULL, N'Per location/point — user enters count at test result entry', 15, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- PerField: always ask quantity at test result entry
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'PerField';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'PerField', N'×', 0, N'UserInputAtEntry', NULL, N'Per field — user enters count at test result entry', 16, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- PerDolly: always ask quantity at test result entry (pull-off test specific)
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'PerDolly';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'PerDolly', N'×', 0, N'UserInputAtEntry', NULL, N'Per dolly — user enters count at test result entry (pull-off test)', 17, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- SpectroCombination: engine checks which param IDs are in billable params
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'SpectroCombination';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'SpectroCombination', NULL, 0, N'ParameterLinked', NULL, N'Spectro element combination pricing — two-step base+extra-tier engine', 18, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- WithImage: user confirms image was captured (Yes/No) at test result entry
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'WithImage';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'WithImage', NULL, 0, N'UserInputAtEntry', NULL, N'Additional charge when image captured — user confirms Yes/No at entry', 19, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- WithExtenso: user confirms extensometer was used (Yes/No) at test result entry
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'WithExtenso';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'WithExtenso', NULL, 0, N'UserInputAtEntry', NULL, N'Additional charge when extensometer used — user confirms Yes/No at entry', 20, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- Algorithm: price formula evaluated at runtime (P3)
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'Algorithm';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Algorithm', NULL, 0, N'UserInput', NULL, N'Custom price formula evaluated at runtime (P3 feature)', 21, 0, GETUTCDATE(), N'LIMS', 1);
+        ");
     }
 }

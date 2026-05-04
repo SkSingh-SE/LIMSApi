@@ -1086,8 +1086,8 @@ namespace LIMSApi.Services
                     throw new Exception("Sample Inward not found");
 
                 entity.ReviewStatus = "Pending for Approval";
-                entity.ReviewedBy = loggedInUser.EmployeeID;
-                entity.ReviewedOn = DateTime.UtcNow;
+                //entity.ReviewedBy = loggedInUser.EmployeeID;
+                //entity.ReviewedOn = DateTime.UtcNow;
 
                 // Update PlanStatus on all active (non-cancelled) test plans to Submitted
                 foreach (var sample in entity.SampleDetails.Where(s => !s.IsCancelled))
@@ -1111,28 +1111,30 @@ namespace LIMSApi.Services
                 }
                 await _context.SaveChangesAsync();
 
-                var statusJobs = new List<Func<Task>>();
-
-                foreach (var sample in entity.SampleDetails.Where(s => !s.IsCancelled))
-                {
-                    statusJobs.Add(() =>
-                        _sampleStatusService.ForceAutoStatusAsync(
-                            sample.ID,
-                            SampleStatus.UNDER_REVIEW_REQUEST,
-                            loggedInUser.EmployeeID
-                        )
-                    );
-                }
-
                 await _workflowService.StartWorkflow(entity.ID, WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Request_Review));
 
                 await _SampleInwardRepository.UpdateSampleInward(entity);
 
-                foreach (var job in statusJobs)
+                // Re-read the inward status after StartWorkflow — self-approval may have already
+                // advanced the inward to REVIEW_COMPLETED. Only push statuses if still UNDER_PLANNING.
+                var freshInwardStatus = await _context.SampleInwards
+                    .Where(s => s.ID == entity.ID)
+                    .Select(s => s.InwardStatus)
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync();
+
+                if (freshInwardStatus == InwardStatus.UNDER_PLANNING.ToString())
                 {
-                    await job();
+                    foreach (var sample in entity.SampleDetails.Where(s => !s.IsCancelled))
+                    {
+                        await _sampleStatusService.ForceAutoStatusAsync(
+                            sample.ID,
+                            SampleStatus.UNDER_REVIEW_REQUEST,
+                            loggedInUser.EmployeeID
+                        );
+                    }
+                    await _sampleStatusService.UpdateInwardStatus(entity.ID, InwardStatus.UNDER_REVIEW, loggedInUser.EmployeeID);
                 }
-                await _sampleStatusService.UpdateInwardStatus(entity.ID, InwardStatus.UNDER_REVIEW, loggedInUser.EmployeeID);
 
                 await trx.CommitAsync();
                 _logger.LogInformation("Plan submitted for review for inward {ID}", model.ID);

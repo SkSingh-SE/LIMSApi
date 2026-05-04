@@ -84,6 +84,21 @@ namespace LIMSApi.Services
         {
             return await _currencyRepository.GetCurrencyDropdown(searchTerm, pageNo, pageSize);
         }
+
+        public async Task<CurrencyMaster?> GetDefaultCurrency()
+        {
+            return await _currencyRepository.GetDefaultCurrency();
+        }
+
+        public async Task SetDefaultCurrency(long id)
+        {
+            var currency = await _currencyRepository.GetCurrencyById(id);
+            if (currency == null)
+                throw new KeyNotFoundException("Currency not found.");
+
+            await _currencyRepository.SetDefaultCurrency(id);
+            _logger.LogInformation("Currency '{CurrencyName}' set as default.", currency.Name);
+        }
     }
 }
 

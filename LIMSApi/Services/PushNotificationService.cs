@@ -78,7 +78,10 @@ namespace LIMSApi.Services
         {
             return entityType.ToLower() switch
             {
-                "request of review" => "/sample/review",
+                "request review"   => $"/inward/review/{entityId}",
+                "report review"    => $"/report/review/{entityId}",
+                "report amendment" => $"/report/amendment/{entityId}",
+                "testresult"       => $"/test-result/verify/{entityId}",
                 _ => "/"
             };
         }

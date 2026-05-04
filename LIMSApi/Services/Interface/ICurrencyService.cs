@@ -12,5 +12,7 @@ namespace LIMSApi.Services.Interface
         Task<PagedResponse<CurrencyMaster>> FetchCurrencies(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetCurrencyDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<CurrencyMaster?> GetDefaultCurrency();
+        Task SetDefaultCurrency(long id);
     }
 }

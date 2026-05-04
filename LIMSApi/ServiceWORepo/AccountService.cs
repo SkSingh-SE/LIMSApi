@@ -237,8 +237,8 @@ namespace LIMSApi.ServiceWORepo
             var hasPendingPayment = await _db.PaymentOrders
                 .AnyAsync(p => p.InwardID == inwardId && p.Status != PaymentStatus.Paid);
 
-            // DirectTaxInvoice: skip PI step entirely
-            var piStatus = inward.Customer!.DirectTaxInvoiceNoPerforma
+            // PI is not required when customer uses DirectTaxInvoice OR when the inward itself has AdvancePIRequired = false
+            var piStatus = (inward.Customer!.DirectTaxInvoiceNoPerforma || !inward.AdvancePIRequired)
                 ? "NOT_REQUIRED"
                 : inward.PIReceived ? "Completed" : "Pending";
 
@@ -248,7 +248,7 @@ namespace LIMSApi.ServiceWORepo
                 .OrderByDescending(p => p.PIDate)
                 .FirstOrDefaultAsync();
 
-            // Update piStatus if PI exists but inward not marked
+            // Update piStatus if PI exists but inward not marked — only when PI is actually required
             if (pi != null && piStatus == "Pending")
                 piStatus = "Generated";
 
@@ -888,13 +888,18 @@ namespace LIMSApi.ServiceWORepo
 
         public async Task<long> GenerateProformaInvoiceAsync(long inwardId)
         {
+            var inward = await _db.SampleInwards.FindAsync(inwardId)
+                ?? throw new KeyNotFoundException("Inward not found.");
+
+            if (!inward.AdvancePIRequired)
+                throw new InvalidOperationException("Proforma Invoice is not applicable for this case because Advance PI is not required.");
+
             var proformaInvoiceId = await _proformaInvoiceRepository.GeneratePIAsync(inwardId);
 
             // Notification (fire-and-forget)
             try
             {
                 var user = Helpers.LoggedInUserProvider.CurrentUser;
-                var inward = await _db.SampleInwards.FindAsync(inwardId);
                 await _notificationService.CreateNotificationAsync(new Notification
                 {
                     UserID = user?.EmployeeID,

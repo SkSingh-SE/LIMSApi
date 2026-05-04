@@ -116,7 +116,11 @@ namespace LIMSApi.Services
             try
             {
                 var inward = await _repo.GetInward(inwardId);
-                if (inward == null) return false;
+                if (inward == null)
+                {
+                    _logger.LogError("UpdateInwardStatus: Inward {InwardId} not found — status not updated to {NewStatus}", inwardId, newStatus);
+                    return false;
+                }
 
                 var previousStatus = inward.InwardStatus;
                 inward.InwardStatus = newStatus.ToString();

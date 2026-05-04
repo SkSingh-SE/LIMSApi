@@ -13,5 +13,5 @@ public partial class CurrencyMaster : AuditProperty
 
     public string? Code { get; set; }
 
-
+    public bool IsDefault { get; set; } = false;
 }

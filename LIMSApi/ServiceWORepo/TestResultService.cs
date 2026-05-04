@@ -2410,9 +2410,10 @@ namespace LIMSApi.ServiceWORepo
             if (!header.IsActive) throw new InvalidOperationException("Header is inactive.");
 
             // Fix 3B — Guard: workflow must be configured before marking header and starting workflow
-            if (!await _workflowService.WorkflowExistsForEntityType("TestResult"))
+            var verificationEntityType = WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Test_Verification);
+            if (!await _workflowService.WorkflowExistsForEntityType(verificationEntityType))
                 throw new InvalidOperationException(
-                    "Cannot submit for verification: No 'TestResult' workflow is configured. Contact administrator.");
+                    "Cannot submit for verification: No 'Test Verification' workflow is configured. Contact administrator.");
 
             header.Status = "PendingVerification";
             await _db.SaveChangesAsync();
@@ -2430,7 +2431,7 @@ namespace LIMSApi.ServiceWORepo
                     loggedInUser.EmployeeID);
             }
 
-            await _workflowService.StartWorkflow(headerId, "TestResult");
+            await _workflowService.StartWorkflow(headerId, verificationEntityType);
         }
 
         /// <summary>
@@ -2472,9 +2473,10 @@ namespace LIMSApi.ServiceWORepo
             }
 
             // Fix 3B — Guard: workflow must be configured before submitting
-            if (!await _workflowService.WorkflowExistsForEntityType("TestResult"))
+            var verificationEntityType = WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Test_Verification);
+            if (!await _workflowService.WorkflowExistsForEntityType(verificationEntityType))
                 throw new InvalidOperationException(
-                    "Cannot submit for verification: No 'TestResult' workflow is configured. Contact administrator.");
+                    "Cannot submit for verification: No 'Test Verification' workflow is configured. Contact administrator.");
 
             // Skip already submitted
             var toSubmit = headers.Where(h => h.Status == "Completed").ToList();
@@ -2499,7 +2501,7 @@ namespace LIMSApi.ServiceWORepo
             // Start verification workflow per header
             foreach (var h in toSubmit)
             {
-                await _workflowService.StartWorkflow(h.ID, "TestResult");
+                await _workflowService.StartWorkflow(h.ID, verificationEntityType);
             }
 
             return new
@@ -2548,6 +2550,7 @@ namespace LIMSApi.ServiceWORepo
         public async Task<PagedResponse<object>> GetVerificationList(PageFilter filter)
         {
             var userId = loggedInUser.EmployeeID;
+            var verificationEntityType = WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Test_Verification);
 
             // Base query: show PendingVerification + recently Verified
             var query = from h in _db.TestResultHeaders
@@ -2558,7 +2561,7 @@ namespace LIMSApi.ServiceWORepo
 
                         // LEFT JOIN to workflow instance
                         join wi in _db.Set<WorkflowInstance>()
-                            on new { EntityID = h.ID, EntityType = "TestResult", IsActive = true }
+                            on new { EntityID = h.ID, EntityType = verificationEntityType, IsActive = true }
                             equals new { wi.EntityID, wi.EntityType, wi.IsActive }
                             into wiJoin
                         from wi in wiJoin.DefaultIfEmpty()
@@ -2694,7 +2697,7 @@ namespace LIMSApi.ServiceWORepo
                 throw new InvalidOperationException($"Cannot verify test in '{header.Status}' status. Only 'PendingVerification' tests can be verified.");
 
             // Try workflow-based verification first
-            var instance = await _workflowService.GetActiveInstanceForEntityAsync(headerId, "TestResult");
+            var instance = await _workflowService.GetActiveInstanceForEntityAsync(headerId, WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Test_Verification));
             if (instance != null)
             {
                 // Route through workflow → ApplyEntityStatusUpdate → HandleTestVerification
@@ -2743,7 +2746,7 @@ namespace LIMSApi.ServiceWORepo
                 throw new InvalidOperationException($"Cannot reject test in '{header.Status}' status. Only 'PendingVerification' tests can be rejected.");
 
             // Try workflow-based rejection first
-            var instance = await _workflowService.GetActiveInstanceForEntityAsync(headerId, "TestResult");
+            var instance = await _workflowService.GetActiveInstanceForEntityAsync(headerId, WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Test_Verification));
             if (instance != null)
             {
                 await _workflowService.PerformAction(instance.ID, "Cancel", loggedInUser.EmployeeID, comments ?? "Rejected");

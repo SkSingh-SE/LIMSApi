@@ -621,7 +621,7 @@ namespace LIMSApi.Services
                     await HandleReportAmendment(instance.EntityID, action);
                     break;
 
-                case "TestResult":
+                case "Test Result Verification":
                     await HandleTestVerification(instance.EntityID, action);
                     break;
 
@@ -652,10 +652,13 @@ namespace LIMSApi.Services
                         await _statusService.ForceAutoStatusAsync(d.ID, status, _loggedInUser.EmployeeID);
                     }
 
-                    await _statusService.UpdateInwardStatus(
+                    var statusUpdated = await _statusService.UpdateInwardStatus(
                         inward.ID,
                         InwardStatus.REVIEW_COMPLETED,
                         _loggedInUser.EmployeeID);
+
+                    if (!statusUpdated)
+                        _logger.LogError("HandleRequestReview: Failed to update inward {InwardId} to REVIEW_COMPLETED — status may remain UNDER_REVIEW", inward.ID);
 
                     // Set plan status to Approved and auto-create TestResultHeaders
                     await ApproveAndCreateTestHeaders(inward);

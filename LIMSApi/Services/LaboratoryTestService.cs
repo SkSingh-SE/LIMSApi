@@ -71,6 +71,34 @@ namespace LIMSApi.Services
             }
 
             await _testMethodRepository.UpdateTestMethod(existingTestMethod);
+
+            // Sync InvoiceCasePrices: remove price rows whose config is no longer linked to this lab test
+            var activeConfigIds = model.InvoiceCases
+                .Select(ic => ic.InvoiceCaseConfigID)
+                .ToHashSet();
+
+            var invoiceCasesToSync = await _context.InvoiceCases
+                .Include(ic => ic.InvoiceCasePrices)
+                .Where(ic => ic.LaboratoryTestID == model.ID)
+                .ToListAsync();
+
+            bool hasStale = false;
+            foreach (var invoiceCase in invoiceCasesToSync)
+            {
+                var staleRows = invoiceCase.InvoiceCasePrices
+                    .Where(p => !activeConfigIds.Contains(p.InvoiceCaseConfigID))
+                    .ToList();
+
+                if (staleRows.Any())
+                {
+                    _context.InvoiceCasePrices.RemoveRange(staleRows);
+                    hasStale = true;
+                }
+            }
+
+            if (hasStale)
+                await _context.SaveChangesAsync();
+
             _logger.LogInformation("SubGroup '{SubGroup}' updated successfully.", model.SubGroup);
         }
 

@@ -174,14 +174,20 @@ namespace LIMSApi.Repositories
         {
             var userId = loggedInUser.EmployeeID;
 
+            // Only the latest workflow instance per inward — prevents duplicate rows when
+            // the same inward was submitted for review more than once.
+            var latestInstanceIds = _context.WorkflowInstances
+                .Where(w => w.EntityType == WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Request_Review))
+                .GroupBy(w => w.EntityID)
+                .Select(g => g.Max(w => w.ID));
+
             var query =
                 from inward in _context.SampleInwards
                 where inward.IsActive
                       && inward.CompanyCode == loggedInUser.CompanyCode
-                     
 
                 join instance in _context.WorkflowInstances
-                    .Where(w => w.IsActive || w.Status == "Completed")
+                    .Where(w => latestInstanceIds.Contains(w.ID) && (w.IsActive || w.Status == "Completed"))
                     on new
                     {
                         inward.ID,

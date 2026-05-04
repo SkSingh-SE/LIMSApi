@@ -64,9 +64,9 @@ namespace LIMSApi.Controllers
         }
         [HttpGet("vapid-public-key")]
         [AllowAnonymous] // public key can be shared
-        public IActionResult GetVapidPublicKey()
+        public async Task<IActionResult> GetVapidPublicKey()
         {
-            var publicKey = _pushNotificationService.GetPublicKey();
+            var publicKey = await _pushNotificationService.GetPublicKey();
             return Ok(new { publicKey });
         }
 
