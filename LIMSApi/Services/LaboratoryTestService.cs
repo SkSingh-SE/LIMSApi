@@ -158,6 +158,11 @@ namespace LIMSApi.Services
         {
             return await _testMethodRepository.GetTestMethodDropdown(searchTerm, pageNo, pageSize);
         }
+        public async Task<List<DropdwonSelector>> GetGeneralTestMethodDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _testMethodRepository.GetGeneralTestMethodDropdown(searchTerm, pageNo, pageSize);
+        }
+
         public async Task<List<DropdwonSelector>> GetChemicalTestMethodDropdown(string? searchTerm, int pageNo, int pageSize)
         {
             return await _testMethodRepository.GetChemicalTestMethodDropdown(searchTerm, pageNo, pageSize);

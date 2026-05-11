@@ -22,7 +22,7 @@ namespace LIMSApi.Models
         [MaxLength(15)]
         public string? MobileNo { get; set; }
 
-        public bool IsWhatsappNo { get; set; }
+        public bool IsWhatsappNo { get; set; } // No Longer Use, as we are using in dispatch mode.
 
         [MaxLength(15)]
         public string? TelephoneNo { get; set; }

@@ -89,6 +89,13 @@ namespace LIMSApi.Controllers
             return data == null ? NoContent(): Ok(data);
         }
 
+        [HttpGet("general-dropdown")]
+        public async Task<IActionResult> GetGeneralTestMethodDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            var data = await _testMethodService.GetGeneralTestMethodDropdown(searchTerm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+
         [HttpGet("chemical-dropdown")]
         public async Task<IActionResult> GetChemicalTestMethodDropdown(string? searchTerm, int pageNo, int pageSize)
         {

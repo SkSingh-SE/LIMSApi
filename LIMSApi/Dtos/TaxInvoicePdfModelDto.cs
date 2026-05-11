@@ -33,6 +33,12 @@
         public decimal BalancePayable { get; set; }
 
         public string AmountInWords { get; set; } = null!;
+
+        // Currency
+        public string CurrencySymbol { get; set; } = "₹";
+        public bool IsNonInr { get; set; } = false;
+        public decimal? ExchangeRate { get; set; }
+        public decimal? ForeignCurrencyGrandTotal { get; set; }
     }
 
     public class TaxInvoiceRow

@@ -85,9 +85,9 @@ namespace LIMSApi.Controllers
         // -----------------------------------
         [HttpPost("cases/{inwardId}/generate-invoice")]
         [RequirePermission(Permissions.Account.GenerateInvoiceBackend)]
-        public async Task<IActionResult> GenerateInvoice(long inwardId)
+        public async Task<IActionResult> GenerateInvoice(long inwardId, [FromBody] GenerateInvoiceRequestDto? request = null)
         {
-            var invoiceId = await _accountService.GenerateInvoiceAsync(inwardId);
+            var invoiceId = await _accountService.GenerateInvoiceAsync(inwardId, request?.ExchangeRate);
             return Ok(new { invoiceId });
         }
 

@@ -298,6 +298,10 @@ namespace LIMSApi.ServiceWORepo
                 .AllAsync(r => r.Status == "Approved" || r.Status == "Completed" || r.Status == "Dispatched");
             var reportStatus = allReportsApproved ? "FINAL_REPORT_APPROVED" : "PENDING";
 
+            var summaryCustomerCurrency = inward.Customer.CurrencyID > 0
+                ? await _db.CurrencyMasters.FindAsync(inward.Customer.CurrencyID)
+                : null;
+
             return new CaseAccountSummaryDto
             {
                 InwardID = inward.ID,
@@ -310,6 +314,9 @@ namespace LIMSApi.ServiceWORepo
                 BillingStatus = inward.BillingStatus ?? "",
                 ReportStatus = reportStatus,
                 HasPendingPayment = hasPendingPayment,
+                CustomerCurrencyCode = summaryCustomerCurrency?.Code ?? "INR",
+                CustomerCurrencySymbol = summaryCustomerCurrency?.Symbol ?? "₹",
+                CustomerCurrencyIsDefault = summaryCustomerCurrency?.IsDefault ?? true,
 
                 ProformaInvoice = pi != null ? new ProformaInvoiceSummary
                 {
@@ -415,7 +422,7 @@ namespace LIMSApi.ServiceWORepo
             await _priceCalculationService.CreatePriceSnapshotAsync(inwardId);
         }
 
-        public async Task<long> GenerateInvoiceAsync(long inwardId)
+        public async Task<long> GenerateInvoiceAsync(long inwardId, decimal? exchangeRate = null)
         {
             // Role check: Only Accounts role can generate invoices
             var user = Helpers.LoggedInUserProvider.CurrentUser;
@@ -429,6 +436,16 @@ namespace LIMSApi.ServiceWORepo
             var inward = await _db.SampleInwards
                 .Include(x => x.Customer)
                 .FirstAsync(x => x.ID == inwardId);
+
+            // Resolve customer currency
+            var invoiceCurrency = inward.Customer?.CurrencyID > 0
+                ? await _db.CurrencyMasters.FindAsync(inward.Customer.CurrencyID)
+                : null;
+            var currencySymbol = invoiceCurrency?.Symbol ?? "₹";
+            var isNonInr = invoiceCurrency != null && !invoiceCurrency.IsDefault;
+
+            if (isNonInr && (exchangeRate == null || exchangeRate <= 0))
+                throw new ArgumentException($"Exchange rate is required for {invoiceCurrency!.Code} customers. Please provide today's rate (1 {invoiceCurrency.Code} = ₹ X).");
 
             if (inward.IsInvoiceGenerated)
                 throw new Exception("Invoice already generated");
@@ -545,8 +562,9 @@ namespace LIMSApi.ServiceWORepo
             var discountedSubTotal = subTotal - discountAmt;
 
             // ── GST from System Configuration (calculated on discounted subtotal) ──
+            // Non-INR (export/foreign) customers are zero-rated — no GST applies
             var gstConfig = await _db.GstConfigs.FirstOrDefaultAsync();
-            var gstApplicable = gstConfig?.DefaultGstRate > 0 || gstConfig == null; // Default: GST applicable
+            var gstApplicable = !isNonInr && (gstConfig?.DefaultGstRate > 0 || gstConfig == null); // Default: GST applicable
             var gstRate = gstConfig?.DefaultGstRate ?? 18m;
             var halfRate = gstRate / 2m;
             var companyState = gstConfig?.State?.Trim().ToLower() ?? "";
@@ -619,7 +637,12 @@ namespace LIMSApi.ServiceWORepo
                 SGST = sgst,
                 IGST = igst,
                 GrandTotal = grandTotal,
-                FinancialYearId = currentFY?.Id
+                FinancialYearId = currentFY?.Id,
+                CurrencySymbol = currencySymbol,
+                ExchangeRate = isNonInr ? exchangeRate : null,
+                ForeignCurrencyGrandTotal = isNonInr && exchangeRate > 0
+                    ? Math.Round(grandTotal / exchangeRate!.Value, 2, MidpointRounding.AwayFromZero)
+                    : null
             };
 
             _db.TaxInvoices.Add(invoice);
@@ -806,7 +829,11 @@ namespace LIMSApi.ServiceWORepo
                 IGST = invoice.IGST,
                 GrandTotal = invoice.GrandTotal,
                 AdvancePayment = advancePayment,
-                BalancePayable = balancePayable
+                BalancePayable = balancePayable,
+                CurrencySymbol = invoice.CurrencySymbol,
+                IsNonInr = invoice.ExchangeRate.HasValue,
+                ExchangeRate = invoice.ExchangeRate,
+                ForeignCurrencyGrandTotal = invoice.ForeignCurrencyGrandTotal
             };
         }
 
@@ -881,6 +908,9 @@ namespace LIMSApi.ServiceWORepo
                 AdvanceAdjusted = advance,
                 BalancePayable = invoice.GrandTotal - advance,
                 PurchaseOrderNo = poNo,
+                CurrencySymbol = invoice.CurrencySymbol,
+                ExchangeRate = invoice.ExchangeRate,
+                ForeignCurrencyGrandTotal = invoice.ForeignCurrencyGrandTotal,
                 ChargeLines = chargeEvents,
                 AdHocLines = adHocLines
             };

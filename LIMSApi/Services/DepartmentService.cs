@@ -51,6 +51,7 @@ namespace LIMSApi.Services
 
             existingDepartment.Name = model.Name;
             existingDepartment.Description = model.Description;
+            existingDepartment.IsChemical = model.IsChemical;
             existingDepartment.ModifiedOn = DateTime.UtcNow;
             existingDepartment.ModifiedBy = loggedInUser?.EmployeeID ?? 0;
 

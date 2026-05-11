@@ -380,6 +380,7 @@ builder.Services.AddScoped<ITestAutoSuggestService, TestAutoSuggestService>();
 builder.Services.AddScoped<ITpiService, TpiService>();
 
 // Third party services
+builder.Services.AddHttpClient();
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<SMSService>();
 builder.Services.AddScoped<WhatsAppService>();

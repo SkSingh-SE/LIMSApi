@@ -33,21 +33,22 @@ namespace LIMSApi.Services
                 { SampleStatus.REPORT_DISPATCHED, 7 },
                 { SampleStatus.CASE_CLOSED, 7 },
 
-                // 6 = REPORTING
+                // 6 = REPORTING / BILLING / AMENDMENT
                 { SampleStatus.REPORT_GENERATION_IN_PROGRESS, 6 },
                 { SampleStatus.REPORT_GENERATED, 6 },
                 { SampleStatus.REPORT_UNDER_REVIEW, 6 },
                 { SampleStatus.REPORT_SENT_FOR_CUSTOMER_REVIEW, 6 },
                 { SampleStatus.CUSTOMER_REQUESTED_AMENDMENT, 6 },
                 { SampleStatus.AMENDMENT_IN_PROGRESS, 6 },
+                { SampleStatus.AMENDMENT_COMPLETED, 6 },
+                { SampleStatus.REPORT_AMENDMENT_APPROVED, 6 },
+                { SampleStatus.PAYMENT_PENDING, 6 },
                 { SampleStatus.PAYMENT_COMPLETED, 6 },
                 { SampleStatus.FINAL_REPORT_APPROVED, 6 },
                 { SampleStatus.REPORT_AMENDED_BY_INTERNAL, 6 },
                 { SampleStatus.REPORT_AMENDED_REJECTED, 6 },
 
-            // 5 = TESTING / EXECUTION (Preparation runs parallel with testing)
-                { SampleStatus.AMENDMENT_COMPLETED, 5 },
-                { SampleStatus.REPORT_AMENDMENT_APPROVED, 5 },
+                // 5 = TESTING / EXECUTION (Preparation runs parallel with testing)
                 { SampleStatus.TPI_WAITING_FOR_AGENT, 5 },
                 { SampleStatus.TPI_IN_PROGRESS, 5 },
                 { SampleStatus.TPI_COMPLETED, 5 },
@@ -56,7 +57,6 @@ namespace LIMSApi.Services
                 { SampleStatus.TESTING_UNDER_VERIFICATION, 5 },
                 { SampleStatus.TESTING_VERIFIED, 5 },
                 { SampleStatus.TESTING_VERIFICATION_REJECTED, 5 },
-                { SampleStatus.PAYMENT_PENDING, 5 },
                 { SampleStatus.REQUEST_APPROVED, 5 },
                 { SampleStatus.PREPARATION_REQUIRED, 5 },
                 { SampleStatus.PREPARATION_IN_PROGRESS, 5 },

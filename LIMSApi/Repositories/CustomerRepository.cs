@@ -133,7 +133,14 @@ namespace LIMSApi.Repositories
         }
         public async Task<bool> ValidateDuplicateCustomer(string gst, long Id)
         {
-            return await _context.Customers.AnyAsync(x => x.GSTNo == gst && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            // Normalize both sides: EF Core translates ToUpper() to SQL UPPER() for case-insensitive match
+            var normalizedGst = gst.Trim().ToUpper();
+            return await _context.Customers.AnyAsync(x =>
+                x.GSTNo != null &&
+                x.GSTNo.ToUpper() == normalizedGst &&
+                x.ID != Id &&
+                x.IsActive &&
+                x.CompanyCode == loggedInUser.CompanyCode);
         }
     }
 }

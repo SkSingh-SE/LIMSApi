@@ -59,6 +59,22 @@ namespace LIMSApi.Services
             if (exists)
                 throw new InvalidOperationException("Customer already exists!");
 
+            // G14 — duplicate GSTIN check on create
+            if (!model.GSTNA && !string.IsNullOrWhiteSpace(model.GSTNo))
+            {
+                bool duplicateGst = await _customerRepository.ValidateDuplicateCustomer(model.GSTNo.Trim().ToUpper(), 0);
+                if (duplicateGst)
+                    throw new InvalidOperationException("A customer with this GSTIN already exists.");
+            }
+
+            // G11 — at least one company category required
+            if (model.CustomerCompanyCategories == null || !model.CustomerCompanyCategories.Any())
+                throw new ArgumentException("At least one company category is required.");
+
+            // G10 — at least one dispatch mode required
+            if (model.CustomerDispatchModes == null || !model.CustomerDispatchModes.Any())
+                throw new ArgumentException("At least one dispatch mode is required.");
+
             model.CreatedOn = DateTime.UtcNow;
             model.CreatedBy = loggedInUser.EmployeeID;
             model.CompanyCode = loggedInUser.CompanyCode;
@@ -136,12 +152,22 @@ namespace LIMSApi.Services
             if (exists)
                 throw new InvalidOperationException("Same Customer already exists!");
 
-            if (!string.IsNullOrWhiteSpace(model.GSTNo))
+            // G14 — duplicate GSTIN check: exclude the customer itself (x.ID != model.ID)
+            if (!model.GSTNA && !string.IsNullOrWhiteSpace(model.GSTNo))
             {
-                bool duplicateCustomer = await _customerRepository.ValidateDuplicateCustomer(model.GSTNo, model.ID);
-                if(duplicateCustomer)
-                    throw new InvalidOperationException("Same Customer GST already exists!");
+                var normalizedGst = model.GSTNo.Trim().ToUpper();
+                bool duplicateCustomer = await _customerRepository.ValidateDuplicateCustomer(normalizedGst, model.ID);
+                if (duplicateCustomer)
+                    throw new InvalidOperationException("Another customer with this GSTIN already exists.");
             }
+
+            // G11 — at least one company category required
+            if (model.CustomerCompanyCategories == null || !model.CustomerCompanyCategories.Any())
+                throw new ArgumentException("At least one company category is required.");
+
+            // G10 — at least one dispatch mode required
+            if (model.CustomerDispatchModes == null || !model.CustomerDispatchModes.Any())
+                throw new ArgumentException("At least one dispatch mode is required.");
 
             var existingCustomer = await _customerRepository.GetCustomerById(model.ID);
             if (existingCustomer == null)
@@ -162,6 +188,7 @@ namespace LIMSApi.Services
             existingCustomer.IsBlock = model.IsBlock;
             existingCustomer.BlockReason = model.BlockReason;
             existingCustomer.GSTNo = model.GSTNo;
+            existingCustomer.CustomerStateCode = model.CustomerStateCode;
             existingCustomer.PANNo = model.PANNo;
             existingCustomer.GSTNA = model.GSTNA;
             existingCustomer.SampleReturn = model.SampleReturn;
@@ -193,13 +220,17 @@ namespace LIMSApi.Services
                     .ToList();
             }
 
-            // remove unwanted mappings
-            if (existingCustomer.ContactPersons.Any())
+            // remove unwanted mappings — if model.ContactPersons is null, preserve all existing
+            if (existingCustomer.ContactPersons.Any() && model.ContactPersons != null)
             {
-                var contactsToRemove = existingCustomer.ContactPersons.Where(contact => !model.ContactPersons.Any(m => m.ID == contact.ID)).ToList();
-                foreach (var contact in contactsToRemove)
+                var contactsToRemove = existingCustomer.ContactPersons
+                    .Where(contact => !model.ContactPersons.Any(m => m.ID == contact.ID))
+                    .ToList();
+                if (contactsToRemove.Any())
                 {
-                    existingCustomer.ContactPersons.Remove(contact);
+                    _context.ContactPersons.RemoveRange(contactsToRemove);
+                    foreach (var contact in contactsToRemove)
+                        existingCustomer.ContactPersons.Remove(contact);
                 }
             }
 
@@ -241,15 +272,16 @@ namespace LIMSApi.Services
                 }
             }
             // --- CompanyCategory  ---
-            if (existingCustomer.CustomerCompanyCategories != null)
+            if (existingCustomer.CustomerCompanyCategories != null && model.CustomerCompanyCategories != null)
             {
                 var categoriesToRemove = existingCustomer.CustomerCompanyCategories
                     .Where(existing => !model.CustomerCompanyCategories.Any(m => m.CompanyCategoryID == existing.CompanyCategoryID))
                     .ToList();
-
-                foreach (var category in categoriesToRemove)
+                if (categoriesToRemove.Any())
                 {
-                    existingCustomer.CustomerCompanyCategories.Remove(category);
+                    _context.CustomerCompanyCategories.RemoveRange(categoriesToRemove);
+                    foreach (var category in categoriesToRemove)
+                        existingCustomer.CustomerCompanyCategories.Remove(category);
                 }
             }
 
@@ -274,14 +306,16 @@ namespace LIMSApi.Services
                 }
             }
 
-            if(existingCustomer.CustomerDispatchModes != null)
+            if (existingCustomer.CustomerDispatchModes != null && model.CustomerDispatchModes != null)
             {
                 var dispatchModesToRemove = existingCustomer.CustomerDispatchModes
                     .Where(existing => !model.CustomerDispatchModes.Any(m => m.DispatchModeID == existing.DispatchModeID))
                     .ToList();
-                foreach (var dispatchMode in dispatchModesToRemove)
+                if (dispatchModesToRemove.Any())
                 {
-                    existingCustomer.CustomerDispatchModes.Remove(dispatchMode);
+                    _context.CustomerDispatchModes.RemoveRange(dispatchModesToRemove);
+                    foreach (var dispatchMode in dispatchModesToRemove)
+                        existingCustomer.CustomerDispatchModes.Remove(dispatchMode);
                 }
             }
             if (model.CustomerDispatchModes != null && model.CustomerDispatchModes.Any())

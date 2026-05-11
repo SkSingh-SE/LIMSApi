@@ -63,7 +63,21 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> GetTestMasterDropdown(string? searchTerm, int pageNo, int pageSize)
         {
             var data = await _testMasterService.GetTestMasterDropdown(searchTerm, pageNo, pageSize);
-            return data == null ? NoContent(): Ok(data);
+            return data == null ? NoContent() : Ok(data);
+        }
+
+        [HttpGet("general-dropdown")]
+        public async Task<IActionResult> GetGeneralTestMasterDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            var data = await _testMasterService.GetGeneralTestMasterDropdown(searchTerm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+
+        [HttpGet("chemical-dropdown")]
+        public async Task<IActionResult> GetChemicalTestMasterDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            var data = await _testMasterService.GetChemicalTestMasterDropdown(searchTerm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
         }
 
     }

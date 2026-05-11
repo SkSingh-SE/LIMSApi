@@ -83,6 +83,9 @@ namespace LIMSApi.ServiceWORepo
                                         .FirstOrDefault(),
                         }).ToList(),
 
+                    HasLongTermTests = _db.LongTermTests
+                        .Any(lt => lt.SampleID == sample.ID && lt.IsActive && lt.Status == "Running"),
+
                 };
 
             // ----------------------------------------------------------
@@ -153,7 +156,14 @@ namespace LIMSApi.ServiceWORepo
                 ActionStatus = ActionStatusResolver.Resolve(WorkflowListType.Testing,x.SampleStatus).ToString(),
 
                 // Test list
-                Tests = string.Join(", ", x.Tests.Where(x => x.TestName != null).Select(t => t.TestName).ToList())
+                Tests = string.Join(", ", x.Tests.Where(x => x.TestName != null).Select(t => t.TestName).ToList()),
+
+                HasLongTermTests = x.HasLongTermTests,
+
+                // True only when the lab technician can actively perform / update test results
+                CanPerformTesting = x.SampleStatus == SampleStatus.REQUEST_APPROVED.ToString()
+                    || x.SampleStatus == SampleStatus.TESTING_IN_PROGRESS.ToString()
+                    || x.SampleStatus == SampleStatus.TESTING_VERIFICATION_REJECTED.ToString()
             }).ToList<object>();
 
             return new PagedResponse<object>(
