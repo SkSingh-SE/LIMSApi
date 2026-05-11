@@ -770,26 +770,26 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
     {
         await db.Database.ExecuteSqlRawAsync(@"
             IF NOT EXISTS (SELECT 1 FROM CurrencyMasters WHERE Code = N'INR' AND IsActive = 1)
-                INSERT INTO CurrencyMasters (Name, Code, IsDefault, CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'Indian Rupee', N'INR', 1, 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO CurrencyMasters (Name, Code, Symbol, IsDefault, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Indian Rupee', N'INR', N'₹', 1, 0, GETUTCDATE(), N'LIMS', 1);
 
             IF NOT EXISTS (SELECT 1 FROM CurrencyMasters WHERE Code = N'USD' AND IsActive = 1)
-                INSERT INTO CurrencyMasters (Name, Code, IsDefault, CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'US Dollar', N'USD', 0, 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO CurrencyMasters (Name, Code, Symbol, IsDefault, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'US Dollar', N'USD', N'$', 0, 0, GETUTCDATE(), N'LIMS', 1);
+
+            IF NOT EXISTS (SELECT 1 FROM CurrencyMasters WHERE Code = N'EUR' AND IsActive = 1)
+                INSERT INTO CurrencyMasters (Name, Code, Symbol, IsDefault, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Euro', N'EUR', N'€', 0, 0, GETUTCDATE(), N'LIMS', 1);
+
+            IF NOT EXISTS (SELECT 1 FROM CurrencyMasters WHERE Code = N'GBP' AND IsActive = 1)
+                INSERT INTO CurrencyMasters (Name, Code, Symbol, IsDefault, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'British Pound', N'GBP', N'£', 0, 0, GETUTCDATE(), N'LIMS', 1);
 
             -- Ensure INR is marked as default if it already exists but IsDefault is 0
             UPDATE CurrencyMasters SET IsDefault = 1 WHERE Code = N'INR' AND IsActive = 1 AND IsDefault = 0;
             -- Ensure no other currency is marked as default
             UPDATE CurrencyMasters SET IsDefault = 0 WHERE Code != N'INR' AND IsActive = 1 AND IsDefault = 1;
         ");
-
-        //IF NOT EXISTS(SELECT 1 FROM CurrencyMasters WHERE Code = N'EUR' AND IsActive = 1)
-        //        INSERT INTO CurrencyMasters(Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive)
-        //        VALUES(N'Euro', N'EUR', 0, GETUTCDATE(), N'LIMS', 1);
-
-        //IF NOT EXISTS(SELECT 1 FROM CurrencyMasters WHERE Code = N'GBP' AND IsActive = 1)
-        //        INSERT INTO CurrencyMasters(Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive)
-        //        VALUES(N'British Pound', N'GBP', 0, GETUTCDATE(), N'LIMS', 1);
     }
 
     // ───────────────────────────────────────────────
@@ -1012,25 +1012,25 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
 
             -- Product Condition Master
             IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'Hot Rolled' AND IsActive = 1)
-                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Hot Rolled', 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO ProductConditionMasters (Name, CalibrationRequired, IsDestructive, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Hot Rolled', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'Cold Rolled' AND IsActive = 1)
-                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Cold Rolled', 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO ProductConditionMasters (Name, CalibrationRequired, IsDestructive, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Cold Rolled', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'Cold Drawn' AND IsActive = 1)
-                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Cold Drawn', 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO ProductConditionMasters (Name, CalibrationRequired, IsDestructive, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Cold Drawn', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'Hot Forged' AND IsActive = 1)
-                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Hot Forged', 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO ProductConditionMasters (Name, CalibrationRequired, IsDestructive, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Hot Forged', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'As Cast' AND IsActive = 1)
-                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'As Cast', 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO ProductConditionMasters (Name, CalibrationRequired, IsDestructive, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'As Cast', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'Machined' AND IsActive = 1)
-                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Machined', 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO ProductConditionMasters (Name, CalibrationRequired, IsDestructive, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Machined', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'As Welded' AND IsActive = 1)
-                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'As Welded', 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO ProductConditionMasters (Name, CalibrationRequired, IsDestructive, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'As Welded', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'PWHT Treated' AND IsActive = 1)
-                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'PWHT Treated', 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO ProductConditionMasters (Name, CalibrationRequired, IsDestructive, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'PWHT Treated', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'Galvanized' AND IsActive = 1)
-                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Galvanized', 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO ProductConditionMasters (Name, CalibrationRequired, IsDestructive, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Galvanized', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'Pickled' AND IsActive = 1)
-                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Pickled', 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO ProductConditionMasters (Name, CalibrationRequired, IsDestructive, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Pickled', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
         ");
     }
 
