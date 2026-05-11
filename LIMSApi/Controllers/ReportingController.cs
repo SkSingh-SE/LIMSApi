@@ -1,4 +1,5 @@
 ﻿using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Helpers.Enums;
 using LIMSApi.Middleware;
 using LIMSApi.Reporting;
@@ -25,6 +26,7 @@ namespace LIMSApi.Controllers
         // 2. GET REPORT BY ID (with blocks)
         // ---------------------------------------------------------
         [HttpGet("{id:long}")]
+        [RequirePermission(Permissions.Reporting.Read)]
         public async Task<IActionResult> Get(long id)
         {
             var result = await _service.GetReportAsync(id);
@@ -39,6 +41,7 @@ namespace LIMSApi.Controllers
         // Dashboard List
         // =============================================================
         [HttpPost("list")]
+        [RequirePermission(Permissions.Reporting.Read)]
         public async Task<IActionResult> List(PageFilter filter)
         {
             return Ok(await _service.GetReportDashboardList(filter));
@@ -47,7 +50,7 @@ namespace LIMSApi.Controllers
         // =============================================================
         // Perform Workflow Action
         [HttpPost("perform-action")]
-        // [RequirePermission("REPORT_APPROVE")] // TODO: re-enable after permission setup
+        [RequirePermission(Permissions.Reporting.Approve)]
         public async Task<IActionResult> PerformAction([FromBody] WorkflowActionRequestDto dto)
         {
             if (dto == null)
@@ -59,6 +62,7 @@ namespace LIMSApi.Controllers
         // =============================================================
         // Report Preview
         [HttpGet("preview/{reportHeaderId:long}")]
+        [RequirePermission(Permissions.Reporting.Read)]
         public async Task<IActionResult> GetReportPreview(long reportHeaderId)
         {
             var result = await _service.GetReportPreviewAsync(reportHeaderId);
@@ -68,6 +72,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpGet("generate-pdf/{sampleId}")]
+        [RequirePermission(Permissions.Reporting.Manage)]
         public async Task<IActionResult> GeneratePDFSampleWise(long sampleId)
         {
             var report = await _service.GeneratePdfForSampleAsync(sampleId);
@@ -82,6 +87,7 @@ namespace LIMSApi.Controllers
         // Generate Enhanced PDF (professional layout)
         // =============================================================
         [HttpGet("{id:long}/generate-pdf")]
+        [RequirePermission(Permissions.Reporting.Manage)]
         public async Task<IActionResult> GenerateEnhancedPdf(long id)
         {
             var filePath = await _service.GenerateEnhancedPdfAsync(id);
@@ -97,6 +103,7 @@ namespace LIMSApi.Controllers
         // Preview Report Data (for frontend preview before PDF)
         // =============================================================
         [HttpGet("{id:long}/preview-data")]
+        [RequirePermission(Permissions.Reporting.Read)]
         public async Task<IActionResult> GetReportDataPreview(long id)
         {
             var reportData = await _service.BuildReportDataAsync(id);
@@ -138,6 +145,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpGet("{id:long}/generate/{formatType}")]
+        [RequirePermission(Permissions.Reporting.Manage)]
         public async Task<IActionResult> GenerateByFormat(long id, ReportFormatType formatType, [FromQuery] string? watermark = null)
         {
             var pdfBytes = await _service.GenerateReportByFormatAsync(id, formatType, watermark);
@@ -145,6 +153,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("request-amendment")]
+        [RequirePermission(Permissions.Reporting.Amend)]
         public async Task<IActionResult> RequestAmendment([FromForm] AmendmentRequestDto request)
         {
             if (string.IsNullOrWhiteSpace(request.Reason))

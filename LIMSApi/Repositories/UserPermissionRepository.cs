@@ -323,9 +323,9 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.DisplayName != null && x.DisplayName.ToLower().Contains(search))
-                                      || (x.Name != null && x.Name.ToLower().Contains(search)));
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.DisplayName != null && x.DisplayName.Contains(search))
+                                      || (x.Name != null && x.Name.Contains(search)));
                 }
             }
 

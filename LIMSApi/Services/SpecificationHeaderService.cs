@@ -34,12 +34,60 @@ namespace LIMSApi.Services
             }
         }
 
+        /// <summary>
+        /// Rounds all numeric fields of every specification line to its linked parameter's DecimalPrecision.
+        /// Defensive: prevents frontend tampering from saving more precision than the parameter allows,
+        /// and ensures DB values match what the UI showed on save.
+        /// </summary>
+        private async Task RoundLinesToParameterPrecisionAsync(SpecificationHeader model)
+        {
+            var paramIds = model.Grades
+                .SelectMany(g => g.SpecificationLines)
+                .Where(l => l.ParameterID.HasValue && l.ParameterID.Value > 0)
+                .Select(l => l.ParameterID!.Value)
+                .Distinct()
+                .ToList();
+
+            if (paramIds.Count == 0) return;
+
+            var precisionMap = await _context.ParameterMasters
+                .Where(p => paramIds.Contains(p.ID))
+                .Select(p => new { p.ID, p.DecimalPrecision })
+                .ToDictionaryAsync(x => x.ID, x => x.DecimalPrecision);
+
+            foreach (var grade in model.Grades)
+            {
+                foreach (var line in grade.SpecificationLines)
+                {
+                    if (!line.ParameterID.HasValue || !precisionMap.TryGetValue(line.ParameterID.Value, out var precision))
+                        continue;
+                    // Clamp precision to column scale (decimal(18,6))
+                    if (precision < 0) precision = 0;
+                    if (precision > 6) precision = 6;
+
+                    line.MinValue = Round(line.MinValue, precision);
+                    line.MaxValue = Round(line.MaxValue, precision);
+                    line.MinValueEquation = Round(line.MinValueEquation, precision);
+                    line.MaxValueEquation = Round(line.MaxValueEquation, precision);
+                    line.MinTolerance = Round(line.MinTolerance, precision);
+                    line.MaxTolerance = Round(line.MaxTolerance, precision);
+                }
+            }
+        }
+
+        private static decimal? Round(decimal? value, int precision)
+        {
+            if (!value.HasValue) return null;
+            return Math.Round(value.Value, precision, MidpointRounding.AwayFromZero);
+        }
+
         public async Task CreateSpecificationHeader(SpecificationHeader model)
         {
             if (string.IsNullOrWhiteSpace(model.AliasName))
                 throw new ArgumentException("SpecificationHeader name should not be empty!");
 
             ValidateSpecificationLines(model);
+            await RoundLinesToParameterPrecisionAsync(model);
 
             bool exists = await _specificationRepo.ExistsByName(model.AliasName);
             if (exists)
@@ -56,6 +104,7 @@ namespace LIMSApi.Services
                 throw new ArgumentException("SpecificationHeader ID should not be empty!");
 
             ValidateSpecificationLines(model);
+            await RoundLinesToParameterPrecisionAsync(model);
 
             bool exists = await _specificationRepo.ExistsByNameAndNotId(model.AliasName, model.ID);
             if (exists)

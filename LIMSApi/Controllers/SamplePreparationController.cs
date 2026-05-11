@@ -1,4 +1,6 @@
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Mvc;
 
@@ -15,12 +17,14 @@ namespace LIMSApi.Controllers
             _service = service;
         }
 
+        [RequirePermission(Permissions.SamplePreparation.Read)]
         [HttpPost("list")]
         public async Task<IActionResult> GetAll([FromBody] PageFilter filter)
         {
             return Ok(await _service.GetAllAsync(filter));
         }
 
+        [RequirePermission(Permissions.SamplePreparation.Read)]
         [HttpGet("details/{id}")]
         public async Task<IActionResult> GetById(long id)
         {
@@ -33,6 +37,7 @@ namespace LIMSApi.Controllers
             return Ok(await _service.GetOrCreateBySampleAsync(sampleId));
         }
 
+        [RequirePermission(Permissions.SamplePreparation.Create)]
         [HttpPost("create")]
         public async Task<IActionResult> Create([FromBody] SamplePreparationCreateDto dto)
         {
@@ -40,6 +45,7 @@ namespace LIMSApi.Controllers
             return Ok(new { message = "Preparation record created successfully.", data = result });
         }
 
+        [RequirePermission(Permissions.SamplePreparation.Update)]
         [HttpPut("update")]
         public async Task<IActionResult> Update([FromBody] SamplePreparationUpdateDto dto)
         {

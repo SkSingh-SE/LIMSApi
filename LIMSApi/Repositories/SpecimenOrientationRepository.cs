@@ -63,8 +63,8 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = filter.searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)) || (x.Code != null && x.Code.ToLower().Contains(search)));
+                    var search = filter.searchTerm.Trim();
+                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)) || (x.Code != null && x.Code.Contains(search)));
                 }
             }
 
@@ -84,11 +84,11 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var search = searchTerm.Trim().ToLower();
+                var search = searchTerm.Trim();
                 if (long.TryParse(search, out var searchId))
-                    _query = _query.Where(x => x.ID == searchId || (x.Name != null && x.Name.ToLower().Contains(search)));
+                    _query = _query.Where(x => x.ID == searchId || (x.Name != null && x.Name.Contains(search)));
                 else
-                    _query = _query.Where(x => x.Name != null && x.Name.ToLower().Contains(search));
+                    _query = _query.Where(x => x.Name != null && x.Name.Contains(search));
             }
 
             var skip = pageNo * pageSize;

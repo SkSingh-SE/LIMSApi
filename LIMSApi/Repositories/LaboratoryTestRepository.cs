@@ -75,11 +75,11 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
+                var search = filter.searchTerm.Trim();
                 _query = _query.Where(x =>
-                                    (!string.IsNullOrEmpty(x.Name) && x.Name.ToLower().Contains(search)) ||
-                                    (!string.IsNullOrEmpty(x.DepartmentName) && x.DepartmentName.ToLower().Contains(search)) ||
-                                    (!string.IsNullOrEmpty(x.SubGroup) && x.SubGroup.ToLower().Contains(search))
+                                    (!string.IsNullOrEmpty(x.Name) && x.Name.Contains(search)) ||
+                                    (!string.IsNullOrEmpty(x.DepartmentName) && x.DepartmentName.Contains(search)) ||
+                                    (!string.IsNullOrEmpty(x.SubGroup) && x.SubGroup.Contains(search))
                                     );
             }
 
@@ -113,8 +113,8 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.SubGroup != null && x.SubGroup.ToLower().Contains(search)));
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.SubGroup != null && x.SubGroup.Contains(search)));
                 }
             }
 
@@ -128,13 +128,14 @@ namespace LIMSApi.Repositories
 
             return data;
         }
-        public async Task<List<DropdwonSelector>> GetChemicalTestMethodDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> GetGeneralTestMethodDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
         {
             if (pageNo < 0) pageNo = 0;
 
             var _query = from a in _context.LaboratoryTests
                          join d in _context.DepartmentMasters on a.LabDepartmentID equals d.ID
                          where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode
+                               && !d.IsChemical
                          select new
                          {
                              a.ID,
@@ -142,7 +143,6 @@ namespace LIMSApi.Repositories
                              Department = d.Name
                          };
 
-            _query = _query.Where(x => x.Department.ToString().ToLower().Contains("chemical"));
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
@@ -151,8 +151,46 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.SubGroup != null && x.SubGroup.ToLower().Contains(search)));
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.SubGroup != null && x.SubGroup.Contains(search)));
+                }
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            {
+                Id = x.ID,
+                Name = $"{x.SubGroup} ({x.Department}) ",
+            })).ToListAsync();
+
+            return data;
+        }
+
+        public async Task<List<DropdwonSelector>> GetChemicalTestMethodDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = from a in _context.LaboratoryTests
+                         join d in _context.DepartmentMasters on a.LabDepartmentID equals d.ID
+                         where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode
+                               && d.IsChemical
+                         select new
+                         {
+                             a.ID,
+                             a.SubGroup,
+                             Department = d.Name
+                         };
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.SubGroup != null && x.SubGroup.Contains(search)));
                 }
             }
 
@@ -186,8 +224,8 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var search = searchTerm.Trim().ToLower();
-                query = query.Where(n => n.ToLower().Contains(search));
+                var search = searchTerm.Trim();
+                query = query.Where(n => n.Contains(search));
             }
 
             return await query.OrderBy(n => n).Take(pageSize).ToListAsync();

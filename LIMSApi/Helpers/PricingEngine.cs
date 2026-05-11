@@ -18,6 +18,11 @@ namespace LIMSApi.Helpers
 
         private static readonly char[] NameSeparators = { ' ', '-', '_' };
 
+        private static readonly HashSet<string> RangeSelectionTypes = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "HoursRange", "SizeRange", "WeightRange", "TempratureRange", "LoadRange"
+        };
+
         public PricingEngine(LIMSContext db, IFinancialYearService fyService, ILogger<PricingEngine> logger)
         {
             _db = db;
@@ -159,7 +164,7 @@ namespace LIMSApi.Helpers
             if (configPrice == null)
                 throw new Exception($"Configuration {config.ID} not found in invoice case prices");
 
-            var isRangeType = config.SelectionType.EndsWith("Range", StringComparison.OrdinalIgnoreCase);
+            var isRangeType = RangeSelectionTypes.Contains(config.SelectionType);
 
             if (isRangeType)
             {

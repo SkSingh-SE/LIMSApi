@@ -14,13 +14,13 @@ public class ToleranceMaster : AuditProperty
     [MaxLength(200)]
     public string? StandardName { get; set; }  // e.g., "BS 970"
 
-    [Column(TypeName = "decimal(18,4)")]
+    [Column(TypeName = "decimal(18,6)")]
     public decimal? ValueRangeStart { get; set; }  // e.g., 0
 
-    [Column(TypeName = "decimal(18,4)")]
+    [Column(TypeName = "decimal(18,6)")]
     public decimal? ValueRangeEnd { get; set; }  // e.g., 100
 
-    [Column(TypeName = "decimal(18,4)")]
+    [Column(TypeName = "decimal(18,6)")]
     public decimal Tolerance { get; set; }  // e.g., ±0.5
 
     [MaxLength(50)]

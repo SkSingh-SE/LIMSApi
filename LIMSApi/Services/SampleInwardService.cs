@@ -212,6 +212,13 @@ namespace LIMSApi.Services
 
                 var statusJobs = new List<Func<Task>>();
 
+                // Validate mandatory information before queuing status jobs so
+                // sample status can match the inward status at creation time.
+                var isComplete = ValidateMandatoryInformation(entity);
+                var initialSampleStatus = isComplete
+                    ? SampleStatus.INWARD_COMPLETED
+                    : SampleStatus.SAMPLE_INWARD_REGISTERED;
+
                 if (entity.SampleDetails.Any())
                 {
                     foreach (var sampleDetail in entity.SampleDetails)
@@ -225,19 +232,17 @@ namespace LIMSApi.Services
                             sampleDetail.FileName = fileUploadResponse.OriginalFileName;
                             sampleDetail.UploadReferenceID = fileUploadResponse.ID;
                         }
-                        // Queue status update job
+                        var capturedSample = sampleDetail;
                         statusJobs.Add(async () =>
                         {
                             await _sampleStatusService.ForceAutoStatusAsync(
-                                sampleDetail.ID,
-                                SampleStatus.SAMPLE_INWARD_REGISTERED,
+                                capturedSample.ID,
+                                initialSampleStatus,
                                 loggedInUser.EmployeeID
                             );
                         });
                     }
                 }
-                // Validate mandatory information
-                var isComplete = ValidateMandatoryInformation(entity);
 
                 await using var trx = await _context.Database.BeginTransactionAsync();
                 try
@@ -257,10 +262,10 @@ namespace LIMSApi.Services
 
                     await trx.CommitAsync();
                 }
-                catch
+                catch (Exception ex)
                 {
                     await trx.RollbackAsync();
-                    throw;
+                    throw ex;
                 }
 
                 // ── Notifications (fire AFTER save — failures must not roll back inward) ──
@@ -510,7 +515,7 @@ namespace LIMSApi.Services
                 if (newSamples.Any())
                 {
                     dynamic caseAndSample = await _SampleInwardRepository.GetCaseNoAndSampleNo();
-                    nextSampleNumber = caseAndSample.nextSampleCounter;
+                    nextSampleNumber = (int)caseAndSample.nextSampleCounter;
                 }
                 var statusJobs = new List<Func<Task>>();
 
@@ -558,14 +563,25 @@ namespace LIMSApi.Services
                             });
                         }
 
-                        //  Queue status update job for existing sample
+                        // Only push sample to INWARD_COMPLETED if it is still at an early
+                        // registration status. Any sample that has progressed to planning
+                        // or beyond must keep its current status — do not regress it.
+                        var earlyRegistrationStatuses = new HashSet<string>
+                        {
+                            SampleStatus.SAMPLE_INWARD_REGISTERED.ToString(),
+                            SampleStatus.AWAITING_MISSING_INFORMATION.ToString()
+                        };
+                        var capturedSample = existingSample;
                         statusJobs.Add(async () =>
                         {
-                            await _sampleStatusService.ForceAutoStatusAsync(
-                                existingSample.ID,
-                                SampleStatus.INWARD_COMPLETED,
-                                loggedInUser.EmployeeID
-                            );
+                            if (earlyRegistrationStatuses.Contains(capturedSample.SampleStatus ?? ""))
+                            {
+                                await _sampleStatusService.ForceAutoStatusAsync(
+                                    capturedSample.ID,
+                                    SampleStatus.INWARD_COMPLETED,
+                                    loggedInUser.EmployeeID
+                                );
+                            }
                         });
                     }
                     else
@@ -800,7 +816,45 @@ namespace LIMSApi.Services
                         sample.TestPlans.Add(plan);
                     }
 
-                    int ulrCounter = 1;
+                    // Start counter from max existing ULR counter + 1 to avoid
+                    // re-using numbers from any previously generated (and possibly removed) methods.
+                    // Must be scanned BEFORE methods are cleared in the UPSERT blocks below.
+                    int maxExistingCounter = 0;
+                    foreach (var existingGt in plan.GeneralTests)
+                        foreach (var m in existingGt.Methods)
+                        {
+                            int c = ParseUlrCounter(m.UlrNo, tcPrefix, year, labLocation, sample.SampleNo);
+                            if (c > maxExistingCounter) maxExistingCounter = c;
+                        }
+                    foreach (var existingCt in plan.ChemicalTests)
+                    {
+                        int c = ParseUlrCounter(existingCt.UlrNo, tcPrefix, year, labLocation, sample.SampleNo);
+                        if (c > maxExistingCounter) maxExistingCounter = c;
+                    }
+                    int ulrCounter = maxExistingCounter > 0 ? maxExistingCounter + 1 : 1;
+
+                    // Delete GeneralTests removed from the form (not present in incoming DTO)
+                    var incomingGeneralIds = (planDto.GeneralTests ?? new())
+                        .Where(g => g.ID > 0).Select(g => g.ID).ToHashSet();
+                    var generalTestsToDelete = plan.GeneralTests
+                        .Where(g => g.ID > 0 && !incomingGeneralIds.Contains(g.ID)).ToList();
+                    foreach (var gt in generalTestsToDelete)
+                    {
+                        _context.GeneralTestMethods.RemoveRange(gt.Methods);
+                        _context.GeneralTests.Remove(gt);
+                    }
+
+                    // Delete ChemicalTests removed from the form (not present in incoming DTO)
+                    var incomingChemicalIds = (planDto.ChemicalTests ?? new())
+                        .Where(c => c.ID > 0).Select(c => c.ID).ToHashSet();
+                    var chemTestsToDelete = plan.ChemicalTests
+                        .Where(c => c.ID > 0 && !incomingChemicalIds.Contains(c.ID)).ToList();
+                    foreach (var ct in chemTestsToDelete)
+                    {
+                        _context.ChemicalTestElements.RemoveRange(ct.Elements);
+                        _context.ChemicalTestTypes.RemoveRange(ct.TestTypes);
+                        _context.ChemicalTests.Remove(ct);
+                    }
 
                     #region GENERAL TEST (UPSERT)
 
@@ -948,6 +1002,20 @@ namespace LIMSApi.Services
                 foreach (var job in statusJobs)
                     await job();
 
+                // Move each sample to UNDER_PLANNING only if still in early inward stages.
+                // Samples already in review/testing/reporting are not downgraded.
+                var earlyStatuses = new HashSet<string>
+                {
+                    SampleStatus.SAMPLE_INWARD_REGISTERED.ToString(),
+                    SampleStatus.INWARD_COMPLETED.ToString()
+                };
+                foreach (var sample in entity.SampleDetails.Where(s => s.IsActive && !s.IsCancelled))
+                {
+                    if (earlyStatuses.Contains(sample.SampleStatus ?? ""))
+                        await _sampleStatusService.ForceAutoStatusAsync(
+                            sample.ID, SampleStatus.UNDER_PLANNING, loggedInUser.EmployeeID);
+                }
+
                 await _sampleStatusService.UpdateInwardStatus(
                     entity.ID,
                     InwardStatus.UNDER_PLANNING,
@@ -969,10 +1037,21 @@ namespace LIMSApi.Services
             if (string.IsNullOrWhiteSpace(reportNo))
                 return $"{tcPrefix}{year}{labLocation}{sampleNo.Split('-')[1].PadLeft(8, '0')}{ulrCounter++}F";
             else
-            {
-                ulrCounter++;
-                return reportNo;
-            }
+                return reportNo; // Preserved — do not advance counter (its slot is already accounted for in maxExistingCounter)
+        }
+
+        int ParseUlrCounter(string? ulrNo, string tcPrefix, string year, string labLocation, string sampleNo)
+        {
+            if (string.IsNullOrWhiteSpace(ulrNo)) return 0;
+            var sampleParts = sampleNo.Split('-');
+            if (sampleParts.Length < 2) return 0;
+            var paddedSample = sampleParts[1].PadLeft(8, '0');
+            var prefix = $"{tcPrefix}{year}{labLocation}{paddedSample}";
+            if (!ulrNo.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return 0;
+            var tail = ulrNo.Substring(prefix.Length);
+            if (tail.EndsWith("F", StringComparison.OrdinalIgnoreCase))
+                tail = tail[..^1];
+            return int.TryParse(tail, out var n) ? n : 0;
         }
 
 
@@ -1007,11 +1086,11 @@ namespace LIMSApi.Services
                     throw new Exception("Sample Inward not found");
 
                 entity.ReviewStatus = "Pending for Approval";
-                entity.ReviewedBy = loggedInUser.EmployeeID;
-                entity.ReviewedOn = DateTime.UtcNow;
+                //entity.ReviewedBy = loggedInUser.EmployeeID;
+                //entity.ReviewedOn = DateTime.UtcNow;
 
-                // Update PlanStatus on all test plans to Submitted
-                foreach (var sample in entity.SampleDetails)
+                // Update PlanStatus on all active (non-cancelled) test plans to Submitted
+                foreach (var sample in entity.SampleDetails.Where(s => !s.IsCancelled))
                 {
                     foreach (var tp in sample.TestPlans)
                     {
@@ -1032,28 +1111,30 @@ namespace LIMSApi.Services
                 }
                 await _context.SaveChangesAsync();
 
-                var statusJobs = new List<Func<Task>>();
-
-                foreach (var sample in entity.SampleDetails)
-                {
-                    statusJobs.Add(() =>
-                        _sampleStatusService.ForceAutoStatusAsync(
-                            sample.ID,
-                            SampleStatus.UNDER_REVIEW_REQUEST,
-                            loggedInUser.EmployeeID
-                        )
-                    );
-                }
-
                 await _workflowService.StartWorkflow(entity.ID, WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Request_Review));
 
                 await _SampleInwardRepository.UpdateSampleInward(entity);
 
-                foreach (var job in statusJobs)
+                // Re-read the inward status after StartWorkflow — self-approval may have already
+                // advanced the inward to REVIEW_COMPLETED. Only push statuses if still UNDER_PLANNING.
+                var freshInwardStatus = await _context.SampleInwards
+                    .Where(s => s.ID == entity.ID)
+                    .Select(s => s.InwardStatus)
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync();
+
+                if (freshInwardStatus == InwardStatus.UNDER_PLANNING.ToString())
                 {
-                    await job();
+                    foreach (var sample in entity.SampleDetails.Where(s => !s.IsCancelled))
+                    {
+                        await _sampleStatusService.ForceAutoStatusAsync(
+                            sample.ID,
+                            SampleStatus.UNDER_REVIEW_REQUEST,
+                            loggedInUser.EmployeeID
+                        );
+                    }
+                    await _sampleStatusService.UpdateInwardStatus(entity.ID, InwardStatus.UNDER_REVIEW, loggedInUser.EmployeeID);
                 }
-                await _sampleStatusService.UpdateInwardStatus(entity.ID, InwardStatus.UNDER_REVIEW, loggedInUser.EmployeeID);
 
                 await trx.CommitAsync();
                 _logger.LogInformation("Plan submitted for review for inward {ID}", model.ID);
@@ -1188,6 +1269,11 @@ namespace LIMSApi.Services
                         SpecimenOrientationID = s.SpecimenOrientationID,
                         Remarks = s.Remarks,
                         Quantity = s.Quantity,
+                        IsCancelled = s.IsCancelled,
+                        SampleStatus = s.SampleStatus,
+                        CancelledOn = s.CancelledOn,
+                        CancelledBy = s.CancelledBy,
+                        CancellationReason = s.CancellationReason,
                         UploadReferenceID = s.UploadReferenceID,
                         SampleFilePath = s.SampleFilePath,
                         FileName = s.FileName,
@@ -1358,6 +1444,7 @@ namespace LIMSApi.Services
                     .FirstOrDefault(),
 
                 SampleDetails = sampleInward.SampleDetails
+                    .Where(s => !s.IsCancelled)
                     .Select(s => new SampleDetailDto
                     {
                         ID = s.ID,
@@ -1372,6 +1459,11 @@ namespace LIMSApi.Services
                         SpecimenOrientationID = s.SpecimenOrientationID,
                         Remarks = s.Remarks,
                         Quantity = s.Quantity,
+                        IsCancelled = s.IsCancelled,
+                        SampleStatus = s.SampleStatus,
+                        CancelledOn = s.CancelledOn,
+                        CancelledBy = s.CancelledBy,
+                        CancellationReason = s.CancellationReason,
                         UploadReferenceID = s.UploadReferenceID,
                         SampleFilePath = s.SampleFilePath,
                         FileName = s.FileName,
@@ -1403,7 +1495,7 @@ namespace LIMSApi.Services
 
                 //  NEW: Sample Test Plans
                 SampleTestPlans = sampleInward.SampleDetails
-                    .Where(s => s.TestPlans.Any())
+                    .Where(s => !s.IsCancelled && s.TestPlans.Any())
                     .SelectMany(s => s.TestPlans.Select(tp => new SampleTestPlanDto
                     {
                         ID = tp.ID,
@@ -1554,5 +1646,143 @@ namespace LIMSApi.Services
         {
             return await _proformaInvoiceRepository.GeneratePIPdfAsync(piId);
         }
+
+        public async Task CancelSampleAsync(long sampleDetailId, string reason)
+        {
+            var user = LoggedInUserProvider.CurrentUser
+                ?? throw new UnauthorizedAccessException("User context not available.");
+
+            var sample = await _context.SampleDetails
+                .Include(s => s.SampleInward)
+                .Include(s => s.TestPlans)
+                .FirstOrDefaultAsync(s => s.ID == sampleDetailId && s.IsActive)
+                ?? throw new KeyNotFoundException("Sample not found.");
+
+            if (sample.IsCancelled)
+                throw new ArgumentException("Sample is already cancelled.");
+
+            if (sample.IsTestingCompleted)
+                throw new InvalidOperationException("Sample testing is already completed. Cannot cancel.");
+
+            if (sample.SampleInward?.IsInvoiceGenerated == true)
+                throw new InvalidOperationException("Tax invoice has been generated for this inward. Cannot cancel sample.");
+
+            if (sample.SampleInward?.PIReceived == true)
+            {
+                var hasPILine = await _context.ProformaInvoiceDetails
+                    .AnyAsync(d => d.SampleID == sampleDetailId);
+                if (hasPILine)
+                    throw new InvalidOperationException("Proforma Invoice is approved and includes this sample. Cannot cancel.");
+            }
+
+            var reportFinalized = await _context.ReportHeaders
+                .AnyAsync(r => r.SampleID == sampleDetailId &&
+                               (r.Status == "Final" || r.Status == "Approved" || r.Status == "Dispatched"));
+            if (reportFinalized)
+                throw new InvalidOperationException("Test report has been finalized for this sample. Cannot cancel.");
+
+            // Cancel all test plans for this sample
+            foreach (var plan in sample.TestPlans)
+                plan.PlanStatus = "Cancelled";
+
+            // Soft-cancel the sample (IsActive stays true — row remains visible)
+            var previousStatus = sample.SampleStatus;
+            sample.IsCancelled = true;
+            sample.SampleStatus = SampleStatus.SAMPLE_CANCELLED.ToString();
+            sample.CancelledOn = DateTime.UtcNow;
+            sample.CancelledBy = user.EmployeeID;
+            sample.CancellationReason = reason;
+            sample.ModifiedBy = user.EmployeeID;
+            sample.ModifiedOn = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            // Immutable audit entry with cancellation reason in Remarks
+            await _sampleStatusService.LogStatusChangePublic(
+                "Sample", sampleDetailId, previousStatus,
+                SampleStatus.SAMPLE_CANCELLED.ToString(),
+                user.EmployeeID, "CancelSampleAsync", reason);
+
+            // Auto-update inward status if all samples are now cancelled
+            var anyActiveLeft = await _context.SampleDetails
+                .AnyAsync(s => s.InwardID == sample.InwardID && s.IsActive && !s.IsCancelled);
+            if (!anyActiveLeft)
+                await _sampleStatusService.UpdateInwardStatus(
+                    sample.InwardID, InwardStatus.INWARD_COMPLETED, user.EmployeeID);
+        }
+
+        public async Task DeleteSampleAsync(long sampleDetailId)
+        {
+            var user = LoggedInUserProvider.CurrentUser
+                ?? throw new UnauthorizedAccessException("User context not available.");
+
+            var sample = await _context.SampleDetails
+                .Include(s => s.TestPlans)
+                .FirstOrDefaultAsync(s => s.ID == sampleDetailId && s.IsActive)
+                ?? throw new KeyNotFoundException("Sample not found.");
+
+            if (sample.IsCancelled)
+                throw new ArgumentException("Cancelled samples cannot be deleted. Use the cancel feature.");
+
+            var hasPlans = sample.TestPlans.Any();
+            if (hasPlans)
+                throw new InvalidOperationException("Sample has test plans and cannot be deleted. Use the cancel option instead.");
+
+            var hasTestResults = await _context.TestResultHeaders
+                .AnyAsync(t => t.SampleID == sampleDetailId);
+            if (hasTestResults)
+                throw new InvalidOperationException("Sample has test results and cannot be deleted.");
+
+            // Soft-delete
+            sample.IsActive = false;
+            sample.ModifiedBy = user.EmployeeID;
+            sample.ModifiedOn = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<PaymentInfoDto> UpdatePaymentInfoAsync(long id, PaymentInfoDto dto)
+        {
+            var entity = await _context.SampleInwards.FindAsync(id)
+                ?? throw new KeyNotFoundException("Sample Inward not found.");
+
+            if (dto.PurchaseOrderId.HasValue)
+            {
+                var po = await _context.CustomerPurchaseOrders
+                    .FirstOrDefaultAsync(p => p.ID == dto.PurchaseOrderId.Value && p.IsActive)
+                    ?? throw new ArgumentException("Selected Purchase Order not found.");
+                if (po.CustomerId != entity.CustomerID)
+                    throw new ArgumentException("Purchase Order does not belong to the selected customer.");
+                if (po.Status != "Active")
+                    throw new ArgumentException($"Purchase Order {po.PONumber} is {po.Status}. Only active POs can be linked.");
+                if (po.ValidUntil.HasValue && po.ValidUntil.Value < DateTime.UtcNow)
+                    throw new ArgumentException($"Purchase Order {po.PONumber} has expired on {po.ValidUntil.Value:dd-MMM-yyyy}.");
+            }
+
+            entity.PurchaseOrderId = dto.PurchaseOrderId;
+            entity.AdvancePayment = dto.AdvancePayment;
+            entity.BillRequired = dto.BillRequired;
+            entity.AdvancePIRequired = dto.AdvancePIRequired;
+            entity.HoldTestingUntilPIApproved = dto.HoldTestingUntilPIApproved;
+
+            var user = LoggedInUserProvider.CurrentUser;
+            if (user != null)
+            {
+                entity.ModifiedBy = user.EmployeeID;
+                entity.ModifiedOn = DateTime.UtcNow;
+            }
+
+            await _context.SaveChangesAsync();
+
+            return new PaymentInfoDto
+            {
+                PurchaseOrderId = entity.PurchaseOrderId,
+                AdvancePayment = entity.AdvancePayment,
+                BillRequired = entity.BillRequired,
+                AdvancePIRequired = entity.AdvancePIRequired,
+                HoldTestingUntilPIApproved = entity.HoldTestingUntilPIApproved
+            };
+        }
+
     }
 }

@@ -1,5 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,6 +20,7 @@ namespace LIMSApi.Controllers
             _labScopeService = labScopeServce;
         }
 
+        [RequirePermission(Permissions.LabScope.Read)]
         [HttpPost("list")]
         public async Task<IActionResult> LabScopeList(PageFilter filter)
         {
@@ -25,6 +28,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.LabScope.Read)]
         [HttpGet("details/{id}")]
         public async Task<ActionResult<LabScopeMaster>> GetLabScopeMaster(long id)
         {
@@ -34,6 +38,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.LabScope.Update)]
         [HttpPut("update")]
         public async Task<IActionResult> PutLabScopeMaster(LabScopeMaster model)
         {
@@ -45,6 +50,7 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [RequirePermission(Permissions.LabScope.Create)]
         [HttpPost("create")]
         public async Task<ActionResult<LabScopeMaster>> PostLabScopeMaster(LabScopeMaster model)
         {
@@ -56,6 +62,7 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [RequirePermission(Permissions.LabScope.Delete)]
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteLabScopeMaster(long id)
         {

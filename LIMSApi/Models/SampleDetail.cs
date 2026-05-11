@@ -15,11 +15,17 @@ namespace LIMSApi.Models
         public string Details { get; set; } = string.Empty;
         public long? MetalClassificationID { get; set; }
         public long? ProductConditionID { get; set; }
-        public long? SpecimenOrientationID { get; set; }
+        public long? SpecimenOrientationID { get; set; } = null;
         public long? ProductFormID { get; set; }
         public string? Remarks { get; set; }
         public int Quantity { get; set; }
-        public bool Disabled { get; set; }
+        public bool IsCancelled { get; set; }
+
+        // Cancellation tracking (populated only when IsCancelled = true)
+        public DateTime? CancelledOn { get; set; }
+        public long? CancelledBy { get; set; }
+        [MaxLength(500)]
+        public string? CancellationReason { get; set; }
 
         public bool PreparationRequired { get; set; }
         public bool MachiningRequired { get; set; }

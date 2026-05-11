@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using LIMSApi.Data;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
 using LIMSApi.Dtos;
@@ -29,6 +31,7 @@ namespace LIMSApi.Controllers
 
 
         [HttpGet("getUser/{email}")]
+        [RequirePermission(Permissions.User.Read)]
         public async Task<IActionResult> GetUserByEmail(string email)
         {
             var user = await _userService.GetUserByEmail(email);
@@ -42,6 +45,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPut("updateUser")]
+        [RequirePermission(Permissions.User.Update)]
         public async Task<IActionResult> UpdateUser(UserMaster user)
         {
             await _userService.UpdateUser(user);
@@ -54,6 +58,7 @@ namespace LIMSApi.Controllers
 
 
         [HttpDelete("deleteUser/{email}")]
+        [RequirePermission(Permissions.User.Delete)]
         public async Task<IActionResult> DeleteUser(string email)
         {
             var user = await _userService.GetUserByEmail(email);
@@ -84,12 +89,14 @@ namespace LIMSApi.Controllers
         }
 
         [HttpGet("by-employee/{employeeId}")]
+        [RequirePermission(Permissions.User.Read)]
         public async Task<ActionResult<UserAccountDto>> GetByEmployee(long employeeId)
         {
             return await _userService.GetByEmployee(employeeId);
         }
 
         [HttpPut("by-employee/{employeeId}")]
+        [RequirePermission(Permissions.User.Update)]
         public async Task<IActionResult> UpdateByEmployee(long employeeId,UserAccountDto dto)
         {
             await _userService.UpdateByEmployee(employeeId, dto);
@@ -101,6 +108,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("reset-password")]
+        [RequirePermission(Permissions.User.ResetPassword)]
         public async Task<IActionResult> ResetPassword(ResetPasswordDto dto)
         {
             await _userService.ResetPassword(dto);

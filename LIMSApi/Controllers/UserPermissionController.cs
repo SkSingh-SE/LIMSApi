@@ -1,4 +1,6 @@
 ﻿using LIMSApi.Dtos;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Models;
 using LIMSApi.Services;
 using LIMSApi.Services.Interface;
@@ -21,6 +23,7 @@ namespace LIMSApi.Controllers
         
 
         [HttpPost("update")]
+        [RequirePermission(Permissions.User.AssignPermission)]
         public async Task<IActionResult> PostUserPermission(long userId, List<UserPermissionUpdateDto> updatedPermissions)
         {
             await _UserPermissionService.SaveUserPermissions(userId, updatedPermissions);
@@ -32,6 +35,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpGet("user-permission/{userId}")]
+        [RequirePermission(Permissions.Admin.ReadUserPermission)]
         public async Task<IActionResult> GetUserPermission(long userId)
         {
             var data = await _UserPermissionService.GetUserPermissions(userId);
@@ -45,6 +49,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpGet("all-permission")]
+        [RequirePermission(Permissions.Admin.ReadUserPermission)]
         public async Task<IActionResult> GetAllPermissions()
         {
             var data = await _UserPermissionService.GetAllPermissions();

@@ -115,7 +115,11 @@ namespace LIMSApi.Dtos
         public long? SpecimenOrientationID { get; set; }
         public string? Remarks { get; set; }
         public int Quantity { get; set; }
-        public bool Disabled { get; set; }
+        public bool IsCancelled { get; set; }
+        public string? SampleStatus { get; set; }
+        public DateTime? CancelledOn { get; set; }
+        public long? CancelledBy { get; set; }
+        public string? CancellationReason { get; set; }
 
         // Prep flags
         public bool PreparationRequired { get; set; }
@@ -247,5 +251,14 @@ namespace LIMSApi.Dtos
         public long Id { get; set; }
         public string Name { get; set; }
         public string Action { get; set; }
+    }
+
+    public class PaymentInfoDto
+    {
+        public long? PurchaseOrderId { get; set; }
+        public decimal AdvancePayment { get; set; }
+        public bool BillRequired { get; set; }
+        public bool AdvancePIRequired { get; set; }
+        public bool HoldTestingUntilPIApproved { get; set; }
     }
 }

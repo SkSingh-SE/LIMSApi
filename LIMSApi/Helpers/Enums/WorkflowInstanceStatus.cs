@@ -11,7 +11,7 @@
     {
         Report_Review,
         Request_Review,
-        TestResult,
+        Test_Verification,
         Report_Amendment
     }
     public static class WorkFlowEntityTypeExtensions
@@ -20,10 +20,10 @@
         {
             return type switch
             {
-                WorkFlowEntityType.Report_Review => "Report Review",
-                WorkFlowEntityType.Request_Review => "Request Review",
-                WorkFlowEntityType.TestResult => "TestResult",
-                WorkFlowEntityType.Report_Amendment => "Report Amendment",
+                WorkFlowEntityType.Report_Review     => "Report Review",
+                WorkFlowEntityType.Request_Review    => "Request Review",
+                WorkFlowEntityType.Test_Verification => "Test Result Verification",
+                WorkFlowEntityType.Report_Amendment  => "Report Amendment",
                 _ => "Unknown"
             };
         }

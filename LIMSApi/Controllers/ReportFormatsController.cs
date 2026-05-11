@@ -156,11 +156,12 @@ namespace LIMSApi.Controllers
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var term = searchTerm.ToLower();
+                // Rely on SQL Server CI collation — no LOWER() on columns (keeps indexes sargable).
+                var term = searchTerm.Trim();
                 query = query.Where(x =>
-                    x.SampleNo.ToLower().Contains(term) ||
-                    x.CaseNo.ToLower().Contains(term) ||
-                    x.CustomerName.ToLower().Contains(term));
+                    x.SampleNo.Contains(term) ||
+                    x.CaseNo.Contains(term) ||
+                    x.CustomerName.Contains(term));
             }
 
             var items = await query

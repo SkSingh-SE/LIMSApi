@@ -78,8 +78,15 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)) || (x.Code != null && x.Code.ToLower().Contains(search)) || (x.Symbol != null && x.Symbol.ToLower().Contains(search)) || (x.UnitName != null && x.UnitName.ToLower().Contains(search)));
+                // NOTE: SQL Server's default collation is case-insensitive (CI_AS), so we
+                // rely on that rather than wrapping columns in LOWER() which would make the
+                // query non-sargable and force a full table scan.
+                var search = filter.searchTerm.Trim();
+                _query = _query.Where(x =>
+                    (x.Name != null && x.Name.Contains(search)) ||
+                    (x.Code != null && x.Code.Contains(search)) ||
+                    (x.Symbol != null && x.Symbol.Contains(search)) ||
+                    (x.UnitName != null && x.UnitName.Contains(search)));
             }
             if (filter.SortByColumn != null)
             {
@@ -114,8 +121,15 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)) || (x.Code != null && x.Code.ToLower().Contains(search)) || (x.AliasName != null && x.AliasName.ToLower().Contains(search)) || (x.ElementType != null && x.ElementType.ToLower().Contains(search)) || (x.UnitName != null && x.UnitName.ToLower().Contains(search)) || (x.CategoryName != null && x.CategoryName.ToLower().Contains(search)));
+                // Rely on SQL Server CI collation — no LOWER() on columns (keeps indexes sargable).
+                var search = filter.searchTerm.Trim();
+                _query = _query.Where(x =>
+                    (x.Name != null && x.Name.Contains(search)) ||
+                    (x.Code != null && x.Code.Contains(search)) ||
+                    (x.AliasName != null && x.AliasName.Contains(search)) ||
+                    (x.ElementType != null && x.ElementType.Contains(search)) ||
+                    (x.UnitName != null && x.UnitName.Contains(search)) ||
+                    (x.CategoryName != null && x.CategoryName.Contains(search)));
             }
             if (filter.SortByColumn != null)
             {
@@ -147,13 +161,14 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
+                // Rely on SQL Server CI collation — no LOWER() on columns (keeps indexes sargable).
+                var search = filter.searchTerm.Trim();
                 _query = _query.Where(x =>
-                    (x.Name != null && x.Name.ToLower().Contains(search))
-                    || (x.AliasName != null && x.AliasName.ToLower().Contains(search))
-                    || (x.ElementType != null && x.ElementType.ToLower().Contains(search))
-                    || (x.ParameterType != null && x.ParameterType.ToLower().Contains(search))
-                    || (x.UnitName != null && x.UnitName.ToLower().Contains(search))
+                    (x.Name != null && x.Name.Contains(search))
+                    || (x.AliasName != null && x.AliasName.Contains(search))
+                    || (x.ElementType != null && x.ElementType.Contains(search))
+                    || (x.ParameterType != null && x.ParameterType.Contains(search))
+                    || (x.UnitName != null && x.UnitName.Contains(search))
                 );
             }
 
@@ -170,48 +185,23 @@ namespace LIMSApi.Repositories
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.ParameterMasters where a.IsActive select a;
-
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
-                {
-                    _query = _query.Where(x => x.ID == exactId);
-                }
-                else
-                {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
-                }
-            }
-
-            var skip = pageNo * pageSize;
-
-            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
-            {
-                Id = x.ID,
-                Name = $"{x.Name} - ({x.ParameterType})",
-                AdditionalValues = new Dictionary<string, object>
-                {
-                    { "UnitID", x.ParameterUnitID },
-                    { "ParameterType", x.ParameterType ?? "" }
-                }
-            })).ToListAsync();
-
-            return data;
-        }
-        public async Task<List<DropdwonSelector>> GetChemicalParameterDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
-        {
-            if (pageNo < 0) pageNo = 0;
-
             var _query = from a in _context.ParameterMasters
                          join u in _context.ParameterUnitMasters on a.ParameterUnitID equals u.ID into unitGroup
                          from u in unitGroup.DefaultIfEmpty()
-                         where a.IsActive && a.ParameterType == "Chemical" select new
+                         where a.IsActive
+                         select new
                          {
-                             a.Name,
                              a.ID,
+                             a.Name,
+                             a.AliasName,
                              a.ParameterType,
+                             a.Symbol,
+                             a.DecimalPrecision,
+                             a.MinReportableLimit,
+                             a.ElementType,
+                             a.IsCalculated,
+                             a.Formula,
+                             a.ParameterCategoryID,
                              unitID = a.ParameterUnitID,
                              unit = u != null ? u.Name : ""
                          };
@@ -224,8 +214,72 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                    // Rely on SQL Server CI collation — no LOWER() on columns (keeps indexes sargable).
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
+                }
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            {
+                Id = x.ID,
+                Name = $"{x.Name} - ({x.ParameterType})",
+                AdditionalValues = new Dictionary<string, object>
+                {
+                    { "UnitID", x.unitID! },
+                    { "Unit", x.unit ?? "" },
+                    { "ParameterType", x.ParameterType ?? "" },
+                    { "Symbol", x.Symbol ?? "" },
+                    { "DecimalPrecision", x.DecimalPrecision },
+                    { "MinReportableLimit", x.MinReportableLimit! },
+                    { "ElementType", x.ElementType ?? "" },
+                    { "IsCalculated", x.IsCalculated },
+                    { "Formula", x.Formula ?? "" },
+                    { "ParameterCategoryID", x.ParameterCategoryID! },
+                    { "AliasName", x.AliasName ?? "" }
+                }
+            })).ToListAsync();
+
+            return data;
+        }
+        public async Task<List<DropdwonSelector>> GetChemicalParameterDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = from a in _context.ParameterMasters
+                         join u in _context.ParameterUnitMasters on a.ParameterUnitID equals u.ID into unitGroup
+                         from u in unitGroup.DefaultIfEmpty()
+                         where a.IsActive && a.ParameterType == "Chemical"
+                         select new
+                         {
+                             a.ID,
+                             a.Name,
+                             a.AliasName,
+                             a.ParameterType,
+                             a.Symbol,
+                             a.DecimalPrecision,
+                             a.MinReportableLimit,
+                             a.ElementType,
+                             a.IsCalculated,
+                             a.Formula,
+                             a.ParameterCategoryID,
+                             unitID = a.ParameterUnitID,
+                             unit = u != null ? u.Name : ""
+                         };
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    // Rely on SQL Server CI collation — no LOWER() on columns (keeps indexes sargable).
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
                 }
             }
 
@@ -237,8 +291,17 @@ namespace LIMSApi.Repositories
                 Name = $"{x.Name}",
                 AdditionalValues = new Dictionary<string, object>
                 {
-                    { "Unit", x.unit},
-                    { "UnitID", x.unitID }
+                    { "UnitID", x.unitID! },
+                    { "Unit", x.unit ?? "" },
+                    { "ParameterType", x.ParameterType ?? "" },
+                    { "Symbol", x.Symbol ?? "" },
+                    { "DecimalPrecision", x.DecimalPrecision },
+                    { "MinReportableLimit", x.MinReportableLimit! },
+                    { "ElementType", x.ElementType ?? "" },
+                    { "IsCalculated", x.IsCalculated },
+                    { "Formula", x.Formula ?? "" },
+                    { "ParameterCategoryID", x.ParameterCategoryID! },
+                    { "AliasName", x.AliasName ?? "" }
                 }
             })).ToListAsync();
 
@@ -254,8 +317,17 @@ namespace LIMSApi.Repositories
                          where a.IsActive && a.ParameterType == "Mechanical"
                          select new
                          {
-                             a.Name,
                              a.ID,
+                             a.Name,
+                             a.AliasName,
+                             a.ParameterType,
+                             a.Symbol,
+                             a.DecimalPrecision,
+                             a.MinReportableLimit,
+                             a.ElementType,
+                             a.IsCalculated,
+                             a.Formula,
+                             a.ParameterCategoryID,
                              unitID = a.ParameterUnitID,
                              unit = u != null ? u.Name : ""
                          };
@@ -268,8 +340,9 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                    // Rely on SQL Server CI collation — no LOWER() on columns (keeps indexes sargable).
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
                 }
             }
 
@@ -281,8 +354,17 @@ namespace LIMSApi.Repositories
                 Name = $"{x.Name}",
                 AdditionalValues = new Dictionary<string, object>
                 {
-                    { "Unit", x.unit },
-                    { "UnitID", x.unitID }
+                    { "UnitID", x.unitID! },
+                    { "Unit", x.unit ?? "" },
+                    { "ParameterType", x.ParameterType ?? "" },
+                    { "Symbol", x.Symbol ?? "" },
+                    { "DecimalPrecision", x.DecimalPrecision },
+                    { "MinReportableLimit", x.MinReportableLimit! },
+                    { "ElementType", x.ElementType ?? "" },
+                    { "IsCalculated", x.IsCalculated },
+                    { "Formula", x.Formula ?? "" },
+                    { "ParameterCategoryID", x.ParameterCategoryID! },
+                    { "AliasName", x.AliasName ?? "" }
                 }
             })).ToListAsync();
 

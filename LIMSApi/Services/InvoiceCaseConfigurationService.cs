@@ -28,8 +28,15 @@ namespace LIMSApi.Services
                 if (string.IsNullOrWhiteSpace(model.Name))
                     throw new ArgumentException("InvoiceCaseConfiguration name should not be empty!");
 
-                if (await _InvoiceCaseConfigurationRepository.ExistsByName(model.Name))
+                if (await _InvoiceCaseConfigurationRepository.ExistsByNameAndSelectionType(model.Name, model.SelectionType))
                     throw new InvalidOperationException("Same InvoiceCaseConfiguration already exists!");
+
+                // Extra-tier SpectroCombination configs require a base "Full" config to exist first
+                if (model.SelectionType == "SpectroCombination" && !model.IsBaseConfig)
+                {
+                    if (!await _InvoiceCaseConfigurationRepository.ExistsBaseSpectroConfig())
+                        throw new InvalidOperationException("Please create the base 'Full' configuration (with 'Base Configuration' enabled) before adding extra-element combinations.");
+                }
 
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
@@ -51,8 +58,15 @@ namespace LIMSApi.Services
                 if (model.ID == 0)
                     throw new ArgumentException("InvoiceCaseConfiguration ID should not be empty!");
 
-                if (await _InvoiceCaseConfigurationRepository.ExistsByNameAndNotId(model.Name, model.ID))
+                if (await _InvoiceCaseConfigurationRepository.ExistsByNameAndSelectionTypeAndNotId(model.Name, model.SelectionType, model.ID))
                     throw new InvalidOperationException("Same InvoiceCaseConfiguration already exists!");
+
+                // Extra-tier SpectroCombination configs require a base "Full" config to exist
+                if (model.SelectionType == "SpectroCombination" && !model.IsBaseConfig)
+                {
+                    if (!await _InvoiceCaseConfigurationRepository.ExistsBaseSpectroConfig())
+                        throw new InvalidOperationException("Please create the base 'Full' configuration (with 'Base Configuration' enabled) before adding extra-element combinations.");
+                }
 
                 var existingInvoiceCaseConfiguration = await _InvoiceCaseConfigurationRepository.GetInvoiceCaseConfigurationById(model.ID);
 
@@ -66,6 +80,9 @@ namespace LIMSApi.Services
                 existingInvoiceCaseConfiguration.Start = model.Start;
                 existingInvoiceCaseConfiguration.End = model.End;
                 existingInvoiceCaseConfiguration.Unit = model.Unit;
+                existingInvoiceCaseConfiguration.SourceParameterIDs = model.SourceParameterIDs;
+                existingInvoiceCaseConfiguration.IsBaseConfig = model.IsBaseConfig;
+                existingInvoiceCaseConfiguration.FallbackToUserInput = model.FallbackToUserInput;
 
                 existingInvoiceCaseConfiguration.ModifiedOn = DateTime.UtcNow;
                 existingInvoiceCaseConfiguration.ModifiedBy = loggedInUser.EmployeeID;

@@ -49,11 +49,11 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search))
-                || x.EntityType.ToLower().Contains(search)
-                || x.CreatedBy.ToLower().Contains(search)
-                || x.CreatedOn.ToString().Contains(search));
+                // Date column excluded from free-text search — use the date column filter instead.
+                var search = filter.searchTerm.Trim();
+                _query = _query.Where(x => (x.Name != null && x.Name.Contains(search))
+                || x.EntityType.Contains(search)
+                || x.CreatedBy.Contains(search));
             }
 
             if (filter.SortByColumn != null)

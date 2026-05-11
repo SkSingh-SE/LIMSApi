@@ -1,4 +1,6 @@
 ﻿using LIMSApi.Dtos;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Mvc;
@@ -19,6 +21,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("create")]
+        [RequirePermission(Permissions.SamplePreparation.Create)]
         public async Task<IActionResult> Create(CuttingChargeHeader model)
         {
              await _service.CreateAsync(model);
@@ -30,24 +33,28 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("list")]
+        [RequirePermission(Permissions.SamplePreparation.Read)]
         public async Task<IActionResult> GetAll(PageFilter filter)
         {
             return Ok(await _service.GetAllAsync(filter));
         }
 
         [HttpGet("details/{id:long}")]
+        [RequirePermission(Permissions.SamplePreparation.Read)]
         public async Task<IActionResult> GetById(long id)
         {
             return Ok(await _service.GetByIdAsync(id));
         }
 
         [HttpGet("by-inward/{inwardId:long}")]
+        [RequirePermission(Permissions.SamplePreparation.Read)]
         public async Task<IActionResult> GetByInward(long inwardId)
         {
             return Ok(await _service.GetByInwardIdAsync(inwardId));
         }
 
         [HttpPut("update")]
+        [RequirePermission(Permissions.SamplePreparation.Update)]
         public async Task<IActionResult> Update(CuttingChargeHeader model)
         {
             await _service.UpdateAsync(model);
@@ -59,6 +66,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPut("update-status/{sampleId:long}")]
+        [RequirePermission(Permissions.SamplePreparation.Update)]
         public async Task<IActionResult> UpdatePreparationStatus(long sampleId, [FromQuery] string status)
         {
             await _service.UpdatePreparationStatusAsync(sampleId, status);

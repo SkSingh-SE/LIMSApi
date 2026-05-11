@@ -70,14 +70,14 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
+                var search = filter.searchTerm.Trim();
                 _query = _query.Where(x =>
-                    (x.Name != null && x.Name.ToLower().Contains(search))
-                    || (x.ProductType != null && x.ProductType.ToLower().Contains(search))
-                    || (x.ContactPerson1 != null && x.ContactPerson1.ToLower().Contains(search))
-                    || (x.ContactNo1 != null && x.ContactNo1.ToLower().Contains(search))
-                    || (x.EmailId1 != null && x.EmailId1.ToLower().Contains(search))
-                    || (x.Address != null && x.Address.ToLower().Contains(search))
+                    (x.Name != null && x.Name.Contains(search))
+                    || (x.ProductType != null && x.ProductType.Contains(search))
+                    || (x.ContactPerson1 != null && x.ContactPerson1.Contains(search))
+                    || (x.ContactNo1 != null && x.ContactNo1.Contains(search))
+                    || (x.EmailId1 != null && x.EmailId1.Contains(search))
+                    || (x.Address != null && x.Address.Contains(search))
                 );
             }
 
@@ -103,8 +103,8 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
                 }
             }
 

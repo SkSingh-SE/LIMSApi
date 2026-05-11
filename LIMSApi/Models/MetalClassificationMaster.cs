@@ -22,6 +22,9 @@ public partial class MetalClassificationMaster : AuditProperty
     public bool HasMechanicalParams { get; set; } = false;
     public int SortOrder { get; set; } = 0;
 
+    [StringLength(20)]
+    public string? MetalType { get; set; }
+
     [ForeignKey("ParentID")]
     public virtual MetalClassificationMaster? Parent { get; set; }
     public virtual ICollection<MetalClassificationMaster> Children { get; set; } = new List<MetalClassificationMaster>();

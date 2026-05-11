@@ -1,5 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -17,6 +19,7 @@ namespace LIMSApi.Controllers
             _taxService = taxService;
         }
 
+        [RequirePermission(Permissions.Tax.Read)]
         [HttpPost("list")]
         public async Task<IActionResult> TaxList(PageFilter filter)
         {
@@ -24,6 +27,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.Tax.Read)]
         [HttpGet("details/{id}")]
         public async Task<ActionResult<TaxMaster>> GetTaxMaster(long id)
         {
@@ -33,6 +37,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.Tax.Update)]
         [HttpPut("update")]
         public async Task<IActionResult> PutTaxMaster(TaxMaster model)
         {
@@ -40,6 +45,7 @@ namespace LIMSApi.Controllers
             return Ok(new { message = $"TaxMaster '{model.Name}' updated successfully." });
         }
 
+        [RequirePermission(Permissions.Tax.Create)]
         [HttpPost("create")]
         public async Task<ActionResult<TaxMaster>> PostTaxMaster(TaxMaster model)
         {
@@ -47,6 +53,7 @@ namespace LIMSApi.Controllers
             return Ok(new { message = $"TaxMaster '{model.Name}' created successfully" });
         }
 
+        [RequirePermission(Permissions.Tax.Delete)]
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteTaxMaster(long id)
         {

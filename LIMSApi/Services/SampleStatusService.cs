@@ -22,6 +22,9 @@ namespace LIMSApi.Services
 
         public static readonly Dictionary<SampleStatus, int> WorkflowPriority = new()
             {
+                // 98 = CANCELLED (terminal, distinct from rejected)
+                { SampleStatus.SAMPLE_CANCELLED, 98 },
+
                 // 99 = REJECTED
                 { SampleStatus.REQUEST_REJECTED, 99 },
                 { SampleStatus.REPORT_REJECTED_BY_INTERNAL, 99 },
@@ -30,21 +33,22 @@ namespace LIMSApi.Services
                 { SampleStatus.REPORT_DISPATCHED, 7 },
                 { SampleStatus.CASE_CLOSED, 7 },
 
-                // 6 = REPORTING
+                // 6 = REPORTING / BILLING / AMENDMENT
                 { SampleStatus.REPORT_GENERATION_IN_PROGRESS, 6 },
                 { SampleStatus.REPORT_GENERATED, 6 },
                 { SampleStatus.REPORT_UNDER_REVIEW, 6 },
                 { SampleStatus.REPORT_SENT_FOR_CUSTOMER_REVIEW, 6 },
                 { SampleStatus.CUSTOMER_REQUESTED_AMENDMENT, 6 },
                 { SampleStatus.AMENDMENT_IN_PROGRESS, 6 },
+                { SampleStatus.AMENDMENT_COMPLETED, 6 },
+                { SampleStatus.REPORT_AMENDMENT_APPROVED, 6 },
+                { SampleStatus.PAYMENT_PENDING, 6 },
                 { SampleStatus.PAYMENT_COMPLETED, 6 },
                 { SampleStatus.FINAL_REPORT_APPROVED, 6 },
                 { SampleStatus.REPORT_AMENDED_BY_INTERNAL, 6 },
                 { SampleStatus.REPORT_AMENDED_REJECTED, 6 },
 
-            // 5 = TESTING / EXECUTION (Preparation runs parallel with testing)
-                { SampleStatus.AMENDMENT_COMPLETED, 5 },
-                { SampleStatus.REPORT_AMENDMENT_APPROVED, 5 },
+                // 5 = TESTING / EXECUTION (Preparation runs parallel with testing)
                 { SampleStatus.TPI_WAITING_FOR_AGENT, 5 },
                 { SampleStatus.TPI_IN_PROGRESS, 5 },
                 { SampleStatus.TPI_COMPLETED, 5 },
@@ -53,7 +57,6 @@ namespace LIMSApi.Services
                 { SampleStatus.TESTING_UNDER_VERIFICATION, 5 },
                 { SampleStatus.TESTING_VERIFIED, 5 },
                 { SampleStatus.TESTING_VERIFICATION_REJECTED, 5 },
-                { SampleStatus.PAYMENT_PENDING, 5 },
                 { SampleStatus.REQUEST_APPROVED, 5 },
                 { SampleStatus.PREPARATION_REQUIRED, 5 },
                 { SampleStatus.PREPARATION_IN_PROGRESS, 5 },
@@ -113,7 +116,11 @@ namespace LIMSApi.Services
             try
             {
                 var inward = await _repo.GetInward(inwardId);
-                if (inward == null) return false;
+                if (inward == null)
+                {
+                    _logger.LogError("UpdateInwardStatus: Inward {InwardId} not found — status not updated to {NewStatus}", inwardId, newStatus);
+                    return false;
+                }
 
                 var previousStatus = inward.InwardStatus;
                 inward.InwardStatus = newStatus.ToString();
@@ -138,6 +145,14 @@ namespace LIMSApi.Services
         /// Resolves employee name from LoggedInUserProvider (already available in request scope).
         /// </summary>
         private async Task LogStatusChange(string entityType, long entityId, string? previousStatus, string newStatus, long changedBy, string source)
+            => await LogStatusChangePublic(entityType, entityId, previousStatus, newStatus, changedBy, source);
+
+        /// <summary>
+        /// Public overload — allows callers to include a remarks string (e.g. cancellation reason).
+        /// Immutable: entries are never updated or deleted.
+        /// </summary>
+        public async Task LogStatusChangePublic(string entityType, long entityId, string? previousStatus,
+            string newStatus, long changedBy, string source, string? remarks = null)
         {
             try
             {
@@ -150,7 +165,8 @@ namespace LIMSApi.Services
                     ChangedBy = changedBy,
                     ChangedByName = LoggedInUserProvider.CurrentUser?.Name,
                     ChangedOn = DateTime.UtcNow,
-                    Source = source
+                    Source = source,
+                    Remarks = remarks
                 };
 
                 _db.SampleStatusHistories.Add(entry);

@@ -11,7 +11,7 @@ namespace LIMSApi.ServiceWORepo
 
         Task<PagedResponse<object>> GetCasePaymentListAsync(long inwardId, PageFilter filter);
         Task CreatePriceSnapshotAsync(long inwardId);
-        Task<long> GenerateInvoiceAsync(long inwardId);
+        Task<long> GenerateInvoiceAsync(long inwardId, decimal? exchangeRate = null);
         Task<InvoiceDetailsDto> GetInvoiceDetailsAsync(long invoiceId);
         Task SendInvoiceAsync(long invoiceId, bool sendEmail, bool sendWhatsApp);
         Task<long> GenerateProformaInvoiceAsync(long inwardId);

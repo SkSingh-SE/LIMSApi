@@ -38,7 +38,7 @@ namespace LIMSApi.Repositories
         public async Task<Customer?> GetCustomerById(long id)
         {
             var customer = await _context.Customers.AsNoTracking()
-   .Include(x => x.ContactPersons)
+   .Include(x => x.ContactPersons.OrderBy(c => c.Type == "contact1" ? 0 : c.Type == "accountant" ? 2 : 1).ThenBy(c => c.ID))
    .Include(x => x.CustomerDispatchModes)
    .Include(x => x.CustomerCompanyCategories)
        .ThenInclude(ccc => ccc.CompanyCategory)
@@ -74,13 +74,13 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
+                var search = filter.searchTerm.Trim();
                 _query = _query.Where(x =>
-                    (x.Name != null && x.Name.ToLower().Contains(search))
-                    || x.CustomerType.ToLower().Contains(search)
-                    || x.PinCode.ToLower().Contains(search)
-                    || (x.GSTNo != null && x.GSTNo.ToLower().Contains(search))
-                    || x.SampleReturn.ToLower().Contains(search)
+                    (x.Name != null && x.Name.Contains(search))
+                    || x.CustomerType.Contains(search)
+                    || x.PinCode.Contains(search)
+                    || (x.GSTNo != null && x.GSTNo.Contains(search))
+                    || x.SampleReturn.Contains(search)
                 );
             }
 
@@ -106,8 +106,8 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
                 }
             }
 
@@ -133,7 +133,14 @@ namespace LIMSApi.Repositories
         }
         public async Task<bool> ValidateDuplicateCustomer(string gst, long Id)
         {
-            return await _context.Customers.AnyAsync(x => x.GSTNo == gst && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            // Normalize both sides: EF Core translates ToUpper() to SQL UPPER() for case-insensitive match
+            var normalizedGst = gst.Trim().ToUpper();
+            return await _context.Customers.AnyAsync(x =>
+                x.GSTNo != null &&
+                x.GSTNo.ToUpper() == normalizedGst &&
+                x.ID != Id &&
+                x.IsActive &&
+                x.CompanyCode == loggedInUser.CompanyCode);
         }
     }
 }

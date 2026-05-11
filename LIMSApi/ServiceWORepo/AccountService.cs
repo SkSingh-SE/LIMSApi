@@ -187,15 +187,15 @@ namespace LIMSApi.ServiceWORepo
             // ---------------- SEARCH ----------------
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
+                var search = filter.searchTerm.Trim();
 
                 query = query.Where(x =>
-                    (x.CaseNo != null && x.CaseNo.ToLower().Contains(search)) ||
-                    (x.CustomerName != null && x.CustomerName.ToLower().Contains(search)) ||
-                    (x.CustomerType != null && x.CustomerType.ToLower().Contains(search)) ||
-                    (x.PIStatus != null && x.PIStatus.ToLower().Contains(search)) ||
-                    (x.InvoiceStatus != null && x.InvoiceStatus.ToLower().Contains(search)) ||
-                    (x.PaymentStatus != null && x.PaymentStatus.ToLower().Contains(search))
+                    (x.CaseNo != null && x.CaseNo.Contains(search)) ||
+                    (x.CustomerName != null && x.CustomerName.Contains(search)) ||
+                    (x.CustomerType != null && x.CustomerType.Contains(search)) ||
+                    (x.PIStatus != null && x.PIStatus.Contains(search)) ||
+                    (x.InvoiceStatus != null && x.InvoiceStatus.Contains(search)) ||
+                    (x.PaymentStatus != null && x.PaymentStatus.Contains(search))
                 );
             }
 
@@ -237,8 +237,8 @@ namespace LIMSApi.ServiceWORepo
             var hasPendingPayment = await _db.PaymentOrders
                 .AnyAsync(p => p.InwardID == inwardId && p.Status != PaymentStatus.Paid);
 
-            // DirectTaxInvoice: skip PI step entirely
-            var piStatus = inward.Customer!.DirectTaxInvoiceNoPerforma
+            // PI is not required when customer uses DirectTaxInvoice OR when the inward itself has AdvancePIRequired = false
+            var piStatus = (inward.Customer!.DirectTaxInvoiceNoPerforma || !inward.AdvancePIRequired)
                 ? "NOT_REQUIRED"
                 : inward.PIReceived ? "Completed" : "Pending";
 
@@ -248,7 +248,7 @@ namespace LIMSApi.ServiceWORepo
                 .OrderByDescending(p => p.PIDate)
                 .FirstOrDefaultAsync();
 
-            // Update piStatus if PI exists but inward not marked
+            // Update piStatus if PI exists but inward not marked — only when PI is actually required
             if (pi != null && piStatus == "Pending")
                 piStatus = "Generated";
 
@@ -298,6 +298,10 @@ namespace LIMSApi.ServiceWORepo
                 .AllAsync(r => r.Status == "Approved" || r.Status == "Completed" || r.Status == "Dispatched");
             var reportStatus = allReportsApproved ? "FINAL_REPORT_APPROVED" : "PENDING";
 
+            var summaryCustomerCurrency = inward.Customer.CurrencyID > 0
+                ? await _db.CurrencyMasters.FindAsync(inward.Customer.CurrencyID)
+                : null;
+
             return new CaseAccountSummaryDto
             {
                 InwardID = inward.ID,
@@ -310,6 +314,9 @@ namespace LIMSApi.ServiceWORepo
                 BillingStatus = inward.BillingStatus ?? "",
                 ReportStatus = reportStatus,
                 HasPendingPayment = hasPendingPayment,
+                CustomerCurrencyCode = summaryCustomerCurrency?.Code ?? "INR",
+                CustomerCurrencySymbol = summaryCustomerCurrency?.Symbol ?? "₹",
+                CustomerCurrencyIsDefault = summaryCustomerCurrency?.IsDefault ?? true,
 
                 ProformaInvoice = pi != null ? new ProformaInvoiceSummary
                 {
@@ -415,7 +422,7 @@ namespace LIMSApi.ServiceWORepo
             await _priceCalculationService.CreatePriceSnapshotAsync(inwardId);
         }
 
-        public async Task<long> GenerateInvoiceAsync(long inwardId)
+        public async Task<long> GenerateInvoiceAsync(long inwardId, decimal? exchangeRate = null)
         {
             // Role check: Only Accounts role can generate invoices
             var user = Helpers.LoggedInUserProvider.CurrentUser;
@@ -429,6 +436,16 @@ namespace LIMSApi.ServiceWORepo
             var inward = await _db.SampleInwards
                 .Include(x => x.Customer)
                 .FirstAsync(x => x.ID == inwardId);
+
+            // Resolve customer currency
+            var invoiceCurrency = inward.Customer?.CurrencyID > 0
+                ? await _db.CurrencyMasters.FindAsync(inward.Customer.CurrencyID)
+                : null;
+            var currencySymbol = invoiceCurrency?.Symbol ?? "₹";
+            var isNonInr = invoiceCurrency != null && !invoiceCurrency.IsDefault;
+
+            if (isNonInr && (exchangeRate == null || exchangeRate <= 0))
+                throw new ArgumentException($"Exchange rate is required for {invoiceCurrency!.Code} customers. Please provide today's rate (1 {invoiceCurrency.Code} = ₹ X).");
 
             if (inward.IsInvoiceGenerated)
                 throw new Exception("Invoice already generated");
@@ -545,8 +562,9 @@ namespace LIMSApi.ServiceWORepo
             var discountedSubTotal = subTotal - discountAmt;
 
             // ── GST from System Configuration (calculated on discounted subtotal) ──
+            // Non-INR (export/foreign) customers are zero-rated — no GST applies
             var gstConfig = await _db.GstConfigs.FirstOrDefaultAsync();
-            var gstApplicable = gstConfig?.DefaultGstRate > 0 || gstConfig == null; // Default: GST applicable
+            var gstApplicable = !isNonInr && (gstConfig?.DefaultGstRate > 0 || gstConfig == null); // Default: GST applicable
             var gstRate = gstConfig?.DefaultGstRate ?? 18m;
             var halfRate = gstRate / 2m;
             var companyState = gstConfig?.State?.Trim().ToLower() ?? "";
@@ -619,7 +637,12 @@ namespace LIMSApi.ServiceWORepo
                 SGST = sgst,
                 IGST = igst,
                 GrandTotal = grandTotal,
-                FinancialYearId = currentFY?.Id
+                FinancialYearId = currentFY?.Id,
+                CurrencySymbol = currencySymbol,
+                ExchangeRate = isNonInr ? exchangeRate : null,
+                ForeignCurrencyGrandTotal = isNonInr && exchangeRate > 0
+                    ? Math.Round(grandTotal / exchangeRate!.Value, 2, MidpointRounding.AwayFromZero)
+                    : null
             };
 
             _db.TaxInvoices.Add(invoice);
@@ -806,7 +829,11 @@ namespace LIMSApi.ServiceWORepo
                 IGST = invoice.IGST,
                 GrandTotal = invoice.GrandTotal,
                 AdvancePayment = advancePayment,
-                BalancePayable = balancePayable
+                BalancePayable = balancePayable,
+                CurrencySymbol = invoice.CurrencySymbol,
+                IsNonInr = invoice.ExchangeRate.HasValue,
+                ExchangeRate = invoice.ExchangeRate,
+                ForeignCurrencyGrandTotal = invoice.ForeignCurrencyGrandTotal
             };
         }
 
@@ -881,6 +908,9 @@ namespace LIMSApi.ServiceWORepo
                 AdvanceAdjusted = advance,
                 BalancePayable = invoice.GrandTotal - advance,
                 PurchaseOrderNo = poNo,
+                CurrencySymbol = invoice.CurrencySymbol,
+                ExchangeRate = invoice.ExchangeRate,
+                ForeignCurrencyGrandTotal = invoice.ForeignCurrencyGrandTotal,
                 ChargeLines = chargeEvents,
                 AdHocLines = adHocLines
             };
@@ -888,13 +918,18 @@ namespace LIMSApi.ServiceWORepo
 
         public async Task<long> GenerateProformaInvoiceAsync(long inwardId)
         {
+            var inward = await _db.SampleInwards.FindAsync(inwardId)
+                ?? throw new KeyNotFoundException("Inward not found.");
+
+            if (!inward.AdvancePIRequired)
+                throw new InvalidOperationException("Proforma Invoice is not applicable for this case because Advance PI is not required.");
+
             var proformaInvoiceId = await _proformaInvoiceRepository.GeneratePIAsync(inwardId);
 
             // Notification (fire-and-forget)
             try
             {
                 var user = Helpers.LoggedInUserProvider.CurrentUser;
-                var inward = await _db.SampleInwards.FindAsync(inwardId);
                 await _notificationService.CreateNotificationAsync(new Notification
                 {
                     UserID = user?.EmployeeID,

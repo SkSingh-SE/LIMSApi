@@ -94,5 +94,15 @@ namespace LIMSApi.Services
         {
             return await _testMasterRepository.GetTestMasterDropdown(searchTerm, pageNo, pageSize);
         }
+
+        public async Task<List<DropdwonSelector>> GetGeneralTestMasterDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _testMasterRepository.GetGeneralTestMasterDropdown(searchTerm, pageNo, pageSize);
+        }
+
+        public async Task<List<DropdwonSelector>> GetChemicalTestMasterDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _testMasterRepository.GetChemicalTestMasterDropdown(searchTerm, pageNo, pageSize);
+        }
     }
 }

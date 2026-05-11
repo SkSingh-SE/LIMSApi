@@ -1,5 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -17,6 +19,7 @@ namespace LIMSApi.Controllers
             _equipmentTypeService = equipmentTypeServce;
         }
 
+        [RequirePermission(Permissions.Equipment.Read)]
         [HttpPost("list")]
         public async Task<IActionResult> EquipmentList(PageFilter filter)
         {
@@ -24,6 +27,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.Equipment.Read)]
         [HttpGet("details/{id}")]
         public async Task<ActionResult<EquipmentMaster>> GetEquipmentMaster(long id)
         {
@@ -33,6 +37,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.Equipment.Update)]
         [HttpPut("update")]
         public async Task<IActionResult> PutEquipmentMaster(EquipmentMaster model)
         {
@@ -44,6 +49,7 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [RequirePermission(Permissions.Equipment.Create)]
         [HttpPost("create")]
         public async Task<ActionResult<EquipmentMaster>> PostEquipmentMaster(EquipmentMaster model)
         {
@@ -93,6 +99,7 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [RequirePermission(Permissions.Equipment.Delete)]
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteEquipmentMaster(long id)
         {

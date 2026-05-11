@@ -50,8 +50,8 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                var search = filter.searchTerm.Trim();
+                _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
             }
 
             if (filter.SortByColumn != null)
@@ -87,8 +87,8 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
                 }
             }
 
@@ -111,6 +111,27 @@ namespace LIMSApi.Repositories
         public async Task<bool> ExistsByNameAndNotId(string name, long Id)
         {
             return await _context.InvoiceCaseConfigurations.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+        }
+
+        public async Task<bool> ExistsByNameAndSelectionType(string name, string selectionType)
+        {
+            return await _context.InvoiceCaseConfigurations.AnyAsync(x =>
+                x.Name == name && x.SelectionType == selectionType &&
+                x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+        }
+
+        public async Task<bool> ExistsByNameAndSelectionTypeAndNotId(string name, string selectionType, long id)
+        {
+            return await _context.InvoiceCaseConfigurations.AnyAsync(x =>
+                x.Name == name && x.SelectionType == selectionType &&
+                x.ID != id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+        }
+
+        public async Task<bool> ExistsBaseSpectroConfig()
+        {
+            return await _context.InvoiceCaseConfigurations.AnyAsync(x =>
+                x.SelectionType == "SpectroCombination" && x.IsBaseConfig &&
+                x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
     }
 }

@@ -54,9 +54,9 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Code != null && x.Code.ToLower().Contains(search))
-                                     || (x.Name != null && x.Name.ToLower().Contains(search)));
+                var search = filter.searchTerm.Trim();
+                _query = _query.Where(x => (x.Code != null && x.Code.Contains(search))
+                                     || (x.Name != null && x.Name.Contains(search)));
             }
 
             if (filter.SortByColumn != null)
@@ -90,9 +90,9 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.Code != null && x.Code.ToLower().Contains(search))
-                                      || (x.Name != null && x.Name.ToLower().Contains(search)));
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.Code != null && x.Code.Contains(search))
+                                      || (x.Name != null && x.Name.Contains(search)));
                 }
             }
 
@@ -115,6 +115,24 @@ namespace LIMSApi.Repositories
         public async Task<bool> ExistsByNameAndNotId(string name, long Id)
         {
             return await _context.CurrencyMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive);
+        }
+
+        public async Task<CurrencyMaster?> GetDefaultCurrency()
+        {
+            return await _context.CurrencyMasters.FirstOrDefaultAsync(x => x.IsDefault && x.IsActive);
+        }
+
+        public async Task SetDefaultCurrency(long id)
+        {
+            var toUnset = await _context.CurrencyMasters.Where(x => x.IsDefault && x.IsActive).ToListAsync();
+            toUnset.ForEach(x => x.IsDefault = false);
+
+            var currency = await _context.CurrencyMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
+            if (currency == null)
+                throw new KeyNotFoundException("Currency not found.");
+
+            currency.IsDefault = true;
+            await _context.SaveChangesAsync();
         }
     }
 }

@@ -1,5 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -19,6 +21,7 @@ namespace LIMSApi.Controllers
             _customerService = testMethodService;
         }
 
+        [RequirePermission(Permissions.Customer.Read)]
         [HttpPost("list")]
         public async Task<IActionResult> CustomerList(PageFilter filter)
         {
@@ -26,6 +29,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.Customer.Read)]
         [HttpGet("details/{id}")]
         public async Task<ActionResult<Customer>> GetCustomerMaster(long id)
         {
@@ -35,6 +39,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.Customer.Update)]
         [HttpPut("update")]
         public async Task<IActionResult> PutCustomerMaster(Customer model)
         {
@@ -42,6 +47,7 @@ namespace LIMSApi.Controllers
             return Ok(new { message = $"Customer '{model.Name}' updated successfully." });
         }
 
+        [RequirePermission(Permissions.Customer.Create)]
         [HttpPost("create")]
         public async Task<ActionResult<Customer>> PostCustomerMaster(Customer model)
         {
@@ -49,6 +55,7 @@ namespace LIMSApi.Controllers
             return Ok(new { message = $"Customer '{model.Name}' created successfully" });
         }
 
+        [RequirePermission(Permissions.Customer.Delete)]
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteCustomerMaster(long id)
         {

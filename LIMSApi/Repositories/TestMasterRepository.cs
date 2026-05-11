@@ -56,8 +56,8 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                var search = filter.searchTerm.Trim();
+                _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
             }
 
             if (filter.SortByColumn != null)
@@ -82,8 +82,8 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
                 }
             }
 
@@ -96,6 +96,60 @@ namespace LIMSApi.Repositories
             })).ToListAsync();
 
             return data;
+        }
+
+        public async Task<List<DropdwonSelector>> GetGeneralTestMasterDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = from a in _context.TestMasters
+                         join d in _context.DepartmentMasters on a.LabDepartmentID equals d.ID
+                         where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode
+                               && !d.IsChemical
+                         select new { a.ID, a.Name };
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                    _query = _query.Where(x => x.ID == exactId);
+                else
+                {
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => x.Name != null && x.Name.Contains(search));
+                }
+            }
+
+            var skip = pageNo * pageSize;
+            return await _query.Skip(skip).Take(pageSize)
+                .Select(x => new DropdwonSelector { Id = x.ID, Name = x.Name })
+                .ToListAsync();
+        }
+
+        public async Task<List<DropdwonSelector>> GetChemicalTestMasterDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = from a in _context.TestMasters
+                         join d in _context.DepartmentMasters on a.LabDepartmentID equals d.ID
+                         where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode
+                               && d.IsChemical
+                         select new { a.ID, a.Name };
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                    _query = _query.Where(x => x.ID == exactId);
+                else
+                {
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => x.Name != null && x.Name.Contains(search));
+                }
+            }
+
+            var skip = pageNo * pageSize;
+            return await _query.Skip(skip).Take(pageSize)
+                .Select(x => new DropdwonSelector { Id = x.ID, Name = x.Name })
+                .ToListAsync();
         }
 
         public async Task<bool> ExistsByName(string name)

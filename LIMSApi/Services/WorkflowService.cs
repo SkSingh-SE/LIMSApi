@@ -259,10 +259,15 @@ namespace LIMSApi.Services
             try
             {
 
-                // Cancel existing workflow if any
+                // Cancel existing workflow if any (but not if already completed)
                 var existing = await _repository.GetActiveInstanceForEntityAsync(entityId, entityType);
                 if (existing != null)
                 {
+                    // Fix 5B — Don't restart a workflow that already completed
+                    if (existing.Status == WorkflowInstanceStatus.Completed.ToString())
+                        throw new InvalidOperationException(
+                            "A completed workflow already exists for this entity. Cannot restart.");
+
                     existing.Status = WorkflowInstanceStatus.Cancelled.ToString();
                     existing.IsActive = false;
                     await _repository.UpdateWorkflowInstanceAsync(existing);
@@ -290,11 +295,15 @@ namespace LIMSApi.Services
 
                 await _repository.AddWorkflowInstanceAsync(instance);
 
-                //  Extract approver list for first step
-                var approvers = firstStep.AssignedToValue
-                    .Split(',')
-                    .Select(long.Parse)
+                // Fix 1A — Safe parse for first step approver list
+                var approvers = (firstStep.AssignedToValue ?? string.Empty)
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(v => long.TryParse(v.Trim(), out var id) ? id : 0L)
+                    .Where(id => id > 0)
                     .ToList();
+
+                if (!approvers.Any())
+                    throw new InvalidOperationException($"No valid approvers configured for step '{firstStep.Name}'.");
 
                 bool creatorIsApprover = approvers.Contains(_loggedInUser.EmployeeID);
 
@@ -359,22 +368,46 @@ namespace LIMSApi.Services
 
 
         public async Task PerformAction(long instanceId, string action, long employeeId, string comments)
+            => await PerformAction(instanceId, action, employeeId, comments, depth: 0);
+
+        private async Task PerformAction(long instanceId, string action, long employeeId, string comments, int depth)
         {
+            if (depth > 10)
+                throw new InvalidOperationException("Workflow auto-approval recursion limit reached.");
+
             try
             {
-
-
                 var instance = await _repository.GetWorkflowInstanceAsync(instanceId)
                     ?? throw new Exception("Instance not found");
+
+                // Fix 5A — Block action on already-completed/cancelled instance
+                if (instance.Status == WorkflowInstanceStatus.Completed.ToString() ||
+                    instance.Status == WorkflowInstanceStatus.Cancelled.ToString())
+                    throw new InvalidOperationException("This workflow instance is already completed or cancelled.");
 
                 var workflow = await _repository.GetWorkflowByIdAsync(instance.WorkflowID)
                     ?? throw new Exception("Workflow not found");
 
                 var currentStep = workflow.Steps.First(s => s.ID == instance.CurrentStepID);
-                //  Permission Check
-                var approvers = currentStep.AssignedToValue.Split(',').Select(long.Parse);
+
+                // Fix 1A — Safe long.TryParse for approver list
+                var approvers = (currentStep.AssignedToValue ?? string.Empty)
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(v => long.TryParse(v.Trim(), out var id) ? id : 0L)
+                    .Where(id => id > 0)
+                    .ToList();
+
+                if (!approvers.Any())
+                    throw new InvalidOperationException($"No valid approvers configured for step '{currentStep.Name}'.");
+
                 if (!approvers.Contains(employeeId))
                     throw new Exception("You are not allowed to perform this action");
+
+                // Fix 5C — Comments required for Back/Cancel
+                if ((action.Equals(WorkflowActions.Back, StringComparison.OrdinalIgnoreCase) ||
+                     action.Equals(WorkflowActions.Cancel, StringComparison.OrdinalIgnoreCase))
+                    && string.IsNullOrWhiteSpace(comments))
+                    throw new ArgumentException("Comments are required when sending back or rejecting.");
 
                 var transition = currentStep.Transitions.FirstOrDefault(t =>
                     t.Action.Equals(action, StringComparison.OrdinalIgnoreCase));
@@ -426,17 +459,24 @@ namespace LIMSApi.Services
 
                 //  Auto-approval if same approver in next step
                 var nextStep = workflow.Steps.First(s => s.ID == transition.ToStepID.Value);
-                var nextApprovers = nextStep.AssignedToValue.Split(',').Select(long.Parse);
 
-                if (nextApprovers.SequenceEqual(approvers))
+                // Fix 1A — Safe parse for next step approvers
+                var nextApprovers = (nextStep.AssignedToValue ?? string.Empty)
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(v => long.TryParse(v.Trim(), out var id) ? id : 0L)
+                    .Where(id => id > 0)
+                    .ToList();
+
+                // Fix 1C — Use HashSet.SetEquals instead of SequenceEqual (order-independent)
+                if (nextApprovers.ToHashSet().SetEquals(approvers.ToHashSet()))
                 {
-                    // Use the first forward transition from next step (not hardcoded "Approve")
+                    // Fix 1B — Explicitly pick "Next" transition (not just "not Cancel" which could pick "Back")
                     var nextTransition = nextStep.Transitions
-                        .FirstOrDefault(t => t.IsActive && !t.Action.Equals("Cancel", StringComparison.OrdinalIgnoreCase));
+                        .FirstOrDefault(t => t.IsActive && t.Action.Equals(WorkflowActions.Next, StringComparison.OrdinalIgnoreCase));
 
                     if (nextTransition != null)
                     {
-                        await PerformAction(instance.ID, nextTransition.Action, employeeId, "Auto-approved (same approver)");
+                        await PerformAction(instance.ID, WorkflowActions.Next, employeeId, "Auto-approved (same approver)", depth + 1);
                         return;
                     }
                 }
@@ -560,9 +600,11 @@ namespace LIMSApi.Services
             return result;
         }
 
-        private async Task ApplyEntityStatusUpdate(WorkflowInstance instance,string action,bool isFinal,string actionName)
+        private async Task ApplyEntityStatusUpdate(WorkflowInstance instance, string action, bool isFinal, string actionName)
         {
-            if (!isFinal)
+            // Fix 1D — Only skip handler for intermediate Next steps.
+            // Back/Cancel MUST update entity status even at non-final steps.
+            if (!isFinal && action.Equals(WorkflowActions.Next, StringComparison.OrdinalIgnoreCase))
                 return;
 
             switch (instance.EntityType)
@@ -579,8 +621,13 @@ namespace LIMSApi.Services
                     await HandleReportAmendment(instance.EntityID, action);
                     break;
 
-                case "TestResult":
+                case "Test Result Verification":
                     await HandleTestVerification(instance.EntityID, action);
+                    break;
+
+                // Fix 1E — Log unhandled entity types instead of silently ignoring
+                default:
+                    _logger.LogWarning("ApplyEntityStatusUpdate: No handler for EntityType '{EntityType}'", instance.EntityType);
                     break;
             }
         }
@@ -595,7 +642,8 @@ namespace LIMSApi.Services
             switch (action)
             {
                 case WorkflowActions.Next:
-                    foreach (var d in inward.SampleDetails)
+                    // Fix 2A — exclude cancelled samples from status advancement
+                    foreach (var d in inward.SampleDetails.Where(s => s.IsActive && !s.IsCancelled))
                     {
                         var status = d.PreparationRequired
                             ? SampleStatus.PREPARATION_REQUIRED
@@ -604,27 +652,64 @@ namespace LIMSApi.Services
                         await _statusService.ForceAutoStatusAsync(d.ID, status, _loggedInUser.EmployeeID);
                     }
 
-                    await _statusService.UpdateInwardStatus(
+                    var statusUpdated = await _statusService.UpdateInwardStatus(
                         inward.ID,
                         InwardStatus.REVIEW_COMPLETED,
                         _loggedInUser.EmployeeID);
+
+                    if (!statusUpdated)
+                        _logger.LogError("HandleRequestReview: Failed to update inward {InwardId} to REVIEW_COMPLETED — status may remain UNDER_REVIEW", inward.ID);
 
                     // Set plan status to Approved and auto-create TestResultHeaders
                     await ApproveAndCreateTestHeaders(inward);
                     break;
 
                 case WorkflowActions.Back:
+                    // Send back for correction — sample returns to UNDER_PLANNING, plans reset to Draft
+                    var sampleIdsBack = inward.SampleDetails
+                        .Where(s => !s.IsCancelled).Select(d => d.ID).ToList();
+
+                    foreach (var d in inward.SampleDetails.Where(s => !s.IsCancelled))
+                    {
+                        if (d.SampleStatus == SampleStatus.UNDER_REVIEW_REQUEST.ToString())
+                            await _statusService.ForceAutoStatusAsync(
+                                d.ID, SampleStatus.UNDER_PLANNING, _loggedInUser.EmployeeID);
+                    }
+
+                    var plansToReset = await context.TestPlans
+                        .Where(tp => sampleIdsBack.Contains(tp.SampleID) && tp.PlanStatus == "Submitted")
+                        .ToListAsync();
+                    foreach (var plan in plansToReset)
+                        plan.PlanStatus = "Draft";
+
+                    await context.SaveChangesAsync();
+
                     await _statusService.UpdateInwardStatus(
-                        inward.ID,
-                        InwardStatus.UNDER_PLANNING,
-                        _loggedInUser.EmployeeID);
+                        inward.ID, InwardStatus.UNDER_PLANNING, _loggedInUser.EmployeeID);
                     break;
 
                 case WorkflowActions.Cancel:
+                    // Hard reject — sample marked REQUEST_REJECTED, plans set to ReplanRequested
+                    var sampleIdsCancel = inward.SampleDetails
+                        .Where(s => !s.IsCancelled).Select(d => d.ID).ToList();
+
+                    foreach (var d in inward.SampleDetails.Where(s => !s.IsCancelled))
+                    {
+                        if (d.SampleStatus == SampleStatus.UNDER_REVIEW_REQUEST.ToString())
+                            await _statusService.ForceAutoStatusAsync(
+                                d.ID, SampleStatus.REQUEST_REJECTED, _loggedInUser.EmployeeID);
+                    }
+
+                    var plansToReject = await context.TestPlans
+                        .Where(tp => sampleIdsCancel.Contains(tp.SampleID) && tp.PlanStatus == "Submitted")
+                        .ToListAsync();
+                    foreach (var plan in plansToReject)
+                        plan.PlanStatus = "ReplanRequested";
+
+                    await context.SaveChangesAsync();
+
                     await _statusService.UpdateInwardStatus(
-                        inward.ID,
-                        InwardStatus.UNDER_PLANNING,
-                        _loggedInUser.EmployeeID);
+                        inward.ID, InwardStatus.UNDER_PLANNING, _loggedInUser.EmployeeID);
                     break;
             }
         }
@@ -717,9 +802,10 @@ namespace LIMSApi.Services
 
                 case WorkflowActions.Back:
                     report.Status = "Send Back";
+                    // Fix 2B — Back means reporter must fix and resubmit → REPORT_REJECTED_BY_INTERNAL
                     await _statusService.ForceAutoStatusAsync(
                         report.SampleID,
-                        SampleStatus.REPORT_UNDER_REVIEW,
+                        SampleStatus.REPORT_REJECTED_BY_INTERNAL,
                         _loggedInUser.EmployeeID);
 
                     // Report sent back — revert test headers to allow corrections
@@ -763,9 +849,10 @@ namespace LIMSApi.Services
                 if (!samples.Any())
                     return;
 
-                // Check if all samples have FINAL_REPORT_APPROVED status
-                var allSamplesApproved = samples.All(s => 
-                    s.SampleStatus == SampleStatus.FINAL_REPORT_APPROVED.ToString());
+                // Fix 2C — Exclude cancelled samples when checking if all approved
+                var allSamplesApproved = samples
+                    .Where(s => !s.IsCancelled)
+                    .All(s => s.SampleStatus == SampleStatus.FINAL_REPORT_APPROVED.ToString());
 
                 if (allSamplesApproved)
                 {
@@ -836,7 +923,12 @@ namespace LIMSApi.Services
                 case WorkflowActions.Back: // SEND BACK
                     amendment.Status = "Pending";
                     amendment.ReportHeader.Status = "Under Amendment Review";
-                    
+
+                    await _statusService.ForceAutoStatusAsync(
+                        amendment.ReportHeader.SampleID,
+                        SampleStatus.REPORT_AMENDED_BY_INTERNAL,
+                        _loggedInUser.EmployeeID);
+
                     _logger.LogInformation(
                         "Internal amendment {AmendmentID} sent back by Employee {EmployeeID}.",
                         amendmentId, _loggedInUser.EmployeeID);
@@ -888,8 +980,20 @@ namespace LIMSApi.Services
                     }
                     break;
 
-                case WorkflowActions.Back: // SEND BACK for correction
-                case WorkflowActions.Cancel: // REJECTED
+                // Fix 2D — Back = soft send-back (tester can correct & resubmit)
+                case WorkflowActions.Back:
+                    header.Status = "NeedsCorrection";
+                    header.ModifiedBy = _loggedInUser.EmployeeID;
+                    header.ModifiedOn = DateTime.UtcNow;
+
+                    await _statusService.ForceAutoStatusAsync(
+                        header.SampleID,
+                        SampleStatus.TESTING_VERIFICATION_REJECTED,
+                        _loggedInUser.EmployeeID);
+                    break;
+
+                // Fix 2D — Cancel = hard reject (cannot resubmit)
+                case WorkflowActions.Cancel:
                     header.Status = "VerificationRejected";
                     header.ModifiedBy = _loggedInUser.EmployeeID;
                     header.ModifiedOn = DateTime.UtcNow;

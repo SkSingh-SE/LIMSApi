@@ -47,6 +47,16 @@ namespace LIMSApi.Models
         [MaxLength(10)]
         public string SACCode { get; set; } = "998346";
 
+        // Currency snapshot — captured at invoice generation time
+        [MaxLength(10)]
+        public string CurrencySymbol { get; set; } = "₹";
+
+        [Column(TypeName = "decimal(18,6)")]
+        public decimal? ExchangeRate { get; set; }           // 1 ForeignUnit = X INR; null for INR invoices
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal? ForeignCurrencyGrandTotal { get; set; } // GrandTotal / ExchangeRate
+
         // Financial Year linkage
         public long? FinancialYearId { get; set; }
 

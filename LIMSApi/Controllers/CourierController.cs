@@ -1,5 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -17,6 +19,7 @@ namespace LIMSApi.Controllers
             _courierService = remarkService;
         }
 
+        [RequirePermission(Permissions.Courier.Read)]
         [HttpPost("list")]
         public async Task<IActionResult> CourierList(PageFilter filter)
         {
@@ -24,6 +27,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.Courier.Read)]
         [HttpGet("details/{id}")]
         public async Task<ActionResult<CourierMaster>> GetCourierMaster(long id)
         {
@@ -33,6 +37,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.Courier.Update)]
         [HttpPut("update")]
         public async Task<IActionResult> PutCourierMaster(CourierMaster model)
         {
@@ -40,6 +45,7 @@ namespace LIMSApi.Controllers
             return Ok(new { status = "success", message = $"CourierMaster '{model.Name}' updated successfully." });
         }
 
+        [RequirePermission(Permissions.Courier.Create)]
         [HttpPost("create")]
         public async Task<ActionResult<CourierMaster>> PostCourierMaster(CourierMaster model)
         {
@@ -47,6 +53,7 @@ namespace LIMSApi.Controllers
             return Ok(new { status = "success", message = $"CourierMaster '{model.Name}' created successfully." });
         }
 
+        [RequirePermission(Permissions.Courier.Delete)]
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteCourierMaster(long id)
         {

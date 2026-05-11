@@ -54,9 +54,9 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Description != null && x.Description.ToLower().Contains(search))
-                                     || (x.Name != null && x.Name.ToLower().Contains(search)));
+                var search = filter.searchTerm.Trim();
+                _query = _query.Where(x => (x.Description != null && x.Description.Contains(search))
+                                     || (x.Name != null && x.Name.Contains(search)));
             }
 
             if (filter.SortByColumn != null)
@@ -75,7 +75,7 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var search = searchTerm.Trim().ToLower();
+                var search = searchTerm.Trim();
                 // Exact ID match for rebinding (SearchableDropdown passes ID as searchTerm)
                 if (long.TryParse(search, out long exactId))
                 {
@@ -85,8 +85,8 @@ namespace LIMSApi.Repositories
                     if (exactMatch != null)
                         return new List<DropdwonSelector> { exactMatch };
                 }
-                _query = _query.Where(x => (x.Description != null && x.Description.ToLower().Contains(search))
-                                      || (x.Name != null && x.Name.ToLower().Contains(search)));
+                _query = _query.Where(x => (x.Description != null && x.Description.Contains(search))
+                                      || (x.Name != null && x.Name.Contains(search)));
             }
 
             var skip = pageNo * pageSize;

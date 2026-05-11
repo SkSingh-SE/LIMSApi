@@ -13,5 +13,8 @@ public partial class CurrencyMaster : AuditProperty
 
     public string? Code { get; set; }
 
+    [StringLength(10)]
+    public string Symbol { get; set; } = "₹";
 
+    public bool IsDefault { get; set; } = false;
 }

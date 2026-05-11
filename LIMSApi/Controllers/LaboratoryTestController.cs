@@ -1,5 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Services.Interface;
 using MailKit.Search;
 using Microsoft.AspNetCore.Authorization;
@@ -21,6 +23,7 @@ namespace LIMSApi.Controllers
             _testMethodService = testMethodService;
         }
 
+        [RequirePermission(Permissions.LaboratoryTest.Read)]
         [HttpPost("list")]
         public async Task<IActionResult> TestMethodList(PageFilter filter)
         {
@@ -28,6 +31,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.LaboratoryTest.Read)]
         [HttpGet("details/{id}")]
         public async Task<ActionResult<LaboratoryTest>> GetTestMethodMaster(long id)
         {
@@ -37,6 +41,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.LaboratoryTest.Update)]
         [HttpPut("update")]
         public async Task<IActionResult> PutTestMethodMaster(LaboratoryTest model)
         {
@@ -48,6 +53,7 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [RequirePermission(Permissions.LaboratoryTest.Create)]
         [HttpPost("create")]
         public async Task<ActionResult<LaboratoryTest>> PostTestMethodMaster(LaboratoryTest model)
         {
@@ -59,6 +65,7 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [RequirePermission(Permissions.LaboratoryTest.Delete)]
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteTestMethodMaster(long id)
         {
@@ -80,6 +87,13 @@ namespace LIMSApi.Controllers
         {
             var data = await _testMethodService.GetTestMethodDropdown(searchTerm, pageNo, pageSize);
             return data == null ? NoContent(): Ok(data);
+        }
+
+        [HttpGet("general-dropdown")]
+        public async Task<IActionResult> GetGeneralTestMethodDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            var data = await _testMethodService.GetGeneralTestMethodDropdown(searchTerm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
         }
 
         [HttpGet("chemical-dropdown")]

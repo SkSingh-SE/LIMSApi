@@ -630,12 +630,14 @@ namespace LIMSApi.Services
                 "ADVANCE_PAYMENT_COMPLETED",
                 "PAYMENT_PENDING", "PAYMENT_COMPLETED", "COMPLETED", "CASE_CLOSED"
             };
-            var allSamplesApproved = samples.All(s => approvedStatuses.Contains(s.SampleStatus ?? ""));
+            var allSamplesApproved = samples
+                .Where(s => !s.IsCancelled)   // excluded cancelled samples from completion check
+                .All(s => approvedStatuses.Contains(s.SampleStatus ?? ""));
 
             if (!allSamplesApproved)
             {
                 var unapprovedSamples = samples
-                    .Where(s => !approvedStatuses.Contains(s.SampleStatus ?? ""))
+                    .Where(s => !s.IsCancelled && !approvedStatuses.Contains(s.SampleStatus ?? ""))
                     .Select(s => $"{s.SampleNo} ({s.SampleStatus})")
                     .ToList();
 

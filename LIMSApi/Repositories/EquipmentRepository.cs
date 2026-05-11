@@ -83,12 +83,12 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
-                _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search))
-                || x.EquipmentNo.ToLower().Contains(search)
-                || x.DepartmentName != null && x.DepartmentName.ToLower().Contains(search)
-                || x.EquipmentType != null && x.EquipmentType.ToLower().Contains(search)
-                || x.OEMName != null && x.OEMName.ToLower().Contains(search)
+                var search = filter.searchTerm.Trim();
+                _query = _query.Where(x => (x.Name != null && x.Name.Contains(search))
+                || x.EquipmentNo.Contains(search)
+                || x.DepartmentName != null && x.DepartmentName.Contains(search)
+                || x.EquipmentType != null && x.EquipmentType.Contains(search)
+                || x.OEMName != null && x.OEMName.Contains(search)
                 );
             }
 
@@ -114,8 +114,8 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
                 }
             }
 

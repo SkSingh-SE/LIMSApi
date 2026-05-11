@@ -17,17 +17,27 @@ public partial class SpecificationLine
 
     public long? ParameterID { get; set; }
 
+    [Column(TypeName = "decimal(18,6)")]
     public decimal? MinValue { get; set; }
 
+    [Column(TypeName = "decimal(18,6)")]
     public decimal? MaxValue { get; set; }
 
     public string? Notes { get; set; }
     public string? Equation { get; set; }
 
     public long? ParameterUnitID { get; set; }
+
+    [Column(TypeName = "decimal(18,6)")]
     public decimal? MinValueEquation { get; set; }
-    public decimal? MaxValueEquation { get; set; } 
+
+    [Column(TypeName = "decimal(18,6)")]
+    public decimal? MaxValueEquation { get; set; }
+
+    [Column(TypeName = "decimal(18,6)")]
     public decimal? MinTolerance { get; set; }
+
+    [Column(TypeName = "decimal(18,6)")]
     public decimal? MaxTolerance { get; set; }
     public long? SpecimenOrientationID { get; set; }
 

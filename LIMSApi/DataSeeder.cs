@@ -50,8 +50,13 @@ public static class DataSeeder
 
             // Master data (ProductForm, SpecimenType, etc.) always runs — idempotent with IF NOT EXISTS checks
             await SeedMasterDataAsync(db);
+            await SeedPriceDimensionTypesAsync(db);
             await SeedFinancialYearsAsync(db);
             await BackfillFinancialYearIdsAsync(db, logger);
+
+            // Role-Permission defaults — idempotent, runs every startup to pick up new permissions
+            await SeedRolePermissionDefaultsAsync(db, logger);
+
             logger.LogInformation("DataSeeder: master data seed complete.");
         }
         catch (Exception ex)
@@ -475,7 +480,158 @@ public static class DataSeeder
             (N'TEST_RESULT_SAVE',N'Save Test Result',59,N'Action'),
             (N'TEST_PRICE_OVERRIDE',N'Override Test Price',59,N'Action'),
             (N'TEST_RESULT_VERIFY',N'Verify Test Result',59,N'Action'),
-            (N'INVOICE_GENERATE',N'Generate Invoice (Backend)',122,N'Action');
+            (N'INVOICE_GENERATE',N'Generate Invoice (Backend)',122,N'Action'),
+
+            -- ═══════════════════════════════════════
+            -- CRUD expansions for Group D Phase 2
+            -- ═══════════════════════════════════════
+            -- Masters CRUD (existing had Read only — add Create/Update/Delete/Manage)
+            (N'CanCreateBank',N'Create Bank',15,N'Create'),
+            (N'CanUpdateBank',N'Update Bank',15,N'Update'),
+            (N'CanDeleteBank',N'Delete Bank',15,N'Delete'),
+            (N'CanManageBank',N'Manage Bank',15,N'Manage'),
+            (N'CanCreateCourier',N'Create Courier',16,N'Create'),
+            (N'CanUpdateCourier',N'Update Courier',16,N'Update'),
+            (N'CanDeleteCourier',N'Delete Courier',16,N'Delete'),
+            (N'CanManageCourier',N'Manage Courier',16,N'Manage'),
+            (N'CanCreateTPI',N'Create TPI',17,N'Create'),
+            (N'CanUpdateTPI',N'Update TPI',17,N'Update'),
+            (N'CanDeleteTPI',N'Delete TPI',17,N'Delete'),
+            (N'CanManageTPI',N'Manage TPI',17,N'Manage'),
+            (N'CanCreateSupplier',N'Create Supplier',18,N'Create'),
+            (N'CanUpdateSupplier',N'Update Supplier',18,N'Update'),
+            (N'CanDeleteSupplier',N'Delete Supplier',18,N'Delete'),
+            (N'CanManageSupplier',N'Manage Supplier',18,N'Manage'),
+            (N'CanCreateEquipment',N'Create Equipment',19,N'Create'),
+            (N'CanUpdateEquipment',N'Update Equipment',19,N'Update'),
+            (N'CanDeleteEquipment',N'Delete Equipment',19,N'Delete'),
+            (N'CanManageEquipment',N'Manage Equipment',19,N'Manage'),
+            (N'CanCreateOEM',N'Create OEM',20,N'Create'),
+            (N'CanUpdateOEM',N'Update OEM',20,N'Update'),
+            (N'CanDeleteOEM',N'Delete OEM',20,N'Delete'),
+            (N'CanManageOEM',N'Manage OEM',20,N'Manage'),
+            (N'CanCreateCalibrationAgency',N'Create Calibration Agency',21,N'Create'),
+            (N'CanUpdateCalibrationAgency',N'Update Calibration Agency',21,N'Update'),
+            (N'CanDeleteCalibrationAgency',N'Delete Calibration Agency',21,N'Delete'),
+            (N'CanManageCalibrationAgency',N'Manage Calibration Agency',21,N'Manage'),
+            (N'CanCreateDepartment',N'Create Department',11,N'Create'),
+            (N'CanUpdateDepartment',N'Update Department',11,N'Update'),
+            (N'CanDeleteDepartment',N'Delete Department',11,N'Delete'),
+            (N'CanManageDepartment',N'Manage Department',11,N'Manage'),
+            (N'CanCreateEmployee',N'Create Employee',12,N'Create'),
+            (N'CanUpdateEmployee',N'Update Employee',12,N'Update'),
+            (N'CanDeleteEmployee',N'Delete Employee',12,N'Delete'),
+            (N'CanManageEmployee',N'Manage Employee',12,N'Manage'),
+            (N'CanCreateDesignation',N'Create Designation',13,N'Create'),
+            (N'CanUpdateDesignation',N'Update Designation',13,N'Update'),
+            (N'CanDeleteDesignation',N'Delete Designation',13,N'Delete'),
+            (N'CanManageDesignation',N'Manage Designation',13,N'Manage'),
+            (N'CanCreateTax',N'Create Tax',14,N'Create'),
+            (N'CanUpdateTax',N'Update Tax',14,N'Update'),
+            (N'CanDeleteTax',N'Delete Tax',14,N'Delete'),
+            (N'CanManageTax',N'Manage Tax',14,N'Manage'),
+
+            -- Technical masters
+            (N'CanCreateMaterialSpecification',N'Create Material Spec',31,N'Create'),
+            (N'CanUpdateMaterialSpecification',N'Update Material Spec',31,N'Update'),
+            (N'CanDeleteMaterialSpecification',N'Delete Material Spec',31,N'Delete'),
+            (N'CanManageMaterialSpecification',N'Manage Material Spec',31,N'Manage'),
+            (N'CanCreateProductSpecification',N'Create Product Spec',33,N'Create'),
+            (N'CanUpdateProductSpecification',N'Update Product Spec',33,N'Update'),
+            (N'CanDeleteProductSpecification',N'Delete Product Spec',33,N'Delete'),
+            (N'CanManageProductSpecification',N'Manage Product Spec',33,N'Manage'),
+            (N'CanCreateLaboratoryTest',N'Create Laboratory Test',35,N'Create'),
+            (N'CanUpdateLaboratoryTest',N'Update Laboratory Test',35,N'Update'),
+            (N'CanDeleteLaboratoryTest',N'Delete Laboratory Test',35,N'Delete'),
+            (N'CanManageLaboratoryTest',N'Manage Laboratory Test',35,N'Manage'),
+            (N'CanCreateTestMethodSpecification',N'Create Test Method Spec',36,N'Create'),
+            (N'CanUpdateTestMethodSpecification',N'Update Test Method Spec',36,N'Update'),
+            (N'CanDeleteTestMethodSpecification',N'Delete Test Method Spec',36,N'Delete'),
+            (N'CanManageTestMethodSpecification',N'Manage Test Method Spec',36,N'Manage'),
+            (N'CanCreateMetalClassification',N'Create Metal Classification',30,N'Create'),
+            (N'CanUpdateMetalClassification',N'Update Metal Classification',30,N'Update'),
+            (N'CanDeleteMetalClassification',N'Delete Metal Classification',30,N'Delete'),
+            (N'CanManageMetalClassification',N'Manage Metal Classification',30,N'Manage'),
+            (N'CanCreateCompanyCategory',N'Create Company Category',38,N'Create'),
+            (N'CanUpdateCompanyCategory',N'Update Company Category',38,N'Update'),
+            (N'CanDeleteCompanyCategory',N'Delete Company Category',38,N'Delete'),
+            (N'CanManageCompanyCategory',N'Manage Company Category',38,N'Manage'),
+            (N'CanCreateCustomerMaster',N'Create Customer',39,N'Create'),
+            (N'CanUpdateCustomerMaster',N'Update Customer',39,N'Update'),
+            (N'CanDeleteCustomerMaster',N'Delete Customer',39,N'Delete'),
+            (N'CanManageCustomerMaster',N'Manage Customer',39,N'Manage'),
+
+            -- Parameter
+            (N'CanCreateParameter',N'Create Parameter',24,N'Create'),
+            (N'CanUpdateParameter',N'Update Parameter',24,N'Update'),
+            (N'CanDeleteParameter',N'Delete Parameter',24,N'Delete'),
+            (N'CanManageParameter',N'Manage Parameter',24,N'Manage'),
+
+            -- Flow — Plan workflow actions
+            (N'CanApprovePlan',N'Approve Plan Change',41,N'Action'),
+            (N'CanRejectPlan',N'Reject Plan Change',41,N'Action'),
+            (N'CanManagePlan',N'Manage Plan',41,N'Manage'),
+            (N'CanApproveReview',N'Approve Review',42,N'Action'),
+            (N'CanRejectReview',N'Reject Review',42,N'Action'),
+            (N'CanManageReview',N'Manage Review',42,N'Manage'),
+
+            -- Sample Preparation
+            (N'CanCreateSampleCutting',N'Create Cutting',43,N'Create'),
+            (N'CanUpdateSampleCutting',N'Update Cutting',43,N'Update'),
+            (N'CanManageSampleCutting',N'Manage Sample Prep',43,N'Manage'),
+
+            -- Role / Menu / User (Admin section)
+            (N'CanCreateRole',N'Create Role',63,N'Create'),
+            (N'CanUpdateRole',N'Update Role',63,N'Update'),
+            (N'CanDeleteRole',N'Delete Role',63,N'Delete'),
+            (N'CanCreateMenu',N'Create Menu',61,N'Create'),
+            (N'CanUpdateMenu',N'Update Menu',61,N'Update'),
+            (N'CanDeleteMenu',N'Delete Menu',61,N'Delete'),
+            (N'CanAssignMenuPermission',N'Assign Menu Permission',62,N'Action'),
+            (N'CanReadUser',N'Read User',64,N'Read'),
+            (N'CanCreateUser',N'Create User',64,N'Create'),
+            (N'CanUpdateUser',N'Update User',64,N'Update'),
+            (N'CanDeleteUser',N'Delete User',64,N'Delete'),
+            (N'CanAssignUserPermission',N'Assign User Permission',64,N'Action'),
+            (N'CanResetUserPassword',N'Reset User Password',64,N'Action'),
+            (N'CanManageSettings',N'Manage Settings',60,N'Manage'),
+            (N'CanReadAdmin',N'Read Admin',63,N'Read'),
+            (N'CanCreateAdmin',N'Create Admin',63,N'Create'),
+            (N'CanUpdateAdmin',N'Update Admin',63,N'Update'),
+            (N'CanDeleteAdmin',N'Delete Admin',63,N'Delete'),
+            (N'CanManageAdmin',N'Manage Admin',63,N'Manage'),
+
+            -- Account / Billing expansions
+            (N'CanCalculatePricing',N'Calculate Case Pricing',122,N'Action'),
+            (N'CanValidatePricing',N'Validate Case Pricing',122,N'Action'),
+            (N'CanReadInvoiceLineItem',N'Read Invoice Line Items',122,N'Read'),
+            (N'CanManageInvoiceLineItem',N'Manage Invoice Line Items',122,N'Manage'),
+            (N'CanCloseCase',N'Close Case',122,N'Action'),
+            (N'CanRecordPayment',N'Record Payment',124,N'Action'),
+            (N'CanReadReceipt',N'Read Receipt',124,N'Read'),
+            (N'CanReadCollectionSummary',N'Read Collection Summary',125,N'Read'),
+            (N'CanReadCreditStatus',N'Read Credit Status',125,N'Read'),
+            (N'CanProcessPayment',N'Process Payment',124,N'Action'),
+            (N'CanValidatePayment',N'Validate Payment Token',124,N'Action'),
+            (N'CanSendPaymentLink',N'Send Payment Link',124,N'Action'),
+
+            -- Invoice Case / Config / CustomerPO / CuttingPrice CRUD
+            (N'CanCreateInvoiceCase',N'Create Invoice Case',37,N'Create'),
+            (N'CanUpdateInvoiceCase',N'Update Invoice Case',37,N'Update'),
+            (N'CanDeleteInvoiceCase',N'Delete Invoice Case',37,N'Delete'),
+            (N'CanManageInvoiceCase',N'Manage Invoice Case',37,N'Manage'),
+            (N'CanCreateInvoiceCaseConfig',N'Create Invoice Case Config',47,N'Create'),
+            (N'CanUpdateInvoiceCaseConfig',N'Update Invoice Case Config',47,N'Update'),
+            (N'CanDeleteInvoiceCaseConfig',N'Delete Invoice Case Config',47,N'Delete'),
+            (N'CanManageInvoiceCaseConfig',N'Manage Invoice Case Config',47,N'Manage'),
+            (N'CanCreateCustomerPO',N'Create Customer PO',127,N'Create'),
+            (N'CanUpdateCustomerPO',N'Update Customer PO',127,N'Update'),
+            (N'CanDeleteCustomerPO',N'Delete Customer PO',127,N'Delete'),
+            (N'CanManageCustomerPO',N'Manage Customer PO',127,N'Manage'),
+            (N'CanCreateCuttingPrice',N'Create Cutting Price',44,N'Create'),
+            (N'CanUpdateCuttingPrice',N'Update Cutting Price',44,N'Update'),
+            (N'CanDeleteCuttingPrice',N'Delete Cutting Price',44,N'Delete'),
+            (N'CanManageCuttingPrice',N'Manage Cutting Price',44,N'Manage');
 
             -- Insert only permissions that don't already exist (by name)
             INSERT INTO PermissionMasters (Name, DisplayName, MenuID, Type)
@@ -583,7 +739,23 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
 
             IF NOT EXISTS (SELECT 1 FROM Configurations WHERE KeyName = N'Entity Type' AND CompanyCode = N'LIMS')
                 INSERT INTO Configurations (KeyName, GroupName, [Value], ValueType, [Description], CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'Entity Type', N'dropdown', N'Request Review|Report Review|Report Amendment|Test Result Verification', N'string', N'Entity types used for workflow configuration. Each value is a fixed entity type.', 0, GETUTCDATE(), N'LIMS', 1);
+                VALUES (N'Entity Type', N'dropdown', N'Request Review|Report Review|Report Amendment|Test Result Verification', N'string', N'Entity types used for workflow configuration. Values must match the exact strings used by the workflow engine.', 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- Migrate existing installs: rename old short-form TestResult to canonical Test Result Verification
+
+            UPDATE Configurations
+            SET [Value] = REPLACE([Value], N'TestResult', N'Test Result Verification')
+            WHERE KeyName = N'Entity Type' AND CompanyCode = N'LIMS'
+              AND [Value] LIKE N'%TestResult%'
+              AND [Value] NOT LIKE N'%Test Result Verification%';
+
+            -- Fix any Workflow definitions using the old short-form label
+            UPDATE Workflows SET EntityType = N'Test Result Verification'
+            WHERE EntityType = N'TestResult';
+
+            -- Fix any WorkflowInstances using the old short-form label
+            UPDATE WorkflowInstances SET EntityType = N'Test Result Verification'
+            WHERE EntityType = N'TestResult';
 
             IF NOT EXISTS (SELECT 1 FROM Configurations WHERE KeyName = N'USE_CONFIG_DRIVEN_REPORTING' AND CompanyCode = N'LIMS')
                 INSERT INTO Configurations (KeyName, GroupName, [Value], ValueType, [Description], CreatedBy, CreatedOn, CompanyCode, IsActive)
@@ -598,13 +770,17 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
     {
         await db.Database.ExecuteSqlRawAsync(@"
             IF NOT EXISTS (SELECT 1 FROM CurrencyMasters WHERE Code = N'INR' AND IsActive = 1)
-                INSERT INTO CurrencyMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'Indian Rupee', N'INR', 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO CurrencyMasters (Name, Code, IsDefault, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Indian Rupee', N'INR', 1, 0, GETUTCDATE(), N'LIMS', 1);
 
             IF NOT EXISTS (SELECT 1 FROM CurrencyMasters WHERE Code = N'USD' AND IsActive = 1)
-                INSERT INTO CurrencyMasters (Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'US Dollar', N'USD', 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO CurrencyMasters (Name, Code, IsDefault, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'US Dollar', N'USD', 0, 0, GETUTCDATE(), N'LIMS', 1);
 
+            -- Ensure INR is marked as default if it already exists but IsDefault is 0
+            UPDATE CurrencyMasters SET IsDefault = 1 WHERE Code = N'INR' AND IsActive = 1 AND IsDefault = 0;
+            -- Ensure no other currency is marked as default
+            UPDATE CurrencyMasters SET IsDefault = 0 WHERE Code != N'INR' AND IsActive = 1 AND IsDefault = 1;
         ");
 
         //IF NOT EXISTS(SELECT 1 FROM CurrencyMasters WHERE Code = N'EUR' AND IsActive = 1)
@@ -955,5 +1131,364 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
         ");
         if (backfilled > 0)
             logger.LogInformation("DataSeeder: backfilled FinancialYearId on {Count} DebitNotes", backfilled);
+    }
+
+    // ───────────────────────────────────────────────────────
+    // ROLE-PERMISSION DEFAULTS
+    // Idempotent — inserts only missing (Role, Permission) pairs.
+    // Admin role is NOT populated (bypasses via RequirePermissionAttribute).
+    //
+    // Role → permission map (DB names must match Permissions.cs catalog):
+    //
+    //   Accounts    → all Account.* + read Inward/Plan/Report/Customer
+    //   FrontDesk   → Inward CRUD, Plan read, Customer CRUD, Courier read
+    //   Technical   → Plan CRUD, Review, SamplePrep, Inward read, most masters read
+    //   Lab         → Testing CRUD, Equipment read, Parameter read, Inward read
+    //   LabManager  → nearly all (except admin/user/role management)
+    // ───────────────────────────────────────────────────────
+    private static async Task SeedRolePermissionDefaultsAsync(LIMSContext db, ILogger logger)
+    {
+        // Map: Role name → list of permission names
+        var roleMap = new Dictionary<string, string[]>
+        {
+            ["Accounts"] = new[]
+            {
+                // Top-level account
+                "CanReadAccount", "CanManageAccount",
+                "CanReadAccountsDashboard", "CanReadCaseAccounts",
+
+                // Invoice generation + line items
+                "CanGeneratePI", "CanGenerateInvoice", "CanManageInvoice",
+                "INVOICE_GENERATE",
+                "CanReadInvoiceLineItem", "CanManageInvoiceLineItem",
+
+                // Pricing
+                "CanCalculatePricing", "CanValidatePricing",
+                "TEST_PRICE_OVERRIDE",
+
+                // Case closure
+                "CanCloseCase",
+
+                // Ledger / receipts / payments
+                "CanReadCustomerLedger", "CanRecordPayment", "CanReadReceipt",
+                "CanProcessPayment", "CanValidatePayment", "CanSendPaymentLink",
+
+                // Reports
+                "CanReadAgingReport", "CanReadOutstandingReport",
+                "CanReadCollectionSummary", "CanReadCreditStatus",
+
+                // Customer PO — full CRUD (Accounts manages PO)
+                "CanReadCustomerPO", "CanCreateCustomerPO",
+                "CanUpdateCustomerPO", "CanDeleteCustomerPO", "CanManageCustomerPO",
+
+                // Invoice Case + Config — full CRUD
+                "CanReadInvoiceCase", "CanCreateInvoiceCase",
+                "CanUpdateInvoiceCase", "CanDeleteInvoiceCase", "CanManageInvoiceCase",
+                "CanReadInvoiceCaseConfig", "CanCreateInvoiceCaseConfig",
+                "CanUpdateInvoiceCaseConfig", "CanDeleteInvoiceCaseConfig", "CanManageInvoiceCaseConfig",
+
+                // Cutting price (for quoting)
+                "CanReadCuttingPrice", "CanCreateCuttingPrice",
+                "CanUpdateCuttingPrice", "CanDeleteCuttingPrice", "CanManageCuttingPrice",
+
+                // Read flow stages for context (can see but not act)
+                "CanReadSampleInward", "CanReadPlan", "CanReadReview",
+                "CanReadReporting", "CanReadCustomerMaster",
+
+                // Masters used in invoice cases / PO
+                "CanReadTax", "CanReadBank",
+            },
+
+            ["FrontDesk"] = new[]
+            {
+                // Sample inward full CRUD
+                "CanReadSampleInward", "CanCreateSampleInward",
+                "CanUpdateSampleInward", "CanDeleteSampleInward",
+                "CanManageSampleInward",
+                // Customer CRUD
+                "CanReadCustomerMaster", "CanCreateCustomerMaster",
+                "CanUpdateCustomerMaster", "CanManageCustomerMaster",
+                // Read plan for status visibility
+                "CanReadPlan", "CanReadReview",
+                // Masters typically needed at inward
+                "CanReadCourier", "CanReadTPI", "CanReadCompanyCategory",
+                "CanReadMaterialSpecification", "CanReadProductSpecification",
+                "CanReadMetalClassification", "CanReadHeatTreatment",
+                "CanReadProductCondition", "CanReadSpecimenOrientation",
+                "CanReadProductForm", "CanReadLaboratoryTest",
+            },
+
+            ["Technical"] = new[]
+            {
+                // Plan management
+                "CanReadPlan", "CanManagePlan", "CanApprovePlan", "CanRejectPlan",
+                "CanReadReview", "CanApproveReview", "CanRejectReview", "CanManageReview",
+                // Sample prep
+                "CanReadSampleCutting", "CanManageSampleCutting",
+                // Inward read (plan upstream)
+                "CanReadSampleInward",
+                // Testing read
+                "CanReadTesting", "CanReadTestingDashboard", "CanReadTestResults",
+                // Reporting read
+                "CanReadReporting",
+                // Most masters read
+                "CanReadMaterialSpecification", "CanReadProductSpecification",
+                "CanReadLaboratoryTest", "CanReadTestMethodSpecification",
+                "CanReadChemicalParameter", "CanReadMechanicalParameter",
+                "CanReadParameterUnit", "CanReadMetalClassification",
+                "CanReadHeatTreatment", "CanReadProductCondition",
+                "CanReadSpecimenOrientation", "CanReadProductForm",
+                "CanReadDimensionalFactors", "CanReadStandardOrganization",
+                "CanReadEquipment", "CanReadCalibrationAgency",
+            },
+
+            ["Lab"] = new[]
+            {
+                // Testing CRUD
+                "CanReadTesting", "CanManageTesting", "CanPerformTest",
+                "CanReadTestingDashboard", "CanReadTestResults",
+                "CanReadPerformTest", "CanReadLongTermTracking",
+                "TEST_RESULT_SAVE",
+                // Read upstream
+                "CanReadSampleInward", "CanReadPlan", "CanReadSampleCutting",
+                // Masters
+                "CanReadLaboratoryTest", "CanReadTestMethodSpecification",
+                "CanReadChemicalParameter", "CanReadMechanicalParameter",
+                "CanReadParameterUnit", "CanReadEquipment",
+                "CanReadDimensionalFactors",
+                // Reporting read (for traceability)
+                "CanReadReporting",
+            },
+
+            ["LabManager"] = new[]
+            {
+                // Flow — full manage
+                "CanReadSampleInward", "CanCreateSampleInward",
+                "CanUpdateSampleInward", "CanDeleteSampleInward", "CanManageSampleInward",
+                "CanReadPlan", "CanCreatePlan", "CanUpdatePlan", "CanDeletePlan",
+                "CanManagePlan", "CanApprovePlan", "CanRejectPlan",
+                "CanReadReview", "CanApproveReview", "CanRejectReview", "CanManageReview",
+                "CanReadSampleCutting", "CanCreateSampleCutting", "CanUpdateSampleCutting",
+                "CanManageSampleCutting",
+                "CanReadTesting", "CanManageTesting", "CanPerformTest",
+                "CanReadTestingDashboard", "CanReadTestResults", "CanReadPerformTest",
+                "CanReadLongTermTracking",
+                "TEST_RESULT_SAVE", "TEST_RESULT_VERIFY", "TEST_PRICE_OVERRIDE",
+                "CanReadReporting", "CanManageReporting",
+                "CanApproveReport", "CanAmendReport",
+                "CanReadReportFormat", "CanManageReportFormat",
+
+                // Lab Scope — full CRUD
+                "CanReadLabScopeMaster", "CanCreateLabScopeMaster",
+                "CanUpdateLabScopeMaster", "CanDeleteLabScopeMaster",
+                "CanManageLabScopeMaster",
+
+                // Masters — FULL CRUD (LabManager can add/edit/delete any master)
+                "CanReadCustomerMaster", "CanCreateCustomerMaster",
+                "CanUpdateCustomerMaster", "CanDeleteCustomerMaster", "CanManageCustomerMaster",
+                "CanReadEmployee", "CanCreateEmployee", "CanUpdateEmployee", "CanDeleteEmployee", "CanManageEmployee",
+                "CanReadDepartment", "CanCreateDepartment", "CanUpdateDepartment", "CanDeleteDepartment", "CanManageDepartment",
+                "CanReadDesignation", "CanCreateDesignation", "CanUpdateDesignation", "CanDeleteDesignation", "CanManageDesignation",
+                "CanReadEquipment", "CanCreateEquipment", "CanUpdateEquipment", "CanDeleteEquipment", "CanManageEquipment",
+                "CanReadCalibrationAgency", "CanCreateCalibrationAgency", "CanUpdateCalibrationAgency", "CanDeleteCalibrationAgency", "CanManageCalibrationAgency",
+                "CanReadMaterialSpecification", "CanCreateMaterialSpecification", "CanUpdateMaterialSpecification", "CanDeleteMaterialSpecification", "CanManageMaterialSpecification",
+                "CanReadProductSpecification", "CanCreateProductSpecification", "CanUpdateProductSpecification", "CanDeleteProductSpecification", "CanManageProductSpecification",
+                "CanReadLaboratoryTest", "CanCreateLaboratoryTest", "CanUpdateLaboratoryTest", "CanDeleteLaboratoryTest", "CanManageLaboratoryTest",
+                "CanReadTestMethodSpecification", "CanCreateTestMethodSpecification", "CanUpdateTestMethodSpecification", "CanDeleteTestMethodSpecification", "CanManageTestMethodSpecification",
+                "CanReadChemicalParameter", "CanReadMechanicalParameter", "CanCreateParameter", "CanUpdateParameter", "CanDeleteParameter", "CanManageParameter",
+                "CanReadParameterUnit",
+                "CanReadMetalClassification", "CanCreateMetalClassification", "CanUpdateMetalClassification", "CanDeleteMetalClassification", "CanManageMetalClassification",
+                "CanReadHeatTreatment", "CanReadProductCondition", "CanReadSpecimenOrientation",
+                "CanReadProductForm", "CanReadDimensionalFactors", "CanReadStandardOrganization",
+                "CanReadCompanyCategory", "CanCreateCompanyCategory", "CanUpdateCompanyCategory", "CanDeleteCompanyCategory", "CanManageCompanyCategory",
+                "CanReadTax", "CanCreateTax", "CanUpdateTax", "CanDeleteTax", "CanManageTax",
+                "CanReadBank", "CanCreateBank", "CanUpdateBank", "CanDeleteBank", "CanManageBank",
+                "CanReadCourier", "CanCreateCourier", "CanUpdateCourier", "CanDeleteCourier", "CanManageCourier",
+                "CanReadTPI", "CanCreateTPI", "CanUpdateTPI", "CanDeleteTPI", "CanManageTPI",
+                "CanReadSupplier", "CanCreateSupplier", "CanUpdateSupplier", "CanDeleteSupplier", "CanManageSupplier",
+                "CanReadOEM", "CanCreateOEM", "CanUpdateOEM", "CanDeleteOEM", "CanManageOEM",
+                "CanReadUniversalCode",
+
+                // Invoice Case / Config — read only (Accounts manages)
+                "CanReadInvoiceCase", "CanReadInvoiceCaseConfig",
+                "CanReadCustomerPO", "CanReadCuttingPrice",
+
+                // Account visibility (read, no manage)
+                "CanReadAccount", "CanReadAccountsDashboard", "CanReadCaseAccounts",
+                "CanReadCustomerLedger", "CanReadAgingReport", "CanReadOutstandingReport",
+
+                // Workflow view
+                "CanReadWorkflow",
+            },
+        };
+
+        int inserted = 0;
+        foreach (var (roleName, permissionNames) in roleMap)
+        {
+            var permList = string.Join(",", permissionNames.Select(p => $"N'{p}'"));
+            var sql = $@"
+                DECLARE @roleId BIGINT = (SELECT TOP 1 ID FROM RoleMasters WHERE Name = N'{roleName}' AND IsActive = 1);
+                IF @roleId IS NULL
+                BEGIN
+                    PRINT 'Role {roleName} not found — skipping';
+                    RETURN;
+                END
+
+                INSERT INTO RolePermissions (RoleID, PermissionID, IsGranted, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                SELECT @roleId, p.ID, 1, 0, GETUTCDATE(), N'LIMS', 1
+                FROM PermissionMasters p
+                WHERE p.Name IN ({permList})
+                  AND NOT EXISTS (
+                      SELECT 1 FROM RolePermissions rp
+                      WHERE rp.RoleID = @roleId AND rp.PermissionID = p.ID AND rp.IsActive = 1
+                  );
+            ";
+            var count = await db.Database.ExecuteSqlRawAsync(sql);
+            if (count > 0)
+            {
+                inserted += count;
+                logger.LogInformation("DataSeeder: seeded {Count} role permissions for {Role}", count, roleName);
+            }
+        }
+
+        if (inserted > 0)
+            logger.LogInformation("DataSeeder: inserted {Total} role-permission defaults total", inserted);
+    }
+
+    // ───────────────────────────────────────────────
+    // PRICE DIMENSION TYPES
+    // ───────────────────────────────────────────────
+    private static async Task SeedPriceDimensionTypesAsync(LIMSContext db)
+    {
+        await db.Database.ExecuteSqlRawAsync(@"
+            -- Macro: inserts a PriceDimensionType row if none with same Name exists (active or inactive)
+            DECLARE @c INT;
+
+            -- FlatRate: fixed price, no dimension auto-detect
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'FlatRate';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'FlatRate', NULL, 0, N'UserInput', NULL, N'Fixed price — no dimension value needed', 1, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- Element: count of billable parameters × unit rate
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'Element';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Element', NULL, 0, N'ParameterCount', NULL, N'Price per element — count of billable parameters', 2, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- Hours: configurable per config (ParameterLinked | TestDuration | UserInputAtEntry)
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'Hours';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Hours', N'hr', 0, N'ParameterLinked', NULL, N'Based on hours — mode configurable per config', 3, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- HoursRange: range slab variant of Hours
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'HoursRange';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'HoursRange', N'hr', 1, N'ParameterLinked', NULL, N'Based on hours range slab — mode configurable per config', 4, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- Size: reads Diameter from SampleDetail
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'Size';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Size', N'mm', 0, N'SampleDimension', N'Diameter', N'Based on sample diameter', 5, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- SizeRange: range slab on Diameter
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'SizeRange';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'SizeRange', N'mm', 1, N'SampleDimension', N'Diameter', N'Based on sample diameter range slab', 6, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- Load: auto-detect from linked param; fallback to user input handled via FallbackToUserInput on config
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'Load';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Load', N'kN', 0, N'ParameterLinked', NULL, N'Based on load — auto-detect or user input if not found', 7, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- LoadRange: range slab on load
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'LoadRange';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'LoadRange', N'kN', 1, N'ParameterLinked', NULL, N'Based on load range slab — auto-detect or user input if not found', 8, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- Temperature: linked temperature parameter
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'Temperature';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Temperature', N'°C', 0, N'ParameterLinked', NULL, N'Based on temperature from linked parameter', 9, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- TemperatureRange: range slab on temperature
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'TemperatureRange';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'TemperatureRange', N'°C', 1, N'ParameterLinked', NULL, N'Based on temperature range slab', 10, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- DayWise: linked days parameter
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'DayWise';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'DayWise', N'days', 0, N'ParameterLinked', NULL, N'Based on number of days from linked parameter', 11, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- SizeLoad: two-dimensional size + load
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'SizeLoad';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'SizeLoad', N'mm/kN', 0, N'SampleDimension', N'Diameter', N'Two-dimensional: size (from sample) + load (from param)', 12, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- SizeAndLoad: two-dimensional range variant
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'SizeAndLoad';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'SizeAndLoad', N'mm/kN', 0, N'SampleDimension', N'Diameter', N'Two-dimensional size+load range variant', 13, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- PerIndent: always ask quantity at test result entry
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'PerIndent';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'PerIndent', N'×', 0, N'UserInputAtEntry', NULL, N'Per indent — user enters count at test result entry', 14, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- PerLocation: always ask quantity at test result entry
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'PerLocation';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'PerLocation', N'×', 0, N'UserInputAtEntry', NULL, N'Per location/point — user enters count at test result entry', 15, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- PerField: always ask quantity at test result entry
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'PerField';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'PerField', N'×', 0, N'UserInputAtEntry', NULL, N'Per field — user enters count at test result entry', 16, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- PerDolly: always ask quantity at test result entry (pull-off test specific)
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'PerDolly';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'PerDolly', N'×', 0, N'UserInputAtEntry', NULL, N'Per dolly — user enters count at test result entry (pull-off test)', 17, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- SpectroCombination: engine checks which param IDs are in billable params
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'SpectroCombination';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'SpectroCombination', NULL, 0, N'ParameterLinked', NULL, N'Spectro element combination pricing — two-step base+extra-tier engine', 18, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- WithImage: user confirms image was captured (Yes/No) at test result entry
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'WithImage';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'WithImage', NULL, 0, N'UserInputAtEntry', NULL, N'Additional charge when image captured — user confirms Yes/No at entry', 19, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- WithExtenso: user confirms extensometer was used (Yes/No) at test result entry
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'WithExtenso';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'WithExtenso', NULL, 0, N'UserInputAtEntry', NULL, N'Additional charge when extensometer used — user confirms Yes/No at entry', 20, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- Algorithm: price formula evaluated at runtime (P3)
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'Algorithm';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Algorithm', NULL, 0, N'UserInput', NULL, N'Custom price formula evaluated at runtime (P3 feature)', 21, 0, GETUTCDATE(), N'LIMS', 1);
+        ");
     }
 }

@@ -1,5 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -17,6 +19,7 @@ namespace LIMSApi.Controllers
             _MenuService = MenuService;
         }
 
+        [RequirePermission(Permissions.Menu.Read)]
         [HttpPost("list")]
         public async Task<IActionResult> MenuList(PageFilter filter)
         {
@@ -24,6 +27,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.Menu.Read)]
         [HttpGet("details/{id}")]
         public async Task<ActionResult<MenuMaster>> GetMenuMaster(long id)
         {
@@ -33,6 +37,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.Menu.Update)]
         [HttpPut("update")]
         public async Task<IActionResult> PutMenuMaster(MenuMaster model)
         {
@@ -44,6 +49,7 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [RequirePermission(Permissions.Menu.Create)]
         [HttpPost("create")]
         public async Task<ActionResult<MenuMaster>> PostMenuMaster(MenuMaster model)
         {
@@ -55,6 +61,7 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [RequirePermission(Permissions.Menu.Delete)]
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteMenuMaster(long id)
         {
@@ -85,6 +92,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("update-permission")]
+        [RequirePermission(Permissions.Menu.AssignPermission)]
         public async Task<IActionResult> UpdateMenuPermission(long menuId, List<PermissionMaster> updatedPermissions)
         {
             if(menuId < 1)
@@ -112,6 +120,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpGet("get-permission/{menuId}")]
+        [RequirePermission(Permissions.Menu.Read)]
         public async Task<IActionResult> GetMenuPermission(long menuId)
         {
             var data = await _MenuService.GetMenuPermissions(menuId);
@@ -123,6 +132,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("submenu-list")]
+        [RequirePermission(Permissions.Menu.Read)]
         public async Task<IActionResult> SubMenuList(PageFilter filter)
         {
             return Ok(await _MenuService.FetchSubMenuList(filter));

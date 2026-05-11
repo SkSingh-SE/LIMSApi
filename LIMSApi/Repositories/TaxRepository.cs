@@ -48,10 +48,12 @@ namespace LIMSApi.Repositories
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                var search = filter.searchTerm.Trim().ToLower();
+                var search = filter.searchTerm.Trim();
+                // Numeric Rate column — parse as decimal for exact match instead of CAST LIKE.
+                decimal? searchRate = decimal.TryParse(search, out var r) ? r : (decimal?)null;
                 _query = _query.Where(x =>
-                    (x.Name != null && x.Name.ToLower().Contains(search))
-                    || x.Rate.ToString().Contains(search));
+                    (x.Name != null && x.Name.Contains(search))
+                    || (searchRate != null && x.Rate == searchRate));
             }
 
             if (filter.SortByColumn != null)
@@ -76,8 +78,8 @@ namespace LIMSApi.Repositories
                 }
                 else
                 {
-                    var search = searchTerm.Trim().ToLower();
-                    _query = _query.Where(x => (x.Name != null && x.Name.ToLower().Contains(search)));
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
                 }
             }
 

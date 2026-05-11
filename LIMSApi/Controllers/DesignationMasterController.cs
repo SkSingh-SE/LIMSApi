@@ -1,5 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -20,6 +22,7 @@ namespace LIMSApi.Controllers
             _designationService = designationService;
         }
 
+        [RequirePermission(Permissions.Designation.Read)]
         [HttpPost("list")]
         public async Task<IActionResult> DesignationList(PageFilter filter)
         {
@@ -27,6 +30,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.Designation.Read)]
         [HttpGet("details/{id}")]
         public async Task<ActionResult<DesignationMaster>> GetDesignationMaster(long id)
         {
@@ -36,6 +40,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.Designation.Update)]
         [HttpPut("update")]
         public async Task<IActionResult> PutDesignationMaster(DesignationMaster model)
         {
@@ -43,6 +48,7 @@ namespace LIMSApi.Controllers
             return Ok(new { message = $"Designation '{model.Name}' updated successfully." });
         }
 
+        [RequirePermission(Permissions.Designation.Create)]
         [HttpPost("create")]
         public async Task<IActionResult> PostDesignationMaster(DesignationMaster model)
         {
@@ -50,6 +56,7 @@ namespace LIMSApi.Controllers
             return Ok(new { message = $"Designation '{model.Name}' created successfully" });
         }
 
+        [RequirePermission(Permissions.Designation.Delete)]
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteDesignationMaster(long id)
         {

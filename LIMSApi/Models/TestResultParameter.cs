@@ -22,6 +22,7 @@ namespace LIMSApi.Models
         public string Unit { get; set; } = string.Empty;
         public string? Remarks { get; set; }
 
+        [Column(TypeName = "decimal(18,6)")]
         public decimal? Value { get; set; }
         public bool IsAdditional { get; set; } = false;
 
@@ -29,7 +30,10 @@ namespace LIMSApi.Models
         public string? Formula { get; set; }
 
         // Chemical Specification Range
+        [Column(TypeName = "decimal(18,6)")]
         public decimal? MinValue { get; set; }
+
+        [Column(TypeName = "decimal(18,6)")]
         public decimal? MaxValue { get; set; }
 
         // PASS / FAIL for this parameter
@@ -43,9 +47,9 @@ namespace LIMSApi.Models
         public string? DependsOnParamsJson { get; set; }
 
         // ----- Specification range enhancements -----
-        [Column(TypeName = "decimal(18,4)")]
+        [Column(TypeName = "decimal(18,6)")]
         public decimal? SpecMinValue { get; set; }
-        [Column(TypeName = "decimal(18,4)")]
+        [Column(TypeName = "decimal(18,6)")]
         public decimal? SpecMaxValue { get; set; }
         [MaxLength(200)]
         public string? AcceptanceCriteria { get; set; }

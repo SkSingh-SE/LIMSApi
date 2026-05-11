@@ -1,5 +1,7 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Models;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -19,6 +21,7 @@ namespace LIMSApi.Controllers
             _ProductSpecificationService = ProductSpecificationService;
         }
 
+        [RequirePermission(Permissions.ProductSpecification.Read)]
         [HttpPost("list")]
         public async Task<IActionResult> ProductSpecificationList(PageFilter filter)
         {
@@ -31,6 +34,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.ProductSpecification.Read)]
         [HttpGet("details/{id}")]
         public async Task<ActionResult<ProductSpecification>> GetProductSpecification(long id)
         {
@@ -40,6 +44,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.ProductSpecification.Update)]
         [HttpPut("update")]
         public async Task<IActionResult> PutProductSpecification(ProductSpecification model)
         {
@@ -52,6 +57,7 @@ namespace LIMSApi.Controllers
            
         }
 
+        [RequirePermission(Permissions.ProductSpecification.Create)]
         [HttpPost("create")]
         public async Task<ActionResult<ProductSpecification>> PostProductSpecification(ProductSpecification model)
         {
@@ -63,6 +69,7 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [RequirePermission(Permissions.ProductSpecification.Delete)]
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteProductSpecification(long id)
         {
