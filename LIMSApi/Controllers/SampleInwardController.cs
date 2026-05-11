@@ -78,6 +78,14 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [RequirePermission(Permissions.Inward.Update)]
+        [HttpPatch("{id}/payment")]
+        public async Task<IActionResult> UpdatePaymentInfo(long id, [FromBody] PaymentInfoDto dto)
+        {
+            var result = await _SampleInwardService.UpdatePaymentInfoAsync(id, dto);
+            return Ok(result);
+        }
+
         [HttpPut("plan")]
         public async Task<IActionResult> ModifySamplePlan(PlanDto model)
         {

@@ -38,7 +38,7 @@ namespace LIMSApi.Repositories
         public async Task<Customer?> GetCustomerById(long id)
         {
             var customer = await _context.Customers.AsNoTracking()
-   .Include(x => x.ContactPersons)
+   .Include(x => x.ContactPersons.OrderBy(c => c.Type == "contact1" ? 0 : c.Type == "accountant" ? 2 : 1).ThenBy(c => c.ID))
    .Include(x => x.CustomerDispatchModes)
    .Include(x => x.CustomerCompanyCategories)
        .ThenInclude(ccc => ccc.CompanyCategory)

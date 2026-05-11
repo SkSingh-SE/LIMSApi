@@ -209,68 +209,7 @@ namespace LIMSApi.Services
             existingCustomer.ModifiedBy = loggedInUser.EmployeeID;
 
             if (model.ContactPersons != null)
-            {
-                var contact1 = model.ContactPersons.FirstOrDefault(c => c.Type == "contact1");
-                if (contact1 == null || string.IsNullOrWhiteSpace(contact1.Name))
-                    throw new ArgumentException("Contact Person 1 name is required.");
-
-                // Remove empty optional contacts before processing
-                model.ContactPersons = model.ContactPersons
-                    .Where(c => c.Type == "contact1" || !string.IsNullOrWhiteSpace(c.Name))
-                    .ToList();
-            }
-
-            // remove unwanted mappings — if model.ContactPersons is null, preserve all existing
-            if (existingCustomer.ContactPersons.Any() && model.ContactPersons != null)
-            {
-                var contactsToRemove = existingCustomer.ContactPersons
-                    .Where(contact => !model.ContactPersons.Any(m => m.ID == contact.ID))
-                    .ToList();
-                if (contactsToRemove.Any())
-                {
-                    _context.ContactPersons.RemoveRange(contactsToRemove);
-                    foreach (var contact in contactsToRemove)
-                        existingCustomer.ContactPersons.Remove(contact);
-                }
-            }
-
-            if (model.ContactPersons != null && model.ContactPersons.Any())
-            {
-                // Add or update mappings
-                foreach (var contactPerson in model.ContactPersons)
-                {
-                    contactPerson.CustomerID = model.ID;
-
-                    var existingContactPerson = existingCustomer.ContactPersons
-                        .FirstOrDefault(m => m.ID == contactPerson.ID);
-
-                    if (existingContactPerson != null)
-                    {
-                        existingContactPerson.CustomerID = model.ID;
-                        existingContactPerson.Salutation = contactPerson.Salutation;
-                        existingContactPerson.Name = contactPerson.Name;
-                        existingContactPerson.Department = contactPerson.Department;
-                        existingContactPerson.EmailId = contactPerson.EmailId;
-                        existingContactPerson.MobileNo = contactPerson.MobileNo;
-                        existingContactPerson.IsWhatsappNo = contactPerson.IsWhatsappNo;
-                        existingContactPerson.TelephoneNo = contactPerson.TelephoneNo;
-                        existingContactPerson.SendBill = contactPerson.SendBill;
-                        existingContactPerson.SendReport = contactPerson.SendReport;
-                        existingContactPerson.Address = contactPerson.Address;
-                        existingContactPerson.AreaID = contactPerson.AreaID;
-                        existingContactPerson.City = contactPerson.City;
-                        existingContactPerson.State = contactPerson.State;
-                        existingContactPerson.Country = contactPerson.Country;
-                        existingContactPerson.PinCode = contactPerson.PinCode;
-
-                        existingContactPerson.Type = contactPerson.Type;
-                    }
-                    else
-                    {
-                        existingCustomer.ContactPersons.Add(contactPerson);
-                    }
-                }
-            }
+                SyncContactPersons(existingCustomer, model.ContactPersons.ToList());
             // --- CompanyCategory  ---
             if (existingCustomer.CustomerCompanyCategories != null && model.CustomerCompanyCategories != null)
             {
@@ -385,7 +324,77 @@ namespace LIMSApi.Services
             customer.VerifiedOn = DateTime.UtcNow;
             customer.VerifiedBy = loggedInUser.EmployeeID;
             await _customerRepository.UpdateCustomer(customer);
+        }
 
+        // ── Contact Person Sync ──────────────────────────────────────────────────
+        // Rules:
+        //   • contact1  — fixed first, always required, name mandatory
+        //   • dynamic   — zero or more, inserted between contact1 and accountant
+        //   • accountant — fixed last, optional (skipped if name is blank)
+        //
+        // Algorithm:
+        //   1. Validate contact1 has a name
+        //   2. Strip optional contacts whose name is blank (accountant / dynamic)
+        //   3. Delete DB rows that are no longer in the incoming list
+        //   4. Update rows that exist in DB (ID > 0)
+        //   5. Insert new rows (ID == 0) — each treated independently, no in-memory collision
+        private void SyncContactPersons(Customer existingCustomer, List<ContactPerson> incoming)
+        {
+            // 1. contact1 must be present and named
+            var contact1 = incoming.FirstOrDefault(c => c.Type == "contact1");
+            if (contact1 == null || string.IsNullOrWhiteSpace(contact1.Name))
+                throw new ArgumentException("Contact Person 1 name is required.");
+
+            // 2. Drop optional contacts with blank name
+            incoming = incoming
+                .Where(c => c.Type == "contact1" || !string.IsNullOrWhiteSpace(c.Name))
+                .ToList();
+
+            // 3. Delete contacts removed by the user
+            var incomingIds = incoming.Where(c => c.ID > 0).Select(c => c.ID).ToHashSet();
+            var toDelete = existingCustomer.ContactPersons
+                .Where(c => !incomingIds.Contains(c.ID))
+                .ToList();
+            if (toDelete.Any())
+            {
+                _context.ContactPersons.RemoveRange(toDelete);
+                foreach (var c in toDelete)
+                    existingCustomer.ContactPersons.Remove(c);
+            }
+
+            // 4 & 5. Update existing rows or insert new ones
+            foreach (var contact in incoming)
+            {
+                contact.CustomerID = existingCustomer.ID;
+
+                if (contact.ID > 0)
+                {
+                    // Update — match strictly by DB ID (never matches ID=0 rows)
+                    var dbRow = existingCustomer.ContactPersons.FirstOrDefault(c => c.ID == contact.ID);
+                    if (dbRow == null) continue;
+                    dbRow.Salutation   = contact.Salutation;
+                    dbRow.Name         = contact.Name;
+                    dbRow.Department   = contact.Department;
+                    dbRow.EmailId      = contact.EmailId;
+                    dbRow.MobileNo     = contact.MobileNo;
+                    dbRow.IsWhatsappNo = contact.IsWhatsappNo;
+                    dbRow.TelephoneNo  = contact.TelephoneNo;
+                    dbRow.SendBill     = contact.SendBill;
+                    dbRow.SendReport   = contact.SendReport;
+                    dbRow.Address      = contact.Address;
+                    dbRow.AreaID       = contact.AreaID;
+                    dbRow.City         = contact.City;
+                    dbRow.State        = contact.State;
+                    dbRow.Country      = contact.Country;
+                    dbRow.PinCode      = contact.PinCode;
+                    dbRow.Type         = contact.Type;
+                }
+                else
+                {
+                    // Insert — ID=0 always means new, never looked up in existing list
+                    existingCustomer.ContactPersons.Add(contact);
+                }
+            }
         }
     }
 }

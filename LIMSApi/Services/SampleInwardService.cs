@@ -1741,5 +1741,48 @@ namespace LIMSApi.Services
             await _context.SaveChangesAsync();
         }
 
+        public async Task<PaymentInfoDto> UpdatePaymentInfoAsync(long id, PaymentInfoDto dto)
+        {
+            var entity = await _context.SampleInwards.FindAsync(id)
+                ?? throw new KeyNotFoundException("Sample Inward not found.");
+
+            if (dto.PurchaseOrderId.HasValue)
+            {
+                var po = await _context.CustomerPurchaseOrders
+                    .FirstOrDefaultAsync(p => p.ID == dto.PurchaseOrderId.Value && p.IsActive)
+                    ?? throw new ArgumentException("Selected Purchase Order not found.");
+                if (po.CustomerId != entity.CustomerID)
+                    throw new ArgumentException("Purchase Order does not belong to the selected customer.");
+                if (po.Status != "Active")
+                    throw new ArgumentException($"Purchase Order {po.PONumber} is {po.Status}. Only active POs can be linked.");
+                if (po.ValidUntil.HasValue && po.ValidUntil.Value < DateTime.UtcNow)
+                    throw new ArgumentException($"Purchase Order {po.PONumber} has expired on {po.ValidUntil.Value:dd-MMM-yyyy}.");
+            }
+
+            entity.PurchaseOrderId = dto.PurchaseOrderId;
+            entity.AdvancePayment = dto.AdvancePayment;
+            entity.BillRequired = dto.BillRequired;
+            entity.AdvancePIRequired = dto.AdvancePIRequired;
+            entity.HoldTestingUntilPIApproved = dto.HoldTestingUntilPIApproved;
+
+            var user = LoggedInUserProvider.CurrentUser;
+            if (user != null)
+            {
+                entity.ModifiedBy = user.EmployeeID;
+                entity.ModifiedOn = DateTime.UtcNow;
+            }
+
+            await _context.SaveChangesAsync();
+
+            return new PaymentInfoDto
+            {
+                PurchaseOrderId = entity.PurchaseOrderId,
+                AdvancePayment = entity.AdvancePayment,
+                BillRequired = entity.BillRequired,
+                AdvancePIRequired = entity.AdvancePIRequired,
+                HoldTestingUntilPIApproved = entity.HoldTestingUntilPIApproved
+            };
+        }
+
     }
 }

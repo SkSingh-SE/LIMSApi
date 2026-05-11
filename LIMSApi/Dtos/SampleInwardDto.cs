@@ -252,4 +252,13 @@ namespace LIMSApi.Dtos
         public string Name { get; set; }
         public string Action { get; set; }
     }
+
+    public class PaymentInfoDto
+    {
+        public long? PurchaseOrderId { get; set; }
+        public decimal AdvancePayment { get; set; }
+        public bool BillRequired { get; set; }
+        public bool AdvancePIRequired { get; set; }
+        public bool HoldTestingUntilPIApproved { get; set; }
+    }
 }
