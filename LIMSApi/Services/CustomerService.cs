@@ -1,4 +1,5 @@
-﻿using LIMSApi.Data;
+﻿using System.Text.Json;
+using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
@@ -13,13 +14,15 @@ namespace LIMSApi.Services
         private readonly ICustomerRepository _customerRepository;
         private readonly ILogger<CustomerService> _logger;
         private readonly LIMSContext _context;
+        private readonly IWorkflowService _workflowService;
         private LoggedInUserDTO loggedInUser;
 
-        public CustomerService(ICustomerRepository customerRepo, ILogger<CustomerService> logger, LIMSContext context)
+        public CustomerService(ICustomerRepository customerRepo, ILogger<CustomerService> logger, LIMSContext context, IWorkflowService workflowService)
         {
             _customerRepository = customerRepo;
             _logger = logger;
             _context = context;
+            _workflowService = workflowService;
             loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
@@ -109,7 +112,30 @@ namespace LIMSApi.Services
                     dispatchMode.CustomerID = model.ID;
                 }
             }
+            // ── Level 2 approval (non-admin) ───────────────────────────────────────
+            CustomerChangeValuesDto? proposed = null;
+            if (!IsAdmin())
+            {
+                proposed = SnapshotLevel2(model);
+                var defaults = DefaultLevel2Snapshot();
+                // Reset Group B fields to safe defaults before saving
+                model.CreditLimitAmount = null;
+                model.CreditLimitTime = null;
+                model.ConstantDiscount = false;
+                model.ConstantDiscountPercentage = null;
+                model.WeeklyBillingCustomer = false;
+                model.MonthlyBillingCustomer = false;
+                model.BillingEvery = false;
+                model.BillingEveryDays = null;
+                // CustomerType (Group A) saves immediately — no change
+            }
+
             await _customerRepository.AddCustomer(model);
+
+            // Create change request after customer is saved (needs CustomerID)
+            if (!IsAdmin() && proposed != null && HasLevel2Changes(DefaultLevel2Snapshot(model), proposed))
+                await CreateAndStartChangeRequest(model.ID, DefaultLevel2Snapshot(model), proposed);
+
             _logger.LogInformation("Customer '{CustomerName}' created successfully.", model.Name);
         }
 
@@ -173,6 +199,9 @@ namespace LIMSApi.Services
             if (existingCustomer == null)
                 throw new InvalidOperationException("Customer not found!");
 
+            // ── Level 2 approval snapshot (non-admin) ──────────────────────────────
+            var oldLevel2 = SnapshotLevel2(existingCustomer);
+            var proposedLevel2 = SnapshotLevel2(model);
 
             existingCustomer.Name = model.Name;
             existingCustomer.LegalName = model.LegalName;
@@ -184,6 +213,7 @@ namespace LIMSApi.Services
             existingCustomer.StateID = model.StateID;
             existingCustomer.CountryID = model.CountryID;
             existingCustomer.CurrencyID = model.CurrencyID;
+            // Group A: CustomerType saves immediately for all users
             existingCustomer.CustomerType = model.CustomerType;
             existingCustomer.IsBlock = model.IsBlock;
             existingCustomer.BlockReason = model.BlockReason;
@@ -192,19 +222,25 @@ namespace LIMSApi.Services
             existingCustomer.PANNo = model.PANNo;
             existingCustomer.GSTNA = model.GSTNA;
             existingCustomer.SampleReturn = model.SampleReturn;
-            existingCustomer.BillingEvery = model.BillingEvery;
-            existingCustomer.BillingEveryDays = model.BillingEveryDays;
             existingCustomer.SpecialAccountingCase = model.SpecialAccountingCase;
-            existingCustomer.WeeklyBillingCustomer = model.WeeklyBillingCustomer;
-            existingCustomer.MonthlyBillingCustomer = model.MonthlyBillingCustomer;
             existingCustomer.DirectTaxInvoiceNoPerforma = model.DirectTaxInvoiceNoPerforma;
             existingCustomer.PerformaInvoiceRequiredBeforeTesting = model.PerformaInvoiceRequiredBeforeTesting;
-            existingCustomer.ConstantDiscount = model.ConstantDiscount;
-            existingCustomer.ConstantDiscountPercentage = model.ConstantDiscountPercentage;
-            existingCustomer.CreditLimitAmount = model.CreditLimitAmount;
-            existingCustomer.CreditLimitTime = model.CreditLimitTime;
             existingCustomer.IsVerified = model.IsVerified;
             existingCustomer.Remark = model.Remark;
+
+            // Group B: apply directly for admin; defer via change request for non-admin
+            if (IsAdmin())
+            {
+                existingCustomer.BillingEvery = model.BillingEvery;
+                existingCustomer.BillingEveryDays = model.BillingEveryDays;
+                existingCustomer.WeeklyBillingCustomer = model.WeeklyBillingCustomer;
+                existingCustomer.MonthlyBillingCustomer = model.MonthlyBillingCustomer;
+                existingCustomer.ConstantDiscount = model.ConstantDiscount;
+                existingCustomer.ConstantDiscountPercentage = model.ConstantDiscountPercentage;
+                existingCustomer.CreditLimitAmount = model.CreditLimitAmount;
+                existingCustomer.CreditLimitTime = model.CreditLimitTime;
+            }
+
             existingCustomer.ModifiedOn = DateTime.UtcNow;
             existingCustomer.ModifiedBy = loggedInUser.EmployeeID;
 
@@ -276,6 +312,10 @@ namespace LIMSApi.Services
             }
             await _customerRepository.UpdateCustomer(existingCustomer);
 
+            // Trigger change request for non-admin Level 2 changes
+            if (!IsAdmin() && HasLevel2Changes(oldLevel2, proposedLevel2))
+                await CreateAndStartChangeRequest(existingCustomer.ID, oldLevel2, proposedLevel2);
+
             _logger.LogInformation("Customer '{CustomerName}' updated successfully.", model.Name);
         }
 
@@ -324,6 +364,206 @@ namespace LIMSApi.Services
             customer.VerifiedOn = DateTime.UtcNow;
             customer.VerifiedBy = loggedInUser.EmployeeID;
             await _customerRepository.UpdateCustomer(customer);
+        }
+
+        // ── Level 2 Change Request ────────────────────────────────────────────────
+
+        public async Task<List<CustomerChangeRequestResponseDto>> GetChangeRequests(long customerId)
+        {
+            var requests = await _context.CustomerChangeRequests
+                .Where(r => r.CustomerID == customerId && r.IsActive)
+                .OrderByDescending(r => r.CreatedOn)
+                .ToListAsync();
+
+            var employeeIds = requests
+                .SelectMany(r => new[] { r.CreatedBy, r.ReviewedBy ?? 0 })
+                .Where(id => id > 0).Distinct().ToList();
+
+            var employees = await _context.EmployeeMasters
+                .Where(e => employeeIds.Contains(e.ID))
+                .Select(e => new { e.ID, e.Name })
+                .ToDictionaryAsync(e => e.ID, e => e.Name);
+
+            return requests.Select(r => new CustomerChangeRequestResponseDto
+            {
+                ID = r.ID,
+                CustomerID = r.CustomerID,
+                OldValues = JsonSerializer.Deserialize<CustomerChangeValuesDto>(r.OldValuesJson) ?? new(),
+                NewValues = JsonSerializer.Deserialize<CustomerChangeValuesDto>(r.NewValuesJson) ?? new(),
+                Status = r.Status,
+                RejectionReason = r.RejectionReason,
+                ReviewedByName = r.ReviewedBy.HasValue && employees.TryGetValue(r.ReviewedBy.Value, out var rv) ? rv : null,
+                ReviewedOn = r.ReviewedOn,
+                CreatedOn = r.CreatedOn,
+                RequestedByName = employees.TryGetValue(r.CreatedBy, out var cb) ? cb : null,
+                WorkflowInstanceID = r.WorkflowInstanceID,
+            }).ToList();
+        }
+
+        public async Task<CustomerChangeRequestResponseDto?> GetPendingChangeRequest(long customerId)
+        {
+            var r = await _context.CustomerChangeRequests
+                .FirstOrDefaultAsync(r => r.CustomerID == customerId && r.Status == "Pending" && r.IsActive);
+            if (r == null) return null;
+
+            return new CustomerChangeRequestResponseDto
+            {
+                ID = r.ID,
+                CustomerID = r.CustomerID,
+                OldValues = JsonSerializer.Deserialize<CustomerChangeValuesDto>(r.OldValuesJson) ?? new(),
+                NewValues = JsonSerializer.Deserialize<CustomerChangeValuesDto>(r.NewValuesJson) ?? new(),
+                Status = r.Status,
+                WorkflowInstanceID = r.WorkflowInstanceID,
+            };
+        }
+
+        public async Task ApplyChangeRequest(long changeRequestId)
+        {
+            var req = await _context.CustomerChangeRequests
+                .Include(r => r.Customer)
+                .FirstOrDefaultAsync(r => r.ID == changeRequestId)
+                ?? throw new KeyNotFoundException("Change request not found.");
+
+            var proposed = JsonSerializer.Deserialize<CustomerChangeValuesDto>(req.NewValuesJson)
+                ?? throw new InvalidOperationException("Invalid change request data.");
+            var customer = req.Customer!;
+
+            customer.CreditLimitAmount = proposed.CreditLimitAmount;
+            customer.CreditLimitTime = proposed.CreditLimitTime;
+            customer.ConstantDiscount = proposed.ConstantDiscount ?? false;
+            customer.ConstantDiscountPercentage = proposed.ConstantDiscountPercentage;
+            customer.WeeklyBillingCustomer = proposed.WeeklyBillingCustomer ?? false;
+            customer.MonthlyBillingCustomer = proposed.MonthlyBillingCustomer ?? false;
+            customer.BillingEvery = proposed.BillingEvery ?? false;
+            customer.BillingEveryDays = proposed.BillingEveryDays;
+            // CustomerType (Group A) already saved immediately — nothing to apply here
+
+            customer.ModifiedOn = DateTime.UtcNow;
+            customer.ModifiedBy = loggedInUser.EmployeeID;
+
+            req.Status = "Approved";
+            req.ReviewedBy = loggedInUser.EmployeeID;
+            req.ReviewedOn = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("CustomerChangeRequest {ID} approved — Group B fields applied to Customer {CustomerID}.", req.ID, req.CustomerID);
+        }
+
+        public async Task RejectChangeRequest(long changeRequestId, string? reason)
+        {
+            var req = await _context.CustomerChangeRequests
+                .Include(r => r.Customer)
+                .FirstOrDefaultAsync(r => r.ID == changeRequestId)
+                ?? throw new KeyNotFoundException("Change request not found.");
+
+            var proposed = JsonSerializer.Deserialize<CustomerChangeValuesDto>(req.NewValuesJson) ?? new();
+            var old = JsonSerializer.Deserialize<CustomerChangeValuesDto>(req.OldValuesJson) ?? new();
+            var customer = req.Customer!;
+
+            // Revert CustomerType (Group A) since it was saved immediately on submit
+            if (proposed.CustomerType != old.CustomerType && old.CustomerType != null)
+                customer.CustomerType = old.CustomerType;
+
+            req.Status = "Rejected";
+            req.RejectionReason = reason;
+            req.ReviewedBy = loggedInUser.EmployeeID;
+            req.ReviewedOn = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("CustomerChangeRequest {ID} rejected.", req.ID);
+        }
+
+        public async Task DirectReviewChangeRequest(ReviewChangeRequestDto dto)
+        {
+            if (dto.Action.Equals("Approve", StringComparison.OrdinalIgnoreCase))
+                await ApplyChangeRequest(dto.ChangeRequestId);
+            else if (dto.Action.Equals("Reject", StringComparison.OrdinalIgnoreCase))
+                await RejectChangeRequest(dto.ChangeRequestId, dto.Remarks);
+            else
+                throw new ArgumentException("Action must be 'Approve' or 'Reject'.");
+        }
+
+        // ── Level 2 Helpers ──────────────────────────────────────────────────────
+
+        private bool IsAdmin() =>
+            string.Equals(loggedInUser?.Role, "Admin", StringComparison.OrdinalIgnoreCase);
+
+        private static CustomerChangeValuesDto SnapshotLevel2(Customer c) => new()
+        {
+            CustomerType = c.CustomerType,
+            CreditLimitAmount = c.CreditLimitAmount,
+            CreditLimitTime = c.CreditLimitTime,
+            ConstantDiscount = c.ConstantDiscount,
+            ConstantDiscountPercentage = c.ConstantDiscountPercentage,
+            WeeklyBillingCustomer = c.WeeklyBillingCustomer,
+            MonthlyBillingCustomer = c.MonthlyBillingCustomer,
+            BillingEvery = c.BillingEvery,
+            BillingEveryDays = c.BillingEveryDays,
+        };
+
+        // Snapshot of Group B defaults (what gets saved to Customer on create before approval)
+        private static CustomerChangeValuesDto DefaultLevel2Snapshot(Customer? c = null) => new()
+        {
+            CustomerType = c?.CustomerType,  // CustomerType is whatever was saved (Group A)
+            CreditLimitAmount = null,
+            CreditLimitTime = null,
+            ConstantDiscount = false,
+            ConstantDiscountPercentage = null,
+            WeeklyBillingCustomer = false,
+            MonthlyBillingCustomer = false,
+            BillingEvery = false,
+            BillingEveryDays = null,
+        };
+
+        private static bool HasLevel2Changes(CustomerChangeValuesDto old, CustomerChangeValuesDto proposed)
+        {
+            return old.CustomerType != proposed.CustomerType
+                || old.CreditLimitAmount != proposed.CreditLimitAmount
+                || old.CreditLimitTime != proposed.CreditLimitTime
+                || old.ConstantDiscount != proposed.ConstantDiscount
+                || old.ConstantDiscountPercentage != proposed.ConstantDiscountPercentage
+                || old.WeeklyBillingCustomer != proposed.WeeklyBillingCustomer
+                || old.MonthlyBillingCustomer != proposed.MonthlyBillingCustomer
+                || old.BillingEvery != proposed.BillingEvery
+                || old.BillingEveryDays != proposed.BillingEveryDays;
+        }
+
+        private async Task CreateAndStartChangeRequest(long customerId,
+            CustomerChangeValuesDto oldValues, CustomerChangeValuesDto proposedValues)
+        {
+            // Supersede any existing pending request for this customer
+            var existing = await _context.CustomerChangeRequests
+                .Where(r => r.CustomerID == customerId && r.Status == "Pending" && r.IsActive)
+                .ToListAsync();
+            foreach (var r in existing)
+                r.Status = "Superseded";
+
+            var changeRequest = new CustomerChangeRequest
+            {
+                CustomerID = customerId,
+                OldValuesJson = JsonSerializer.Serialize(oldValues),
+                NewValuesJson = JsonSerializer.Serialize(proposedValues),
+                Status = "Pending",
+                CreatedBy = loggedInUser.EmployeeID,
+                CreatedOn = DateTime.UtcNow,
+                CompanyCode = loggedInUser.CompanyCode ?? string.Empty,
+                IsActive = true,
+            };
+            _context.CustomerChangeRequests.Add(changeRequest);
+            await _context.SaveChangesAsync();
+
+            // Start workflow if configured; otherwise leave as Pending for direct review
+            bool workflowExists = await _workflowService.WorkflowExistsForEntityType("Customer Field Change");
+            if (workflowExists)
+            {
+                await _workflowService.StartWorkflow(changeRequest.ID, "Customer Field Change");
+                var instance = await _workflowService.GetActiveInstanceForEntityAsync(changeRequest.ID, "Customer Field Change");
+                if (instance != null)
+                {
+                    changeRequest.WorkflowInstanceID = instance.ID;
+                    await _context.SaveChangesAsync();
+                }
+            }
         }
 
         // ── Contact Person Sync ──────────────────────────────────────────────────

@@ -435,7 +435,7 @@ namespace LIMSApi.Services
                     instance.IsActive = false;
                     await _repository.UpdateWorkflowInstanceAsync(instance);
 
-                    await ApplyEntityStatusUpdate(instance, action, isFinal: isFinalStep, transition.Alias);
+                    await ApplyEntityStatusUpdate(instance, action, isFinal: isFinalStep, transition.Alias, comments);
                     return;
                 }
 
@@ -447,7 +447,7 @@ namespace LIMSApi.Services
                     instance.IsActive = false;
                     await _repository.UpdateWorkflowInstanceAsync(instance);
 
-                    await ApplyEntityStatusUpdate(instance, action, isFinal: true, transition.Alias);
+                    await ApplyEntityStatusUpdate(instance, action, isFinal: true, transition.Alias, comments);
                     return;
                 }
 
@@ -455,7 +455,7 @@ namespace LIMSApi.Services
                 instance.Status = WorkflowInstanceStatus.InProgress.ToString();
                 await _repository.UpdateWorkflowInstanceAsync(instance);
 
-                await ApplyEntityStatusUpdate(instance, action, isFinal: false, transition.Alias);
+                await ApplyEntityStatusUpdate(instance, action, isFinal: false, transition.Alias, comments);
 
                 //  Auto-approval if same approver in next step
                 var nextStep = workflow.Steps.First(s => s.ID == transition.ToStepID.Value);
@@ -600,7 +600,7 @@ namespace LIMSApi.Services
             return result;
         }
 
-        private async Task ApplyEntityStatusUpdate(WorkflowInstance instance, string action, bool isFinal, string actionName)
+        private async Task ApplyEntityStatusUpdate(WorkflowInstance instance, string action, bool isFinal, string actionName, string? comments = null)
         {
             // Fix 1D — Only skip handler for intermediate Next steps.
             // Back/Cancel MUST update entity status even at non-final steps.
@@ -625,9 +625,29 @@ namespace LIMSApi.Services
                     await HandleTestVerification(instance.EntityID, action);
                     break;
 
+                case "Customer Field Change":
+                    await HandleCustomerFieldChange(instance.EntityID, action, comments);
+                    break;
+
                 // Fix 1E — Log unhandled entity types instead of silently ignoring
                 default:
                     _logger.LogWarning("ApplyEntityStatusUpdate: No handler for EntityType '{EntityType}'", instance.EntityType);
+                    break;
+            }
+        }
+
+        private async Task HandleCustomerFieldChange(long changeRequestId, string action, string? comments)
+        {
+            var customerService = _serviceProvider.GetRequiredService<ICustomerService>();
+
+            switch (action)
+            {
+                case WorkflowActions.Next:
+                    await customerService.ApplyChangeRequest(changeRequestId);
+                    break;
+                case WorkflowActions.Back:
+                case WorkflowActions.Cancel:
+                    await customerService.RejectChangeRequest(changeRequestId, comments);
                     break;
             }
         }
