@@ -1197,6 +1197,8 @@ namespace LIMSApi.Services
                 UploadReferenceID = sampleInward.UploadReferenceID,
                 Status = sampleInward.InwardStatus,
                 CollectionTime = sampleInward.CollectionTime,
+                StatementOfConformity = sampleInward.StatementOfConformity,
+                DecisionRule = sampleInward.DecisionRule,
 
                 DispatchModes = sampleInward.DispatchModes
                     .Select(d => new DispatchModeDto

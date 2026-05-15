@@ -111,7 +111,9 @@ namespace LIMSApi.Dtos
         public string? MetalClassificationName { get; set; }
         public long? ProductConditionID { get; set; }
         public string? ProductConditionName { get; set; }
+        // UI hidden per client requirement — retained for data integrity
         public long? ProductFormID { get; set; }
+        // UI hidden per client requirement — retained for data integrity
         public long? SpecimenOrientationID { get; set; }
         public string? Remarks { get; set; }
         public int Quantity { get; set; }
