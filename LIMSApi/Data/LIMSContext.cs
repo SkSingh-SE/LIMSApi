@@ -110,7 +110,6 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<TestMaster> TestMasters { get; set; }
     public virtual DbSet<LaboratoryTest> LaboratoryTests { get; set; }
     public virtual DbSet<LaboratoryTestInvoiceCase> LaboratoryTestInvoiceCase { get; set; }
-    public virtual DbSet<TestMethodStandard> TestMethodStandards { get; set; }
     public virtual DbSet<TestMethodSubGroup> TestMethodSubGroups { get; set; }
     public virtual DbSet<TestMethodSpecification> TestMethodSpecifications { get; set; }
     public virtual DbSet<TestMethodSpecificationVersion> TestMethodSpecificationVersions { get; set; }
@@ -341,6 +340,7 @@ public partial class LIMSContext : DbContext
             .HasOne(x => x.DefaultTestMethod)
             .WithMany()
             .HasForeignKey(x => x.DefaultTestMethodID)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.NoAction);
 
         modelBuilder.Entity<ParameterMaster>()
@@ -685,6 +685,14 @@ public partial class LIMSContext : DbContext
             .HasForeignKey(x => x.LaboratoryTestID)
             .OnDelete(DeleteBehavior.NoAction);
 
+        // ProductTestGroup → TestMethodSpecification (no cascade, nullable)
+        modelBuilder.Entity<ProductTestGroup>()
+            .HasOne(x => x.TestMethodSpecification)
+            .WithMany()
+            .HasForeignKey(x => x.TestMethodStandardID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
+
         // TpiInspection FKs (no cascade)
         modelBuilder.Entity<TpiInspection>()
             .HasOne(x => x.SampleInward)
@@ -793,6 +801,13 @@ public partial class LIMSContext : DbContext
             .HasOne(x => x.LaboratoryTest)
             .WithMany()
             .HasForeignKey(x => x.LaboratoryTestID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<SamplePreparationMaster>()
+            .HasOne(x => x.TestMethodSpecification)
+            .WithMany()
+            .HasForeignKey(x => x.TestMethodStandardID)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.NoAction);
 
         // EquipmentReferenceMaterial → EquipmentMaster (no cascade)

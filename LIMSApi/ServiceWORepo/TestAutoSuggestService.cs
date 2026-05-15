@@ -51,7 +51,7 @@ namespace LIMSApi.ServiceWORepo
             var tests = await _context.ProductTestGroups
                 .Where(ptg => ptg.ProductSpecificationID == productSpecificationId && ptg.IsActive)
                 .Include(ptg => ptg.LaboratoryTest)
-                .Include(ptg => ptg.TestMethodStandard)
+                .Include(ptg => ptg.TestMethodSpecification)
                 .Select(ptg => new SuggestedTestDto
                 {
                     LaboratoryTestID = ptg.LaboratoryTestID,
@@ -60,7 +60,7 @@ namespace LIMSApi.ServiceWORepo
                     Source = "ProductTestGroup",
                     IsPerBatch = ptg.IsPerBatch,
                     TestMethodStandardID = ptg.TestMethodStandardID,
-                    TestMethodStandardName = ptg.TestMethodStandard != null ? ptg.TestMethodStandard.Name : null
+                    TestMethodStandardName = ptg.TestMethodSpecification != null ? ptg.TestMethodSpecification.Name : null
                 })
                 .ToListAsync();
 

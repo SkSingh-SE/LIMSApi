@@ -86,6 +86,13 @@ namespace LIMSApi.Controllers
             return Ok(result);
         }
 
+        [HttpPatch("update-prep/{sampleId}")]
+        public async Task<IActionResult> UpdateSamplePrep(long sampleId, [FromBody] SamplePrepReviewDto dto)
+        {
+            await _SampleInwardService.UpdateSamplePrepAsync(sampleId, dto);
+            return Ok(new { message = "Preparation details updated." });
+        }
+
         [HttpPut("plan")]
         public async Task<IActionResult> ModifySamplePlan(PlanDto model)
         {

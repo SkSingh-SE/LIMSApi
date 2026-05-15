@@ -897,7 +897,8 @@ namespace LIMSApi.Services
                                 UlrNo = GenerateUlr(
                                     m.UlrNo, tcPrefix, year, labLocation,
                                     sample.SampleNo, ref ulrCounter),
-                                Cancel = m.Cancel
+                                Cancel = m.Cancel,
+                                StandardID = m.StandardID ?? 0
                             });
                         }
                     }
@@ -1347,6 +1348,31 @@ namespace LIMSApi.Services
             if (sampleInward == null)
                 throw new InvalidOperationException("SampleInward not found!");
 
+            var tpiIds = sampleInward.SampleDetails
+                .Where(s => s.TpiAgencyID.HasValue)
+                .Select(s => s.TpiAgencyID!.Value)
+                .Distinct()
+                .ToList();
+            var tpiMap = tpiIds.Count > 0
+                ? await _context.TPIMasters
+                    .Where(t => tpiIds.Contains(t.ID))
+                    .ToDictionaryAsync(t => t.ID, t => t)
+                : new Dictionary<long, TPIMaster>();
+
+            var standardIds = sampleInward.SampleDetails
+                .SelectMany(s => s.TestPlans)
+                .SelectMany(tp => tp.GeneralTests)
+                .SelectMany(gt => gt.Methods)
+                .Where(m => m.StandardID != 0)
+                .Select(m => m.StandardID)
+                .Distinct()
+                .ToList();
+            var standardMap = standardIds.Count > 0
+                ? await _context.TestMethodSpecifications
+                    .Where(s => standardIds.Contains(s.ID))
+                    .ToDictionaryAsync(s => s.ID, s => s.Name ?? string.Empty)
+                : new Dictionary<long, string>();
+
             var dto = new SampleInwardDto
             {
                 ID = sampleInward.ID,
@@ -1474,6 +1500,9 @@ namespace LIMSApi.Services
                         OtherPreparationCharge = s.OtherPreparationCharge,
                         TpiRequired = s.TpiRequired,
                         TpiAgencyID = s.TpiAgencyID,
+                        TpiAgencyName = s.TpiAgencyID.HasValue && tpiMap.ContainsKey(s.TpiAgencyID.Value) ? tpiMap[s.TpiAgencyID.Value].AgencyName : null,
+                        TpiEmailId = s.TpiAgencyID.HasValue && tpiMap.ContainsKey(s.TpiAgencyID.Value) ? tpiMap[s.TpiAgencyID.Value].EmailId : null,
+                        TpiContactNo = s.TpiAgencyID.HasValue && tpiMap.ContainsKey(s.TpiAgencyID.Value) ? tpiMap[s.TpiAgencyID.Value].ContactNo : null,
                         Specimen = s.Specimen,
                         TestInstructions = s.TestInstructions,
                         Thickness = s.Thickness,
@@ -1522,7 +1551,9 @@ namespace LIMSApi.Services
                                 Quantity = m.Quantity,
                                 ReportNo = m.ReportNo,
                                 UlrNo = m.UlrNo,
-                                Cancel = m.Cancel
+                                Cancel = m.Cancel,
+                                StandardID = m.StandardID != 0 ? m.StandardID : null,
+                                StandardName = m.StandardID != 0 && standardMap.ContainsKey(m.StandardID) ? standardMap[m.StandardID] : null
                             }).ToList()
                         }).ToList(),
                         ChemicalTests = tp.ChemicalTests.Select(ct => new ChemicalTestDto
@@ -1782,6 +1813,26 @@ namespace LIMSApi.Services
                 AdvancePIRequired = entity.AdvancePIRequired,
                 HoldTestingUntilPIApproved = entity.HoldTestingUntilPIApproved
             };
+        }
+
+        public async Task UpdateSamplePrepAsync(long sampleId, SamplePrepReviewDto dto)
+        {
+            var sample = await _context.SampleDetails.FindAsync(sampleId)
+                ?? throw new KeyNotFoundException($"Sample with ID {sampleId} not found.");
+
+            sample.PreparationRequired = dto.PreparationRequired;
+            sample.MachiningRequired = dto.MachiningRequired;
+            sample.MachiningAmount = dto.MachiningAmount;
+            sample.Specimen = dto.Specimen;
+            sample.OtherPreparation = dto.OtherPreparation;
+            sample.OtherPreparationCharge = dto.OtherPreparationCharge;
+            sample.TestInstructions = dto.TestInstructions;
+            sample.TpiRequired = dto.TpiRequired;
+            sample.TpiAgencyID = dto.TpiAgencyID;
+            sample.ModifiedBy = loggedInUser.EmployeeID;
+            sample.ModifiedOn = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
         }
 
     }

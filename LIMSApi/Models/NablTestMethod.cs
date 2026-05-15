@@ -9,7 +9,7 @@ namespace LIMSApi.Models
         public long? TestMethodStandardId { get; set; }
 
         [ForeignKey("TestMethodStandardId")]
-        public virtual TestMethodStandard? TestMethodStandard { get; set; }
+        public virtual TestMethodSpecification? TestMethodSpecification { get; set; }
 
         [MaxLength(100)]
         public string? TestMethodCode { get; set; }

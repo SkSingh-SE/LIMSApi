@@ -91,6 +91,11 @@ namespace LIMSApi.Repositories
             {
                 Id = x.ID,
                 Name = x.AgencyName,
+                AdditionalValues = new Dictionary<string, object>
+                {
+                    { "emailId", x.EmailId },
+                    { "contactNo", x.ContactNo }
+                }
             })).ToListAsync();
 
             return data;

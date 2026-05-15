@@ -8,7 +8,7 @@ namespace LIMSApi.Models
         [Key]
         public long ID { get; set; }
 
-        public long? TestMethodStandardID { get; set; }  // FK to TestMethodStandard
+        public long? TestMethodStandardID { get; set; }
 
         public long? LaboratoryTestID { get; set; }  // FK to LaboratoryTest (SubGroup)
 
@@ -28,7 +28,7 @@ namespace LIMSApi.Models
         public string? Remark { get; set; }
 
         [ForeignKey("TestMethodStandardID")]
-        public virtual TestMethodStandard? TestMethodStandard { get; set; }
+        public virtual TestMethodSpecification? TestMethodSpecification { get; set; }
 
         [ForeignKey("LaboratoryTestID")]
         public virtual LaboratoryTest? LaboratoryTest { get; set; }

@@ -132,6 +132,11 @@ namespace LIMSApi.Dtos
         public string? Specimen { get; set; }
         public string? TestInstructions { get; set; }
 
+        // TPI joined fields (for display in review screens)
+        public string? TpiAgencyName { get; set; }
+        public string? TpiEmailId { get; set; }
+        public string? TpiContactNo { get; set; }
+
         // File
         public long? UploadReferenceID { get; set; }
         public string? SampleFilePath { get; set; }
@@ -193,6 +198,8 @@ namespace LIMSApi.Dtos
         public string? ReportNo { get; set; }
         public string? UlrNo { get; set; }
         public bool Cancel { get; set; }
+        public long? StandardID { get; set; }
+        public string? StandardName { get; set; }
     }
 
     public class ChemicalTestDto
@@ -260,5 +267,18 @@ namespace LIMSApi.Dtos
         public bool BillRequired { get; set; }
         public bool AdvancePIRequired { get; set; }
         public bool HoldTestingUntilPIApproved { get; set; }
+    }
+
+    public class SamplePrepReviewDto
+    {
+        public bool PreparationRequired { get; set; }
+        public bool MachiningRequired { get; set; }
+        public decimal MachiningAmount { get; set; }
+        public string? Specimen { get; set; }
+        public bool OtherPreparation { get; set; }
+        public decimal OtherPreparationCharge { get; set; }
+        public string? TestInstructions { get; set; }
+        public bool TpiRequired { get; set; }
+        public long? TpiAgencyID { get; set; }
     }
 }

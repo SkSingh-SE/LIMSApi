@@ -56,7 +56,7 @@ namespace LIMSApi.Repositories
                           join lt in _context.LaboratoryTests on ptg.LaboratoryTestID equals lt.ID into ltGroup
                           from lt in ltGroup.DefaultIfEmpty()
 
-                          join tms in _context.TestMethodStandards on ptg.TestMethodStandardID equals tms.ID into tmsGroup
+                          join tms in _context.TestMethodSpecifications on ptg.TestMethodStandardID equals tms.ID into tmsGroup
                           from tms in tmsGroup.DefaultIfEmpty()
 
                           where ptg.IsActive
@@ -136,7 +136,7 @@ namespace LIMSApi.Repositories
                               join lt in _context.LaboratoryTests on ptg.LaboratoryTestID equals lt.ID into ltGroup
                               from lt in ltGroup.DefaultIfEmpty()
 
-                              join tms in _context.TestMethodStandards on ptg.TestMethodStandardID equals tms.ID into tmsGroup
+                              join tms in _context.TestMethodSpecifications on ptg.TestMethodStandardID equals tms.ID into tmsGroup
                               from tms in tmsGroup.DefaultIfEmpty()
 
                               where ptg.IsActive && ptg.ProductSpecificationID == productSpecId
@@ -148,7 +148,7 @@ namespace LIMSApi.Repositories
                                   ptg.LaboratoryTestID,
                                   LaboratoryTestName = lt != null ? lt.Name : string.Empty,
                                   ptg.TestMethodStandardID,
-                                  TestMethodStandardName = tms != null ? tms.Name : string.Empty,
+                                  TestMethodSpecificationName = tms != null ? tms.Name : string.Empty,
                                   ptg.IsPerBatch,
                                   ptg.Year,
                                   ptg.Remark
