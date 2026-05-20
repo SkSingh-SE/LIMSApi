@@ -129,34 +129,25 @@ namespace LIMSApi.Helpers
         public async Task<(decimal Rate, long ConfigId)> MatchConfigAndGetRateAsync(
             long laboratoryTestId,
             InvoiceCaseConfiguration config,
-            decimal usedValue)
+            decimal usedValue,
+            DateTime inwardDate)
         {
-            // FY-filtered InvoiceCase lookup with fallback
-            var currentFYEntity = await _db.FinancialYears.FirstOrDefaultAsync(f => f.IsCurrent);
-            InvoiceCase? invoiceCase = null;
-            if (currentFYEntity != null)
-            {
-                invoiceCase = await _db.InvoiceCases
-                    .Where(x => x.LaboratoryTestID == laboratoryTestId && x.IsActive && x.FinancialYearId == currentFYEntity.Id)
-                    .Include(x => x.InvoiceCasePrices)
-                    .FirstOrDefaultAsync();
-            }
+            // Date-effective InvoiceCase resolution: pick the version with the greatest
+            // EffectiveFrom ≤ the sample inward date, falling back to the earliest version.
+            var versions = await _db.InvoiceCases
+                .Where(x => x.LaboratoryTestID == laboratoryTestId && x.IsActive)
+                .Include(x => x.InvoiceCasePrices)
+                .Include(x => x.FinancialYearEntity)
+                .ToListAsync();
 
-            if (invoiceCase == null)
-            {
-                invoiceCase = await _db.InvoiceCases
-                    .Where(x => x.LaboratoryTestID == laboratoryTestId && x.IsActive)
-                    .Include(x => x.InvoiceCasePrices)
-                    .Include(x => x.FinancialYearEntity)
-                    .FirstOrDefaultAsync();
-
-                if (invoiceCase != null)
-                    _logger.LogWarning("No InvoiceCase for current FY and LabTest {LabTestId}. Using fallback FY {FallbackFY}.",
-                        laboratoryTestId, invoiceCase.FinancialYearEntity?.Year);
-            }
+            var invoiceCase = PriceVersionResolver.Resolve(versions, v => v.EffectiveFrom, inwardDate);
 
             if (invoiceCase == null)
                 throw new Exception($"No invoice case found for LaboratoryTest {laboratoryTestId}");
+
+            if (invoiceCase.EffectiveFrom.Date > inwardDate.Date)
+                _logger.LogWarning("Sample inward date {InwardDate:d} precedes all InvoiceCase versions for LabTest {LabTestId}. Using earliest version (FY {FY}).",
+                    inwardDate, laboratoryTestId, invoiceCase.FinancialYearEntity?.Year);
 
             var configPrice = invoiceCase.InvoiceCasePrices
                 .FirstOrDefault(p => p.InvoiceCaseConfigID == config.ID);

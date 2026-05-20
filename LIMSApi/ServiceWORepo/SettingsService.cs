@@ -805,7 +805,9 @@ namespace LIMSApi.ServiceWORepo
                 {
                     Id = f.Id,
                     Year = f.Year,
-                    IsCurrent = f.IsCurrent
+                    IsCurrent = f.IsCurrent,
+                    StartDate = f.StartDate,
+                    EndDate = f.EndDate
                 })
                 .ToListAsync(cancellationToken);
         }

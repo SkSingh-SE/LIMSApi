@@ -32,10 +32,48 @@ namespace LIMSApi.Services
         /// Sets BillingStatus = PRICE_DRAFTED
         /// Returns detailed result with per-test success/failure info
         /// </summary>
-        public async Task<PriceCalculationResultDto> CalculateAndCreateChargeEventsAsync(long inwardId)
+        public async Task<PriceCalculationResultDto> CalculateAndCreateChargeEventsAsync(long inwardId, bool confirmed = false)
         {
+            if (!confirmed)
+            {
+                var mismatch = await CheckFinancialYearMismatchAsync(inwardId);
+                if (mismatch != null)
+                    return mismatch;
+            }
+
             var result = await CalculatePricingInternalAsync(inwardId, dryRun: false);
             return result;
+        }
+
+        /// <summary>
+        /// Returns a RequiresConfirmation result when the sample's inward FY differs from the
+        /// current default FY (older price list will be applied). Returns null when there is no
+        /// mismatch, or when FY data is missing (calculation proceeds normally).
+        /// </summary>
+        private async Task<PriceCalculationResultDto?> CheckFinancialYearMismatchAsync(long inwardId)
+        {
+            var inward = await _db.SampleInwards
+                .Include(x => x.FinancialYear)
+                .FirstOrDefaultAsync(x => x.ID == inwardId);
+
+            if (inward?.FinancialYearId == null)
+                return null;
+
+            var currentFy = await _db.FinancialYears.FirstOrDefaultAsync(f => f.IsCurrent);
+            if (currentFy == null || inward.FinancialYearId == currentFy.Id)
+                return null;
+
+            var inwardFy = inward.FinancialYear?.Year ?? "(unknown)";
+            return new PriceCalculationResultDto
+            {
+                InwardId = inwardId,
+                CaseNo = inward.CaseNo ?? "",
+                RequiresConfirmation = true,
+                InwardFY = inwardFy,
+                CurrentFY = currentFy.Year,
+                ConfirmationMessage = $"Sample is from FY {inwardFy} — the {inwardFy} price list will be applied " +
+                                      $"instead of the current FY {currentFy.Year}. Proceed?"
+            };
         }
 
         /// <summary>
@@ -217,7 +255,8 @@ namespace LIMSApi.Services
                                     method.LaboratoryTestID,
                                     gt,
                                     method,
-                                    plan.ID
+                                    plan.ID,
+                                    inward.CollectionTime
                                 );
                                 var rate = calcResult.Rate;
                                 var configId = calcResult.ConfigId;
@@ -283,7 +322,8 @@ namespace LIMSApi.Services
                                 var calcResult = await GetRateForChemicalTestAsync(
                                     tt.LaboratoryTestID!.Value,
                                     ct,
-                                    usedElements
+                                    usedElements,
+                                    inward.CollectionTime
                                 );
                                 var rate = calcResult.Rate;
                                 var configId = calcResult.ConfigId;
@@ -413,7 +453,8 @@ namespace LIMSApi.Services
             long laboratoryTestId,
             GeneralTest generalTest,
             GeneralTestMethod method,
-            long testPlanId)
+            long testPlanId,
+            DateTime inwardDate)
         {
             // Get all InvoiceCaseConfigurations linked to this LaboratoryTest
             var configs = await _db.LaboratoryTestInvoiceCase
@@ -467,7 +508,8 @@ namespace LIMSApi.Services
                         var (rate, configId) = await MatchConfigAndGetRateAsync(
                             laboratoryTestId,
                             config,
-                            parameterValue.Value
+                            parameterValue.Value,
+                            inwardDate
                         );
 
                         return (rate, configId, config.SelectionType, parameterValue.Value);
@@ -475,7 +517,7 @@ namespace LIMSApi.Services
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogDebug(ex, "Failed to match config {ConfigId} with SelectionType {SelectionType}", 
+                    _logger.LogDebug(ex, "Failed to match config {ConfigId} with SelectionType {SelectionType}",
                         config.ID, config.SelectionType);
                     continue;
                 }
@@ -490,7 +532,8 @@ namespace LIMSApi.Services
         private async Task<(decimal Rate, long ConfigId, string? SelectionType, decimal? UsedValue)> GetRateForChemicalTestAsync(
             long laboratoryTestId,
             ChemicalTest chemicalTest,
-            int usedElements)
+            int usedElements,
+            DateTime inwardDate)
         {
             // Get all InvoiceCaseConfigurations linked to this LaboratoryTest
             var configs = await _db.LaboratoryTestInvoiceCase
@@ -510,7 +553,8 @@ namespace LIMSApi.Services
                 var (rate, configId) = await MatchConfigAndGetRateAsync(
                     laboratoryTestId,
                     elementConfig,
-                    usedElements
+                    usedElements,
+                    inwardDate
                 );
 
                 return (rate, configId, "Element", usedElements);
@@ -552,7 +596,8 @@ namespace LIMSApi.Services
                         var (rate, configId) = await MatchConfigAndGetRateAsync(
                             laboratoryTestId,
                             config,
-                            parameterValue.Value
+                            parameterValue.Value,
+                            inwardDate
                         );
 
                         return (rate, configId, config.SelectionType, parameterValue.Value);
@@ -560,7 +605,7 @@ namespace LIMSApi.Services
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogDebug(ex, "Failed to match config {ConfigId} with SelectionType {SelectionType}", 
+                    _logger.LogDebug(ex, "Failed to match config {ConfigId} with SelectionType {SelectionType}",
                         config.ID, config.SelectionType);
                     continue;
                 }
@@ -583,8 +628,9 @@ namespace LIMSApi.Services
         private Task<(decimal Rate, long ConfigId)> MatchConfigAndGetRateAsync(
             long laboratoryTestId,
             InvoiceCaseConfiguration config,
-            decimal usedValue)
-            => _pricingEngine.MatchConfigAndGetRateAsync(laboratoryTestId, config, usedValue);
+            decimal usedValue,
+            DateTime inwardDate)
+            => _pricingEngine.MatchConfigAndGetRateAsync(laboratoryTestId, config, usedValue, inwardDate);
 
         public async Task<decimal> GetDraftTotalAsync(long inwardId)
         {

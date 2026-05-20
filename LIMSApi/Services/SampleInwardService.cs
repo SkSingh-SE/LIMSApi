@@ -94,11 +94,18 @@ namespace LIMSApi.Services
                     model.HoldTestingUntilPIApproved = true;
                 }
 
+                // Derive the financial year from CollectionTime for FY-aware pricing.
+                var inwardFyId = await _context.FinancialYears
+                    .Where(f => f.StartDate <= model.CollectionTime && f.EndDate >= model.CollectionTime)
+                    .Select(f => (long?)f.Id)
+                    .FirstOrDefaultAsync();
+
                 var entity = new SampleInward
                 {
                     CaseNo = caseAndSample.caseNo,
                     CustomerID = model.CustomerID,
                     PurchaseOrderId = model.PurchaseOrderId,
+                    FinancialYearId = inwardFyId,
                     Address = model.Address,
                     Area = model.Area,
                     State = model.State,

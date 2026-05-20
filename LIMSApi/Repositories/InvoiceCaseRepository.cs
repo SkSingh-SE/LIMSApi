@@ -134,5 +134,96 @@ namespace LIMSApi.Repositories
         {
             return await _context.InvoiceCases.AnyAsync(x => x.FinancialYearId == financialYearId && x.LaboratoryTestID == laboratoryTestId && x.ID != excludeId && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
+
+        public async Task<List<InvoiceCase>> GetByLabTest(long laboratoryTestId)
+        {
+            return await _context.InvoiceCases
+                .Include(x => x.InvoiceCasePrices)
+                .Include(x => x.LaboratoryTest)
+                .Include(x => x.FinancialYearEntity)
+                .Where(x => x.LaboratoryTestID == laboratoryTestId && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode)
+                .OrderByDescending(x => x.EffectiveFrom)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+
+        public async Task SaveAllVersions(long laboratoryTestId, List<InvoiceCase> incoming)
+        {
+            var existing = await _context.InvoiceCases
+                .Include(x => x.InvoiceCasePrices)
+                .Where(x => x.LaboratoryTestID == laboratoryTestId && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode)
+                .ToListAsync();
+
+            var incomingIds = incoming.Where(v => v.ID != 0).Select(v => v.ID).ToHashSet();
+
+            // Soft-delete versions removed from the form
+            foreach (var ex in existing.Where(e => !incomingIds.Contains(e.ID)))
+            {
+                ex.IsActive = false;
+                ex.ModifiedOn = DateTime.UtcNow;
+            }
+
+            foreach (var v in incoming)
+            {
+                var match = v.ID != 0 ? existing.FirstOrDefault(e => e.ID == v.ID) : null;
+
+                if (match == null)
+                {
+                    _context.InvoiceCases.Add(v);
+                }
+                else
+                {
+                    match.EffectiveFrom = v.EffectiveFrom;
+                    match.FinancialYearId = v.FinancialYearId;
+                    match.DefaultPricingType = v.DefaultPricingType;
+                    match.ModifiedOn = DateTime.UtcNow;
+
+                    // Remove price rows dropped from the form
+                    var toRemove = match.InvoiceCasePrices
+                        .Where(p => !v.InvoiceCasePrices.Any(np => np.ID == p.ID))
+                        .ToList();
+                    foreach (var p in toRemove)
+                        match.InvoiceCasePrices.Remove(p);
+
+                    // Add or update price rows
+                    foreach (var np in v.InvoiceCasePrices)
+                    {
+                        var pMatch = np.ID != 0
+                            ? match.InvoiceCasePrices.FirstOrDefault(p => p.ID == np.ID)
+                            : null;
+
+                        if (pMatch == null)
+                        {
+                            match.InvoiceCasePrices.Add(np);
+                        }
+                        else
+                        {
+                            pMatch.InvoiceCaseConfigID = np.InvoiceCaseConfigID;
+                            pMatch.Name = np.Name;
+                            pMatch.AliasName = np.AliasName;
+                            pMatch.Price = np.Price;
+                        }
+                    }
+                }
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<long?> GetFinancialYearIdForDate(DateTime date)
+        {
+            return await _context.FinancialYears
+                .Where(f => f.StartDate <= date && f.EndDate >= date)
+                .Select(f => (long?)f.Id)
+                .FirstOrDefaultAsync();
+        }
+
+        public async Task<long?> GetCurrentFinancialYearId()
+        {
+            return await _context.FinancialYears
+                .Where(f => f.IsCurrent)
+                .Select(f => (long?)f.Id)
+                .FirstOrDefaultAsync();
+        }
     }
 }

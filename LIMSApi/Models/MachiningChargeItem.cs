@@ -24,7 +24,12 @@ namespace LIMSApi.Models
         [MaxLength(500)]
         public string? Remark { get; set; }
 
+        public long? MachiningChargeMasterID { get; set; }  // nullable FK — null = free-text entry, set = master-linked (NABL traceability)
+
         [ForeignKey(nameof(SampleID))]
         public virtual SampleDetail? Sample { get; set; }
+
+        [ForeignKey(nameof(MachiningChargeMasterID))]
+        public virtual MachiningChargeMaster? MachiningChargeMaster { get; set; }
     }
 }

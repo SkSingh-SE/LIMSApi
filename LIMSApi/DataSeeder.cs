@@ -568,6 +568,12 @@ public static class DataSeeder
             ('CanDeleteCuttingPrice','Delete Cutting Price','Cutting Price Master',NULL,'Delete'),
             ('CanManageCuttingPrice','Manage Cutting Price','Cutting Price Master',NULL,'Manage'),
 
+            ('CanReadMachiningCharge','View Machining Charge','Machining Charge Master',NULL,'Read'),
+            ('CanCreateMachiningCharge','Create Machining Charge','Machining Charge Master',NULL,'Create'),
+            ('CanUpdateMachiningCharge','Update Machining Charge','Machining Charge Master',NULL,'Update'),
+            ('CanDeleteMachiningCharge','Delete Machining Charge','Machining Charge Master',NULL,'Delete'),
+            ('CanManageMachiningCharge','Manage Machining Charge','Machining Charge Master',NULL,'Manage'),
+
             -- ═══════════════════════ Invoice ═══════════════════════
             ('CanReadInvoiceCaseConfig','View Invoice Case Config','Invoice Case Config',NULL,'Read'),
             ('CanCreateInvoiceCaseConfig','Create Invoice Case Config','Invoice Case Config',NULL,'Create'),
@@ -1268,6 +1274,10 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 "CanReadCuttingPrice", "CanCreateCuttingPrice",
                 "CanUpdateCuttingPrice", "CanDeleteCuttingPrice", "CanManageCuttingPrice",
 
+                // Machining charge (for quoting)
+                "CanReadMachiningCharge", "CanCreateMachiningCharge",
+                "CanUpdateMachiningCharge", "CanDeleteMachiningCharge", "CanManageMachiningCharge",
+
                 // Read flow stages for context (can see but not act)
                 "CanReadSampleInward", "CanReadPlan", "CanReadReview",
                 "CanReadReporting", "CanReadCustomerMaster",
@@ -1388,7 +1398,7 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
 
                 // Invoice Case / Config — read only (Accounts manages)
                 "CanReadInvoiceCase", "CanReadInvoiceCaseConfig",
-                "CanReadCustomerPO", "CanReadCuttingPrice",
+                "CanReadCustomerPO", "CanReadCuttingPrice", "CanReadMachiningCharge",
 
                 // Account visibility (read, no manage)
                 "CanReadAccount", "CanReadAccountsDashboard", "CanReadCaseAccounts",

@@ -2,7 +2,7 @@
 
 namespace LIMSApi.Models
 {
-    public class TestMethodSpecification : AuditProperty
+    public class TestMethodSpecification : AuditProperty // Test Method Standard
     {
         [Key]
         public long ID { get; set; }

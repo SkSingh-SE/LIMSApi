@@ -33,6 +33,7 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<CustomerCompanyCategory> CustomerCompanyCategories { get; set; }
     public virtual DbSet<CustomerDispatchMode> CustomerDispatchModes { get; set; }
     public virtual DbSet<CuttingPriceMaster> CuttingPriceMasters { get; set; }
+    public virtual DbSet<CuttingPriceVersion> CuttingPriceVersions { get; set; }
     public virtual DbSet<Configuration> Configurations { get; set; }
     public virtual DbSet<DepartmentMaster> DepartmentMasters { get; set; }
     public virtual DbSet<DesignationMaster> DesignationMasters { get; set; }
@@ -137,6 +138,8 @@ public partial class LIMSContext : DbContext
     public DbSet<CuttingChargeSample> CuttingChargeSamples { get; set; }
     public DbSet<CuttingChargeDetail> CuttingChargeDetails { get; set; }
     public DbSet<MachiningChargeItem> MachiningChargeItems { get; set; }
+    public DbSet<MachiningChargeMaster> MachiningChargeMasters { get; set; }
+    public DbSet<MachiningChargeVersion> MachiningChargeVersions { get; set; }
     public DbSet<SamplePreparationMaster> SamplePreparationMasters { get; set; }
     public DbSet<SamplePreparation> SamplePreparations { get; set; }
     public DbSet<ProductTestGroup> ProductTestGroups { get; set; }
@@ -809,6 +812,84 @@ public partial class LIMSContext : DbContext
             .HasForeignKey(x => x.TestMethodStandardID)
             .IsRequired(false)
             .OnDelete(DeleteBehavior.NoAction);
+
+        // MachiningChargeMaster FKs (no cascade)
+        modelBuilder.Entity<MachiningChargeMaster>()
+            .HasOne(x => x.LaboratoryTest)
+            .WithMany()
+            .HasForeignKey(x => x.LaboratoryTestID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<MachiningChargeMaster>()
+            .HasOne(x => x.TestMethodSpecification)
+            .WithMany()
+            .HasForeignKey(x => x.TestMethodStandardID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // MachiningChargeItem → MachiningChargeMaster (optional FK, no cascade)
+        modelBuilder.Entity<MachiningChargeItem>()
+            .HasOne(x => x.MachiningChargeMaster)
+            .WithMany()
+            .HasForeignKey(x => x.MachiningChargeMasterID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // CuttingPriceVersion → CuttingPriceMaster (no cascade; versions soft-deleted with the master)
+        modelBuilder.Entity<CuttingPriceVersion>()
+            .HasOne(x => x.CuttingPriceMaster)
+            .WithMany(m => m.Versions)
+            .HasForeignKey(x => x.CuttingPriceMasterID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // CuttingPriceVersion → FinancialYear (nullable derived field — no cascade)
+        modelBuilder.Entity<CuttingPriceVersion>()
+            .HasOne(x => x.FinancialYear)
+            .WithMany()
+            .HasForeignKey(x => x.FinancialYearId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // One rate version per effective date per master
+        modelBuilder.Entity<CuttingPriceVersion>()
+            .HasIndex(x => new { x.CuttingPriceMasterID, x.EffectiveFrom })
+            .IsUnique()
+            .HasFilter("[IsActive] = 1");
+
+        // MachiningChargeVersion → MachiningChargeMaster (no cascade; versions soft-deleted with the master)
+        modelBuilder.Entity<MachiningChargeVersion>()
+            .HasOne(x => x.MachiningChargeMaster)
+            .WithMany(m => m.Versions)
+            .HasForeignKey(x => x.MachiningChargeMasterID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // MachiningChargeVersion → FinancialYear (nullable derived field — no cascade)
+        modelBuilder.Entity<MachiningChargeVersion>()
+            .HasOne(x => x.FinancialYear)
+            .WithMany()
+            .HasForeignKey(x => x.FinancialYearId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // One price version per effective date per master
+        modelBuilder.Entity<MachiningChargeVersion>()
+            .HasIndex(x => new { x.MachiningChargeMasterID, x.EffectiveFrom })
+            .IsUnique()
+            .HasFilter("[IsActive] = 1");
+
+        // SampleInward → FinancialYear (nullable — stamped from CollectionTime on create)
+        modelBuilder.Entity<SampleInward>()
+            .HasOne(x => x.FinancialYear)
+            .WithMany()
+            .HasForeignKey(x => x.FinancialYearId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // One InvoiceCase price version per effective date per LaboratoryTest
+        // (LaboratoryTest acts as the master; each InvoiceCase row is a date-effective version)
+        modelBuilder.Entity<InvoiceCase>()
+            .HasIndex(x => new { x.LaboratoryTestID, x.EffectiveFrom })
+            .IsUnique()
+            .HasFilter("[IsActive] = 1");
 
         // EquipmentReferenceMaterial → EquipmentMaster (no cascade)
         modelBuilder.Entity<EquipmentReferenceMaterial>()

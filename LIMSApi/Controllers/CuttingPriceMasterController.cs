@@ -25,7 +25,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpGet("get-all")]
-        public async Task<ActionResult<CuttingPriceMaster>> GetAll()
+        public async Task<IActionResult> GetAll()
         {
             return Ok(await _cuttingPriceService.CuttingPriceList());
         }

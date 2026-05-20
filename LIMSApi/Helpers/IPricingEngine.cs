@@ -16,12 +16,14 @@ namespace LIMSApi.Helpers
 
         /// <summary>
         /// Match configuration against parameter value and get rate.
-        /// FY-filtered InvoiceCase lookup with fallback.
+        /// Resolves the date-effective InvoiceCase version via the sample inward date
+        /// (greatest EffectiveFrom ≤ inwardDate; falls back to the earliest version).
         /// </summary>
         Task<(decimal Rate, long ConfigId)> MatchConfigAndGetRateAsync(
             long laboratoryTestId,
             InvoiceCaseConfiguration config,
-            decimal usedValue);
+            decimal usedValue,
+            DateTime inwardDate);
 
         /// <summary>
         /// Strict name matching: exact → alias exact → token match (3+ chars).
