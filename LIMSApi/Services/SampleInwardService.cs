@@ -159,7 +159,8 @@ namespace LIMSApi.Services
                        Country = model.ReportingTo.Country,
                        Type = model.ReportingTo.Type,
                        MobileNo = model.ReportingTo.MobileNo,
-                          EmailId = model.ReportingTo.EmailId
+                          EmailId = model.ReportingTo.EmailId,
+                       CustomerID = model.ReportingTo.CustomerID
                    },
                    new SampleInwardAddressInfo
                    {
@@ -173,7 +174,8 @@ namespace LIMSApi.Services
                        Country = model.BillingTo.Country,
                        Type = model.BillingTo.Type,
                           MobileNo = model.BillingTo.MobileNo,
-                              EmailId = model.BillingTo.EmailId
+                              EmailId = model.BillingTo.EmailId,
+                       CustomerID = model.BillingTo.CustomerID
                    }
                },
 
@@ -492,7 +494,8 @@ namespace LIMSApi.Services
                     Country = model.ReportingTo.Country,
                     Type = model.ReportingTo.Type,
                     MobileNo = model.ReportingTo.MobileNo,
-                    EmailId = model.ReportingTo.EmailId
+                    EmailId = model.ReportingTo.EmailId,
+                    CustomerID = model.ReportingTo.CustomerID
                 });
                 entity.Addresses.Add(new SampleInwardAddressInfo
                 {
@@ -507,7 +510,8 @@ namespace LIMSApi.Services
                     Country = model.BillingTo.Country,
                     Type = model.BillingTo.Type,
                     MobileNo = model.BillingTo.MobileNo,
-                    EmailId = model.BillingTo.EmailId
+                    EmailId = model.BillingTo.EmailId,
+                    CustomerID = model.BillingTo.CustomerID
                 });
 
                 //  Only fetch next sample number if a new sample will be added
@@ -963,12 +967,8 @@ namespace LIMSApi.Services
                             });
                         }
 
-                        var addedLabTestIds = new HashSet<long>();
-                        foreach (var kvp in cDto.TestTypes)
+                        foreach (var labTestId in cDto.TestTypeIds ?? new List<long>())
                         {
-                            if (!long.TryParse(kvp.Key, out var labTestId)) continue;
-                            if (!addedLabTestIds.Add(labTestId)) continue; // skip duplicates
-
                             var labTest = await _context.LaboratoryTests
                                 .FirstOrDefaultAsync(x => x.ID == labTestId);
 
@@ -976,7 +976,7 @@ namespace LIMSApi.Services
                             {
                                 LaboratoryTestID = labTestId,
                                 Name = labTest?.Name ?? "",
-                                IsSelected = kvp.Value
+                                IsSelected = true
                             });
                         }
                     }
@@ -1078,7 +1078,7 @@ namespace LIMSApi.Services
             var hasAnyTest = model.SampleDetails?.Any(s =>
                 s.TestPlans?.Any(tp =>
                     (tp.GeneralTests?.Any(gt => gt.Methods?.Any(m => m.Cancel != true) == true) == true) ||
-                    (tp.ChemicalTests?.Any(ct => ct.TestTypes?.Any(t => t.Value) == true || ct.Elements?.Count > 0) == true)
+                    (tp.ChemicalTests?.Any(ct => (ct.TestTypeIds?.Count > 0) == true || ct.Elements?.Count > 0) == true)
                 ) == true
             ) == true;
 
@@ -1243,7 +1243,8 @@ namespace LIMSApi.Services
                         Country = a.Country,
                         Type = a.Type,
                         MobileNo = a.MobileNo,
-                        EmailId = a.EmailId
+                        EmailId = a.EmailId,
+                        CustomerID = a.CustomerID
                     })
                     .FirstOrDefault(),
 
@@ -1263,7 +1264,8 @@ namespace LIMSApi.Services
                         Country = a.Country,
                         Type = a.Type,
                         MobileNo = a.MobileNo,
-                        EmailId = a.EmailId
+                        EmailId = a.EmailId,
+                        CustomerID = a.CustomerID
                     })
                     .FirstOrDefault(),
 
@@ -1454,7 +1456,8 @@ namespace LIMSApi.Services
                         Country = a.Country,
                         Type = a.Type,
                         MobileNo = a.MobileNo,
-                        EmailId = a.EmailId
+                        EmailId = a.EmailId,
+                        CustomerID = a.CustomerID
                     })
                     .FirstOrDefault(),
 
@@ -1474,7 +1477,8 @@ namespace LIMSApi.Services
                         Country = a.Country,
                         Type = a.Type,
                         MobileNo = a.MobileNo,
-                        EmailId = a.EmailId
+                        EmailId = a.EmailId,
+                        CustomerID = a.CustomerID
                     })
                     .FirstOrDefault(),
 
@@ -1574,9 +1578,9 @@ namespace LIMSApi.Services
                             MetalClassificationID = ct.MetalClassificationID,
                             Specification1 = ct.Specification1,
                             Specification2 = ct.Specification2,
-                            TestTypes = ct.TestTypes
-                                .GroupBy(tt => tt.LaboratoryTestID.ToString())
-                                .ToDictionary(g => g.Key, g => g.First().IsSelected),
+                            TestTypeIds = ct.TestTypes
+                                .Select(tt => tt.LaboratoryTestID ?? 0)
+                                .ToList(),
                             Elements = ct.Elements.Select(e => new ChemicalTestElementDto
                             {
                                 ID = e.ID,

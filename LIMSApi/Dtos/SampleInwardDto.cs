@@ -100,6 +100,7 @@ namespace LIMSApi.Dtos
         public long InwardID { get; set; }
         public string EmailId { get; set; } = string.Empty;
         public string MobileNo { get; set; } = string.Empty;
+        public long? CustomerID { get; set; }
     }
 
     public class SampleDetailDto
@@ -211,7 +212,7 @@ namespace LIMSApi.Dtos
         public string? SampleNo { get; set; }
         public string? ReportNo { get; set; } = "";
         public string? UlrNo { get; set; } = "";
-        public Dictionary<string, bool> TestTypes { get; set; } = new();
+        public List<long> TestTypeIds { get; set; } = new();
         public long? MetalClassificationID { get; set; }
         public string? MetalClassificationName { get; set; }
         public long? Specification1 { get; set; }
