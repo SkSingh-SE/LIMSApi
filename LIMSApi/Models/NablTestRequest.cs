@@ -18,7 +18,7 @@ namespace LIMSApi.Models
         public string? SampleDescription { get; set; }
 
         [MaxLength(200)]
-        public string? SampleQuantity { get; set; }
+        public int? SampleQuantity { get; set; }
 
         [MaxLength(200)]
         public string? SampleCondition { get; set; }
@@ -46,5 +46,34 @@ namespace LIMSApi.Models
 
         [MaxLength(500)]
         public string? TestPurpose { get; set; }
+        public string? Address { get; set; }
+        public string? Remarks { get; set; }
+        public string? GstNo { get; set; }
+        public string? PoNumber { get; set; }
+        public bool? Urgent { get; set; }
+        public bool? ReturnSample { get; set; }
+        public bool? HoldTesting { get; set; }
+        public bool? BillRequired { get; set; }
+        public bool? ConfirmityRequired { get; set; }
+        public string? DispatchModeJson { get; set; }
+        [NotMapped]
+        public List<string>? DispatchModes { get; set; }
+        [NotMapped]
+        public List<samples>? Samples { get; set; }
+        public string? Note { get; set; }
+
     }
+    [NotMapped]
+    public class samples
+    {
+        public string? SampleNo { get; set; }
+        public string? Description { get; set; }
+        public int? Quantity { get; set; }
+        public string? MaterialSpecification { get; set; }
+        public string? TestToPerform { get; set; }
+        public string? MetalClassification { get; set; }
+
+    }
+
 }
+

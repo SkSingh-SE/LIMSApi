@@ -1,11 +1,13 @@
-using System.Text.Json;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
+using LIMSApi.Repositories;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
+using Microsoft.CodeAnalysis.Operations;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace LIMSApi.Services
 {
@@ -15,6 +17,8 @@ namespace LIMSApi.Services
         private readonly LIMSContext _context;
         private readonly ILogger<NablService> _logger;
         private readonly LoggedInUserDTO loggedInUser;
+        private readonly IWebHostEnvironment _env;
+        private readonly IFileUploadService _fileUploadService;
 
         private static readonly JsonSerializerOptions _jsonOptions = new()
         {
@@ -27,7 +31,7 @@ namespace LIMSApi.Services
             { "JobDescription", "F-3" },
             { "ResponsibilityAuthority", "F-4" },
             { "EmployeeCompetence", "F-7" },
-            { "EmployeeAuthorization", "F-5" },
+            { "EmployeeAuthorization", "F-7" },
             { "CompetenceRequirement", "F-4" },
             { "InductionTraining", "F-6" },
             { "SkillMatrix", "F-6" },
@@ -37,7 +41,7 @@ namespace LIMSApi.Services
             { "TrainingEffectiveness", "F-10" },
             { "EnvironmentMonitoring", "F-11" },
             { "QualityControlPlan", "F-12" },
-            { "TestRequest", "F-13" },
+            { "TestRequest", "F-27" },
             { "TestMethod", "F-14" },
             { "MethodVerification", "F-15" },
             { "MethodValidation", "F-16" },
@@ -51,15 +55,15 @@ namespace LIMSApi.Services
             { "IntermediateCheck", "F-24" },
             { "ReferenceMaterial", "F-25" },
             { "CrmConsumption", "F-26" },
-            { "SupplierRegistration", "F-27" },
-            { "SupplierEvaluation", "F-28" },
-            { "ApprovedSupplier", "F-29" },
+            { "SupplierRegistration", "F-19" },
+            { "SupplierEvaluation", "F-26" },
+            { "ApprovedSupplier", "F-20" },
             { "SupplierConfidentiality", "F-30" },
-            { "IncomingMaterial", "F-31" },
-            { "ProductInspection", "F-32" },
-            { "PurchaseIndent", "F-33" },
-            { "PurchaseOrder", "F-34" },
-            { "PurchaseMaterialVerification", "F-35" },
+            { "IncomingMaterial", "F-24" },
+            { "ProductInspection", "F-23" },
+            { "PurchaseIndent", "F-21" },
+            { "PurchaseOrder", "F-22" },
+            { "PurchaseMaterialVerification", "F-25" },
             { "Complaint", "F-36" },
             { "CustomerFeedback", "F-37" },
             { "FeedbackAnalysis", "F-38" },
@@ -81,12 +85,14 @@ namespace LIMSApi.Services
             { "EmployeePerformanceRecord", "F-54" },
         };
 
-        public NablService(INablRepository repository, LIMSContext context, ILogger<NablService> logger)
+        public NablService(INablRepository repository, LIMSContext context, ILogger<NablService> logger, IWebHostEnvironment env, IFileUploadService fileUploadService)
         {
             _repository = repository;
             _context = context;
             _logger = logger;
             loggedInUser = LoggedInUserProvider.CurrentUser;
+            _env=env;
+            _fileUploadService=fileUploadService;
         }
 
         public async Task<PagedResponse<object>> FetchList(string formType, PageFilter filter)
@@ -96,7 +102,124 @@ namespace LIMSApi.Services
 
         public async Task<object?> GetDetails(string formType, long id)
         {
-            return await _repository.GetById(formType, id);
+            var data = await _repository.GetById(formType, id);
+
+            if (data == null)
+                return null;
+
+            switch (formType)
+            {
+                case "SupplierEvaluation":
+                    {
+                        var result = data as NablSupplierEvaluation;
+
+                        if (result != null && !string.IsNullOrEmpty(result.CriteriaJson))
+                        {
+                            result.Criteria = JsonSerializer.Deserialize<List<Criteria>>(result.CriteriaJson);
+                        }
+                        if (result != null && !string.IsNullOrEmpty(result.POJson))
+                        {
+                            result.PurchaseOrders = JsonSerializer.Deserialize<List<PurchaseOrders>>(result.POJson);
+                        }
+                        if (result != null && !string.IsNullOrEmpty(result.IncomingPlanJson))
+                        {
+                            result.IncomingPlan = JsonSerializer.Deserialize<List<IncomingPlan>>(result.IncomingPlanJson);
+                        }
+
+                        return result;
+                    }
+
+                case "EmployeeCompetence":
+                    {
+                        var result = data as NablEmployeeCompetence;
+
+                        if (result != null && !string.IsNullOrEmpty(result.ParametersJson))
+                        {
+                            result.Parameters = JsonSerializer.Deserialize<List<CompetenceParameter>>(result.ParametersJson);
+                        }
+
+                        return result;
+                    }
+                case "TrainingAttendance":
+                    {
+                        var result = data as NablTrainingAttendance;
+                        if (result != null && !string.IsNullOrEmpty(result.AttendeesJson))
+                        {
+                            result.Participants = JsonSerializer.Deserialize<List<Participates>>(result.AttendeesJson);
+                        }
+                        return result;
+                    }
+                case "SupplierRegistration":
+                    {
+                        var result = data as NablSupplierRegistration;
+                        if (result != null && !string.IsNullOrEmpty(result.BankDetailsJson))
+                        {
+                            result.BankDetail = JsonSerializer.Deserialize<BankDetail>(result.BankDetailsJson);
+                        }
+                        if (result != null && !string.IsNullOrEmpty(result.DocumentsSubmittedJson))
+                        {
+                            result.DocumentsSubmitted = JsonSerializer.Deserialize<DocumentsSubmitted>(result.DocumentsSubmittedJson);
+                        }
+                        return result;
+                    }
+                case "PurchaseOrder":
+                    {
+                        var result = data as NablPurchaseOrder;
+                        if (result != null && !string.IsNullOrEmpty(result.ItemsJson))
+                        {
+                            result.Items = JsonSerializer.Deserialize<List<Items>>(result.ItemsJson);
+                        }
+                        return result;
+                    }
+                case "ProductInspection":
+                    {
+                        var result = data as NablProductInspection;
+                        if (result != null && !string.IsNullOrEmpty(result.InspectionResultsJson))
+                        {
+                            result.Parameters = JsonSerializer.Deserialize<List<Inspectionparameters>>(result.InspectionResultsJson);
+                        }
+                        return result;
+                    }
+                case "IncomingMaterial":
+                    {
+                        var result = data as NablIncomingMaterial;
+                        if (result != null && !string.IsNullOrEmpty(result.InspectionParameterJson))
+                        {
+                            result.InspectionParameters = JsonSerializer.Deserialize<List<InspectionParameters>>(result.InspectionParameterJson);
+                        }
+                        if (result != null && !string.IsNullOrEmpty(result.ItemsParametersJson))
+                        {
+                            result.ItemsParameters = JsonSerializer.Deserialize<List<ItemsParameters>>(result.ItemsParametersJson);
+                        }
+                        return result;
+                    }
+                case "TestRequest":
+                    {
+                        var result = data as NablTestRequest;
+                        if (result != null && !string.IsNullOrEmpty(result.DispatchModeJson))
+                        {
+                            result.DispatchModes = JsonSerializer.Deserialize<List<string>>(result.DispatchModeJson);
+                        }
+                        if (result != null && !string.IsNullOrEmpty(result.TestParametersJson))
+                        {
+                            result.Samples = JsonSerializer.Deserialize<List<samples>>(result.TestParametersJson);
+                        }
+                        return result;
+                    }
+                case "PurchaseMaterialVerification":
+                    {
+                        var result = data as NablPurchaseMaterialVerification;
+                        if (result != null && !string.IsNullOrEmpty(result.ItemsVerificationJson))
+                        {
+                            result.ItemsParameters = JsonSerializer.Deserialize<List<DescriptionParameters>>(result.ItemsVerificationJson);
+                        }
+                        return result;
+                    }
+
+
+                default:
+                    return data;
+            }
         }
 
         public async Task<object?> GetByDesignationId(string formType, long designationId)
@@ -350,8 +473,12 @@ namespace LIMSApi.Services
                 existing.AuthorityEquipmentCalibration = model.AuthorityEquipmentCalibration;
                 existing.QmsResponsibilities = model.QmsResponsibilities;
                 existing.ConfidentialityClause = model.ConfidentialityClause;
-                existing.PreparedByName = model.PreparedByName;
-                existing.ApprovedByName = model.ApprovedByName;
+                existing.PreparedBy = model.PreparedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ReviewedDate = model.ReviewedDate;
                 existing.EmployeeAccepted = model.EmployeeAccepted;
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
@@ -405,7 +532,11 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
-
+                existing.PreparedDate = model.PreparedDate;
+                existing.ApprovedDate =model.ApprovedDate;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ReviewedDate = model.ReviewedDate;
                 await _repository.Update("ResponsibilityAuthority", existing);
                 await LogAudit("ResponsibilityAuthority", existing.ID, "Updated", null, body.GetRawText());
                 _logger.LogInformation("ResponsibilityAuthority ID {Id} updated.", existing.ID);
@@ -426,6 +557,7 @@ namespace LIMSApi.Services
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
+                model.ParametersJson = JsonSerializer.Serialize(model.Parameters);
 
                 var id = await _repository.Add("EmployeeCompetence", model);
                 await LogAudit("EmployeeCompetence", id, "Created", null, body.GetRawText());
@@ -455,6 +587,12 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
+                existing.ParametersJson = JsonSerializer.Serialize(model.Parameters);
+                existing.PreparedDate = model.PreparedDate;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ApprovedBy = model.ApprovedBy;
 
                 await _repository.Update("EmployeeCompetence", existing);
                 await LogAudit("EmployeeCompetence", existing.ID, "Updated", null, body.GetRawText());
@@ -535,8 +673,84 @@ namespace LIMSApi.Services
             }
             else
             {
-                var existing = await _context.NablEmployeeAuthorizations
+                var existing = await _context.NablEmployeeAuthorizations.Include(c => c.LabTestAuth).Include(c => c.TestMethodAuth).Include(c => c.EmployeeEquipmentAuth)
                     .FirstOrDefaultAsync(x => x.ID == model.ID && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+
+                if (existing.EmployeeEquipmentAuth != null)
+                {
+                    var toRemove = existing.EmployeeEquipmentAuth.Where(existing => !model.EmployeeEquipmentAuth.Any(m => m.EquipmentId == existing.EquipmentId)).ToList();
+                    foreach (var employee in toRemove)
+                    {
+                        existing.EmployeeEquipmentAuth.Remove(employee);
+                    }
+                }
+                if (model.EmployeeEquipmentAuth != null && model.EmployeeEquipmentAuth.Any())
+                {
+                    foreach (var Newemp in model.EmployeeEquipmentAuth)
+                    {
+                        Newemp.EmployeeAuthorazitionId = model.ID;
+                        var existemployee = existing.EmployeeEquipmentAuth.FirstOrDefault(c => c.EquipmentId == Newemp.EquipmentId);
+                        if (existemployee == null)
+                        {
+                            existing.EmployeeEquipmentAuth.Add(Newemp);
+                        }
+                        else
+                        {
+                            existemployee.UID = Newemp.UID;
+                            existemployee.EquipmentName = Newemp.EquipmentName;
+
+                        }
+                    }
+                }
+                if (existing.LabTestAuth != null)
+                {
+
+                    var toRemove = existing.LabTestAuth.Where(existing => !model.LabTestAuth.Any(m => m.LabTestId == existing.LabTestId)).ToList();
+                    foreach (var lab in toRemove)
+                    {
+                        existing.LabTestAuth.Remove(lab);
+                    }
+                }
+                if (model.LabTestAuth != null && model.LabTestAuth.Any())
+                {
+                    foreach (var newlab in model.LabTestAuth)
+                    {
+                        newlab.EmployeeAuthorizationId = model.ID;
+                        var existlab = existing.LabTestAuth.FirstOrDefault(c => c.LabTestId == newlab.LabTestId);
+                        if (existlab == null)
+                        {
+                            existing.LabTestAuth.Add(newlab);
+                        }
+                        else
+                        {
+                            existlab.LabTestName = newlab.LabTestName;
+                        }
+                    }
+                }
+                if (existing.TestMethodAuth != null)
+                {
+                    var toRemove = existing.TestMethodAuth.Where(existing => !model.TestMethodAuth.Any(m => m.TestMethodId == existing.TestMethodId)).ToList();
+                    foreach (var testMethod in toRemove)
+                    {
+                        existing.TestMethodAuth.Remove(testMethod);
+                    }
+                }
+                if (model.TestMethodAuth != null && model.TestMethodAuth.Any())
+                {
+                    foreach (var newtestMethod in model.TestMethodAuth)
+                    {
+                        newtestMethod.EmployeeAuthorizationId = model.ID;
+                        var extisttestMethod = existing.TestMethodAuth.FirstOrDefault(c => c.TestMethodId == newtestMethod.TestMethodId);
+                        if (extisttestMethod == null)
+                        {
+                            existing.TestMethodAuth.Add(newtestMethod);
+                        }
+                        else
+                        {
+                            extisttestMethod.TestMethodName = newtestMethod.TestMethodName;
+                        }
+                    }
+                }
 
                 if (existing == null)
                     throw new InvalidOperationException("EmployeeAuthorization not found!");
@@ -554,7 +768,13 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
-
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.PreparedDate = model.PreparedDate;
+                //existing.LabTestAuth = model.LabTestAuth;
+                //existing.TestMethodAuth = model.TestMethodAuth;
                 await _repository.Update("EmployeeAuthorization", existing);
                 await LogAudit("EmployeeAuthorization", existing.ID, "Updated", null, body.GetRawText());
                 _logger.LogInformation("EmployeeAuthorization ID {Id} updated.", existing.ID);
@@ -600,7 +820,12 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
-
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.PreparedDate = model.PreparedDate;
+                existing.PreparedBy = model.PreparedBy;
                 await _repository.Update("CompetenceRequirement", existing);
                 await LogAudit("CompetenceRequirement", existing.ID, "Updated", null, body.GetRawText());
                 _logger.LogInformation("CompetenceRequirement ID {Id} updated.", existing.ID);
@@ -662,7 +887,12 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
-
+                existing.PerformanceLevel = model.PerformanceLevel;
+                existing.PreparedDate = model.PreparedDate;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ReviewedBy = model.ReviewedBy;
                 await _repository.Update("InductionTraining", existing);
                 await LogAudit("InductionTraining", existing.ID, "Updated", null, body.GetRawText());
                 _logger.LogInformation("InductionTraining ID {Id} updated.", existing.ID);
@@ -781,7 +1011,6 @@ namespace LIMSApi.Services
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
-
                 var id = await _repository.Add("TrainingPlan", model);
                 await LogAudit("TrainingPlan", id, "Created", null, body.GetRawText());
                 _logger.LogInformation("TrainingPlan created with ID {Id}.", id);
@@ -813,14 +1042,21 @@ namespace LIMSApi.Services
                 existing.TrainingStatus = model.TrainingStatus;
                 existing.CompletionRemarks = model.CompletionRemarks;
                 existing.PlanningYear = model.PlanningYear;
-                existing.PlanDate = model.PlanDate;
                 existing.TotalBudget = model.TotalBudget;
                 existing.ApprovalStatus = model.ApprovalStatus;
                 existing.CoursesJson = model.CoursesJson;
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
-
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.Agency = model.Agency;
+                existing.TargetAudience = model.TargetAudience;
+                existing.Provider = model.Provider;
+                existing.PlanMonth = model.PlanMonth;
                 await _repository.Update("TrainingPlan", existing);
                 await LogAudit("TrainingPlan", existing.ID, "Updated", null, body.GetRawText());
                 _logger.LogInformation("TrainingPlan ID {Id} updated.", existing.ID);
@@ -839,9 +1075,11 @@ namespace LIMSApi.Services
                 await AssignDocumentNumber(model, "TrainingAttendance");
                 model.Status = "Draft";
                 model.CreatedOn = DateTime.UtcNow;
+                model.TrainingDate = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
-
+                model.AttendeesJson = JsonSerializer.Serialize(model.Participants);
+                model.TotalAttendees = model.Participants?.Count;
                 var id = await _repository.Add("TrainingAttendance", model);
                 await LogAudit("TrainingAttendance", id, "Created", null, body.GetRawText());
                 _logger.LogInformation("TrainingAttendance created with ID {Id}.", id);
@@ -862,11 +1100,18 @@ namespace LIMSApi.Services
                 existing.TrainingDate = model.TrainingDate;
                 existing.TrainerName = model.TrainerName;
                 existing.VenueMode = model.VenueMode;
-                existing.AttendeesJson = model.AttendeesJson;
-                existing.TotalAttendees = model.TotalAttendees;
+                existing.AttendeesJson = JsonSerializer.Serialize(model.Participants);
+                existing.TotalAttendees = model.Participants?.Count;
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
+                existing.PreparedDate = model.PreparedDate;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.NextReviewDate = model.ReviewedDate;
+                existing.TrainingDatetime = model.TrainingDatetime;
+                existing.GenearalRemarks = model.GenearalRemarks;
 
                 await _repository.Update("TrainingAttendance", existing);
                 await LogAudit("TrainingAttendance", existing.ID, "Updated", null, body.GetRawText());
@@ -1071,7 +1316,8 @@ namespace LIMSApi.Services
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
-
+                model.TestParametersJson =  JsonSerializer.Serialize(model.Samples);
+                model.DispatchModeJson =  JsonSerializer.Serialize(model.DispatchModes);
                 var id = await _repository.Add("TestRequest", model);
                 await LogAudit("TestRequest", id, "Created", null, body.GetRawText());
                 _logger.LogInformation("TestRequest created with ID {Id}.", id);
@@ -1104,7 +1350,24 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
-
+                existing.TestParametersJson =  JsonSerializer.Serialize(model.Samples);
+                existing.DispatchModeJson =  JsonSerializer.Serialize(model.DispatchModes);
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.PreparedBy = model.PreparedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.Urgent = model.Urgent;
+                existing.HoldTesting = model.HoldTesting;
+                existing.ReturnSample = model.ReturnSample;
+                existing.BillRequired = model.BillRequired;
+                existing.ConfirmityRequired = model.ConfirmityRequired;
+                existing.GstNo = model.GstNo;
+                existing.Remarks =  model.Remarks;
+                existing.Address = model.Address;
+                existing.PoNumber = model.PoNumber;
+                existing.Note = model.Note;
                 await _repository.Update("TestRequest", existing);
                 await LogAudit("TestRequest", existing.ID, "Updated", null, body.GetRawText());
                 _logger.LogInformation("TestRequest ID {Id} updated.", existing.ID);
@@ -1808,7 +2071,8 @@ namespace LIMSApi.Services
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
-
+                model.DocumentsSubmittedJson = JsonSerializer.Serialize(model.DocumentsSubmitted);
+                model.BankDetailsJson = JsonSerializer.Serialize(model.BankDetail);
                 var id = await _repository.Add("SupplierRegistration", model);
                 await LogAudit("SupplierRegistration", id, "Created", null, body.GetRawText());
                 _logger.LogInformation("SupplierRegistration created with ID {Id}.", id);
@@ -1836,7 +2100,6 @@ namespace LIMSApi.Services
                 existing.RegistrationDate = model.RegistrationDate;
                 existing.RegistrationValidUpto = model.RegistrationValidUpto;
                 existing.NablApproved = model.NablApproved;
-                existing.BankDetails = model.BankDetails;
                 existing.Designation = model.Designation;
                 existing.MobileNo = model.MobileNo;
                 existing.Website = model.Website;
@@ -1846,8 +2109,8 @@ namespace LIMSApi.Services
                 existing.PanNo = model.PanNo;
                 existing.IsoCertified = model.IsoCertified;
                 existing.IsoDetails = model.IsoDetails;
-                existing.BankDetailsJson = model.BankDetailsJson;
-                existing.DocumentsSubmittedJson = model.DocumentsSubmittedJson;
+                existing.DocumentsSubmittedJson = JsonSerializer.Serialize(model.DocumentsSubmitted);
+                existing.BankDetailsJson = JsonSerializer.Serialize(model.BankDetail);
                 existing.RegistrationStatus = model.RegistrationStatus;
                 existing.Remarks = model.Remarks;
                 existing.RecordedBy = model.RecordedBy;
@@ -1855,6 +2118,12 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.RegisterNo = model.RegisterNo;
 
                 await _repository.Update("SupplierRegistration", existing);
                 await LogAudit("SupplierRegistration", existing.ID, "Updated", null, body.GetRawText());
@@ -1876,6 +2145,9 @@ namespace LIMSApi.Services
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
+                model.CriteriaJson = JsonSerializer.Serialize(model.Criteria);
+                model.POJson = JsonSerializer.Serialize(model.PurchaseOrders);
+                model.IncomingPlanJson = JsonSerializer.Serialize(model.IncomingPlan);
 
                 var id = await _repository.Add("SupplierEvaluation", model);
                 await LogAudit("SupplierEvaluation", id, "Created", null, body.GetRawText());
@@ -1906,7 +2178,31 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
-
+                existing.CriteriaJson = JsonSerializer.Serialize(model.Criteria);
+                existing.POJson = JsonSerializer.Serialize(model.PurchaseOrders);
+                existing.IncomingPlanJson = JsonSerializer.Serialize(model.IncomingPlan);
+                existing.SupplierRegisterId = model.SupplierRegisterId;
+                existing.Email = model.Email;
+                existing.MobileNo = model.MobileNo;
+                existing.NatureOfBusiness= model.NatureOfBusiness;
+                existing.EvaluatingPeriodFrom = model.EvaluatingPeriodFrom;
+                existing.EvaluatingPeriodTo = model.EvaluatingPeriodTo;
+                existing.PresentStatus = model.PresentStatus;
+                existing.ProductsServicesOffered = model.ProductsServicesOffered;
+                existing.ToContinued = model.ToContinued;
+                existing.ToRemoved = model.ToRemoved;
+                existing.Recommendation = model.Recommendation;
+                existing.RegisterNo = model.RegisterNo;
+                existing.GstNo = model.GstNo;
+                existing.AcceptableLimitMin = model.AcceptableLimitMin;
+                existing.Address = model.Address;
+                existing.ContactPerson = model.ContactPerson;
+                existing.ServiceProvider = model.ServiceProvider;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ApprovedDate = model.ApprovedDate;
                 await _repository.Update("SupplierEvaluation", existing);
                 await LogAudit("SupplierEvaluation", existing.ID, "Updated", null, body.GetRawText());
                 _logger.LogInformation("SupplierEvaluation ID {Id} updated.", existing.ID);
@@ -1955,7 +2251,29 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
-
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.IsPresentStatus = model.IsPresentStatus;
+                existing.EnlistmentDate = model.EnlistmentDate;
+                existing.LastScore = model.LastScore;
+                existing.ContactPerson = model.ContactPerson;
+                existing.Email = model.Email;
+                existing.MobileNo = model.MobileNo;
+                existing.ProductApproved = model.ProductApproved;
+                existing.ServiceProviderName = model.ServiceProviderName;
+                existing.PreparedBy = model.PreparedBy;
+                existing.AgreementDate = model.AgreementDate;
+                existing.IsBlacklisted = model.IsBlacklisted;
+                existing.BlacklistDate = model.BlacklistDate;
+                existing.BlacklistReason = model.BlacklistReason;
+                existing.SupplierRegisterId = model.SupplierRegisterId;
+                existing.Remarks = model.Remarks;
+                existing.RegisterNo = model.RegisterNo;
+                existing.GstNo = model.GstNo;
+                existing.Address = model.Address;
                 await _repository.Update("ApprovedSupplier", existing);
                 await LogAudit("ApprovedSupplier", existing.ID, "Updated", null, body.GetRawText());
                 _logger.LogInformation("ApprovedSupplier ID {Id} updated.", existing.ID);
@@ -1972,7 +2290,7 @@ namespace LIMSApi.Services
             {
                 model.FormCode = FormCodeMap["SupplierConfidentiality"];
                 await AssignDocumentNumber(model, "SupplierConfidentiality");
-                model.Status = "Draft";
+                //model.Status = "Draft";
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
@@ -2004,6 +2322,15 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
+                existing.Status = model.Status;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.Address = model.Address;
+                existing.PreparedBy = model.PreparedBy;
+                existing.PreparedById = model.PreparedById;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.PreparedDate = model.PreparedDate;
 
                 await _repository.Update("SupplierConfidentiality", existing);
                 await LogAudit("SupplierConfidentiality", existing.ID, "Updated", null, body.GetRawText());
@@ -2025,6 +2352,8 @@ namespace LIMSApi.Services
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
+                model.InspectionParameterJson =JsonSerializer.Serialize(model.InspectionParameters);
+                model.ItemsParametersJson = JsonSerializer.Serialize(model.ItemsParameters);
 
                 var id = await _repository.Add("IncomingMaterial", model);
                 await LogAudit("IncomingMaterial", id, "Created", null, body.GetRawText());
@@ -2058,6 +2387,38 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
+                existing.InspectionParameterJson =JsonSerializer.Serialize(model.InspectionParameters);
+                existing.ItemsParametersJson = JsonSerializer.Serialize(model.ItemsParameters);
+                existing.PreparedBy = model.PreparedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.ReceivedBy = model.ReceivedBy;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.LotNo = model.LotNo;
+                existing.MaterialCode = model.MaterialCode;
+                existing.MaterialName = model.MaterialName;
+                existing.InvoiceNo = model.InvoiceNo;
+                existing.GrnNo = model.GrnNo;
+                existing.Deviations = model.Deviations;
+                existing.CorrectiveActions = model.CorrectiveActions;
+                existing.RiskLevel = model.RiskLevel;
+                existing.InspectionStage = model.InspectionStage;
+                existing.ProductName = model.ProductName;
+                existing.ProductCode = model.ProductCode;
+                existing.Category = model.Category;
+                existing.InspectionPlanNo = model.InspectionPlanNo;
+                existing.PoNo = model.PoNo;
+                existing.Email = model.Email;
+                existing.PhoneNo = model.PhoneNo;
+                existing.Address = model.Address;
+                existing.GstNo = model.GstNo;
+                existing.GeneralRemarks = model.GeneralRemarks;
+                existing.OrderType = model.OrderType;
+                existing.IndentNoPoNo = model.IndentNoPoNo;
+                existing.InspectionPlanNoName = model.InspectionPlanNoName;
+
 
                 await _repository.Update("IncomingMaterial", existing);
                 await LogAudit("IncomingMaterial", existing.ID, "Updated", null, body.GetRawText());
@@ -2079,7 +2440,7 @@ namespace LIMSApi.Services
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
-
+                model.InspectionResultsJson =  JsonSerializer.Serialize(model.Parameters);
                 var id = await _repository.Add("ProductInspection", model);
                 await LogAudit("ProductInspection", id, "Created", null, body.GetRawText());
                 _logger.LogInformation("ProductInspection created with ID {Id}.", id);
@@ -2104,12 +2465,27 @@ namespace LIMSApi.Services
                 existing.SampleSize = model.SampleSize;
                 existing.DefectsFound = model.DefectsFound;
                 existing.InspectionCriteria = model.InspectionCriteria;
-                existing.InspectionResultsJson = model.InspectionResultsJson;
                 existing.OverallResult = model.OverallResult;
                 existing.CorrectiveAction = model.CorrectiveAction;
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
+                existing.InspectionResultsJson =  JsonSerializer.Serialize(model.Parameters);
+                existing.PreparedBy = model.PreparedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ProductCode = model.ProductCode;
+                existing.ProductName = model.ProductName;
+                existing.InspectionStage = model.InspectionStage;
+                existing.Category = model.Category;
+                existing.Remarks =  model.Remarks;
+                existing.PlanNo = model.PlanNo;
+                existing.Risklevel = model.Risklevel;
+
+
 
                 await _repository.Update("ProductInspection", existing);
                 await LogAudit("ProductInspection", existing.ID, "Updated", null, body.GetRawText());
@@ -2159,7 +2535,18 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
-
+                existing.PreparedDate = model.PreparedDate;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.Quantity = model.Quantity;
+                existing.TechnicalSpecification = model.TechnicalSpecification;
+                existing.ExpectedDate = model.ExpectedDate;
+                existing.Remarks = model.Remarks;
+                existing.IndentorName = model.IndentorName;
+                existing.UnitOfMeasure = model.UnitOfMeasure;
+                existing.PINo = model.PINo;
                 await _repository.Update("PurchaseIndent", existing);
                 await LogAudit("PurchaseIndent", existing.ID, "Updated", null, body.GetRawText());
                 _logger.LogInformation("PurchaseIndent ID {Id} updated.", existing.ID);
@@ -2180,7 +2567,8 @@ namespace LIMSApi.Services
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
-
+                model.ItemsJson = JsonSerializer.Serialize(model.Items);
+                model.PODate = DateTime.UtcNow;
                 var id = await _repository.Add("PurchaseOrder", model);
                 await LogAudit("PurchaseOrder", id, "Created", null, body.GetRawText());
                 _logger.LogInformation("PurchaseOrder created with ID {Id}.", id);
@@ -2202,7 +2590,6 @@ namespace LIMSApi.Services
                 existing.PODate = model.PODate;
                 existing.DeliveryDate = model.DeliveryDate;
                 existing.PaymentTerms = model.PaymentTerms;
-                existing.ItemsJson = model.ItemsJson;
                 existing.TotalAmount = model.TotalAmount;
                 existing.Currency = model.Currency;
                 existing.SpecialInstructions = model.SpecialInstructions;
@@ -2210,7 +2597,28 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
-
+                existing.GstAmount = model.GstAmount;
+                existing.GSTNo = model.GSTNo;
+                existing.GstPercentage = model.GstPercentage;
+                existing.OrderType = model.OrderType;
+                existing.GrandTotal = model.GrandTotal;
+                existing.TearmCondition = model.TearmCondition;
+                existing.PreparedBy = model.PreparedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.ItemsJson = JsonSerializer.Serialize(model.Items);
+                existing.SupplierAddress = model.SupplierAddress;
+                existing.PONo = model.PONo;
+                existing.Email = model.Email;
+                existing.PhoneNo = model.PONo;
+                existing.AuthorizedBy = model.AuthorizedBy;
+                existing.ReferenceIndentNo = model.ReferenceIndentNo;
+                existing.RequestedQuantity = model.RequestedQuantity;
+                existing.ApprovedSupplierId = model.ApprovedSupplierId;
+                existing.ReferenceIndentName = model.ReferenceIndentName;
                 await _repository.Update("PurchaseOrder", existing);
                 await LogAudit("PurchaseOrder", existing.ID, "Updated", null, body.GetRawText());
                 _logger.LogInformation("PurchaseOrder ID {Id} updated.", existing.ID);
@@ -2231,6 +2639,7 @@ namespace LIMSApi.Services
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
+                model.ItemsVerificationJson = JsonSerializer.Serialize(model.ItemsParameters);
 
                 var id = await _repository.Add("PurchaseMaterialVerification", model);
                 await LogAudit("PurchaseMaterialVerification", id, "Created", null, body.GetRawText());
@@ -2252,13 +2661,34 @@ namespace LIMSApi.Services
                 existing.ReceivedDate = model.ReceivedDate;
                 existing.VerificationDate = model.VerificationDate;
                 existing.VerifiedBy = model.VerifiedBy;
-                existing.ItemsVerificationJson = model.ItemsVerificationJson;
+                existing.ItemsVerificationJson = JsonSerializer.Serialize(model.ItemsParameters);
                 existing.OverallStatus = model.OverallStatus;
                 existing.GRNNumber = model.GRNNumber;
                 existing.Remarks = model.Remarks;
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
+                existing.PreparedBy = model.PreparedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.GstNo= model.GstNo;
+                existing.SupplierName= model.SupplierName;
+                existing.Email= model.Email;
+                existing.Address= model.Address;
+                existing.PhoneNo= model.PhoneNo;
+                existing.InspectionBy= model.InspectionBy;
+                existing.PODate= model.PODate;
+                existing.InvoiceNo= model.InvoiceNo;
+                existing.PODate= model.PODate;
+                existing.InvoiceDate= model.InvoiceDate;
+                existing.OrderType= model.OrderType;
+                existing.CorrectiveActions= model.CorrectiveActions;
+                existing.Deviations= model.Deviations;
+                existing.PurchaseOrderNo= model.PurchaseOrderNo;
+                existing.PoNo= model.PoNo;
 
                 await _repository.Update("PurchaseMaterialVerification", existing);
                 await LogAudit("PurchaseMaterialVerification", existing.ID, "Updated", null, body.GetRawText());
@@ -3460,6 +3890,146 @@ namespace LIMSApi.Services
                 reviewers = employees,
                 approvers = employees
             };
+        }
+        public async Task<List<DropdwonSelector>> GetTraningPlanDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _repository.GetTraningPlanDropdown(searchTerm, pageNo, pageSize);
+        }
+        public async Task<List<DropdwonSelector>> Roomdropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _repository.Roomdropdown(searchTerm, pageNo, pageSize);
+        }
+        public async Task<List<DropdwonSelector>> Supplierlist(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _repository.Supplierlist(searchTerm, pageNo, pageSize);
+        }
+        public async Task<List<DropdwonSelector>> AllSupplierlist(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _repository.AllSupplierlist(searchTerm, pageNo, pageSize);
+        }
+        public async Task<UploadFile> UploadSignatureAsync(IFormFile file, CancellationToken cancellationToken = default)
+        {
+            if (file == null || file.Length == 0)
+                throw new ArgumentException("File is required");
+
+            var uploaded = await _fileUploadService.UploadFileAsync(file, Dtos.FileType.Nabl, null, string.Empty);
+            var relativePath = uploaded.FilePath;
+            return uploaded;
+        }
+        public async Task<string> GetNextRegisterNo()
+        {
+            var year = DateTime.Now.Year;
+
+            var lastRecord = await _context.NablSupplierRegistrations
+                .Where(x => x.RegisterNo != null && x.RegisterNo.StartsWith($"SUP-{year}-"))
+                .OrderByDescending(x => x.ID)
+                .FirstOrDefaultAsync();
+
+            int nextNumber = 1;
+
+            if (lastRecord != null && !string.IsNullOrEmpty(lastRecord.RegisterNo))
+            {
+                var lastNumberText = lastRecord.RegisterNo.Split('-').Last();
+
+                if (int.TryParse(lastNumberText, out int lastNumber))
+                {
+                    nextNumber = lastNumber + 1;
+                }
+            }
+
+            return $"SUP-{year}-{nextNumber:D3}";
+        }
+        public async Task<string> GetNextIndentNo()
+        {
+            var year = DateTime.Now.Year;
+            string companyCode = loggedInUser.CompanyCode ?? "LIMS";
+
+            // Expected Format: LIMS-PI-YYYY-XXX
+            var prefix = $"{companyCode}-PI-{year}-";
+
+            var lastRecord = await _context.NablPurchaseIndents
+                .Where(x => x.PINo != null && x.PINo.StartsWith(prefix))
+                .OrderByDescending(x => x.ID)
+                .FirstOrDefaultAsync();
+
+            int nextNumber = 1;
+
+            if (lastRecord != null && !string.IsNullOrWhiteSpace(lastRecord.PINo))
+            {
+                // Example: LIMS-PI-2026-001
+                // Split -> ["LIMS", "PI", "2026", "001"]
+                var lastNumberText = lastRecord.PINo.Split('-').Last();
+
+                if (int.TryParse(lastNumberText, out int lastNumber))
+                {
+                    nextNumber = lastNumber + 1;
+                }
+            }
+
+            // Final Format: LIMS-PI-2026-001
+            return $"{companyCode}-PI-{year}-{nextNumber:D3}";
+        }
+        public async Task<string> GetNextPlanNo()
+        {
+            var year = DateTime.Now.Year;
+            string companyCode = loggedInUser.CompanyCode ?? "LIMS";
+
+            string prefix = $"{companyCode}-PSIP-{year}-";
+
+            var lastRecord = await _context.NablProductInspections
+                .Where(x => x.PlanNo != null && x.PlanNo.StartsWith(prefix))
+                .OrderByDescending(x => x.ID)
+                .FirstOrDefaultAsync();
+
+            int nextNumber = 1;
+
+            if (lastRecord != null && !string.IsNullOrEmpty(lastRecord.PlanNo))
+            {
+                var lastNumberText = lastRecord.PlanNo.Split('-').Last();
+
+                if (int.TryParse(lastNumberText, out int lastNumber))
+                {
+                    nextNumber = lastNumber + 1;
+                }
+            }
+
+            return $"{prefix}{nextNumber:D3}";
+        }
+        public async Task<List<DropdwonSelector>> IndentNoList(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _repository.IndentNoList(searchTerm, pageNo, pageSize);
+        }
+        public async Task<List<DropdwonSelector>> ApprovedSupplierlist(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _repository.ApprovedSupplierlist(searchTerm, pageNo, pageSize);
+        }
+        public async Task<List<DropdwonSelector>> PlanNoDetailslist(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _repository.PlanNoDetailslist(searchTerm, pageNo, pageSize);
+        }
+        public async Task<List<DropdwonSelector>> PONoListDetailslist(string? formType, string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _repository.PONoListDetailslist(formType, searchTerm, pageNo, pageSize);
+        }
+        public async Task<SupplierEvaluationDetailsDto> SupplierEvaluationDetails(string supplierName, DateTime? fromDate, DateTime? toDate)
+        {
+            return await _repository.SupplierEvaluationDetails(supplierName, fromDate, toDate);
+        }
+        public async Task<List<Items>> PoitemsDetails(string poNo, string supplierName)
+        {
+            return await _repository.PoitemsDetails(poNo, supplierName);
+        }
+        public async Task<List<CombinedPoItemDto>> ReceivedItemsDetails(string poNo, string supplierName)
+        {
+            return await _repository.ReceivedItemsDetails(poNo, supplierName);
+        }
+        public async Task<List<InspectionParameters>> InspectionPlanDetails(string inspectionPlanNo)
+        {
+            return await _repository.InspectionPlanDetails(inspectionPlanNo);
+        }
+        public async Task<NablPurchaseIndentDto> IndentDetails(string indentNo)
+        {
+            return await _repository.IndentDetails(indentNo);
         }
     }
 }

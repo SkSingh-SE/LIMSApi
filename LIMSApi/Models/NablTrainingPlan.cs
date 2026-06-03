@@ -1,3 +1,4 @@
+using Microsoft.DotNet.Scaffolding.Shared;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -8,8 +9,6 @@ namespace LIMSApi.Models
     {
         // Planning document fields (F-8) - matches frontend trainingPlanModel.ts
         public int? PlanningYear { get; set; }
-
-        public DateTime? PlanDate { get; set; }
 
         public decimal? TotalBudget { get; set; }
 
@@ -65,5 +64,11 @@ namespace LIMSApi.Models
 
         [MaxLength(500)]
         public string? CompletionRemarks { get; set; }
+        public string? PlanMonth { get; set; }
+        public string? Provider { get; set; }
+        public string? TargetAudience { get; set; }
+        public string? Objectives { get; set; }
+        public string? Agency { get; set; }
+       
     }
 }

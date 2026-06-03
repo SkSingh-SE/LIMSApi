@@ -59,5 +59,12 @@ namespace LIMSApi.Models
 
         [MaxLength(500)]
         public string? ObsoleteReason { get; set; }
+        //public long? ParentDocumentId { get; set; }
+
+        //[MaxLength(500)]
+        //public string? RevisionReason { get; set; }
+
+        //[MaxLength(20)]
+        //public string? RevisionType { get; set; }
     }
 }

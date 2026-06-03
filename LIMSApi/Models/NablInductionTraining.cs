@@ -74,5 +74,7 @@ namespace LIMSApi.Models
 
         [MaxLength(500)]
         public string? TrainerComments { get; set; }
+        [MaxLength(100)]
+        public string? PerformanceLevel { get; set; }
     }
 }

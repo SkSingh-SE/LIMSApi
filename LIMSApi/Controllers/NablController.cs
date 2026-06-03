@@ -1,8 +1,9 @@
-using System.Text.Json;
 using LIMSApi.Dtos;
+using LIMSApi.Services;
 using LIMSApi.Services.Interface;
 using LIMSApi.ServiceWORepo;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
 
 namespace LIMSApi.Controllers
 {
@@ -138,6 +139,110 @@ namespace LIMSApi.Controllers
         {
             var pdf = await _auditService.GenerateAuditPackage(request.FormTypes, request.From, request.To);
             return File(pdf, "application/pdf", $"NABL_Audit_Package_{DateTime.UtcNow:yyyyMMdd_HHmmss}.pdf");
+        }
+        [HttpGet("{formType}/training-plan-dropdown")]
+        public async Task<IActionResult> Trainingplandropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            var data = await _service.GetTraningPlanDropdown(searchTerm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("{formType}/room-dropdown")]
+        public async Task<IActionResult> Roomdropdown(string? searchTearm, int pageNo, int pageSize)
+        {
+            var data = await _service.Roomdropdown(searchTearm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+
+        [HttpPost("{formType}/upload-signature")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> UploadSignature(IFormFile logo, CancellationToken cancellationToken = default)
+        {
+            var uploadedRef = await _service.UploadSignatureAsync(logo, cancellationToken);
+            return Ok(uploadedRef);
+        }
+        [HttpGet("{formType}/next-register-no")]
+        public async Task<IActionResult> GetNextRegisterNo()
+        {
+            var registerNo = await _service.GetNextRegisterNo();
+            return Ok(new { registerNo });
+        }
+        [HttpGet("{formType}/supplierlist")]
+        public async Task<IActionResult> Supplierlist(string? searchTearm, int pageNo, int pageSize)
+        {
+            var data = await _service.Supplierlist(searchTearm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("{formType}/allsupplierlist")]
+        public async Task<IActionResult> AllSupplierlist(string? searchTearm, int pageNo, int pageSize)
+        {
+            var data = await _service.AllSupplierlist(searchTearm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("{formType}/next-indent-no")]
+        public async Task<IActionResult> GetNextIndentNo()
+        {
+            var piNo = await _service.GetNextIndentNo();
+            return Ok(new { piNo });
+        }
+        [HttpGet("{formType}/next-plan-no")]
+        public async Task<IActionResult> GetNextPlanNo()
+        {
+            var planNo = await _service.GetNextPlanNo();
+            return Ok(new { planNo });
+        }
+        [HttpGet("{formType}/indentNoList")]
+        public async Task<IActionResult> IndentNoList(string? searchTearm, int pageNo, int pageSize)
+        {
+            var data = await _service.IndentNoList(searchTearm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("{formType}/approvedSupplierlist")]
+        public async Task<IActionResult> ApprovedSupplierlist(string? searchTearm, int pageNo, int pageSize)
+        {
+            var data = await _service.ApprovedSupplierlist(searchTearm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("{formType}/planNoList")]
+        public async Task<IActionResult> PlanNoDetailslist(string? searchTearm, int pageNo, int pageSize)
+        {
+            var data = await _service.PlanNoDetailslist(searchTearm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("{formType}/pONoList")]
+        public async Task<IActionResult> PONoListDetailslist(string formType, string? searchTearm, int pageNo, int pageSize)
+        {
+            var data = await _service.PONoListDetailslist(formType, searchTearm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("{formType}/supplier-evaluation-details")]
+        public async Task<IActionResult> SupplierEvaluationDetails(string supplierName,DateTime? fromDate,DateTime? toDate)
+        {
+            var data = await _service.SupplierEvaluationDetails(supplierName, fromDate, toDate);
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("{formType}/po-items-details")]
+        public async Task<IActionResult> PoitemsDetails(string poNo,string supplierName)
+        {
+            var data = await _service.PoitemsDetails(poNo, supplierName);
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("{formType}/receive-items-details")]
+        public async Task<IActionResult> ReceivedItemsDetails(string poNo, string supplierName)
+        {
+            var data = await _service.ReceivedItemsDetails(poNo, supplierName);
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("{formType}/inspectionplan-details")]
+        public async Task<IActionResult> InspectionPlanDetails(string inspectionPlanNo)
+        {
+            var data = await _service.InspectionPlanDetails(inspectionPlanNo);
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("{formType}/indent-details")]
+        public async Task<IActionResult> IndentDetails(string indentNo)
+        {
+            var data = await _service.IndentDetails(indentNo);
+            return data == null ? NoContent() : Ok(data);
         }
     }
 

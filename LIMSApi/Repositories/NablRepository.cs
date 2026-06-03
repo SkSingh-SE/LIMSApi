@@ -8,6 +8,7 @@ using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using Microsoft.EntityFrameworkCore;
+using Newtonsoft.Json;
 
 namespace LIMSApi.Repositories
 {
@@ -50,7 +51,7 @@ namespace LIMSApi.Repositories
                 "ResponsibilityAuthority" => await GetAllTyped<NablResponsibilityAuthority>(filter),
                 "EmployeeCompetence" => await GetAllTyped<NablEmployeeCompetence>(filter),
                 "EmployeePerformanceRecord" => await GetAllTyped<NablEmployeePerformanceRecord>(filter),
-                "EmployeeAuthorization" => await GetAllTyped<NablEmployeeAuthorization>(filter),
+                "EmployeeAuthorization" => await GetEquipmentAuthorizationList(filter),
                 "CompetenceRequirement" => await GetAllTyped<NablCompetenceRequirement>(filter),
                 "InductionTraining" => await GetAllTyped<NablInductionTraining>(filter),
                 "SkillMatrix" => await GetAllTyped<NablSkillMatrix>(filter),
@@ -113,7 +114,7 @@ namespace LIMSApi.Repositories
                 "ResponsibilityAuthority" => await GetByIdTyped<NablResponsibilityAuthority>(id),
                 "EmployeeCompetence" => await GetByIdTyped<NablEmployeeCompetence>(id),
                 "EmployeePerformanceRecord" => await GetByIdTyped<NablEmployeePerformanceRecord>(id),
-                "EmployeeAuthorization" => await GetByIdTyped<NablEmployeeAuthorization>(id),
+                "EmployeeAuthorization" => await GetEmployeeAuthorization(id),
                 "CompetenceRequirement" => await GetByIdTyped<NablCompetenceRequirement>(id),
                 "InductionTraining" => await GetByIdTyped<NablInductionTraining>(id),
                 "SkillMatrix" => await GetByIdTyped<NablSkillMatrix>(id),
@@ -201,7 +202,7 @@ namespace LIMSApi.Repositories
                 "ReferenceMaterial" => await AddTyped((NablReferenceMaterial)model),
                 "CrmConsumption" => await AddTyped((NablCrmConsumption)model),
                 "SupplierRegistration" => await AddTyped((NablSupplierRegistration)model),
-                "SupplierEvaluation" => await AddTyped((NablSupplierEvaluation)model),
+                "SupplierEvaluation" => await AddSupplierEvaluation((NablSupplierEvaluation)model),
                 "ApprovedSupplier" => await AddTyped((NablApprovedSupplier)model),
                 "SupplierConfidentiality" => await AddTyped((NablSupplierConfidentiality)model),
                 "IncomingMaterial" => await AddTyped((NablIncomingMaterial)model),
@@ -323,7 +324,7 @@ namespace LIMSApi.Repositories
                     await UpdateTyped((NablSupplierRegistration)model);
                     break;
                 case "SupplierEvaluation":
-                    await UpdateTyped((NablSupplierEvaluation)model);
+                    await UpdateSupplierEvaluation((NablSupplierEvaluation)model);
                     break;
                 case "ApprovedSupplier":
                     await UpdateTyped((NablApprovedSupplier)model);
@@ -624,11 +625,83 @@ namespace LIMSApi.Repositories
                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
+        private async Task<NablEmployeeAuthorization> GetEmployeeAuthorization(long id)
+        {
+            var data = await _context.NablEmployeeAuthorizations.Include(c => c.EmployeeEquipmentAuth).Include(c => c.LabTestAuth).Include(c => c.TestMethodAuth).FirstOrDefaultAsync(c => c.ID == id && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
+            return data;
+        }
+        private async Task<PagedResponse<object>> GetEquipmentAuthorizationList(PageFilter filter)
+        {
+            var _query = _context.NablEmployeeAuthorizations.Include(x => x.EmployeeEquipmentAuth)
+                   .Include(c => c.LabTestAuth)
+                   .Include(c => c.TestMethodAuth).Where(c => c.IsActive)
+                   .AsQueryable()
+                   .ApplyFilters(filter.Filter);
+
+            if (!string.IsNullOrWhiteSpace(filter.searchTerm))
+            {
+                var search = filter.searchTerm.Trim();
+                _query = _query.Where(x => (x.PersonnelName!= null && x.PersonnelName.Contains(search)));
+            }
+
+            if (filter.SortByColumn != null)
+            {
+                _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
+            }
+
+            var data = await _query.Select(x => new
+            {
+                x.DocumentNo,
+                x.ID,
+                x.PersonnelName,
+                x.Date,
+                x.DepartmentName,
+                UID = x.EmployeeEquipmentAuth.Select(e => e.UID).ToList(),
+                Equipments = x.EmployeeEquipmentAuth.Select(e => e.EquipmentName).ToList(),
+                TestMethodAuth = x.TestMethodAuth.Select(c => c.TestMethodName).ToList(),
+                LabTests = x.LabTestAuth.Select(l => l.LabTestName).ToList()
+            }).Cast<object>().ToPagedAsync(filter);
+
+            return data;
+
+        }
+
         private async Task<long> AddTyped<T>(T model) where T : NablFormBase
         {
             await _context.Set<T>().AddAsync(model);
             await _context.SaveChangesAsync();
             return model.ID;
+        }
+
+        private async Task<long> AddSupplierEvaluation(NablSupplierEvaluation obj)
+        {
+            if (obj.ToRemoved == true)
+            {
+                var supplier = await _context.NablApprovedSuppliers.FirstOrDefaultAsync(c => c.SupplierName.Contains(obj.SupplierName));
+                supplier.IsPresentStatus = false;
+                supplier.EnlistmentDate = null;
+                _context.NablApprovedSuppliers.Update(supplier);
+                await _context.SaveChangesAsync();
+                obj.PresentStatus = "Delisted";
+            }
+            await _context.NablSupplierEvaluations.AddAsync(obj);
+            await _context.SaveChangesAsync();
+            return obj.ID;
+        }
+
+        private async  Task UpdateSupplierEvaluation(NablSupplierEvaluation obj)
+        {
+            if (obj.ToRemoved == true)
+            {
+                var supplier = await _context.NablApprovedSuppliers.FirstOrDefaultAsync(c => c.SupplierName.Contains(obj.SupplierName));
+                supplier.IsPresentStatus = false;
+                supplier.EnlistmentDate = null;
+                _context.NablApprovedSuppliers.Update(supplier);
+                await _context.SaveChangesAsync();
+                obj.PresentStatus = "Delisted";
+            }
+             _context.NablSupplierEvaluations.Update(obj);
+            await _context.SaveChangesAsync();
         }
 
         private async Task UpdateTyped<T>(T model) where T : NablFormBase
@@ -651,5 +724,710 @@ namespace LIMSApi.Repositories
                 await _context.SaveChangesAsync();
             }
         }
+
+        public async Task<List<DropdwonSelector>> GetTraningPlanDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = from a in _context.NablTrainingPlans
+                         where a.IsActive
+                         select a;
+
+
+            _query = _query.Where(x => !string.IsNullOrWhiteSpace(x.TrainingTopic));
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => x.TrainingTopic.Contains(search));
+                }
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await _query
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = x.TrainingTopic
+                })
+                .ToListAsync();
+
+            return data;
+        }
+        public async Task<List<DropdwonSelector>> Roomdropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = from a in _context.LabRooms
+                         where a.IsActive
+                         select a;
+
+
+            _query = _query.Where(x => !string.IsNullOrWhiteSpace(x.Name));
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => x.Name.Contains(search));
+                }
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await _query
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = x.Name
+                })
+                .ToListAsync();
+
+            return data;
+        }
+        public async Task<List<DropdwonSelector>> Supplierlist(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0)
+                pageNo = 0;
+
+
+            var query = _context.NablSupplierRegistrations
+                .Where(x => x.IsActive && !string.IsNullOrWhiteSpace(x.SupplierName));
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    query = query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    query = query.Where(x => x.SupplierName.Contains(search));
+                }
+            }
+
+
+            var supplierList = await query.ToListAsync();
+
+            supplierList = supplierList
+                .Where(x =>
+                {
+                    if (string.IsNullOrWhiteSpace(x.DocumentsSubmittedJson))
+                        return false;
+
+                    try
+                    {
+                        var documents = JsonConvert.DeserializeObject<DocumentsSubmitted>(x.DocumentsSubmittedJson);
+
+                        return documents?.SupplierApproved == true;
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                })
+                .ToList();
+
+            var skip = pageNo * pageSize;
+
+            var data = supplierList
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = x.SupplierName,
+                    AdditionalValues = new Dictionary<string, object>
+                    {
+                { "ContactPerson", x.ContactPerson ?? "" },
+                { "MobileNo", x.MobileNo ?? "" },
+                { "Email", x.Email ?? "" },
+                { "RegisterNo", x.RegisterNo ?? "" },
+                {"GSTNo",x.GstNo?? "" },
+                {"Address",x.Address ?? "" }
+                    }
+                })
+                .ToList();
+            return data;
+        }
+
+        public async Task<List<DropdwonSelector>> AllSupplierlist(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0)
+                pageNo = 0;
+
+            var query = _context.NablApprovedSuppliers
+                .Where(x =>
+                    x.IsActive &&
+                    !string.IsNullOrWhiteSpace(x.SupplierName) &&
+                    x.IsBlacklisted == false && x.IsPresentStatus == true); // Enlisted
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    query = query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    query = query.Where(x => x.SupplierName.Contains(search));
+                }
+            }
+
+            var approvedSuppliers = await query
+                .OrderBy(x => x.SupplierName)
+                .Skip(pageNo * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            var supplierNames = approvedSuppliers
+                .Select(x => x.SupplierName.Trim())
+                .ToList();
+
+            var registrationList = await _context.NablSupplierRegistrations
+                .Where(x =>
+                    x.IsActive &&
+                    !string.IsNullOrWhiteSpace(x.SupplierName) &&
+                    supplierNames.Contains(x.SupplierName.Trim()))
+                .ToListAsync();
+
+            var data = approvedSuppliers.Select(x =>
+            {
+                var reg = registrationList.FirstOrDefault(r =>
+                    r.SupplierName.Trim().ToLower() == x.SupplierName.Trim().ToLower());
+
+                return new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = x.SupplierName,
+                    AdditionalValues = new Dictionary<string, object>
+                {
+                { "RegisterNo", x.RegisterNo ?? reg?.RegisterNo ?? "" },
+                { "ContactPerson", x.ContactPerson ?? reg?.ContactPerson ?? "" },
+                { "MobileNo", x.MobileNo ?? reg?.MobileNo ?? "" },
+                { "Email", reg?.Email ?? "" },
+                { "GSTNo", x.GstNo ?? reg?.GstNo ?? "" },
+                { "Address", x.Address ?? reg?.Address ?? "" },
+
+                { "PresentStatus", x.IsPresentStatus == true ? "Enlisted" : "Delisted" },
+                { "IsBlacklisted", x.IsBlacklisted },
+
+                { "NatureOfBusiness", reg?.NatureOfBusiness ?? "" },
+                { "ProductsServicesOffered", reg?.ProductsServicesOffered ?? "" },
+                { "ServiceProvider", x?.ServiceProviderName ?? "" }
+                }
+                };
+            }).ToList();
+
+            return data;
+        }
+        public async Task<List<DropdwonSelector>> IndentNoList(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = from a in _context.NablPurchaseIndents
+                         where a.IsActive
+                         select a;
+
+
+            _query = _query.Where(x => !string.IsNullOrWhiteSpace(x.PINo));
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => x.PINo.Contains(search));
+                }
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await _query
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = (x.PINo ?? "") + "/" + (x.IndentorName ?? ""),
+                    AdditionalValues = new Dictionary<string, object>
+                    {
+                        {"Qaulity",x.Quantity ?? 0 },
+                        {"IndetorName",x.IndentorName ?? "" },
+                        {"ReferenceIndentorName",x.PINo ?? "" + "/" + (x.IndentorName ?? "") }
+                    }
+                })
+                .ToListAsync();
+
+            return data;
+        }
+        public async Task<List<DropdwonSelector>> ApprovedSupplierlist(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0)
+                pageNo = 0;
+
+
+            var query = _context.NablApprovedSuppliers
+                .Where(x => x.IsActive && !string.IsNullOrWhiteSpace(x.SupplierName));
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    query = query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    query = query.Where(x => x.SupplierName.Contains(search));
+                }
+            }
+            var supplierList = await query.ToListAsync();
+            supplierList = supplierList.Where(x => x.IsBlacklisted == false && x.IsPresentStatus == true).ToList();
+
+            var skip = pageNo * pageSize;
+
+            var data = supplierList
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = x.SupplierName,
+                    AdditionalValues = new Dictionary<string, object>
+                    {
+                { "ContactPerson", x.ContactPerson ?? "" },
+                { "MobileNo", x.MobileNo ?? "" },
+                { "Email", x.Email ?? "" },
+                { "RegisterNo", x.RegisterNo ?? "" },
+                {"GSTNo",x.GstNo?? "" },
+                {"Address",x.Address ?? "" }
+                    }
+                })
+                .ToList();
+            return data;
+        }
+        public async Task<List<DropdwonSelector>> PlanNoDetailslist(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = from a in _context.NablProductInspections
+                         where a.IsActive
+                         select a;
+
+
+            _query = _query.Where(x => !string.IsNullOrWhiteSpace(x.PlanNo));
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => x.PlanNo.Contains(search));
+                }
+            }
+            var skip = pageNo * pageSize;
+
+            var data = _query
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = x.PlanNo ?? "",
+                    AdditionalValues = new Dictionary<string, object>
+                    {
+                { "ProductName", x.ProductName ?? "" },
+                { "ProductCode", x.ProductCode ?? "" },
+                { "Category", x.Category ?? "" },
+                { "InspectionStage", x.InspectionStage ?? "" },
+                {"Risklevel",x.Risklevel?? "" },
+                {"PlanNoName",x.PlanNo?? "" },
+                {"InspectionResultsJson",x.InspectionResultsJson ?? "" }
+                    }
+                })
+                .ToList();
+            return data;
+        }
+        public async Task<List<DropdwonSelector>> PONoListDetailslist(string? formType, string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+
+            if (pageNo < 0) pageNo = 0;
+
+            switch (formType)
+            {
+                case "IncomingMaterial":
+
+                    var _query = from a in _context.NablPurchaseOrders
+                                 where a.IsActive
+                                 select a;
+
+
+                    _query = _query.Where(x => !string.IsNullOrWhiteSpace(x.PONo));
+
+                    if (!string.IsNullOrWhiteSpace(searchTerm))
+                    {
+                        if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                        {
+                            _query = _query.Where(x => x.ID == exactId);
+                        }
+                        else
+                        {
+                            var search = searchTerm.Trim();
+                            _query = _query.Where(x => x.PONo.Contains(search));
+                        }
+                    }
+                    var skip = pageNo * pageSize;
+
+                    var data = _query
+                        .Skip(skip)
+                        .Take(pageSize)
+                        .Select(x => new DropdwonSelector
+                        {
+                            Id = x.ID,
+                            Name = x.PONo ?? "",
+                            AdditionalValues = new Dictionary<string, object>
+                            {
+                            { "ReferenceIndentNo", x.ReferenceIndentName ?? "" },
+                            { "SupplierName", x.SupplierName ?? "" },
+                            { "Email", x.Email?? "" },
+                            { "PhoneNo", x.PhoneNo?? "" },
+                            { "GSTNo", x.GSTNo?? "" },
+                            { "OrderType", x.OrderType?? "" },
+                            {"SupplierAddress" , x.SupplierAddress ?? "" },
+                            {"ItemsJson",x.ItemsJson ?? "" },
+                            {"PurchaseOrderNo",x.PONo?? "" }
+                            }
+                        })
+                        .ToList();
+                    return data;
+
+                case "PurchaseMaterialVerification":
+                    var query =
+                        from im in _context.NablIncomingMaterials
+                        join po in _context.NablPurchaseOrders
+                            on im.PurchaseOrderNo equals po.PONo
+                        where im.IsActive
+                              && po.IsActive
+                              && !string.IsNullOrEmpty(im.PurchaseOrderNo)
+                        select new
+                        {
+                            Incoming = im,
+                            PurchaseOrder = po
+                        };
+
+                    if (!string.IsNullOrWhiteSpace(searchTerm))
+                    {
+                        if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                        {
+                            query = query.Where(x => x.Incoming.ID == exactId);
+                        }
+                        else
+                        {
+                            var search = searchTerm.Trim();
+
+                            query = query.Where(x =>
+                                x.Incoming.PurchaseOrderNo.Contains(search) ||
+                                x.PurchaseOrder.PONo.Contains(search) ||
+                                x.PurchaseOrder.SupplierName.Contains(search)
+                            );
+                        }
+                    }
+
+                    var skipped = pageNo * pageSize;
+
+                    var obj = await query
+                        .OrderByDescending(x => x.Incoming.ID)
+                        .Skip(skipped)
+                        .Take(pageSize)
+                        .Select(x => new DropdwonSelector
+                        {
+                            Id = x.Incoming.ID,
+
+
+                            Name = x.Incoming.PurchaseOrderNo ?? "",
+
+                            AdditionalValues = new Dictionary<string, object>
+                            {
+                            // From Purchase Order table
+                            { "Deviations", x.Incoming.Deviations?? "" },
+                            { "CorrectiveActions", x.Incoming.CorrectiveActions?? "" },
+                            { "SupplierName", x.PurchaseOrder.SupplierName ?? "" },
+                            { "Email", x.PurchaseOrder.Email ?? "" },
+                            { "PhoneNo", x.PurchaseOrder.PhoneNo ?? "" },
+                            { "GSTNo", x.PurchaseOrder.GSTNo ?? "" },
+                            { "OrderType", x.PurchaseOrder.OrderType ?? "" },
+                            { "SupplierAddress", x.PurchaseOrder.SupplierAddress ?? "" },
+                            { "PurchaseOrderNo", x.PurchaseOrder.PONo ?? "" },
+                            { "PODate", x.PurchaseOrder.PODate },
+                            { "ItemsJson", x.Incoming.ItemsParametersJson ?? "" },
+                            { "InspectionBy", x.Incoming.InspectionBy ?? "" },
+                            { "ReceivedBy", x.Incoming.ReceivedBy ?? "" }
+                            }
+                        }).ToListAsync();
+                    return obj;
+
+            }
+            return null;
+
+        }
+        public async Task<List<CombinedPoItemDto>> ReceivedItemsDetails(string poNo, string supplierName)
+        {
+
+            var po = await _context.NablPurchaseOrders
+                .FirstOrDefaultAsync(x =>
+                    x.IsActive &&
+                    x.PONo == poNo &&
+                    x.SupplierName == supplierName);
+            var incoming = await _context.NablIncomingMaterials
+                .FirstOrDefaultAsync(x =>
+                    x.IsActive &&
+                    x.PurchaseOrderNo == poNo &&
+                    x.SupplierName == supplierName);
+            var verification = await _context.NablPurchaseMaterialVerifications
+                .FirstOrDefaultAsync(x =>
+                    x.IsActive &&
+                    x.PurchaseOrderNo == poNo &&
+                    x.SupplierName == supplierName);
+
+            List<Items> poItems = new();
+
+            if (!string.IsNullOrWhiteSpace(po?.ItemsJson))
+            {
+                poItems = JsonConvert.DeserializeObject<List<Items>>(po.ItemsJson)
+                          ?? new List<Items>();
+            }
+            List<ItemsParameters> incomingItems = new();
+
+            if (!string.IsNullOrWhiteSpace(incoming?.ItemsParametersJson))
+            {
+                incomingItems = JsonConvert.DeserializeObject<List<ItemsParameters>>
+                                (incoming.ItemsParametersJson)
+                                ?? new List<ItemsParameters>();
+            }
+
+            // Verification item list
+            List<DescriptionParameters> verificationItems = new();
+
+            if (!string.IsNullOrWhiteSpace(verification?.ItemsVerificationJson))
+            {
+                verificationItems = JsonConvert.DeserializeObject<List<DescriptionParameters>>(verification.ItemsVerificationJson)
+                                    ?? new List<DescriptionParameters>();
+            }
+
+            var result = new List<CombinedPoItemDto>();
+
+            foreach (var poItem in poItems)
+            {
+                var incomingItem = incomingItems.FirstOrDefault(x =>
+                    x.MaterialName == poItem.Description);
+
+                var verificationItem = verificationItems.FirstOrDefault(x =>
+                    x.MaterialName == poItem.Description);
+                var row = new CombinedPoItemDto
+                {
+                    ItemName = poItem.Description ?? "",
+                    OrderedQty = incomingItem.OrderedQty ?? 0,
+                    UnitPrice = poItem.UnitPrice ?? 0,
+                    Amount = poItem.TotalAmount,
+                    ReceivedQty = incomingItem?.ReceviceQty,
+                    BatchNo = incomingItem?.BatchNo ?? "",
+                    LotNo = incomingItem?.LotNo ?? "",
+                    InvoiceNo = incomingItem?.InvoiceNo ?? "",
+                    ApprovedQty = verificationItem?.ApprovedQty,
+                    RejectedQty = verificationItem?.RejectedQty,
+                    VerificationStatus = verificationItem?.InspectionQtyStatus ?? "",
+                    VerificationDone= verificationItem?.VerificationDone ?? "",
+                    VerificationDetails = verificationItem?.VerificationDetails ?? ""
+                };
+
+                result.Add(row);
+            }
+
+            return result;
+        }
+        public async Task<List<InspectionParameters>> InspectionPlanDetails(string inspectionPlanNo)
+        {
+
+            var planNo = await _context.NablProductInspections
+                .FirstOrDefaultAsync(x =>
+                    x.IsActive &&
+                    x.PlanNo == inspectionPlanNo);
+
+            List<InspectionParameters> planDetails = new();
+
+            if (!string.IsNullOrWhiteSpace(planNo?.InspectionResultsJson))
+            {
+                planDetails = JsonConvert.DeserializeObject<List<InspectionParameters>>(planNo.InspectionResultsJson)
+                          ?? new List<InspectionParameters>();
+            }
+
+
+            // Verification item list
+
+            var result = new List<InspectionParameters>();
+
+            foreach (var inspectionPlanDetails in planDetails)
+            {
+                var row = new InspectionParameters
+                {
+                    ParameterName = inspectionPlanDetails.ParameterName ?? "",
+                    Requirement = inspectionPlanDetails.Requirement ?? "",
+                    ReferenceStandard = inspectionPlanDetails.ReferenceStandard ?? "",
+                    MethodOfCheck = inspectionPlanDetails.MethodOfCheck,
+                    Frequency = inspectionPlanDetails.Frequency ?? "",
+                    AcceptanceCriteria = inspectionPlanDetails.AcceptanceCriteria ?? "",
+
+                };
+
+                result.Add(row);
+            }
+
+            return result;
+        }
+        public async Task<NablPurchaseIndentDto> IndentDetails(string indentNo)
+        {
+
+            var indentDetails = await _context.NablPurchaseIndents
+                .Where(x =>
+                    x.IsActive &&
+                    x.PINo == indentNo).Select(c => new NablPurchaseIndentDto
+                    {
+                        Description = c.Justification,
+                        UnitOfMeasure = c.UnitOfMeasure,
+                        Priority = c.Priority,
+                        TechnicalSpecification = c.TechnicalSpecification,
+                        ExpectedDate = c.ExpectedDate,
+                        IndentorName = c.IndentorName,
+                        PurchaseIndentNo = c.PINo,
+                        Quantity = c.Quantity
+                    }).FirstOrDefaultAsync();
+
+            return indentDetails;
+        }
+        public async Task<List<Items>> PoitemsDetails(string poNo, string supplierName)
+        {
+
+            var po = await _context.NablPurchaseOrders
+                .FirstOrDefaultAsync(x =>
+                    x.IsActive &&
+                    x.PONo == poNo &&
+                    x.SupplierName == supplierName);
+
+            List<Items> poItems = new();
+
+            if (!string.IsNullOrWhiteSpace(po?.ItemsJson))
+            {
+                poItems = JsonConvert.DeserializeObject<List<Items>>(po.ItemsJson)
+                          ?? new List<Items>();
+            }
+
+            var result = new List<Items>();
+
+            foreach (var poItem in poItems)
+            {
+
+                var row = new Items
+                {
+                    Description = poItem.Description ?? "",
+                    Quantity = poItem.Quantity?? 0,
+                    UnitPrice = poItem.UnitPrice ?? 0,
+                    TotalAmount = poItem.TotalAmount,
+                    UnitOfMeasure = poItem.UnitOfMeasure,
+                };
+
+                result.Add(row);
+            }
+
+            return result;
+        }
+        public async Task<SupplierEvaluationDetailsDto> SupplierEvaluationDetails(string? supplierName, DateTime? fromDate, DateTime? toDate)
+        {
+            var poQuery = _context.NablPurchaseOrders
+                .Where(x => x.IsActive);
+
+            if (!string.IsNullOrWhiteSpace(supplierName))
+            {
+                poQuery = poQuery
+                    .Where(x => x.SupplierName == supplierName);
+            }
+
+            if (fromDate != null && toDate != null)
+            {
+                poQuery = poQuery
+                    .Where(x =>
+                        x.PODate >= fromDate &&
+                        x.PODate <= toDate);
+            }
+
+            var purchaseOrders = await poQuery
+                .OrderBy(x => x.PODate)
+                .Select(x => new NablPurchaseOrderDto
+                {
+                    Id = x.ID,
+                    PONo = x.PONo ?? "",
+                    PODate = x.PODate,
+                    DeliveryDate = x.DeliveryDate,
+                    SupplierName = x.SupplierName ?? "",
+                    ReferenceIndentNo = x.ReferenceIndentName ?? "",
+                })
+                .ToListAsync();
+
+            var poNos = purchaseOrders
+                .Where(x => !string.IsNullOrWhiteSpace(x.PONo))
+                .Select(x => x.PONo)
+                .ToList();
+
+            var incomingMaterials = await _context.NablIncomingMaterials
+                .Where(x =>
+                    x.IsActive &&
+                    poNos.Contains(x.PurchaseOrderNo!))
+                .Select(x => new NablIncomingMaterialDto
+                {
+                    Id = x.ID,
+                    PurchaseOrderNo = x.PurchaseOrderNo ?? "",
+                    SupplierName = x.SupplierName ?? "",
+                    InspectionPlanNoName = x.InspectionPlanNoName ?? "",
+                    Date = x.Date,
+                    InspectionResult = x.InspectionResult ?? "",
+                })
+                .ToListAsync();
+
+            var result = new SupplierEvaluationDetailsDto
+            {
+                PurchaseOrders = purchaseOrders,
+                IncomingMaterials = incomingMaterials
+            };
+
+            return result;
+        }
+
     }
 }

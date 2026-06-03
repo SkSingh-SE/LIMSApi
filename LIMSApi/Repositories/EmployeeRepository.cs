@@ -57,35 +57,35 @@ namespace LIMSApi.Repositories
             model.ModifiedOn = DateTime.UtcNow;
             _context.EmployeeMasters.Update(model);
             await _context.SaveChangesAsync();
-            
+
         }
 
         public async Task<PagedResponse<object>> GetAllEmployees(PageFilter filter)
         {
             var _query = (from e in _context.EmployeeMasters
-                         where e.IsActive && e.CompanyCode == loggedInUser.CompanyCode
-                         join d in _context.DepartmentMasters on e.DepartmentID equals d.ID into dpGroup
-                         from dp in dpGroup.DefaultIfEmpty()
+                          where e.IsActive && e.CompanyCode == loggedInUser.CompanyCode
+                          join d in _context.DepartmentMasters on e.DepartmentID equals d.ID into dpGroup
+                          from dp in dpGroup.DefaultIfEmpty()
 
-                         join ds in _context.DesignationMasters on e.DesignationID equals ds.ID into dsGroup
-                         from ds in dsGroup.DefaultIfEmpty()
-                         select new
-                         {
-                             e.ID,
-                             e.Name,
-                             e.EmailId,
-                             e.DateOfJoin,
-                             e.DateOfBirth,
-                             e.Gender,
-                             e.DepartmentID,
-                             DepartmentName = dp.Name,
-                             e.DesignationID,
-                             DesignationName = ds.Name,
-                             e.ModifiedOn,
-                             e.CreatedOn
-                         }).AsQueryable().ApplyFilters(filter.Filter);
+                          join ds in _context.DesignationMasters on e.DesignationID equals ds.ID into dsGroup
+                          from ds in dsGroup.DefaultIfEmpty()
+                          select new
+                          {
+                              e.ID,
+                              e.Name,
+                              e.EmailId,
+                              e.DateOfJoin,
+                              e.DateOfBirth,
+                              e.Gender,
+                              e.DepartmentID,
+                              DepartmentName = dp.Name,
+                              e.DesignationID,
+                              DesignationName = ds.Name,
+                              e.ModifiedOn,
+                              e.CreatedOn
+                          }).AsQueryable().ApplyFilters(filter.Filter);
 
-            
+
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 // Date columns excluded from free-text search — use the date column filter (FilterHelper)
@@ -108,11 +108,45 @@ namespace LIMSApi.Repositories
             return await _query.Cast<object>().ToPagedAsync(filter);
         }
 
-        public async Task<List<DropdwonSelector>> GetEmployeeDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> GetEmployeeDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20, int departmentId= 0)
         {
             if (pageNo < 0) pageNo = 0;
 
             var _query = from a in _context.EmployeeMasters where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode select a;
+
+            if(departmentId > 0)
+            {
+                _query = _query.Where(c => c.DepartmentID == departmentId);
+            }
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => x.Name != null && x.Name.Contains(search));
+                }
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            {
+                Id = x.ID,
+                Name = x.Name,
+            })).ToListAsync();
+
+            return data;
+        }
+
+        public async Task<List<DropdwonSelector>> GetTestmethodsDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = from a in _context.TestMethodSpecifications where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode select a;
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
@@ -133,6 +167,82 @@ namespace LIMSApi.Repositories
             {
                 Id = x.ID,
                 Name = x.Name,
+                AdditionalValues = new Dictionary<string, object>
+                {
+                    { "ID", x.ID}
+                },
+            })).ToListAsync();
+
+            return data;
+        }
+        public async Task<List<DropdwonSelector>> GetLabtestDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20, int departmentId = 0)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = from a in _context.LaboratoryTests where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode select a;
+            if(departmentId > 0)
+            {
+                _query = _query.Where(c => c.LabDepartmentID == departmentId);
+            }
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => x.Name != null && x.Name.Contains(search));
+                }
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            {
+                Id = x.ID,
+                Name = x.Name,
+                AdditionalValues = new Dictionary<string, object>
+                {
+                    { "ID", x.ID}
+                },
+            })).ToListAsync();
+
+            return data;
+        }
+        public async Task<List<DropdwonSelector>> GetEquipmentDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = from a in _context.EquipmentMasters where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode select a;
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => x.Name != null && x.Name.Contains(search));
+                }
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            {
+                Id = x.ID,
+                Name = (x.EquipmentNo ?? "") + "/" + (x.Name ?? ""),
+                AdditionalValues = new Dictionary<string, object>
+                {
+                    {"EquipmentNo ",x.EquipmentNo ?? ""},
+                    {"ID", x.ID},
+                    {"EquipmentName",x.Name?? ""}
+                }
+
             })).ToListAsync();
 
             return data;

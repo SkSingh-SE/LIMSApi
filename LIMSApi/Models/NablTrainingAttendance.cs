@@ -25,5 +25,19 @@ namespace LIMSApi.Models
         public string? AttendeesJson { get; set; } // JSON array of {EmployeeId, EmployeeName, Designation, Signature}
 
         public int? TotalAttendees { get; set; }
+        public string? GenearalRemarks { get; set; }
+        public DateTime? TrainingDatetime { get; set; }
+        [NotMapped]
+        public List<Participates>? Participants { get; set; }
+    }
+    [NotMapped]
+    public class Participates
+    {
+        public int? SlNo { get; set; }
+        public string? Feedback { get; set; }
+        public string? FilePath { get; set; }
+        public string? FileName{ get; set; }
+        public string? ParticipantName { get; set; }
+        public int? UploadReferenceID { get; set; }
     }
 }
