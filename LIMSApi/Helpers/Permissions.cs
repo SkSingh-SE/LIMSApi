@@ -77,6 +77,15 @@ namespace LIMSApi.Helpers
             public const string Manage = "CanManageCourier";
         }
 
+        public static class ProductSizeMaster
+        {
+            public const string Read   = "CanReadProductSizeMaster";
+            public const string Create = "CanCreateProductSizeMaster";
+            public const string Update = "CanUpdateProductSizeMaster";
+            public const string Delete = "CanDeleteProductSizeMaster";
+            public const string Manage = "CanManageProductSizeMaster";
+        }
+
         public static class TPI
         {
             public const string Read   = "CanReadTPI";

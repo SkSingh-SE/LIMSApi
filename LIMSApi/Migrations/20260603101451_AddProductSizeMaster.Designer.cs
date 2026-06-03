@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20260603101451_AddProductSizeMaster")]
+    partial class AddProductSizeMaster
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -14609,17 +14612,16 @@ namespace LIMSApi.Migrations
                     b.Property<DateTime?>("ModifiedOn")
                         .HasColumnType("datetime2");
 
-                    b.Property<long?>("ParameterUnitID")
-                        .HasColumnType("bigint");
-
                     b.Property<string>("SizeType")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.HasKey("ID");
+                    b.Property<string>("Unit")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
-                    b.HasIndex("ParameterUnitID");
+                    b.HasKey("ID");
 
                     b.ToTable("ProductSizeMasters");
                 });
@@ -20527,15 +20529,6 @@ namespace LIMSApi.Migrations
                     b.Navigation("ProductCondition");
 
                     b.Navigation("PropertyType");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.ProductSizeMaster", b =>
-                {
-                    b.HasOne("LIMSApi.Models.ParameterUnitMaster", "ParameterUnit")
-                        .WithMany()
-                        .HasForeignKey("ParameterUnitID");
-
-                    b.Navigation("ParameterUnit");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ProductSpecification", b =>

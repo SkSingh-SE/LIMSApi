@@ -27,6 +27,7 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<ContactPerson> ContactPersons { get; set; }
     public virtual DbSet<CountryMaster> CountryMasters { get; set; }
     public virtual DbSet<CourierMaster> CourierMasters { get; set; }
+    public virtual DbSet<ProductSizeMaster> ProductSizeMasters { get; set; }
     public virtual DbSet<CurrencyMaster> CurrencyMasters { get; set; }
     public virtual DbSet<Customer> Customers { get; set; }
     public virtual DbSet<CustomerChangeRequest> CustomerChangeRequests { get; set; }

@@ -154,6 +154,7 @@ public static class DataSeeder
             (N'Tax Master',          NULL, N'/tax',                NULL, N'Administration'),
             (N'Bank Master',         NULL, N'/bank',               NULL, N'Administration'),
             (N'Courier Master',      NULL, N'/courier',            NULL, N'Administration'),
+            (N'Product Size Master', NULL, N'/product-size-master',NULL, N'Administration'),
             (N'TPI Master',          NULL, N'/tpi',                NULL, N'Administration'),
             (N'Supplier Master',     NULL, N'/supplier',           NULL, N'Administration'),
             (N'Equipment',           NULL, N'/equipment',          NULL, N'Administration'),
@@ -424,6 +425,12 @@ public static class DataSeeder
             ('CanUpdateCourier','Update Courier','Courier Master',NULL,'Update'),
             ('CanDeleteCourier','Delete Courier','Courier Master',NULL,'Delete'),
             ('CanManageCourier','Manage Courier','Courier Master',NULL,'Manage'),
+
+            ('CanReadProductSizeMaster','View Product Size','Product Size Master',NULL,'Read'),
+            ('CanCreateProductSizeMaster','Create Product Size','Product Size Master',NULL,'Create'),
+            ('CanUpdateProductSizeMaster','Update Product Size','Product Size Master',NULL,'Update'),
+            ('CanDeleteProductSizeMaster','Delete Product Size','Product Size Master',NULL,'Delete'),
+            ('CanManageProductSizeMaster','Manage Product Size','Product Size Master',NULL,'Manage'),
 
             ('CanReadTPI','View TPI','TPI Master',NULL,'Read'),
             ('CanCreateTPI','Create TPI','TPI Master',NULL,'Create'),
@@ -1303,6 +1310,7 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 "CanReadMetalClassification", "CanReadHeatTreatment",
                 "CanReadProductCondition", "CanReadSpecimenOrientation",
                 "CanReadProductForm", "CanReadLaboratoryTest",
+                "CanReadProductSizeMaster",
             },
 
             ["Technical"] = new[]
@@ -1327,6 +1335,7 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 "CanReadSpecimenOrientation", "CanReadProductForm",
                 "CanReadDimensionalFactors", "CanReadStandardOrganization",
                 "CanReadEquipment", "CanReadCalibrationAgency",
+                "CanReadProductSizeMaster",
             },
 
             ["Lab"] = new[]
