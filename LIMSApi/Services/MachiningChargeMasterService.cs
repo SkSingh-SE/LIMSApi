@@ -1,8 +1,10 @@
+using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
+using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Services
 {
@@ -11,17 +13,37 @@ namespace LIMSApi.Services
         private readonly IMachiningChargeMasterRepository _repository;
         private readonly ILogger<MachiningChargeMasterService> _logger;
         private readonly IFileUploadService _uploadService;
+        private readonly LIMSContext _context;
         private LoggedInUserDTO loggedInUser;
 
         public MachiningChargeMasterService(
             IMachiningChargeMasterRepository repository,
             ILogger<MachiningChargeMasterService> logger,
-            IFileUploadService uploadService)
+            IFileUploadService uploadService,
+            LIMSContext context)
         {
             _repository = repository;
             _logger = logger;
             _uploadService = uploadService;
+            _context = context;
             loggedInUser = LoggedInUserProvider.CurrentUser;
+        }
+
+        // Each version's Effective From must fall within its selected Financial Year (StartDate..EndDate).
+        private async Task ValidateEffectiveWithinFinancialYearAsync(IEnumerable<MachiningChargeVersion> versions)
+        {
+            var fyIds = versions.Where(v => v.FinancialYearId.HasValue).Select(v => v.FinancialYearId!.Value).Distinct().ToList();
+            if (fyIds.Count == 0) return;
+            var fys = await _context.FinancialYears.Where(f => fyIds.Contains(f.Id))
+                .ToDictionaryAsync(f => f.Id, f => new { f.StartDate, f.EndDate });
+            foreach (var v in versions.Where(v => v.FinancialYearId.HasValue))
+            {
+                if (fys.TryGetValue(v.FinancialYearId!.Value, out var fy)
+                    && (v.EffectiveFrom.Date < fy.StartDate.Date || v.EffectiveFrom.Date > fy.EndDate.Date))
+                {
+                    throw new ArgumentException("Effective From must fall within the selected financial year.");
+                }
+            }
         }
 
         public async Task CreateMachiningChargeMaster(MachiningChargeMaster model)
@@ -30,6 +52,7 @@ namespace LIMSApi.Services
                 throw new ArgumentException("Specimen Size should not be empty!");
 
             ValidateVersions(model.Versions);
+            await ValidateEffectiveWithinFinancialYearAsync(model.Versions);
 
             bool exists = await _repository.ExistsBySpecimenSizeAndTest(
                 model.SpecimenSize, model.LaboratoryTestID, model.TestMethodStandardID);
@@ -71,6 +94,7 @@ namespace LIMSApi.Services
                 throw new ArgumentException("MachiningChargeMaster ID should not be empty!");
 
             ValidateVersions(model.Versions);
+            await ValidateEffectiveWithinFinancialYearAsync(model.Versions);
 
             bool exists = await _repository.ExistsBySpecimenSizeAndTestAndNotId(
                 model.SpecimenSize, model.LaboratoryTestID, model.TestMethodStandardID, model.ID);
@@ -167,6 +191,8 @@ namespace LIMSApi.Services
                 throw new ArgumentException("Each price version must have a Financial Year selected!");
             if (versions.Any(v => v.EffectiveFrom == default))
                 throw new ArgumentException("Each price version must have an Effective From date!");
+            if (versions.Where(v => v.FinancialYearId.HasValue).GroupBy(v => v.FinancialYearId).Any(g => g.Count() > 1))
+                throw new ArgumentException("Duplicate Financial Year in price versions — each financial year can appear only once!");
             if (versions.GroupBy(v => v.EffectiveFrom.Date).Any(g => g.Count() > 1))
                 throw new ArgumentException("Duplicate Effective From date in price versions — each date can appear only once!");
         }
@@ -194,6 +220,8 @@ namespace LIMSApi.Services
                     current.FinancialYearId = v.FinancialYearId;
                     current.PriceGeneralMetal = v.PriceGeneralMetal;
                     current.PriceHardMetal = v.PriceHardMetal;
+                    current.CuttingRateGeneralMetal = v.CuttingRateGeneralMetal;
+                    current.CuttingRateHardMetal = v.CuttingRateHardMetal;
                     current.ModifiedOn = DateTime.UtcNow;
                     current.ModifiedBy = loggedInUser.EmployeeID;
                 }
@@ -205,6 +233,8 @@ namespace LIMSApi.Services
                         FinancialYearId = v.FinancialYearId,
                         PriceGeneralMetal = v.PriceGeneralMetal,
                         PriceHardMetal = v.PriceHardMetal,
+                        CuttingRateGeneralMetal = v.CuttingRateGeneralMetal,
+                        CuttingRateHardMetal = v.CuttingRateHardMetal,
                         CreatedOn = DateTime.UtcNow,
                         CreatedBy = loggedInUser.EmployeeID,
                         ModifiedOn = null,

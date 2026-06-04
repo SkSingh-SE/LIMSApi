@@ -1,8 +1,10 @@
+using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
+using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Services
 {
@@ -10,13 +12,32 @@ namespace LIMSApi.Services
     {
         private readonly ICuttingPriceMasterRepository _itemRepository;
         private readonly ILogger<CuttingPriceMasterService> _logger;
+        private readonly LIMSContext _context;
         private LoggedInUserDTO loggedInUser;
 
-        public CuttingPriceMasterService(ICuttingPriceMasterRepository itemMasterRepository, ILogger<CuttingPriceMasterService> logger)
+        public CuttingPriceMasterService(ICuttingPriceMasterRepository itemMasterRepository, ILogger<CuttingPriceMasterService> logger, LIMSContext context)
         {
             _itemRepository = itemMasterRepository;
             _logger = logger;
+            _context = context;
             loggedInUser = LoggedInUserProvider.CurrentUser;
+        }
+
+        // Each version's Effective From must fall within its selected Financial Year (StartDate..EndDate).
+        private async Task ValidateEffectiveWithinFinancialYearAsync(IEnumerable<CuttingPriceVersion> versions)
+        {
+            var fyIds = versions.Where(v => v.FinancialYearId.HasValue).Select(v => v.FinancialYearId!.Value).Distinct().ToList();
+            if (fyIds.Count == 0) return;
+            var fys = await _context.FinancialYears.Where(f => fyIds.Contains(f.Id))
+                .ToDictionaryAsync(f => f.Id, f => new { f.StartDate, f.EndDate });
+            foreach (var v in versions.Where(v => v.FinancialYearId.HasValue))
+            {
+                if (fys.TryGetValue(v.FinancialYearId!.Value, out var fy)
+                    && (v.EffectiveFrom.Date < fy.StartDate.Date || v.EffectiveFrom.Date > fy.EndDate.Date))
+                {
+                    throw new ArgumentException("Effective From must fall within the selected financial year.");
+                }
+            }
         }
 
         public async Task CreateCuttingPrice(CuttingPriceMaster model)
@@ -25,6 +46,7 @@ namespace LIMSApi.Services
                 throw new ArgumentException("CuttingPriceMaster name should not be empty!");
 
             ValidateVersions(model.Versions);
+            await ValidateEffectiveWithinFinancialYearAsync(model.Versions);
 
             bool exists = await _itemRepository.ExistsByName(model.CuttingType);
             if (exists)
@@ -55,6 +77,7 @@ namespace LIMSApi.Services
                 throw new ArgumentException("CuttingPriceMaster ID should not be empty!");
 
             ValidateVersions(model.Versions);
+            await ValidateEffectiveWithinFinancialYearAsync(model.Versions);
 
             bool exists = await _itemRepository.ExistsByNameAndNotId(model.CuttingType, model.ID);
             if (exists)
@@ -168,6 +191,8 @@ namespace LIMSApi.Services
                 throw new ArgumentException("Each rate version must have a Financial Year selected!");
             if (versions.Any(v => v.EffectiveFrom == default))
                 throw new ArgumentException("Each rate version must have an Effective From date!");
+            if (versions.Where(v => v.FinancialYearId.HasValue).GroupBy(v => v.FinancialYearId).Any(g => g.Count() > 1))
+                throw new ArgumentException("Duplicate Financial Year in rate versions — each financial year can appear only once!");
             if (versions.GroupBy(v => v.EffectiveFrom.Date).Any(g => g.Count() > 1))
                 throw new ArgumentException("Duplicate Effective From date in rate versions — each date can appear only once!");
         }

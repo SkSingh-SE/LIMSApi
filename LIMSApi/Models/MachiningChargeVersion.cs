@@ -23,11 +23,19 @@ namespace LIMSApi.Models
         // Used for copy-forward + reminders; not used for resolution.
         public long? FinancialYearId { get; set; }
 
+        // Machining rates
         [Column(TypeName = "decimal(18,2)")]
-        public decimal PriceGeneralMetal { get; set; }
+        public decimal PriceGeneralMetal { get; set; }   // Normal-metal machining rate
 
         [Column(TypeName = "decimal(18,2)")]
-        public decimal PriceHardMetal { get; set; }
+        public decimal PriceHardMetal { get; set; }      // Hard-metal machining rate
+
+        // Cutting rates (same year-version)
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal CuttingRateGeneralMetal { get; set; }   // Normal-metal cutting rate
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal CuttingRateHardMetal { get; set; }      // Hard-metal cutting rate
 
         [ForeignKey(nameof(MachiningChargeMasterID))]
         [JsonIgnore]
