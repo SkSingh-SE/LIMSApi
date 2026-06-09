@@ -47,4 +47,7 @@ public partial class ParameterUnitMaster : AuditProperty
     public string? SimilarUnit7 { get; set; }
     [Column(TypeName = "decimal(18,6)")]
     public decimal? ConversionFactor7 { get; set; }
+
+    // Normalized equivalents (replaces inline SimilarUnit1-7; inline kept until cleanup phase).
+    public virtual ICollection<ParameterUnitEquivalent> Equivalents { get; set; } = new List<ParameterUnitEquivalent>();
 }

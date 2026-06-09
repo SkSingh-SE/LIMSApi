@@ -37,7 +37,9 @@ namespace LIMSApi.Repositories
 
         public async Task<ParameterUnitMaster?> GetParameterUnitById(long id)
         {
-            return await _context.ParameterUnitMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
+            return await _context.ParameterUnitMasters
+                .Include(x => x.Equivalents)
+                .FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
         }
 
         public async Task UpdateParameterUnit(ParameterUnitMaster model)

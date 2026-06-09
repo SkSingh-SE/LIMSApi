@@ -30,6 +30,17 @@ namespace LIMSApi.Services
             if (exists)
                 throw new InvalidOperationException("ParameterUnit already exists!");
 
+            // Normalize incoming equivalents (fresh insert) + sync inline columns for legacy readers.
+            var order = 0;
+            foreach (var e in model.Equivalents ?? new List<ParameterUnitEquivalent>())
+            {
+                e.ID = 0;
+                e.Name = e.Name?.Trim() ?? string.Empty;
+                e.DisplayOrder = ++order;
+                e.IsActive = true;
+            }
+            SyncInlineFromEquivalents(model);
+
             await _ParameterUnitRepository.AddParameterUnit(model);
             _logger.LogInformation("ParameterUnit '{ParameterUnitName}' created successfully.", model.Name);
         }
@@ -49,24 +60,73 @@ namespace LIMSApi.Services
 
             existingParameterUnit.Name = model.Name;
             existingParameterUnit.ConversaionFactor = model.ConversaionFactor;
-            existingParameterUnit.SimilarUnit1 = model.SimilarUnit1;
-            existingParameterUnit.ConversionFactor1 = model.ConversionFactor1;
-            existingParameterUnit.SimilarUnit2 = model.SimilarUnit2;
-            existingParameterUnit.ConversionFactor2 = model.ConversionFactor2;
-            existingParameterUnit.SimilarUnit3 = model.SimilarUnit3;
-            existingParameterUnit.ConversionFactor3 = model.ConversionFactor3;
-            existingParameterUnit.SimilarUnit4 = model.SimilarUnit4;
-            existingParameterUnit.ConversionFactor4 = model.ConversionFactor4;
-            existingParameterUnit.SimilarUnit5 = model.SimilarUnit5;
-            existingParameterUnit.ConversionFactor5 = model.ConversionFactor5;
-            existingParameterUnit.SimilarUnit6 = model.SimilarUnit6;
-            existingParameterUnit.ConversionFactor6 = model.ConversionFactor6;
-            existingParameterUnit.SimilarUnit7 = model.SimilarUnit7;
-            existingParameterUnit.ConversionFactor7 = model.ConversionFactor7;
+
+            // Equivalents = source of truth. Upsert by ID, soft-delete the removed ones
+            // (so future FK references survive), then sync inline columns for legacy readers.
+            ApplyEquivalents(existingParameterUnit, model.Equivalents);
+            SyncInlineFromEquivalents(existingParameterUnit);
             existingParameterUnit.ModifiedOn = DateTime.UtcNow;
 
             await _ParameterUnitRepository.UpdateParameterUnit(existingParameterUnit);
             _logger.LogInformation("ParameterUnit '{ParameterUnitName}' updated successfully.", model.Name);
+        }
+
+        // Upsert child equivalents by ID; soft-delete the ones no longer present.
+        private static void ApplyEquivalents(ParameterUnitMaster existing, ICollection<ParameterUnitEquivalent> incoming)
+        {
+            incoming ??= new List<ParameterUnitEquivalent>();
+            var order = 0;
+            foreach (var inc in incoming)
+            {
+                order++;
+                var match = inc.ID > 0 ? existing.Equivalents.FirstOrDefault(e => e.ID == inc.ID) : null;
+                if (match == null)
+                {
+                    existing.Equivalents.Add(new ParameterUnitEquivalent
+                    {
+                        BaseParameterUnitID = existing.ID,
+                        Name = inc.Name?.Trim() ?? string.Empty,
+                        ConversionFactor = inc.ConversionFactor,
+                        DisplayOrder = order,
+                        IsActive = true
+                    });
+                }
+                else
+                {
+                    match.Name = inc.Name?.Trim() ?? string.Empty;
+                    match.ConversionFactor = inc.ConversionFactor;
+                    match.DisplayOrder = order;
+                    match.IsActive = true;
+                }
+            }
+            // Soft-delete equivalents not present in the incoming set.
+            var incomingIds = incoming.Where(i => i.ID > 0).Select(i => i.ID).ToHashSet();
+            foreach (var e in existing.Equivalents.Where(e => e.IsActive && e.ID > 0 && !incomingIds.Contains(e.ID)))
+                e.IsActive = false;
+        }
+
+        // Mirror the first 7 active equivalents back into inline SimilarUnit1-7 so legacy
+        // readers (TestResult/Report) keep working until they migrate to the child table.
+        private static void SyncInlineFromEquivalents(ParameterUnitMaster unit)
+        {
+            var active = unit.Equivalents
+                .Where(e => e.IsActive && !string.IsNullOrWhiteSpace(e.Name))
+                .OrderBy(e => e.DisplayOrder ?? int.MaxValue)
+                .ThenBy(e => e.ID)
+                .Take(7)
+                .ToList();
+
+            string?[] names = new string?[7];
+            decimal?[] factors = new decimal?[7];
+            for (int i = 0; i < active.Count; i++) { names[i] = active[i].Name; factors[i] = active[i].ConversionFactor; }
+
+            unit.SimilarUnit1 = names[0]; unit.ConversionFactor1 = factors[0];
+            unit.SimilarUnit2 = names[1]; unit.ConversionFactor2 = factors[1];
+            unit.SimilarUnit3 = names[2]; unit.ConversionFactor3 = factors[2];
+            unit.SimilarUnit4 = names[3]; unit.ConversionFactor4 = factors[3];
+            unit.SimilarUnit5 = names[4]; unit.ConversionFactor5 = factors[4];
+            unit.SimilarUnit6 = names[5]; unit.ConversionFactor6 = factors[5];
+            unit.SimilarUnit7 = names[6]; unit.ConversionFactor7 = factors[6];
         }
 
         public async Task RemoveParameterUnit(long id)

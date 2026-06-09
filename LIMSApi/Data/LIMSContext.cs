@@ -79,6 +79,7 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<OrganisationMaster> OrganisationMasters { get; set; }
     public virtual DbSet<ParameterMaster> ParameterMasters { get; set; }
     public virtual DbSet<ParameterUnitMaster> ParameterUnitMasters { get; set; }
+    public virtual DbSet<ParameterUnitEquivalent> ParameterUnitEquivalents { get; set; }
     public virtual DbSet<HardnessEquivalence> HardnessEquivalences { get; set; }
     public virtual DbSet<ToleranceMaster> ToleranceMasters { get; set; }
     public virtual DbSet<ProductConditionMaster> ProductConditionMasters { get; set; }
@@ -672,6 +673,13 @@ public partial class LIMSContext : DbContext
             .WithMany()
             .HasForeignKey(x => x.ProductSizeMasterID)
             .OnDelete(DeleteBehavior.NoAction);
+
+        // ParameterUnitEquivalent → ParameterUnitMaster (cascade with base unit)
+        modelBuilder.Entity<ParameterUnitEquivalent>()
+            .HasOne(x => x.BaseParameterUnit)
+            .WithMany(u => u.Equivalents)
+            .HasForeignKey(x => x.BaseParameterUnitID)
+            .OnDelete(DeleteBehavior.Cascade);
 
         // MS-E: SpecificationLineTestMethod → SpecificationLine (cascade with line)
         modelBuilder.Entity<SpecificationLineTestMethod>()
