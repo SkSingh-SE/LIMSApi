@@ -89,9 +89,9 @@ namespace LIMSApi.Services
             ValidateSpecificationLines(model);
             await RoundLinesToParameterPrecisionAsync(model);
 
-            bool exists = await _specificationRepo.ExistsByName(model.AliasName);
+            bool exists = await _specificationRepo.ExistsByNameAndVersion(model.AliasName, model.Version);
             if (exists)
-                throw new InvalidOperationException("SpecificationHeader already exists!");
+                throw new InvalidOperationException("A specification with the same name and version already exists!");
 
             await _specificationRepo.AddSpecificationHeader(model);
 
@@ -106,9 +106,9 @@ namespace LIMSApi.Services
             ValidateSpecificationLines(model);
             await RoundLinesToParameterPrecisionAsync(model);
 
-            bool exists = await _specificationRepo.ExistsByNameAndNotId(model.AliasName, model.ID);
+            bool exists = await _specificationRepo.ExistsByNameAndVersion(model.AliasName, model.Version, model.ID);
             if (exists)
-                throw new InvalidOperationException("Same SpecificationHeader already exists!");
+                throw new InvalidOperationException("A specification with the same name and version already exists!");
 
             var existingSpecificationHeader = await _specificationRepo.GetSpecificationHeaderById(model.ID);
             if (existingSpecificationHeader == null)
@@ -121,7 +121,25 @@ namespace LIMSApi.Services
             existingSpecificationHeader.Part = model.Part;
             existingSpecificationHeader.StandardYear = model.StandardYear;
             existingSpecificationHeader.IsCustom = model.IsCustom;
+            existingSpecificationHeader.SpecificationNo = model.SpecificationNo;
+            existingSpecificationHeader.Version = model.Version;
+            existingSpecificationHeader.DisplayTitle = model.DisplayTitle;
+            existingSpecificationHeader.Title = model.Title;
+            existingSpecificationHeader.IdentifierConfigJson = model.IdentifierConfigJson;
             existingSpecificationHeader.ModifiedOn = DateTime.UtcNow;
+
+            // Header parameter template: clear + repopulate (copied into grade tabs on Add Grade, client-side)
+            existingSpecificationHeader.HeaderParameters.Clear();
+            foreach (var hp in model.HeaderParameters)
+            {
+                existingSpecificationHeader.HeaderParameters.Add(new SpecificationHeaderParameter
+                {
+                    ParameterID = hp.ParameterID,
+                    ParameterUnitID = hp.ParameterUnitID,
+                    Type = hp.Type,
+                    DisplayOrder = hp.DisplayOrder
+                });
+            }
 
             var incomingGradeIds = model.Grades.Where(y => y.ID > 0).Select(y => y.ID).ToHashSet();
             var toRemoveGrades = existingSpecificationHeader.Grades.Where(x => !incomingGradeIds.Contains(x.ID)).ToList();
@@ -148,6 +166,7 @@ namespace LIMSApi.Services
                 existingGrade.IsUNS = grade.IsUNS;
                 existingGrade.UNSSteelNumber = grade.UNSSteelNumber;
                 existingGrade.MetalClassificationID = grade.MetalClassificationID;
+                existingGrade.IdentifierValuesJson = grade.IdentifierValuesJson;
 
                 // Remove missing lines (only check lines with real IDs from payload, ignore new lines with ID=0)
                 var incomingLineIds = grade.SpecificationLines.Where(y => y.ID > 0).Select(y => y.ID).ToHashSet();
@@ -190,9 +209,30 @@ namespace LIMSApi.Services
                         existingLine.DimensionalFactorID = line.DimensionalFactorID;
                         existingLine.LowerLimitValue = line.LowerLimitValue;
                         existingLine.UpperLimitValue = line.UpperLimitValue;
+                        existingLine.LowerLimitDecimalValue = line.LowerLimitDecimalValue;
+                        existingLine.UpperLimitDecimalValue = line.UpperLimitDecimalValue;
                         existingLine.HeatTreatmentID = line.HeatTreatmentID;
                         existingLine.ProductConditionID1 = line.ProductConditionID1;
                         existingLine.ProductConditionID2 = line.ProductConditionID2;
+                        existingLine.ProductSizeMasterID = line.ProductSizeMasterID;
+                        existingLine.TestCondition = line.TestCondition;
+                        existingLine.TestNote = line.TestNote;
+
+                        // MS-E: replace test-method mappings (clear + repopulate)
+                        existingLine.TestMethodMappings.Clear();
+                        if (line.TestMethodMappings != null)
+                        {
+                            foreach (var m in line.TestMethodMappings)
+                            {
+                                existingLine.TestMethodMappings.Add(new SpecificationLineTestMethod
+                                {
+                                    LaboratoryTestID = m.LaboratoryTestID,
+                                    TestMethodSpecificationID = m.TestMethodSpecificationID,
+                                    NumberOfTestSpecimen = m.NumberOfTestSpecimen,
+                                    DisplayOrder = m.DisplayOrder
+                                });
+                            }
+                        }
                     }
                 }
             }
@@ -200,6 +240,84 @@ namespace LIMSApi.Services
             _logger.LogInformation("SpecificationHeader '{SpecificationHeaderName}' updated successfully.", model.AliasName);
         }
 
+
+        // Returns a detached deep-copy of an existing spec with all IDs zeroed and Version cleared,
+        // so the frontend can pre-fill the create form for a new version (clone-previous).
+        public async Task<SpecificationHeader> GetCloneTemplate(long id)
+        {
+            var src = await _specificationRepo.GetSpecificationHeaderById(id);
+            if (src == null)
+                throw new InvalidOperationException("SpecificationHeader not found!");
+
+            return new SpecificationHeader
+            {
+                ID = 0,
+                AliasName = src.AliasName,
+                StandardOrganizationID = src.StandardOrganizationID,
+                Standard = src.Standard,
+                Part = src.Part,
+                StandardYear = src.StandardYear,
+                IsCustom = src.IsCustom,
+                SpecificationNo = src.SpecificationNo,
+                Version = null, // user enters the new version
+                DisplayTitle = src.DisplayTitle,
+                Title = src.Title,
+                IdentifierConfigJson = src.IdentifierConfigJson,
+                HeaderParameters = src.HeaderParameters.Select(hp => new SpecificationHeaderParameter
+                {
+                    ID = 0,
+                    ParameterID = hp.ParameterID,
+                    ParameterUnitID = hp.ParameterUnitID,
+                    Type = hp.Type,
+                    DisplayOrder = hp.DisplayOrder
+                }).ToList(),
+                Grades = src.Grades.Select(g => new SpecificationGrade
+                {
+                    ID = 0,
+                    Grade = g.Grade,
+                    IsUNS = g.IsUNS,
+                    UNSSteelNumber = g.UNSSteelNumber,
+                    MetalClassificationID = g.MetalClassificationID,
+                    IdentifierValuesJson = g.IdentifierValuesJson,
+                    SpecificationLines = g.SpecificationLines.Select(l => new SpecificationLine
+                    {
+                        ID = 0,
+                        ManualSelection = l.ManualSelection,
+                        ParameterID = l.ParameterID,
+                        MinValue = l.MinValue,
+                        MaxValue = l.MaxValue,
+                        Notes = l.Notes,
+                        Equation = l.Equation,
+                        ParameterUnitID = l.ParameterUnitID,
+                        MinValueEquation = l.MinValueEquation,
+                        MaxValueEquation = l.MaxValueEquation,
+                        MinTolerance = l.MinTolerance,
+                        MaxTolerance = l.MaxTolerance,
+                        SpecimenOrientationID = l.SpecimenOrientationID,
+                        DimensionalFactorID = l.DimensionalFactorID,
+                        LowerLimitValue = l.LowerLimitValue,
+                        UpperLimitValue = l.UpperLimitValue,
+                        LowerLimitDecimalValue = l.LowerLimitDecimalValue,
+                        UpperLimitDecimalValue = l.UpperLimitDecimalValue,
+                        HeatTreatmentID = l.HeatTreatmentID,
+                        ProductConditionID1 = l.ProductConditionID1,
+                        ProductConditionID2 = l.ProductConditionID2,
+                        ProductSizeMasterID = l.ProductSizeMasterID,
+                        TestCondition = l.TestCondition,
+                        TestNote = l.TestNote,
+                        Type = l.Type,
+                        TestMethodMappings = l.TestMethodMappings.Select(m => new SpecificationLineTestMethod
+                        {
+                            ID = 0,
+                            LaboratoryTestID = m.LaboratoryTestID,
+                            TestMethodSpecificationID = m.TestMethodSpecificationID,
+                            NumberOfTestSpecimen = m.NumberOfTestSpecimen,
+                            DisplayOrder = m.DisplayOrder
+                        }).ToList()
+                    }).ToList()
+                }).ToList()
+            };
+        }
 
         public async Task RemoveSpecificationHeader(long id)
         {

@@ -89,8 +89,10 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<SiteActivity> SiteActivities { get; set; }
     public virtual DbSet<SiteError> SiteErrors { get; set; }
     public virtual DbSet<SpecificationHeader> SpecificationHeaders { get; set; }
+    public virtual DbSet<SpecificationHeaderParameter> SpecificationHeaderParameters { get; set; }
     public virtual DbSet<SpecificationGrade> SpecificationGrades { get; set; }
     public virtual DbSet<SpecificationLine> SpecificationLines { get; set; }
+    public virtual DbSet<SpecificationLineTestMethod> SpecificationLineTestMethods { get; set; }
     public virtual DbSet<SpecimenOrientationMaster> SpecimenOrientationMasters { get; set; }
     public virtual DbSet<SpecimenTypeMaster> SpecimenTypeMasters { get; set; }
     public virtual DbSet<StandardOrganizationMaster> StandardOrganizationMasters { get; set; }
@@ -646,6 +648,48 @@ public partial class LIMSContext : DbContext
     .WithMany()
     .HasForeignKey(x => x.TokenID)
     .OnDelete(DeleteBehavior.Restrict);
+
+        // SpecificationHeaderParameter → SpecificationHeader (cascade with header)
+        modelBuilder.Entity<SpecificationHeaderParameter>()
+            .HasOne(x => x.SpecificationHeader)
+            .WithMany(h => h.HeaderParameters)
+            .HasForeignKey(x => x.SpecificationHeaderID)
+            .OnDelete(DeleteBehavior.Cascade);
+        // SpecificationHeaderParameter → Parameter / ParameterUnit (no cascade)
+        modelBuilder.Entity<SpecificationHeaderParameter>()
+            .HasOne(x => x.Parameter)
+            .WithMany()
+            .HasForeignKey(x => x.ParameterID)
+            .OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<SpecificationHeaderParameter>()
+            .HasOne(x => x.ParameterUnit)
+            .WithMany()
+            .HasForeignKey(x => x.ParameterUnitID)
+            .OnDelete(DeleteBehavior.NoAction);
+        // SpecificationLine → ProductSizeMaster (MS-D, no cascade)
+        modelBuilder.Entity<SpecificationLine>()
+            .HasOne(x => x.ProductSizeMaster)
+            .WithMany()
+            .HasForeignKey(x => x.ProductSizeMasterID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // MS-E: SpecificationLineTestMethod → SpecificationLine (cascade with line)
+        modelBuilder.Entity<SpecificationLineTestMethod>()
+            .HasOne(x => x.SpecificationLine)
+            .WithMany(l => l.TestMethodMappings)
+            .HasForeignKey(x => x.SpecificationLineID)
+            .OnDelete(DeleteBehavior.Cascade);
+        // MS-E: SpecificationLineTestMethod → LaboratoryTest / TestMethodSpecification (no cascade)
+        modelBuilder.Entity<SpecificationLineTestMethod>()
+            .HasOne(x => x.LaboratoryTest)
+            .WithMany()
+            .HasForeignKey(x => x.LaboratoryTestID)
+            .OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<SpecificationLineTestMethod>()
+            .HasOne(x => x.TestMethodSpecification)
+            .WithMany()
+            .HasForeignKey(x => x.TestMethodSpecificationID)
+            .OnDelete(DeleteBehavior.NoAction);
 
         // ProductSpecificationGrade → SpecificationGrade (no cascade)
         modelBuilder.Entity<ProductSpecificationGrade>()

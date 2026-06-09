@@ -12,5 +12,8 @@ namespace LIMSApi.Services.Interface
         Task<PagedResponse<object>> FetchParameterUnitList(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetParameterUnitDropdown(string? searchTerm, int pageNo, int pageSize);
+
+        // Equivalent units for a given unit: the unit itself + units whose Name matches its SimilarUnit1-7.
+        Task<List<DropdwonSelector>> GetEquivalentUnits(long unitId);
     }
 }

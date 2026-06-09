@@ -44,6 +44,13 @@ namespace LIMSApi.Repositories
                  .Include(x => x.Grades)
                      .ThenInclude(sl => sl.SpecificationLines)
                          .ThenInclude(l => l.Parameter)
+                 .Include(x => x.Grades)
+                     .ThenInclude(sl => sl.SpecificationLines)
+                         .ThenInclude(l => l.TestMethodMappings)
+                 .Include(x => x.HeaderParameters)
+                     .ThenInclude(hp => hp.Parameter)
+                 .Include(x => x.HeaderParameters)
+                     .ThenInclude(hp => hp.ParameterUnit)
                  .FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
         }
 
@@ -283,6 +290,7 @@ namespace LIMSApi.Repositories
             return data;
         }
 
+        // Uniqueness is (AliasName + Version) so the same spec can exist across versions.
         public async Task<bool> ExistsByName(string name)
         {
             return await _context.SpecificationHeaders.AnyAsync(x => x.AliasName == name && x.IsActive);
@@ -291,6 +299,15 @@ namespace LIMSApi.Repositories
         public async Task<bool> ExistsByNameAndNotId(string name, long Id)
         {
             return await _context.SpecificationHeaders.AnyAsync(x => x.AliasName == name && x.ID != Id && x.IsActive);
+        }
+
+        public async Task<bool> ExistsByNameAndVersion(string name, string? version, long excludeId = 0)
+        {
+            return await _context.SpecificationHeaders.AnyAsync(x =>
+                x.AliasName == name
+                && ((x.Version ?? "") == (version ?? ""))
+                && x.ID != excludeId
+                && x.IsActive);
         }
 
         public async Task<List<DropdwonSelector>> GetDefaultStandardForSpecification(long gradeId)

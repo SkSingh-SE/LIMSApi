@@ -43,18 +43,34 @@ public partial class SpecificationLine
 
     public long? DimensionalFactorID { get; set; }
 
+    // MS-D: limit = symbol (≤ ≥ < > =) + decimal value. Symbol kept in *Value, number in *DecimalValue.
     public string? LowerLimitValue { get; set; }
 
     public string? UpperLimitValue { get; set; }
 
+    [Column(TypeName = "decimal(18,6)")]
+    public decimal? LowerLimitDecimalValue { get; set; }
+
+    [Column(TypeName = "decimal(18,6)")]
+    public decimal? UpperLimitDecimalValue { get; set; }
+
     public long? HeatTreatmentID { get; set; }
     public long? ProductConditionID1 { get; set; }
     public long? ProductConditionID2 { get; set; }
+
+    // MS-D: product size band (→ ProductSizeMaster / MS8) + test condition + test note
+    public long? ProductSizeMasterID { get; set; }
+    public string? TestCondition { get; set; }
+    public string? TestNote { get; set; }
+
     public string Type { get; set; } = "chemical"; // 'chemical' | 'mechanical' | 'other'
 
 
     [ForeignKey("ParameterID")]
     public virtual ParameterMaster? Parameter { get; set; }
+
+    [ForeignKey("ProductSizeMasterID")]
+    public virtual ProductSizeMaster? ProductSizeMaster { get; set; }
     [ForeignKey("ParameterUnitID")]
     public virtual ParameterUnitMaster? ParameterUnit { get; set; }
 
@@ -68,5 +84,8 @@ public partial class SpecificationLine
 
     [ForeignKey("SpecificationGradeID"),JsonIgnore]
     public virtual SpecificationGrade? SpecificationGrade { get; set; }
+
+    // MS-E: per-parameter test-method mapping (relational).
+    public virtual ICollection<SpecificationLineTestMethod> TestMethodMappings { get; set; } = new List<SpecificationLineTestMethod>();
 
 }

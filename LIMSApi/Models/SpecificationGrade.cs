@@ -16,6 +16,9 @@ public partial class SpecificationGrade
 
     public string? UNSSteelNumber { get; set; }
 
+    // MS-B: per-grade values for the header's enabled identifiers. JSON object { key: value }.
+    public string? IdentifierValuesJson { get; set; }
+
     public long? MetalClassificationID { get; set; }
     [ForeignKey("MetalClassificationID")]
     public virtual MetalClassificationMaster? MetalClassification { get; set; }

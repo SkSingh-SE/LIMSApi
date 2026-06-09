@@ -4,6 +4,7 @@ using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
+using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Services
 {
@@ -100,6 +101,44 @@ namespace LIMSApi.Services
         public async Task<List<DropdwonSelector>> GetParameterUnitDropdown(string? searchTerm, int pageNo, int pageSize)
         {
             return await _ParameterUnitRepository.GetParameterUnitDropdown(searchTerm, pageNo, pageSize);
+        }
+
+        public async Task<List<DropdwonSelector>> GetEquivalentUnits(long unitId)
+        {
+            var baseUnit = await _context.ParameterUnitMasters
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.ID == unitId && u.IsActive);
+
+            // Always return the base unit first so the parameter's default unit binds even with no equivalents.
+            var result = new List<DropdwonSelector>();
+            if (baseUnit == null) return result;
+            result.Add(new DropdwonSelector { Id = baseUnit.ID, Name = baseUnit.Name });
+
+            // Equivalents can be stored in EITHER direction, so match both:
+            //  (a) other units whose Name is listed in THIS unit's SimilarUnit1-7, and
+            //  (b) other units that list THIS unit's Name in THEIR SimilarUnit1-7.
+            var baseName = baseUnit.Name.Trim();
+            var similarNames = new[]
+            {
+                baseUnit.SimilarUnit1, baseUnit.SimilarUnit2, baseUnit.SimilarUnit3, baseUnit.SimilarUnit4,
+                baseUnit.SimilarUnit5, baseUnit.SimilarUnit6, baseUnit.SimilarUnit7
+            }
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Select(n => n!.Trim())
+            .ToList();
+
+            var equivalents = await _context.ParameterUnitMasters
+                .AsNoTracking()
+                .Where(u => u.IsActive && u.ID != baseUnit.ID && (
+                    similarNames.Contains(u.Name) ||
+                    u.SimilarUnit1 == baseName || u.SimilarUnit2 == baseName || u.SimilarUnit3 == baseName ||
+                    u.SimilarUnit4 == baseName || u.SimilarUnit5 == baseName || u.SimilarUnit6 == baseName ||
+                    u.SimilarUnit7 == baseName))
+                .Select(u => new DropdwonSelector { Id = u.ID, Name = u.Name })
+                .ToListAsync();
+            result.AddRange(equivalents);
+
+            return result;
         }
     }
 }

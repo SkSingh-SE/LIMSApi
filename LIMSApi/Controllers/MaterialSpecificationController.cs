@@ -88,6 +88,15 @@ namespace LIMSApi.Controllers
             });
         }
 
+        // Clone-as-new-version: returns a detached copy (IDs zeroed, Version cleared) to pre-fill the create form.
+        [RequirePermission(Permissions.MaterialSpecification.Create)]
+        [HttpGet("clone-template/{id}")]
+        public async Task<ActionResult<SpecificationHeader>> GetCloneTemplate(long id)
+        {
+            var entity = await _service.GetCloneTemplate(id);
+            return entity == null ? NoContent() : Ok(entity);
+        }
+
         [HttpGet("dropdown")]
         public async Task<IActionResult> GetSpecificationHeaderDropdown(string? searchTerm, int pageNo, int pageSize)
         {

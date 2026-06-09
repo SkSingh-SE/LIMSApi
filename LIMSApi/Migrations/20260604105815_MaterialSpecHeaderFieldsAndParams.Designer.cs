@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20260604105815_MaterialSpecHeaderFieldsAndParams")]
+    partial class MaterialSpecHeaderFieldsAndParams
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -16782,9 +16785,6 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<string>("IdentifierValuesJson")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<bool?>("IsUNS")
                         .HasColumnType("bit");
 
@@ -16832,9 +16832,6 @@ namespace LIMSApi.Migrations
                     b.Property<string>("DisplayTitle")
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
-
-                    b.Property<string>("IdentifierConfigJson")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -16932,9 +16929,6 @@ namespace LIMSApi.Migrations
                     b.Property<long?>("HeatTreatmentID")
                         .HasColumnType("bigint");
 
-                    b.Property<decimal?>("LowerLimitDecimalValue")
-                        .HasColumnType("decimal(18,6)");
-
                     b.Property<string>("LowerLimitValue")
                         .HasColumnType("nvarchar(max)");
 
@@ -16974,27 +16968,15 @@ namespace LIMSApi.Migrations
                     b.Property<long?>("ProductConditionID2")
                         .HasColumnType("bigint");
 
-                    b.Property<long?>("ProductSizeMasterID")
-                        .HasColumnType("bigint");
-
                     b.Property<long?>("SpecificationGradeID")
                         .HasColumnType("bigint");
 
                     b.Property<long?>("SpecimenOrientationID")
                         .HasColumnType("bigint");
 
-                    b.Property<string>("TestCondition")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("TestNote")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<decimal?>("UpperLimitDecimalValue")
-                        .HasColumnType("decimal(18,6)");
 
                     b.Property<string>("UpperLimitValue")
                         .HasColumnType("nvarchar(max)");
@@ -17009,47 +16991,11 @@ namespace LIMSApi.Migrations
 
                     b.HasIndex("ParameterUnitID");
 
-                    b.HasIndex("ProductSizeMasterID");
-
                     b.HasIndex("SpecificationGradeID");
 
                     b.HasIndex("SpecimenOrientationID");
 
                     b.ToTable("SpecificationLines");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.SpecificationLineTestMethod", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<int?>("DisplayOrder")
-                        .HasColumnType("int");
-
-                    b.Property<long?>("LaboratoryTestID")
-                        .HasColumnType("bigint");
-
-                    b.Property<int?>("NumberOfTestSpecimen")
-                        .HasColumnType("int");
-
-                    b.Property<long>("SpecificationLineID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("TestMethodSpecificationID")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("LaboratoryTestID");
-
-                    b.HasIndex("SpecificationLineID");
-
-                    b.HasIndex("TestMethodSpecificationID");
-
-                    b.ToTable("SpecificationLineTestMethods");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SpecimenOrientationCategoryMaster", b =>
@@ -21208,11 +21154,6 @@ namespace LIMSApi.Migrations
                         .WithMany()
                         .HasForeignKey("ParameterUnitID");
 
-                    b.HasOne("LIMSApi.Models.ProductSizeMaster", "ProductSizeMaster")
-                        .WithMany()
-                        .HasForeignKey("ProductSizeMasterID")
-                        .OnDelete(DeleteBehavior.NoAction);
-
                     b.HasOne("LIMSApi.Models.SpecificationGrade", "SpecificationGrade")
                         .WithMany("SpecificationLines")
                         .HasForeignKey("SpecificationGradeID");
@@ -21229,36 +21170,9 @@ namespace LIMSApi.Migrations
 
                     b.Navigation("ParameterUnit");
 
-                    b.Navigation("ProductSizeMaster");
-
                     b.Navigation("SpecificationGrade");
 
                     b.Navigation("SpecimenOrientation");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.SpecificationLineTestMethod", b =>
-                {
-                    b.HasOne("LIMSApi.Models.LaboratoryTest", "LaboratoryTest")
-                        .WithMany()
-                        .HasForeignKey("LaboratoryTestID")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("LIMSApi.Models.SpecificationLine", "SpecificationLine")
-                        .WithMany("TestMethodMappings")
-                        .HasForeignKey("SpecificationLineID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("LIMSApi.Models.TestMethodSpecification", "TestMethodSpecification")
-                        .WithMany()
-                        .HasForeignKey("TestMethodSpecificationID")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.Navigation("LaboratoryTest");
-
-                    b.Navigation("SpecificationLine");
-
-                    b.Navigation("TestMethodSpecification");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SpecimenOrientationMaster", b =>
@@ -21820,11 +21734,6 @@ namespace LIMSApi.Migrations
                     b.Navigation("Grades");
 
                     b.Navigation("HeaderParameters");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.SpecificationLine", b =>
-                {
-                    b.Navigation("TestMethodMappings");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.SpecimenOrientationMaster", b =>
