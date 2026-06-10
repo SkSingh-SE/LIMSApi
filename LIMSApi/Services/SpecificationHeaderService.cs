@@ -136,6 +136,7 @@ namespace LIMSApi.Services
                 {
                     ParameterID = hp.ParameterID,
                     ParameterUnitID = hp.ParameterUnitID,
+                    ParameterUnitEquivalentID = hp.ParameterUnitEquivalentID,
                     Type = hp.Type,
                     DisplayOrder = hp.DisplayOrder
                 });
@@ -201,6 +202,10 @@ namespace LIMSApi.Services
                         existingLine.Notes = line.Notes;
                         existingLine.Equation = line.Equation;
                         existingLine.ParameterUnitID = line.ParameterUnitID;
+                        existingLine.ParameterUnitEquivalentID = line.ParameterUnitEquivalentID;
+                        existingLine.LaboratoryTestID = line.LaboratoryTestID;
+                        existingLine.MinEquation = line.MinEquation;
+                        existingLine.MaxEquation = line.MaxEquation;
                         existingLine.MinValueEquation = line.MinValueEquation;
                         existingLine.MaxValueEquation = line.MaxValueEquation;
                         existingLine.MinTolerance = line.MinTolerance;
@@ -268,6 +273,7 @@ namespace LIMSApi.Services
                     ID = 0,
                     ParameterID = hp.ParameterID,
                     ParameterUnitID = hp.ParameterUnitID,
+                    ParameterUnitEquivalentID = hp.ParameterUnitEquivalentID,
                     Type = hp.Type,
                     DisplayOrder = hp.DisplayOrder
                 }).ToList(),
@@ -288,7 +294,11 @@ namespace LIMSApi.Services
                         MaxValue = l.MaxValue,
                         Notes = l.Notes,
                         Equation = l.Equation,
+                        MinEquation = l.MinEquation,
+                        MaxEquation = l.MaxEquation,
                         ParameterUnitID = l.ParameterUnitID,
+                        ParameterUnitEquivalentID = l.ParameterUnitEquivalentID,
+                        LaboratoryTestID = l.LaboratoryTestID,
                         MinValueEquation = l.MinValueEquation,
                         MaxValueEquation = l.MaxValueEquation,
                         MinTolerance = l.MinTolerance,

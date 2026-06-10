@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20260609102518_AddSpecUnitEquivalentFk")]
+    partial class AddSpecUnitEquivalentFk
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -16969,9 +16972,6 @@ namespace LIMSApi.Migrations
                     b.Property<long?>("HeatTreatmentID")
                         .HasColumnType("bigint");
 
-                    b.Property<long?>("LaboratoryTestID")
-                        .HasColumnType("bigint");
-
                     b.Property<decimal?>("LowerLimitDecimalValue")
                         .HasColumnType("decimal(18,6)");
 
@@ -16981,9 +16981,6 @@ namespace LIMSApi.Migrations
                     b.Property<bool?>("ManualSelection")
                         .HasColumnType("bit");
 
-                    b.Property<string>("MaxEquation")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<decimal?>("MaxTolerance")
                         .HasColumnType("decimal(18,6)");
 
@@ -16992,9 +16989,6 @@ namespace LIMSApi.Migrations
 
                     b.Property<decimal?>("MaxValueEquation")
                         .HasColumnType("decimal(18,6)");
-
-                    b.Property<string>("MinEquation")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<decimal?>("MinTolerance")
                         .HasColumnType("decimal(18,6)");
@@ -17053,8 +17047,6 @@ namespace LIMSApi.Migrations
                     b.HasIndex("DimensionalFactorID");
 
                     b.HasIndex("HeatTreatmentID");
-
-                    b.HasIndex("LaboratoryTestID");
 
                     b.HasIndex("ParameterID");
 
@@ -21271,11 +21263,6 @@ namespace LIMSApi.Migrations
                         .WithMany()
                         .HasForeignKey("HeatTreatmentID");
 
-                    b.HasOne("LIMSApi.Models.LaboratoryTest", "LaboratoryTest")
-                        .WithMany()
-                        .HasForeignKey("LaboratoryTestID")
-                        .OnDelete(DeleteBehavior.NoAction);
-
                     b.HasOne("LIMSApi.Models.ParameterMaster", "Parameter")
                         .WithMany()
                         .HasForeignKey("ParameterID");
@@ -21305,8 +21292,6 @@ namespace LIMSApi.Migrations
                     b.Navigation("DimensionalFactor");
 
                     b.Navigation("HeatTreatment");
-
-                    b.Navigation("LaboratoryTest");
 
                     b.Navigation("Parameter");
 

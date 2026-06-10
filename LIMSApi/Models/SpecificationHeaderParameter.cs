@@ -19,6 +19,9 @@ namespace LIMSApi.Models
 
         public long? ParameterUnitID { get; set; }
 
+        // Phase 2: chosen equivalent of ParameterUnitID (null = base unit).
+        public long? ParameterUnitEquivalentID { get; set; }
+
         /// 'chemical' | 'general'
         [MaxLength(20)]
         public string Type { get; set; } = "chemical";
@@ -34,5 +37,8 @@ namespace LIMSApi.Models
 
         [ForeignKey(nameof(ParameterUnitID))]
         public virtual ParameterUnitMaster? ParameterUnit { get; set; }
+
+        [ForeignKey(nameof(ParameterUnitEquivalentID))]
+        public virtual ParameterUnitEquivalent? ParameterUnitEquivalent { get; set; }
     }
 }

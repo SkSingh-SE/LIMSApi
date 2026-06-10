@@ -13,7 +13,7 @@ namespace LIMSApi.Services.Interface
 
         Task<List<DropdwonSelector>> GetParameterUnitDropdown(string? searchTerm, int pageNo, int pageSize);
 
-        // Equivalent units for a given unit: the unit itself + units whose Name matches its SimilarUnit1-7.
-        Task<List<DropdwonSelector>> GetEquivalentUnits(long unitId);
+        // Selectable unit options for a parameter: base unit + its normalized child equivalents.
+        Task<List<EquivalentUnitOption>> GetEquivalentUnits(long unitId);
     }
 }

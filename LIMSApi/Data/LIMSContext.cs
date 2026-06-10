@@ -681,6 +681,23 @@ public partial class LIMSContext : DbContext
             .HasForeignKey(x => x.BaseParameterUnitID)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // Phase 2: SpecificationLine / SpecificationHeaderParameter → ParameterUnitEquivalent (no cascade)
+        modelBuilder.Entity<SpecificationLine>()
+            .HasOne(x => x.ParameterUnitEquivalent)
+            .WithMany()
+            .HasForeignKey(x => x.ParameterUnitEquivalentID)
+            .OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<SpecificationLine>()
+            .HasOne(x => x.LaboratoryTest)
+            .WithMany()
+            .HasForeignKey(x => x.LaboratoryTestID)
+            .OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<SpecificationHeaderParameter>()
+            .HasOne(x => x.ParameterUnitEquivalent)
+            .WithMany()
+            .HasForeignKey(x => x.ParameterUnitEquivalentID)
+            .OnDelete(DeleteBehavior.NoAction);
+
         // MS-E: SpecificationLineTestMethod → SpecificationLine (cascade with line)
         modelBuilder.Entity<SpecificationLineTestMethod>()
             .HasOne(x => x.SpecificationLine)

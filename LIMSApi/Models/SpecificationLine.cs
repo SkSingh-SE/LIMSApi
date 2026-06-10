@@ -28,6 +28,19 @@ public partial class SpecificationLine
 
     public long? ParameterUnitID { get; set; }
 
+    // Phase 2: chosen equivalent of ParameterUnitID (null = base unit). FK to ParameterUnitEquivalent.
+    public long? ParameterUnitEquivalentID { get; set; }
+
+    // Test-method matrix: one Laboratory Test per parameter (the up-to-5 Test Method Specs live in
+    // TestMethodMappings as TestMethodSpecificationID rows, DisplayOrder 1-5).
+    public long? LaboratoryTestID { get; set; }
+
+    // Formula expressions for equation-driven limits (authoring). Evaluated at test-result time
+    // (cross-parameter, e.g. "Mg + 0.4*(C-56)") to produce MinValueEquation / MaxValueEquation.
+    public string? MinEquation { get; set; }
+    public string? MaxEquation { get; set; }
+
+    // Runtime-computed equation limits (filled by the evaluator phase).
     [Column(TypeName = "decimal(18,6)")]
     public decimal? MinValueEquation { get; set; }
 
@@ -73,6 +86,10 @@ public partial class SpecificationLine
     public virtual ProductSizeMaster? ProductSizeMaster { get; set; }
     [ForeignKey("ParameterUnitID")]
     public virtual ParameterUnitMaster? ParameterUnit { get; set; }
+    [ForeignKey("ParameterUnitEquivalentID")]
+    public virtual ParameterUnitEquivalent? ParameterUnitEquivalent { get; set; }
+    [ForeignKey("LaboratoryTestID")]
+    public virtual LaboratoryTest? LaboratoryTest { get; set; }
 
     [ForeignKey("SpecimenOrientationID")]
     public virtual SpecimenOrientationMaster? SpecimenOrientation { get; set; }
