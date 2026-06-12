@@ -39,5 +39,48 @@ namespace LIMSApi.Models
         public string? VerifiedBy { get; set; }
 
         public DateTime? NextVerificationDate { get; set; }
+        public string? TestMethodName { get; set; }
+        public string? RevIssue { get; set; }
+        public string? ReferenceStandard { get; set; }
+        public string? Humidity { get; set; }
+        public string? Temperature { get; set; }
+        public string? EquipmentId { get; set; }
+        public string? EquipmentName { get; set; }
+        public string? Conclusion { get; set; }
+        public string? VerificationStatus { get; set; }
+        public string? ReasonNotVerified { get; set; }
+        public decimal? RecoveryMin { get; set; }
+        public decimal? RecoveryMax { get; set; }
+        public decimal? RsdMax { get; set; }
+        public decimal? BiasMax { get; set; }
+        public DateTime? CalibrationDueDate { get; set; }
+        public string? CrmParametersJson { get; set; }
+        public string? VerificationDataJson { get; set; }
+
+        [NotMapped]
+        public List<CrmParameters>? CrmParameters { get; set; }
+
+        [NotMapped]
+        public List<VerificationData>? VerificationData { get; set; }
+    }
+    [NotMapped]
+    public class CrmParameters
+    {
+        public string CrmSampleId { get; set; }
+        public string CertificateNo { get; set; }
+        public decimal ReferenceValue { get; set; }
+        public string Unit { get; set; }
+        public string MeasurementUncertainty { get; set; }
+    }
+    [NotMapped]
+    public class VerificationData
+    {
+        public string CrmSampleId { get; set; }
+        public decimal ReferenceValue { get; set; }
+        public string Unit { get; set; }
+        public decimal ObservationValue { get; set; }
+        public decimal Difference { get; set; }
+        public decimal Recovery { get; set; }
+        public string Status { get; set; }
     }
 }

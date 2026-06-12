@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20260608101028_NablTestVerificationAddCols")]
+    partial class NablTestVerificationAddCols
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -9010,12 +9013,6 @@ namespace LIMSApi.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
 
-                    b.Property<bool?>("Accuracy")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("AccuracyStudyJson")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("ApprovedBy")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -9026,9 +9023,6 @@ namespace LIMSApi.Migrations
                     b.Property<DateTime?>("ApprovedDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<decimal?>("BiasMax")
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<decimal?>("BiasPercentage")
                         .HasColumnType("decimal(8,4)");
 
@@ -9036,23 +9030,11 @@ namespace LIMSApi.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("Conclusion")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<decimal?>("ConfidenceLevel")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal?>("CoverageFactor")
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<long>("CreatedBy")
                         .HasColumnType("bigint");
 
                     b.Property<DateTime>("CreatedOn")
                         .HasColumnType("datetime2");
-
-                    b.Property<string>("CrmMaterialParametersJson")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime>("Date")
                         .HasColumnType("datetime2");
@@ -9068,22 +9050,10 @@ namespace LIMSApi.Migrations
                     b.Property<DateTime?>("EffectiveDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("EquipmentId")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("EquipmentName")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<decimal?>("ExpandedUncertainty")
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<string>("FormCode")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("Humidity")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -9099,12 +9069,6 @@ namespace LIMSApi.Migrations
                     b.Property<string>("LinearityRange")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
-
-                    b.Property<bool?>("Measurement")
-                        .HasColumnType("bit");
-
-                    b.Property<decimal?>("MeasurementUncertainty")
-                        .HasColumnType("decimal(18,2)");
 
                     b.Property<long?>("ModifiedBy")
                         .HasColumnType("bigint");
@@ -9126,14 +9090,8 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<bool?>("Precision")
-                        .HasColumnType("bit");
-
                     b.Property<decimal?>("PrecisionRSD")
                         .HasColumnType("decimal(8,4)");
-
-                    b.Property<string>("PrecisionStudyJson")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("PreparedBy")
                         .HasMaxLength(200)
@@ -9149,33 +9107,9 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
-                    b.Property<string>("ReasonForValidation")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("ReasonNotValid")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool?>("Recovery")
-                        .HasColumnType("bit");
-
-                    b.Property<decimal?>("RecoveryMax")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal?>("RecoveryMin")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("ReferenceStandard")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("RejectionRemarks")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
-
-                    b.Property<bool?>("Repeatability")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("RevIssue")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("RevNo")
                         .IsRequired()
@@ -9195,15 +9129,9 @@ namespace LIMSApi.Migrations
                     b.Property<DateTime?>("ReviewedDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<bool?>("Robustness")
-                        .HasColumnType("bit");
-
                     b.Property<string>("RobustnessResults")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
-
-                    b.Property<decimal?>("RsdMax")
-                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("SelectivityResults")
                         .HasMaxLength(500)
@@ -9213,9 +9141,6 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
-                    b.Property<string>("Temperature")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("TestMatrix")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -9224,9 +9149,6 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<string>("TestMethodName")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("TestParameter")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -9234,9 +9156,6 @@ namespace LIMSApi.Migrations
                     b.Property<string>("UncertaintyResults")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("ValidStatus")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ValidatedBy")
                         .HasMaxLength(200)
@@ -9248,15 +9167,6 @@ namespace LIMSApi.Migrations
                     b.Property<string>("ValidationScope")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("ValidationType")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("VerificationDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("VerifiedBy")
-                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("ID");
 
@@ -9281,8 +9191,8 @@ namespace LIMSApi.Migrations
                     b.Property<DateTime?>("ApprovedDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<decimal?>("BiasMax")
-                        .HasColumnType("decimal(18,2)");
+                    b.Property<int?>("BiasMax")
+                        .HasColumnType("int");
 
                     b.Property<string>("BiasResults")
                         .HasMaxLength(500)
@@ -9383,11 +9293,11 @@ namespace LIMSApi.Migrations
                     b.Property<string>("ReasonNotVerified")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<decimal?>("RecoveryMax")
-                        .HasColumnType("decimal(18,2)");
+                    b.Property<int?>("RecoveryMax")
+                        .HasColumnType("int");
 
-                    b.Property<decimal?>("RecoveryMin")
-                        .HasColumnType("decimal(18,2)");
+                    b.Property<int?>("RecoveryMin")
+                        .HasColumnType("int");
 
                     b.Property<string>("ReferenceStandard")
                         .HasColumnType("nvarchar(max)");
@@ -9417,8 +9327,8 @@ namespace LIMSApi.Migrations
                     b.Property<DateTime?>("ReviewedDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<decimal?>("RsdMax")
-                        .HasColumnType("decimal(18,2)");
+                    b.Property<int?>("RsdMax")
+                        .HasColumnType("int");
 
                     b.Property<string>("Status")
                         .HasMaxLength(20)

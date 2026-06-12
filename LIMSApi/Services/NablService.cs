@@ -31,8 +31,8 @@ namespace LIMSApi.Services
             { "JobDescription", "F-3" },
             { "ResponsibilityAuthority", "F-4" },
             { "EmployeeCompetence", "F-7" },
-            { "EmployeeAuthorization", "F-7" },
-            { "CompetenceRequirement", "F-4" },
+            { "EmployeeAuthorization", "F-7B" },
+            { "CompetenceRequirement", "F-7D" },
             { "InductionTraining", "F-6" },
             { "SkillMatrix", "F-6" },
             { "SkillMatrixDecision", "F-6A" },
@@ -42,9 +42,9 @@ namespace LIMSApi.Services
             { "EnvironmentMonitoring", "F-11" },
             { "QualityControlPlan", "F-12" },
             { "TestRequest", "F-27" },
-            { "TestMethod", "F-14" },
-            { "MethodVerification", "F-15" },
-            { "MethodValidation", "F-16" },
+            { "TestMethod", "F-28" },
+            { "MethodVerification", "F-29" },
+            { "MethodValidation", "F-30" },
             { "SampleInwardRegister", "F-17" },
             { "SampleMusterRegister", "F-18" },
             { "SampleLabel", "F-19" },
@@ -212,6 +212,49 @@ namespace LIMSApi.Services
                         if (result != null && !string.IsNullOrEmpty(result.ItemsVerificationJson))
                         {
                             result.ItemsParameters = JsonSerializer.Deserialize<List<DescriptionParameters>>(result.ItemsVerificationJson);
+                        }
+                        return result;
+                    }
+                case "TestMethod":
+                    {
+                        var result = data as NablTestMethod;
+                        if (result != null && !string.IsNullOrEmpty(result.TestMethodJson))
+                        {
+                            result.TestMethod = JsonSerializer.Deserialize<List<TestMethod>>(result.TestMethodJson);
+                        }
+                        if (result != null && !string.IsNullOrEmpty(result.OrginDocJson))
+                        {
+                            result.DocEntries = JsonSerializer.Deserialize<List<DocEntries>>(result.OrginDocJson);
+                        }
+                        return result;
+                    }
+                case "MethodVerification":
+                    {
+                        var result = data as NablMethodVerification;
+                        if (result != null && !string.IsNullOrEmpty(result.CrmParametersJson))
+                        {
+                            result.CrmParameters = JsonSerializer.Deserialize<List<CrmParameters>>(result.CrmParametersJson);
+                        }
+                        if (result != null && !string.IsNullOrEmpty(result.VerificationDataJson))
+                        {
+                            result.VerificationData = JsonSerializer.Deserialize<List<VerificationData>>(result.VerificationDataJson);
+                        }
+                        return result;
+                    }
+                case "MethodValidation":
+                    {
+                        var result = data as NablMethodValidation;
+                        if (result != null && !string.IsNullOrEmpty(result.AccuracyStudyJson))
+                        {
+                            result.AccuracyStudy = JsonSerializer.Deserialize<List<AccuracyStudy>>(result.AccuracyStudyJson);
+                        }
+                        if (result != null && !string.IsNullOrEmpty(result.CrmMaterialParametersJson))
+                        {
+                            result.CrmMaterialParameters = JsonSerializer.Deserialize<List<CrmMaterialParameters>>(result.CrmMaterialParametersJson);
+                        }
+                        if (result != null && !string.IsNullOrEmpty(result.PrecisionStudyJson))
+                        {
+                            result.PrecisionStudy = JsonSerializer.Deserialize<List<PrecisionStudy>>(result.PrecisionStudyJson);
                         }
                         return result;
                     }
@@ -1388,7 +1431,8 @@ namespace LIMSApi.Services
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
-
+                model.OrginDocJson =  JsonSerializer.Serialize(model.DocEntries);
+                model.TestMethodJson =  JsonSerializer.Serialize(model.TestMethod);
                 var id = await _repository.Add("TestMethod", model);
                 await LogAudit("TestMethod", id, "Created", null, body.GetRawText());
                 _logger.LogInformation("TestMethod created with ID {Id}.", id);
@@ -1424,7 +1468,14 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
-
+                existing.OrginDocJson =  JsonSerializer.Serialize(model.DocEntries);
+                existing.TestMethodJson =  JsonSerializer.Serialize(model.TestMethod);
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.PreparedBy = model.PreparedBy;
+                existing.PreparedDate = model.PreparedDate;
                 await _repository.Update("TestMethod", existing);
                 await LogAudit("TestMethod", existing.ID, "Updated", null, body.GetRawText());
                 _logger.LogInformation("TestMethod ID {Id} updated.", existing.ID);
@@ -1445,6 +1496,8 @@ namespace LIMSApi.Services
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
+                model.CrmParametersJson =  JsonSerializer.Serialize(model.CrmParameters);
+                model.VerificationDataJson =  JsonSerializer.Serialize(model.VerificationData);
 
                 var id = await _repository.Add("MethodVerification", model);
                 await LogAudit("MethodVerification", id, "Created", null, body.GetRawText());
@@ -1476,6 +1529,29 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
+                existing.TestMethodName = model.TestMethodName;
+                existing.RevIssue = model.RevIssue;
+                existing.ReferenceStandard = model.ReferenceStandard;
+                existing.Humidity = model.Humidity;
+                existing.Temperature = model.Temperature;
+                existing.EquipmentId = model.EquipmentId;
+                existing.EquipmentName = model.EquipmentName;
+                existing.Conclusion = model.Conclusion;
+                existing.VerificationStatus = model.VerificationStatus;
+                existing.ReasonNotVerified = model.ReasonNotVerified;
+                existing.RecoveryMax = model.RecoveryMax;
+                existing.RecoveryMin = model.RecoveryMin;
+                existing.RsdMax = model.RsdMax;
+                existing.BiasMax = model.BiasMax;
+                existing.CalibrationDueDate = model.CalibrationDueDate;
+                existing.CrmParametersJson =  JsonSerializer.Serialize(model.CrmParameters);
+                existing.VerificationDataJson =  JsonSerializer.Serialize(model.VerificationData);
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.PreparedBy = model.PreparedBy;
+                existing.PreparedDate = model.PreparedDate;
 
                 await _repository.Update("MethodVerification", existing);
                 await LogAudit("MethodVerification", existing.ID, "Updated", null, body.GetRawText());
@@ -1497,6 +1573,9 @@ namespace LIMSApi.Services
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
+                model.CrmMaterialParametersJson =  JsonSerializer.Serialize(model.CrmMaterialParameters);
+                model.AccuracyStudyJson =  JsonSerializer.Serialize(model.AccuracyStudy);
+                model.PrecisionStudyJson =  JsonSerializer.Serialize(model.PrecisionStudy);
 
                 var id = await _repository.Add("MethodValidation", model);
                 await LogAudit("MethodValidation", id, "Created", null, body.GetRawText());
@@ -1532,7 +1611,42 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
-
+                existing.CrmMaterialParametersJson =  JsonSerializer.Serialize(model.CrmMaterialParameters);
+                existing.AccuracyStudyJson =  JsonSerializer.Serialize(model.AccuracyStudy);
+                existing.PrecisionStudyJson =  JsonSerializer.Serialize(model.PrecisionStudy);
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.PreparedBy = model.PreparedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.ValidationType = model.ValidationType;
+                existing.ValidStatus = model.ValidStatus;
+                existing.TestMethodName = model.TestMethodName;
+                existing.RevIssue = model.RevIssue;
+                existing.ReferenceStandard = model.ReferenceStandard;
+                existing.Humidity = model.Humidity;
+                existing.Temperature = model.Temperature;
+                existing.EquipmentId = model.EquipmentId;
+                existing.EquipmentName = model.EquipmentName;
+                existing.Conclusion = model.Conclusion;
+                existing.ReasonForValidation = model.ReasonForValidation;
+                existing.ReasonNotValid = model.ReasonNotValid;
+                existing.Recovery = model.Recovery;
+                existing.RecoveryMax = model.RecoveryMax;
+                existing.RecoveryMin= model.RecoveryMin;
+                existing.RsdMax= model.RsdMax;
+                existing.BiasMax= model.BiasMax;
+                existing.ConfidenceLevel= model.ConfidenceLevel;
+                existing.CoverageFactor= model.CoverageFactor;
+                existing.ExpandedUncertainty= model.ExpandedUncertainty;
+                existing.Measurement= model.Measurement;
+                existing.MeasurementUncertainty= model.MeasurementUncertainty;
+                existing.Precision= model.Precision;
+                existing.Repeatability= model.Repeatability;
+                existing.Accuracy= model.Accuracy;
+                existing.Robustness = model.Robustness;
+                
                 await _repository.Update("MethodValidation", existing);
                 await LogAudit("MethodValidation", existing.ID, "Updated", null, body.GetRawText());
                 _logger.LogInformation("MethodValidation ID {Id} updated.", existing.ID);
@@ -3907,6 +4021,10 @@ namespace LIMSApi.Services
         {
             return await _repository.AllSupplierlist(searchTerm, pageNo, pageSize);
         }
+        public async Task<List<DropdwonSelector>> Alltestmethodlist(string formType, string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _repository.Alltestmethodlist(formType, searchTerm, pageNo, pageSize);
+        }
         public async Task<UploadFile> UploadSignatureAsync(IFormFile file, CancellationToken cancellationToken = default)
         {
             if (file == null || file.Length == 0)
@@ -4030,6 +4148,10 @@ namespace LIMSApi.Services
         public async Task<NablPurchaseIndentDto> IndentDetails(string indentNo)
         {
             return await _repository.IndentDetails(indentNo);
+        }
+        public async Task<NablTestMethodValidationDto> TestMethodDetails(string testmethodCode)
+        {
+            return await _repository.TestMethodDetails(testmethodCode);
         }
     }
 }

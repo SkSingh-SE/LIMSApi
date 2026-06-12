@@ -1,14 +1,16 @@
-using System.Collections.Concurrent;
-using System.ComponentModel.DataAnnotations.Schema;
-using System.Linq.Dynamic.Core;
-using System.Reflection;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
+using LIMSApi.Migrations;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
+using System.Collections.Concurrent;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Linq.Dynamic.Core;
+using System.Reflection;
+using System.Text.Json;
 
 namespace LIMSApi.Repositories
 {
@@ -689,7 +691,7 @@ namespace LIMSApi.Repositories
             return obj.ID;
         }
 
-        private async  Task UpdateSupplierEvaluation(NablSupplierEvaluation obj)
+        private async Task UpdateSupplierEvaluation(NablSupplierEvaluation obj)
         {
             if (obj.ToRemoved == true)
             {
@@ -700,7 +702,7 @@ namespace LIMSApi.Repositories
                 await _context.SaveChangesAsync();
                 obj.PresentStatus = "Delisted";
             }
-             _context.NablSupplierEvaluations.Update(obj);
+            _context.NablSupplierEvaluations.Update(obj);
             await _context.SaveChangesAsync();
         }
 
@@ -1029,6 +1031,80 @@ namespace LIMSApi.Repositories
                 .ToList();
             return data;
         }
+        public async Task<List<DropdwonSelector>> Alltestmethodlist(string formType, string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+
+
+            if (pageNo < 0) pageNo = 0;
+            switch (formType)
+            {
+                case "MethodVerification":
+                    var query = _context.NablTestMethods
+                        .Where(x => x.IsActive && !string.IsNullOrWhiteSpace(x.TestMethodJson));
+
+                    var allMethods = new List<TestMethodEntryDto>();
+                    foreach (var method in await query.ToListAsync())
+                    {
+
+                        var methods = System.Text.Json.JsonSerializer.Deserialize<List<TestMethodEntryDto>>(
+                    method.TestMethodJson,
+                    new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    });
+
+                        if (methods != null && methods.Any())
+                        {
+                            allMethods.AddRange(methods);
+                        }
+                        allMethods = allMethods.Where(x => x.Status == "Active").ToList();
+                    }
+
+
+                    var skip = pageNo * pageSize;
+
+
+                    var data = allMethods
+                        .Skip(skip)
+                        .Take(pageSize)
+                        .Select((x, index) => new DropdwonSelector
+                        {
+                            Id = skip + index +1,
+                            Name = x.SpecificationCode,
+                            AdditionalValues = new Dictionary<string, object>
+                        {
+                { "MethodName", x.MethodName ?? "" },
+                { "SpecificationCode", x.SpecificationCode ?? "" },
+                { "ReferenceStandard", x.ReferenceStandard ?? "" },
+                { "RevisionNo", x.RevisionNo ?? "" },
+                { "EffectiveDate", x.EffectiveDate },
+                { "Status", x.Status ?? "" },
+                        }
+                        })
+                        .ToList();
+                    return data;
+
+                case "MethodValidation":
+                    var _query = await _context.NablMethodVerifications.Where(x => x.IsActive && x.VerificationStatus == "Verified").ToListAsync();
+                    //_query = _query.Where(x => !string.IsNullOrEmpty(x.VerificationStatus) && x.VerificationStatus == "Verified");
+
+                    var _skip = pageNo * pageSize;
+
+
+                    var data1 = _query
+                        .Skip(_skip)
+                        .Take(pageSize)
+                        .Select((x, index) => new DropdwonSelector
+                        {
+                            Id = x.ID,
+                            Name = x.TestMethodCode
+                        })
+                        .ToList();
+                    return data1;
+
+            }
+            return null;
+        }
         public async Task<List<DropdwonSelector>> PlanNoDetailslist(string? searchTerm, int pageNo = 0, int pageSize = 20)
         {
 
@@ -1331,6 +1407,45 @@ namespace LIMSApi.Repositories
                     }).FirstOrDefaultAsync();
 
             return indentDetails;
+        }
+        public async Task<NablTestMethodValidationDto> TestMethodDetails(string testmethodCode)
+        {
+
+            var data = await _context.NablMethodVerifications
+                .Where(x =>
+                    x.IsActive &&
+                    x.TestMethodCode == testmethodCode).Select(c => new 
+                    {
+                        c.TestMethodName,
+                        c.RevIssue,
+                        c.ReferenceStandard,
+                        c.Humidity,
+                        c.Temperature,
+                        c.EquipmentId,
+                        c.EquipmentName,
+                        c.CrmParametersJson,
+                        c.VerificationDate,
+                        c.VerifiedBy,
+                    }).FirstOrDefaultAsync();
+            var crmlist = new List<CrmParameters>();
+            if (!string.IsNullOrEmpty(data.CrmParametersJson))
+            {
+                crmlist = System.Text.Json.JsonSerializer.Deserialize<List<CrmParameters>>(data.CrmParametersJson) ?? new List<CrmParameters>();
+            }
+            var res = new NablTestMethodValidationDto
+            {
+                TestMethodName = data.TestMethodName,
+                RevIssue = data.RevIssue,
+                ReferenceStandard = data.ReferenceStandard,
+                Humidity = data.Humidity,
+                Temperature = data.Temperature,
+                EquipmentId = data.EquipmentId,
+                EquipmentName = data.EquipmentName,
+                VerifiedBy = data.VerifiedBy,
+                VerificationDate = data.VerificationDate,
+                CrmMaterialParameters = crmlist
+            };
+            return res;
         }
         public async Task<List<Items>> PoitemsDetails(string poNo, string supplierName)
         {

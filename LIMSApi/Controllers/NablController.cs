@@ -215,13 +215,13 @@ namespace LIMSApi.Controllers
             return data == null ? NoContent() : Ok(data);
         }
         [HttpGet("{formType}/supplier-evaluation-details")]
-        public async Task<IActionResult> SupplierEvaluationDetails(string supplierName,DateTime? fromDate,DateTime? toDate)
+        public async Task<IActionResult> SupplierEvaluationDetails(string supplierName, DateTime? fromDate, DateTime? toDate)
         {
             var data = await _service.SupplierEvaluationDetails(supplierName, fromDate, toDate);
             return data == null ? NoContent() : Ok(data);
         }
         [HttpGet("{formType}/po-items-details")]
-        public async Task<IActionResult> PoitemsDetails(string poNo,string supplierName)
+        public async Task<IActionResult> PoitemsDetails(string poNo, string supplierName)
         {
             var data = await _service.PoitemsDetails(poNo, supplierName);
             return data == null ? NoContent() : Ok(data);
@@ -242,6 +242,18 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> IndentDetails(string indentNo)
         {
             var data = await _service.IndentDetails(indentNo);
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("{formType}/alltestmethodlist")]
+        public async Task<IActionResult> Alltestmethodlist(string formType, string? searchTearm, int pageNo, int pageSize)
+        {
+            var data = await _service.Alltestmethodlist(formType, searchTearm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("{formType}/testMethodDetails/{testmethodCode}")]
+        public async Task<IActionResult> TestMethodDetails(string testmethodCode)
+        {
+            var data = await _service.TestMethodDetails(testmethodCode);
             return data == null ? NoContent() : Ok(data);
         }
     }

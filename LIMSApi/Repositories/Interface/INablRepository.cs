@@ -14,6 +14,7 @@ namespace LIMSApi.Repositories.Interface
         Task<List<DropdwonSelector>> Roomdropdown(string? searchTerm, int pageNo, int pageSize);
         Task<List<DropdwonSelector>> Supplierlist(string? searchTerm, int pageNo, int pageSize);
         Task<List<DropdwonSelector>> AllSupplierlist(string? searchTerm, int pageNo, int pageSize);
+        Task<List<DropdwonSelector>> Alltestmethodlist(string formType, string? searchTerm, int pageNo, int pageSize);
         Task<List<DropdwonSelector>> IndentNoList(string? searchTerm, int pageNo, int pageSize);
         Task<List<DropdwonSelector>> ApprovedSupplierlist(string? searchTerm, int pageNo, int pageSize);
         Task<List<DropdwonSelector>> PlanNoDetailslist(string? searchTerm, int pageNo, int pageSize);
@@ -23,6 +24,7 @@ namespace LIMSApi.Repositories.Interface
         Task<List<CombinedPoItemDto>> ReceivedItemsDetails(string poNo, string supplierName);
         Task<List<InspectionParameters>> InspectionPlanDetails(string inspectionPlanNo);
         Task<NablPurchaseIndentDto> IndentDetails(string indentNo);
+        Task<NablTestMethodValidationDto> TestMethodDetails(string testmethodCode);
 
     }
 }
