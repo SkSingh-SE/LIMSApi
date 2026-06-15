@@ -81,7 +81,7 @@ namespace LIMSApi.Services
             { "DocumentReview", "F-50" },
             { "MasterDocument", "F-51" },
             { "MeasurementUncertainty", "F-52" },
-            { "PtIlcPlan", "F-53" },
+            { "PtIlcPlan", "F-36" },
             { "EmployeePerformanceRecord", "F-54" },
         };
 
@@ -255,6 +255,15 @@ namespace LIMSApi.Services
                         if (result != null && !string.IsNullOrEmpty(result.PrecisionStudyJson))
                         {
                             result.PrecisionStudy = JsonSerializer.Deserialize<List<PrecisionStudy>>(result.PrecisionStudyJson);
+                        }
+                        return result;
+                    }
+                case "PtIlcPlan":
+                    {
+                        var result = data as NablPtIlcPlan;
+                        if (result != null && !string.IsNullOrEmpty(result.ActivitiesJson))
+                        {
+                            result.Activities = JsonSerializer.Deserialize<List<PtilcActivity>>(result.ActivitiesJson);
                         }
                         return result;
                     }
@@ -3716,7 +3725,7 @@ namespace LIMSApi.Services
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
-
+                model.ActivitiesJson = JsonSerializer.Serialize(model.Activities);
                 var id = await _repository.Add("PtIlcPlan", model);
                 await LogAudit("PtIlcPlan", id, "Created", null, body.GetRawText());
                 _logger.LogInformation("PtIlcPlan created with ID {Id}.", id);
@@ -3742,9 +3751,20 @@ namespace LIMSApi.Services
                 existing.CorrectiveActions = model.CorrectiveActions;
                 existing.ResponsiblePerson = model.ResponsiblePerson;
                 existing.OverallAssessment = model.OverallAssessment;
+                existing.LaboratoryId= model.LaboratoryId;
+                existing.LaboratoryName= model.LaboratoryName;
+                existing.FieldOfAccreditation= model.FieldOfAccreditation;
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
+                existing.ActivitiesJson = JsonSerializer.Serialize(model.Activities);
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.PreparedBy = model.PreparedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.Note = model.Note;
 
                 await _repository.Update("PtIlcPlan", existing);
                 await LogAudit("PtIlcPlan", existing.ID, "Updated", null, body.GetRawText());
