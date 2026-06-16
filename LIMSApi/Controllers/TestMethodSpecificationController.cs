@@ -53,29 +53,15 @@ namespace LIMSApi.Controllers
                 ID = model.ID,
                 Name = model.Name,
                 Part = model.Part,
+                DisplayTitle = model.DisplayTitle,
                 StandardOrganizationID = model.StandardOrganizationID,
                 TestMethodStandard = model.TestMethodStandard,
                 IsDisabled = model.IsDisabled,
 
             };
-            if (versions != null && versions.Any())
-            {
-                testMethodSpecification.Versions = versions.Select(v => new TestMethodSpecificationVersion
-                {
-                    ID = v.ID,
-                    Version = v.Version,
-                    StandardFile = v.StandardFile,
-                    StandardFilePath = v.StandardFilePath,
-                    Status = (VersionStatus)v.Status,
-                    Year = v.Year,
-                    EffectiveDate = v.EffectiveDate,
-                    SupersededDate = v.SupersededDate,
-                    ReviewDate = v.ReviewDate,
-                    ChangeReason = v.ChangeReason,
-                    UploadReferenceID = v.UploadReferenceID,
-                    file = uploadedFiles.FirstOrDefault(f => f.FileName == v.StandardFile)
-                }).ToList();
-            }
+            testMethodSpecification.Versions = MapVersions(versions, uploadedFiles);
+
+            MapMetalClassifications(model, testMethodSpecification);
 
             await _testMethodService.ModifyTestMethodSpecification(testMethodSpecification);
             return Ok(new
@@ -96,29 +82,15 @@ namespace LIMSApi.Controllers
                 ID = model.ID,
                 Name = model.Name,
                 Part = model.Part,
+                DisplayTitle = model.DisplayTitle,
                 StandardOrganizationID = model.StandardOrganizationID,
                 TestMethodStandard = model.TestMethodStandard,
                 IsDisabled = model.IsDisabled,
 
             };
-            if (versions != null && versions.Any())
-            {
-                testMethodSpecification.Versions = versions.Select(v => new TestMethodSpecificationVersion
-                {
-                    ID = v.ID,
-                    Version = v.Version,
-                    StandardFile = v.StandardFile,
-                    StandardFilePath = v.StandardFilePath,
-                    Status = (VersionStatus)v.Status,
-                    Year = v.Year,
-                    EffectiveDate = v.EffectiveDate,
-                    SupersededDate = v.SupersededDate,
-                    ReviewDate = v.ReviewDate,
-                    ChangeReason = v.ChangeReason,
-                    UploadReferenceID = v.UploadReferenceID,
-                    file = uploadedFiles.FirstOrDefault(f => f.FileName == v.StandardFile)
-                }).ToList();
-            }
+            testMethodSpecification.Versions = MapVersions(versions, uploadedFiles);
+
+            MapMetalClassifications(model, testMethodSpecification);
 
             await _testMethodService.CreateTestMethodSpecification(testMethodSpecification);
             return Ok(new
@@ -126,6 +98,54 @@ namespace LIMSApi.Controllers
                 status = "success",
                 message = $"TestMethodSpecification '{model.Name}' created successfully."
             });
+        }
+
+        // Maps version DTOs (with their nested version-level parameters) into entity versions.
+        private static List<TestMethodSpecificationVersion> MapVersions(List<VersionDto>? versions, IFormFileCollection uploadedFiles)
+        {
+            if (versions == null || !versions.Any())
+                return new List<TestMethodSpecificationVersion>();
+
+            return versions.Select(v => new TestMethodSpecificationVersion
+            {
+                ID = v.ID,
+                Version = v.Version,
+                StandardFile = v.StandardFile,
+                StandardFilePath = v.StandardFilePath,
+                Status = (VersionStatus)v.Status,
+                Year = v.Year,
+                EffectiveDate = v.EffectiveDate,
+                SupersededDate = v.SupersededDate,
+                ReviewDate = v.ReviewDate,
+                ChangeReason = v.ChangeReason,
+                UploadReferenceID = v.UploadReferenceID,
+                IsDefault = v.IsDefault,
+                file = uploadedFiles.FirstOrDefault(f => f.FileName == v.StandardFile),
+                Parameters = (v.Parameters ?? new List<TestMethodSpecParameterDto>())
+                    .Where(p => p.ParameterID > 0)
+                    .Select((p, idx) => new TestMethodSpecificationParameter
+                    {
+                        ID = p.ID,
+                        ParameterID = p.ParameterID,
+                        ParameterUnitID = p.ParameterUnitID,
+                        ParameterUnitEquivalentID = p.ParameterUnitEquivalentID,
+                        Comment = p.Comment,
+                        SortOrder = p.SortOrder != 0 ? p.SortOrder : idx
+                    }).ToList()
+            }).ToList();
+        }
+
+        // Parses MetalClassificationIDs JSON from the DTO into the entity child collection.
+        private static void MapMetalClassifications(TestMethodSpecificationDto model, TestMethodSpecification entity)
+        {
+            if (!string.IsNullOrWhiteSpace(model.MetalClassificationIDs))
+            {
+                var ids = JsonConvert.DeserializeObject<List<long>>(model.MetalClassificationIDs) ?? new List<long>();
+                entity.MetalClassifications = ids.Distinct().Select(id => new TestMethodSpecificationMetalClassification
+                {
+                    MetalClassificationID = id
+                }).ToList();
+            }
         }
 
         [RequirePermission(Permissions.TestMethodSpecification.Delete)]
@@ -176,6 +196,13 @@ namespace LIMSApi.Controllers
             return data == null ? NoContent() : Ok(data);
         }
 
+        [HttpGet("metal-classification-wise/{metalClassificationId}")]
+        public async Task<IActionResult> GetTestMethodsByMetalClassification(long metalClassificationId, string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            var data = await _testMethodService.GetTestMethodsByMetalClassification(metalClassificationId, searchTerm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+
         [HttpPost("activate-version")]
         public async Task<IActionResult> ActivateVersion([FromBody] VersionActionDto dto)
         {
@@ -202,6 +229,14 @@ namespace LIMSApi.Controllers
         {
             var data = await _testMethodService.GetActiveVersionsBySpecId(specId);
             return Ok(data);
+        }
+
+        [RequirePermission(Permissions.TestMethodSpecification.Update)]
+        [HttpPost("set-default-version")]
+        public async Task<IActionResult> SetDefaultVersion([FromBody] SetDefaultVersionDto dto)
+        {
+            await _testMethodService.SetDefaultVersion(dto.SpecificationId, dto.VersionId);
+            return Ok(new { status = "success", message = "Default version set successfully." });
         }
     }
 }

@@ -41,7 +41,8 @@ namespace LIMSApi.Repositories
         public async Task<TestMethodSpecification?> GetTestMethodSpecificationById(long id)
         {
             var spec = await _context.TestMethodSpecifications
-                .Include(x => x.Versions)
+                .Include(x => x.Versions).ThenInclude(v => v.Parameters).ThenInclude(p => p.Parameter)
+                .Include(x => x.MetalClassifications).ThenInclude(m => m.MetalClassification)
                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
 
             if (spec != null)
@@ -73,6 +74,7 @@ namespace LIMSApi.Repositories
                          {
                              c.ID,
                              c.Name,
+                             c.DisplayTitle,
                              c.StandardOrganizationID,
                              StandardOrganizationName = s.Name,
                              c.TestMethodStandard,
@@ -155,6 +157,40 @@ namespace LIMSApi.Repositories
                              Name = a.Name,
                          };
             return _query.ToListAsync();
+        }
+
+        public async Task<List<DropdwonSelector>> GetTestMethodsByMetalClassification(long metalClassificationId, string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            // Specs explicitly linked to this metal classification, plus specs with no metal-classification
+            // link at all (treated as universal — applicable to any classification).
+            var _query = from a in _context.TestMethodSpecifications
+                         where a.IsActive && !a.IsDisabled && a.CompanyCode == loggedInUser.CompanyCode
+                            && (a.MetalClassifications.Any(m => m.MetalClassificationID == metalClassificationId)
+                                || !a.MetalClassifications.Any())
+                         select a;
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => x.Name != null && x.Name.Contains(search));
+                }
+            }
+
+            var skip = pageNo * pageSize;
+
+            return await _query.OrderBy(x => x.Name).Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            {
+                Id = x.ID,
+                Name = !string.IsNullOrEmpty(x.DisplayTitle) ? x.DisplayTitle : x.Name,
+            }).ToListAsync();
         }
 
         public async Task<int> GetVersionImpactCount(long versionId)

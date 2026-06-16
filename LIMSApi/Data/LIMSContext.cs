@@ -118,6 +118,8 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<TestMethodSubGroup> TestMethodSubGroups { get; set; }
     public virtual DbSet<TestMethodSpecification> TestMethodSpecifications { get; set; }
     public virtual DbSet<TestMethodSpecificationVersion> TestMethodSpecificationVersions { get; set; }
+    public virtual DbSet<TestMethodSpecificationMetalClassification> TestMethodSpecificationMetalClassifications { get; set; }
+    public virtual DbSet<TestMethodSpecificationParameter> TestMethodSpecificationParameters { get; set; }
     public virtual DbSet<TestTypeMaster> TestTypeMasters { get; set; }
     public virtual DbSet<TPIMaster> TPIMasters { get; set; }
     public virtual DbSet<UniversalCodeTypeMaster> UniversalCodeTypeMasters { get; set; }
@@ -299,6 +301,46 @@ public partial class LIMSContext : DbContext
             .OnDelete(DeleteBehavior.NoAction);
 
         modelBuilder.Entity<MetalClassificationParameter>().HasKey(x => new { x.MetalClassificationID, x.ParameterID });
+
+        // Test Method Specification ↔ Metal Classification (junction).
+        // Spec FK cascades (owned child); Metal master FK is NoAction (block master delete).
+        modelBuilder.Entity<TestMethodSpecificationMetalClassification>()
+            .HasKey(x => new { x.TestMethodSpecificationID, x.MetalClassificationID });
+        modelBuilder.Entity<TestMethodSpecificationMetalClassification>()
+            .HasOne(x => x.TestMethodSpecification)
+            .WithMany(x => x.MetalClassifications)
+            .HasForeignKey(x => x.TestMethodSpecificationID)
+            .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<TestMethodSpecificationMetalClassification>()
+            .HasOne(x => x.MetalClassification)
+            .WithMany()
+            .HasForeignKey(x => x.MetalClassificationID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // Test Method Specification VERSION → Parameters (owned child, version-level).
+        // Version FK cascades; Parameter/Unit master FKs are NoAction.
+        modelBuilder.Entity<TestMethodSpecificationParameter>()
+            .HasOne(x => x.TestMethodSpecificationVersion)
+            .WithMany(x => x.Parameters)
+            .HasForeignKey(x => x.TestMethodSpecificationVersionID)
+            .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<TestMethodSpecificationParameter>()
+            .HasOne(x => x.Parameter)
+            .WithMany()
+            .HasForeignKey(x => x.ParameterID)
+            .OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<TestMethodSpecificationParameter>()
+            .HasOne(x => x.ParameterUnit)
+            .WithMany()
+            .HasForeignKey(x => x.ParameterUnitID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // Test Method Specification → DefaultVersion (NoAction; nullable; avoids cascade cycle with Versions).
+        modelBuilder.Entity<TestMethodSpecification>()
+            .HasOne(x => x.DefaultVersion)
+            .WithMany()
+            .HasForeignKey(x => x.DefaultVersionID)
+            .OnDelete(DeleteBehavior.NoAction);
 
         modelBuilder.Entity<ParameterSpecimenOrientation>().HasKey(x => new { x.ParameterID, x.SpecimenOrientationID });
 

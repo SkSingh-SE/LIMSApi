@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20260611135255_AddTestMethodSpecDisplayTitle")]
+    partial class AddTestMethodSpecDisplayTitle
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -17933,9 +17936,6 @@ namespace LIMSApi.Migrations
                     b.Property<string>("DefaultParameters")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<long?>("DefaultVersionID")
-                        .HasColumnType("bigint");
-
                     b.Property<string>("DisplayTitle")
                         .HasMaxLength(600)
                         .HasColumnType("nvarchar(600)");
@@ -17978,62 +17978,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.HasIndex("DefaultVersionID");
-
                     b.ToTable("TestMethodSpecifications");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.TestMethodSpecificationMetalClassification", b =>
-                {
-                    b.Property<long>("TestMethodSpecificationID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("MetalClassificationID")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("TestMethodSpecificationID", "MetalClassificationID");
-
-                    b.HasIndex("MetalClassificationID");
-
-                    b.ToTable("TestMethodSpecificationMetalClassifications");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.TestMethodSpecificationParameter", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<string>("Comment")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<long>("ParameterID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("ParameterUnitEquivalentID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("ParameterUnitID")
-                        .HasColumnType("bigint");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("int");
-
-                    b.Property<long>("TestMethodSpecificationVersionID")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("ParameterID");
-
-                    b.HasIndex("ParameterUnitID");
-
-                    b.HasIndex("TestMethodSpecificationVersionID");
-
-                    b.ToTable("TestMethodSpecificationParameters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.TestMethodSpecificationVersion", b =>
@@ -21527,61 +21472,6 @@ namespace LIMSApi.Migrations
                     b.Navigation("TestMethod");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.TestMethodSpecification", b =>
-                {
-                    b.HasOne("LIMSApi.Models.TestMethodSpecificationVersion", "DefaultVersion")
-                        .WithMany()
-                        .HasForeignKey("DefaultVersionID")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.Navigation("DefaultVersion");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.TestMethodSpecificationMetalClassification", b =>
-                {
-                    b.HasOne("LIMSApi.Models.MetalClassificationMaster", "MetalClassification")
-                        .WithMany()
-                        .HasForeignKey("MetalClassificationID")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("LIMSApi.Models.TestMethodSpecification", "TestMethodSpecification")
-                        .WithMany("MetalClassifications")
-                        .HasForeignKey("TestMethodSpecificationID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("MetalClassification");
-
-                    b.Navigation("TestMethodSpecification");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.TestMethodSpecificationParameter", b =>
-                {
-                    b.HasOne("LIMSApi.Models.ParameterMaster", "Parameter")
-                        .WithMany()
-                        .HasForeignKey("ParameterID")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("LIMSApi.Models.ParameterUnitMaster", "ParameterUnit")
-                        .WithMany()
-                        .HasForeignKey("ParameterUnitID")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("LIMSApi.Models.TestMethodSpecificationVersion", "TestMethodSpecificationVersion")
-                        .WithMany("Parameters")
-                        .HasForeignKey("TestMethodSpecificationVersionID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Parameter");
-
-                    b.Navigation("ParameterUnit");
-
-                    b.Navigation("TestMethodSpecificationVersion");
-                });
-
             modelBuilder.Entity("LIMSApi.Models.TestMethodSpecificationVersion", b =>
                 {
                     b.HasOne("LIMSApi.Models.TestMethodSpecification", "TestMethodSpecification")
@@ -22048,14 +21938,7 @@ namespace LIMSApi.Migrations
 
             modelBuilder.Entity("LIMSApi.Models.TestMethodSpecification", b =>
                 {
-                    b.Navigation("MetalClassifications");
-
                     b.Navigation("Versions");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.TestMethodSpecificationVersion", b =>
-                {
-                    b.Navigation("Parameters");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.TestResultHeader", b =>

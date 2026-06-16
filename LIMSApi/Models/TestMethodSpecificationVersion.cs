@@ -47,8 +47,15 @@ namespace LIMSApi.Models
         [NotMapped]
         public IFormFile? file { get; set; }
 
+        // Transient: carries the "this is the default version" choice from the form into the service.
+        [NotMapped]
+        public bool IsDefault { get; set; }
+
         [ForeignKey("TestMethodSpecificationID")]
         [System.Text.Json.Serialization.JsonIgnore]
         public virtual TestMethodSpecification? TestMethodSpecification { get; set; }
+
+        // Parameters this edition reports (version-level so old editions keep their own set).
+        public ICollection<TestMethodSpecificationParameter> Parameters { get; set; } = new List<TestMethodSpecificationParameter>();
     }
 }

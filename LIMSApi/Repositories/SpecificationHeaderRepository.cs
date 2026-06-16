@@ -85,6 +85,7 @@ namespace LIMSApi.Repositories
                               MetalClassificationName = mc != null ? mc.Name : null,
                               g.UNSSteelNumber,
                               c.AliasName,
+                              c.DisplayTitle,
                               g.Grade,
                               c.StandardYear,
                               c.ModifiedOn
@@ -100,6 +101,7 @@ namespace LIMSApi.Repositories
                 || (x.UNSSteelNumber != null && x.UNSSteelNumber.Contains(search))
                 || (x.Grade != null && x.Grade.Contains(search))
                 || (x.AliasName != null && x.AliasName.Contains(search))
+                || (x.DisplayTitle != null && x.DisplayTitle.Contains(search))
                 || (x.MetalClassificationName != null && x.MetalClassificationName.Contains(search))
                 );
             }
@@ -135,6 +137,7 @@ namespace LIMSApi.Repositories
                               MetalClassificationName = mc != null ? mc.Name : null,
                               g.UNSSteelNumber,
                               c.AliasName,
+                              c.DisplayTitle,
                               g.Grade,
                               c.StandardYear,
                               c.ModifiedOn
@@ -150,6 +153,7 @@ namespace LIMSApi.Repositories
                 || (x.UNSSteelNumber != null && x.UNSSteelNumber.Contains(search))
                 || (x.Grade != null && x.Grade.Contains(search))
                 || (x.AliasName != null && x.AliasName.Contains(search))
+                || (x.DisplayTitle != null && x.DisplayTitle.Contains(search))
                 || (x.MetalClassificationName != null && x.MetalClassificationName.Contains(search))
                 );
             }

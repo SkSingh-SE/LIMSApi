@@ -15,6 +15,7 @@ namespace LIMSApi.Repositories.Interface
         Task<bool> ExistsByName(string name);
         Task<bool> ExistsByNameAndNotId(string name, long Id);
         Task<List<DropdwonSelector>> GetTestMethodSpecificationsByStandard(long standardId);
+        Task<List<DropdwonSelector>> GetTestMethodsByMetalClassification(long metalClassificationId, string? searchTerm, int pageNo, int pageSize);
         Task<int> GetVersionImpactCount(long versionId);
         Task<List<TestMethodSpecificationVersion>> GetVersionsDueForReview(DateTime cutoffDate);
         Task<List<DropdwonSelector>> GetActiveVersionsBySpecId(long specId);
