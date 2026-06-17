@@ -67,7 +67,8 @@ namespace LIMSApi.Controllers
             return Ok(new
             {
                 status = "success",
-                message = $"Specification Header '{model.AliasName}' created successfully."
+                message = $"Specification Header '{model.AliasName}' created successfully.",
+                id = model.ID
             });
         }
 
