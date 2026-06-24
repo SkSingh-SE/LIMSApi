@@ -19,6 +19,6 @@ namespace LIMSApi.Services.Interface
         Task SetDefaultVersion(long specId, long versionId);
         Task WithdrawVersion(long specId, long versionId, string reason);
         Task<int> GetVersionImpactCount(long versionId);
-        Task<List<DropdwonSelector>> GetActiveVersionsBySpecId(long specId);
+        Task<List<DropdwonSelector>> GetVersionsBySpecId(long specId, bool includeAll = false);
     }
 }

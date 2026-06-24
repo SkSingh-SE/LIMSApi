@@ -63,31 +63,26 @@ namespace LIMSApi.Repositories
         public async Task<PagedResponse<object>> GetAllSpecificationHeaders(PageFilter filter)
         {
             var _query = (from c in _context.SpecificationHeaders
-                          join g in _context.SpecificationGrades on c.ID equals g.SpecificationHeaderID
 
                           join so in _context.StandardOrganizationMasters
                           on c.StandardOrganizationID equals so.ID into soGroup
                           from so in soGroup.DefaultIfEmpty()
-
-                          join mc in _context.MetalClassificationMasters
-                          on g.MetalClassificationID equals mc.ID into mcGroup
-                          from mc in mcGroup.DefaultIfEmpty()
 
                           where c.IsActive && c.IsCustom == false
 
                           select new
                           {
                               c.ID,
+                              c.SpecificationNo,
                               c.Standard,
                               c.Part,
                               c.StandardOrganizationID,
-                              StandardOrganizationName = so.Name,
-                              MetalClassificationName = mc != null ? mc.Name : null,
-                              g.UNSSteelNumber,
+                              StandardOrganizationName = so != null ? so.Name : null,
                               c.AliasName,
                               c.DisplayTitle,
-                              g.Grade,
                               c.StandardYear,
+                              c.Version,
+                              c.Title,
                               c.ModifiedOn
                           }).AsQueryable().ApplyFilters(filter.Filter);
 
@@ -98,11 +93,10 @@ namespace LIMSApi.Repositories
                 _query = _query.Where(x => (x.Standard != null && x.Standard.Contains(search))
                 || (x.Part != null && x.Part.Contains(search))
                 || (x.StandardYear != null && x.StandardYear.Contains(search))
-                || (x.UNSSteelNumber != null && x.UNSSteelNumber.Contains(search))
-                || (x.Grade != null && x.Grade.Contains(search))
                 || (x.AliasName != null && x.AliasName.Contains(search))
                 || (x.DisplayTitle != null && x.DisplayTitle.Contains(search))
-                || (x.MetalClassificationName != null && x.MetalClassificationName.Contains(search))
+                || (x.SpecificationNo != null && x.SpecificationNo.Contains(search))
+                || (x.Title != null && x.Title.Contains(search))
                 );
             }
 
@@ -117,29 +111,24 @@ namespace LIMSApi.Repositories
         public async Task<PagedResponse<object>> GetAllCustomSpecificationHeaders(PageFilter filter)
         {
             var _query = (from c in _context.SpecificationHeaders
-                          join g in _context.SpecificationGrades on c.ID equals g.SpecificationHeaderID
                           join so in _context.StandardOrganizationMasters
                           on c.StandardOrganizationID equals so.ID into soGroup
                           from so in soGroup.DefaultIfEmpty()
-
-                          join mc in _context.MetalClassificationMasters
-                          on g.MetalClassificationID equals mc.ID into mcGroup
-                          from mc in mcGroup.DefaultIfEmpty()
 
                           where c.IsActive && c.IsCustom == true
                           select new
                           {
                               c.ID,
+                              c.SpecificationNo,
                               c.Standard,
                               c.Part,
                               c.StandardOrganizationID,
-                              StandardOrganizationName = so.Name,
-                              MetalClassificationName = mc != null ? mc.Name : null,
-                              g.UNSSteelNumber,
+                              StandardOrganizationName = so != null ? so.Name : null,
                               c.AliasName,
                               c.DisplayTitle,
-                              g.Grade,
                               c.StandardYear,
+                              c.Version,
+                              c.Title,
                               c.ModifiedOn
                           }).AsQueryable().ApplyFilters(filter.Filter);
 
@@ -150,11 +139,10 @@ namespace LIMSApi.Repositories
                 _query = _query.Where(x => (x.Standard != null && x.Standard.Contains(search))
                 || (x.Part != null && x.Part.Contains(search))
                 || (x.StandardYear != null && x.StandardYear.Contains(search))
-                || (x.UNSSteelNumber != null && x.UNSSteelNumber.Contains(search))
-                || (x.Grade != null && x.Grade.Contains(search))
                 || (x.AliasName != null && x.AliasName.Contains(search))
                 || (x.DisplayTitle != null && x.DisplayTitle.Contains(search))
-                || (x.MetalClassificationName != null && x.MetalClassificationName.Contains(search))
+                || (x.SpecificationNo != null && x.SpecificationNo.Contains(search))
+                || (x.Title != null && x.Title.Contains(search))
                 );
             }
 

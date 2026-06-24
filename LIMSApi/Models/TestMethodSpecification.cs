@@ -21,12 +21,6 @@ namespace LIMSApi.Models
 
         public bool IsDisabled { get; set; } = false;
 
-        // The version treated as default/active — auto-selected in inward/plan dropdowns.
-        public long? DefaultVersionID { get; set; }
-        [System.ComponentModel.DataAnnotations.Schema.ForeignKey("DefaultVersionID")]
-        [System.Text.Json.Serialization.JsonIgnore]
-        public virtual TestMethodSpecificationVersion? DefaultVersion { get; set; }
-
         // Phase 7.3: Test method specification enhancements
         [MaxLength(500)]
         public string? LinkedStandard { get; set; }

@@ -69,7 +69,7 @@ namespace LIMSApi.Repositories
             var _query = from c in _context.TestMethodSpecifications
                          join s in _context.StandardOrganizationMasters on c.StandardOrganizationID equals s.ID
                          where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
-                         let activeVersion = c.Versions.FirstOrDefault(v => v.Status == VersionStatus.Active)
+                         let defaultVersion = c.Versions.FirstOrDefault(v => v.IsDefault)
                          select new
                          {
                              c.ID,
@@ -78,8 +78,8 @@ namespace LIMSApi.Repositories
                              c.StandardOrganizationID,
                              StandardOrganizationName = s.Name,
                              c.TestMethodStandard,
-                             CurrentVersion = activeVersion != null ? activeVersion.Version : "",
-                             CurrentVersionYear = activeVersion != null ? activeVersion.Year : (string?)null,
+                             DefaultVersion = defaultVersion != null ? defaultVersion.Version : "",
+                             DefaultVersionYear = defaultVersion != null ? defaultVersion.Year : (string?)null,
                              c.IsDisabled,
                              c.CreatedBy,
                              c.CreatedOn,
@@ -94,8 +94,8 @@ namespace LIMSApi.Repositories
                 _query = _query.Where(x => (x.Name != null && x.Name.Contains(search))
                                      || (x.StandardOrganizationName != null && x.StandardOrganizationName.Contains(search))
                                      || (x.TestMethodStandard != null && x.TestMethodStandard.Contains(search))
-                                     || (x.CurrentVersion != null && x.CurrentVersion.Contains(search))
-                                     || (x.CurrentVersionYear != null && x.CurrentVersionYear.ToString()!.Contains(search))
+                                     || (x.DefaultVersion != null && x.DefaultVersion.Contains(search))
+                                     || (x.DefaultVersionYear != null && x.DefaultVersionYear.ToString()!.Contains(search))
                                      || (x.IsDisabled ? "disabled" : "active").Contains(search));
             }
 
@@ -213,14 +213,25 @@ namespace LIMSApi.Repositories
                 .ToListAsync();
         }
 
-        public async Task<List<DropdwonSelector>> GetActiveVersionsBySpecId(long specId)
+        public async Task<List<DropdwonSelector>> GetVersionsBySpecId(long specId, bool includeAll = false)
         {
-            return await _context.TestMethodSpecificationVersions
-                .Where(v => v.TestMethodSpecificationID == specId && v.Status == VersionStatus.Active)
+            var query = _context.TestMethodSpecificationVersions
+                .Where(v => v.TestMethodSpecificationID == specId);
+
+            if (!includeAll)
+                query = query.Where(v => v.Status == VersionStatus.Active);
+
+            return await query
+                .OrderBy(v => v.IsDefault ? 0 :
+                              v.Status == VersionStatus.Active ? 1 :
+                              v.Status == VersionStatus.Draft ? 2 :
+                              v.Status == VersionStatus.Superseded ? 3 : 4)
                 .Select(v => new DropdwonSelector
                 {
                     Id = v.ID,
-                    Name = v.Version + (v.Year != null ? " (" + v.Year.ToString() + ")" : ""),
+                    Name = v.Version + (v.Year != null ? " (" + v.Year + ")" : "")
+                         + (v.IsDefault ? " ★" : "")
+                         + (v.Status != VersionStatus.Active ? " [" + v.Status + "]" : ""),
                 })
                 .ToListAsync();
         }

@@ -47,8 +47,7 @@ namespace LIMSApi.Models
         [NotMapped]
         public IFormFile? file { get; set; }
 
-        // Transient: carries the "this is the default version" choice from the form into the service.
-        [NotMapped]
+        // True if this version is the spec's default (auto-selected in inward/plan dropdowns).
         public bool IsDefault { get; set; }
 
         [ForeignKey("TestMethodSpecificationID")]

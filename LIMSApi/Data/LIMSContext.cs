@@ -335,12 +335,11 @@ public partial class LIMSContext : DbContext
             .HasForeignKey(x => x.ParameterUnitID)
             .OnDelete(DeleteBehavior.NoAction);
 
-        // Test Method Specification → DefaultVersion (NoAction; nullable; avoids cascade cycle with Versions).
-        modelBuilder.Entity<TestMethodSpecification>()
-            .HasOne(x => x.DefaultVersion)
-            .WithMany()
-            .HasForeignKey(x => x.DefaultVersionID)
-            .OnDelete(DeleteBehavior.NoAction);
+        // TestMethodSpecificationVersion: at most one IsDefault=true per spec.
+        modelBuilder.Entity<TestMethodSpecificationVersion>()
+            .HasIndex(v => new { v.TestMethodSpecificationID, v.IsDefault })
+            .HasFilter("[IsDefault] = 1")
+            .IsUnique();
 
         modelBuilder.Entity<ParameterSpecimenOrientation>().HasKey(x => new { x.ParameterID, x.SpecimenOrientationID });
 

@@ -225,9 +225,9 @@ namespace LIMSApi.Controllers
         }
 
         [HttpGet("{specId}/versions/dropdown")]
-        public async Task<IActionResult> GetActiveVersionsDropdown(long specId)
+        public async Task<IActionResult> GetVersionsDropdown(long specId, [FromQuery] bool includeAll = false)
         {
-            var data = await _testMethodService.GetActiveVersionsBySpecId(specId);
+            var data = await _testMethodService.GetVersionsBySpecId(specId, includeAll);
             return Ok(data);
         }
 
