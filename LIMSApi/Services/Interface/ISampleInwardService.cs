@@ -24,6 +24,7 @@ namespace LIMSApi.Services.Interface
         Task CancelSampleAsync(long sampleDetailId, string reason);
         Task DeleteSampleAsync(long sampleDetailId);
         Task<PaymentInfoDto> UpdatePaymentInfoAsync(long id, PaymentInfoDto dto);
+        Task UpdateSamplePrepAsync(long sampleId, SamplePrepReviewDto dto);
 
     }
 }

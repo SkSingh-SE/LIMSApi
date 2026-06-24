@@ -56,6 +56,8 @@ namespace LIMSApi.Dtos
         public long Id { get; set; }
         public string Year { get; set; } = string.Empty;
         public bool IsCurrent { get; set; }
+        public DateTime StartDate { get; set; }
+        public DateTime EndDate { get; set; }
     }
     public sealed class SignatoryDto
     {

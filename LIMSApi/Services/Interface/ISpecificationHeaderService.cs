@@ -9,6 +9,7 @@ namespace LIMSApi.Services.Interface
         Task ModifySpecificationHeader(SpecificationHeader model);
         Task RemoveSpecificationHeader(long id);
         Task<SpecificationHeader> GetSpecificationHeaderDetails(long id);
+        Task<SpecificationHeader> GetCloneTemplate(long id);
         Task<PagedResponse<object>> FetchSpecificationHeaderList(PageFilter filter);
         Task<PagedResponse<object>> FetchCustomSpecificationHeaderList(PageFilter filter);
 

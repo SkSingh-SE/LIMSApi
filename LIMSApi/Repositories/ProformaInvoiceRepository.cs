@@ -136,6 +136,7 @@ namespace LIMSApi.Repositories
                                         gt,
                                         method,
                                         plan.ID,
+                                        inward.CollectionTime,
                                         sd
                                     );
 
@@ -182,7 +183,8 @@ namespace LIMSApi.Repositories
                                     var (rate, configId, selectionType, usedValue) = await GetRateForChemicalTestAsync(
                                         tt.LaboratoryTestID.Value,
                                         ct,
-                                        usedElements
+                                        usedElements,
+                                        inward.CollectionTime
                                     );
 
                                     var amount = rate;
@@ -358,23 +360,16 @@ namespace LIMSApi.Repositories
             GeneralTest generalTest,
             GeneralTestMethod method,
             long testPlanId,
+            DateTime inwardDate,
             SampleDetail? sample = null)
         {
-            // Get current financial year
-            var currentFY = await _context.FinancialYears.FirstOrDefaultAsync(f => f.IsCurrent);
+            // Date-effective InvoiceCase resolution: pick the version with the greatest
+            // EffectiveFrom ≤ the sample inward date, falling back to the earliest version.
+            var versions = await _context.InvoiceCases
+                .Where(ic => ic.LaboratoryTestID == laboratoryTestId && ic.IsActive)
+                .ToListAsync();
 
-            // Get InvoiceCase for this test + current FY (source of truth for pricing)
-            var invoiceCase = await _context.InvoiceCases
-                .Where(ic => ic.LaboratoryTestID == laboratoryTestId && ic.IsActive
-                    && (currentFY == null || ic.FinancialYearId == currentFY.Id))
-                .FirstOrDefaultAsync();
-
-            // Fallback: any active InvoiceCase for this test (regardless of FY)
-            if (invoiceCase == null)
-                invoiceCase = await _context.InvoiceCases
-                    .Where(ic => ic.LaboratoryTestID == laboratoryTestId && ic.IsActive)
-                    .OrderByDescending(ic => ic.ID)
-                    .FirstOrDefaultAsync();
+            var invoiceCase = PriceVersionResolver.Resolve(versions, v => v.EffectiveFrom, inwardDate);
 
             if (invoiceCase == null)
                 throw new Exception($"No Invoice Case found for LaboratoryTest {laboratoryTestId}");
@@ -487,7 +482,8 @@ namespace LIMSApi.Repositories
         private async Task<(decimal Rate, long ConfigId, string? SelectionType, decimal? UsedValue)> GetRateForChemicalTestAsync(
             long laboratoryTestId,
             ChemicalTest chemicalTest,
-            int usedElements)
+            int usedElements,
+            DateTime inwardDate)
         {
             // Get all InvoiceCaseConfigurations linked to this LaboratoryTest
             var configs = await _context.LaboratoryTestInvoiceCase
@@ -507,7 +503,8 @@ namespace LIMSApi.Repositories
                 var (rate, configId) = await MatchConfigAndGetRateAsync(
                     laboratoryTestId,
                     elementConfig,
-                    usedElements
+                    usedElements,
+                    inwardDate
                 );
 
                 return (rate, configId, "Element", usedElements);
@@ -549,7 +546,8 @@ namespace LIMSApi.Repositories
                         var (rate, configId) = await MatchConfigAndGetRateAsync(
                             laboratoryTestId,
                             config,
-                            parameterValue.Value
+                            parameterValue.Value,
+                            inwardDate
                         );
 
                         return (rate, configId, config.SelectionType, parameterValue.Value);
@@ -578,8 +576,9 @@ namespace LIMSApi.Repositories
         private Task<(decimal Rate, long ConfigId)> MatchConfigAndGetRateAsync(
             long laboratoryTestId,
             InvoiceCaseConfiguration config,
-            decimal usedValue)
-            => _pricingEngine.MatchConfigAndGetRateAsync(laboratoryTestId, config, usedValue);
+            decimal usedValue,
+            DateTime inwardDate)
+            => _pricingEngine.MatchConfigAndGetRateAsync(laboratoryTestId, config, usedValue, inwardDate);
 
         public async Task<byte[]> GeneratePIPdfAsync(long piId)
         {

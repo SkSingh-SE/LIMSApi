@@ -1,5 +1,6 @@
 using LIMSApi.Data;
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
 using Microsoft.EntityFrameworkCore;
@@ -29,41 +30,38 @@ namespace LIMSApi.ServiceWORepo
         }
 
         /// <summary>
-        /// Get InvoiceCase for a lab test with FY filtering.
-        /// Tries current FY first, falls back to any active case if no FY match.
+        /// Resolves the InvoiceCase price version for a lab test by the sample inward date:
+        /// greatest EffectiveFrom ≤ inwardDate, falling back to the earliest version.
         /// </summary>
-        private async Task<InvoiceCase?> GetInvoiceCaseForTestAsync(long laboratoryTestId)
+        private async Task<InvoiceCase?> GetInvoiceCaseForTestAsync(long laboratoryTestId, DateTime inwardDate)
         {
-            // Find the current FY entity
-            var currentFYEntity = await _db.FinancialYears.FirstOrDefaultAsync(f => f.IsCurrent);
-
-            // Try current FY first (if one is set)
-            InvoiceCase? invoiceCase = null;
-            if (currentFYEntity != null)
-            {
-                invoiceCase = await _db.InvoiceCases
-                    .Where(ic => ic.LaboratoryTestID == laboratoryTestId && ic.IsActive && ic.FinancialYearId == currentFYEntity.Id)
-                    .Include(ic => ic.InvoiceCasePrices)
-                        .ThenInclude(p => p.Configuration)
-                    .Include(ic => ic.FinancialYearEntity)
-                    .FirstOrDefaultAsync();
-            }
-
-            if (invoiceCase != null) return invoiceCase;
-
-            // Fallback: any active case (log warning)
-            invoiceCase = await _db.InvoiceCases
+            var versions = await _db.InvoiceCases
                 .Where(ic => ic.LaboratoryTestID == laboratoryTestId && ic.IsActive)
                 .Include(ic => ic.InvoiceCasePrices)
                     .ThenInclude(p => p.Configuration)
                 .Include(ic => ic.FinancialYearEntity)
-                .FirstOrDefaultAsync();
+                .ToListAsync();
 
-            if (invoiceCase != null)
-                _logger.LogWarning("No InvoiceCase for current FY and LabTest {LabTestId}. Using fallback FY {FallbackFY}.",
-                    laboratoryTestId, invoiceCase.FinancialYearEntity?.Year);
+            var invoiceCase = PriceVersionResolver.Resolve(versions, v => v.EffectiveFrom, inwardDate);
+
+            if (invoiceCase != null && invoiceCase.EffectiveFrom.Date > inwardDate.Date)
+                _logger.LogWarning("Sample inward date {InwardDate:d} precedes all InvoiceCase versions for LabTest {LabTestId}. Using earliest version (FY {FY}).",
+                    inwardDate, laboratoryTestId, invoiceCase.FinancialYearEntity?.Year);
 
             return invoiceCase;
+        }
+
+        /// <summary>
+        /// Resolves the sample inward date (CollectionTime) for a TestResultHeader's sample.
+        /// Falls back to DateTime.UtcNow when the sample has no inward link.
+        /// </summary>
+        private async Task<DateTime> ResolveInwardDateAsync(TestResultHeader header)
+        {
+            var inwardId = header.Sample?.InwardID ?? 0;
+            if (inwardId == 0)
+                return DateTime.UtcNow;
+
+            return await PriceVersionResolver.ResolveInwardDate(_db, inwardId);
         }
 
         /// <inheritdoc />
@@ -77,8 +75,9 @@ namespace LIMSApi.ServiceWORepo
             if (header == null)
                 throw new Exception($"TestResultHeader {headerId} not found");
 
-            // Get InvoiceCase for this LaboratoryTest (FY-filtered with fallback)
-            var invoiceCase = await GetInvoiceCaseForTestAsync(header.LaboratoryTestID);
+            // Get InvoiceCase for this LaboratoryTest, resolved by the sample inward date
+            var inwardDate = await ResolveInwardDateAsync(header);
+            var invoiceCase = await GetInvoiceCaseForTestAsync(header.LaboratoryTestID, inwardDate);
 
             decimal calculatedTotal = 0;
             string? message = null;
@@ -148,7 +147,8 @@ namespace LIMSApi.ServiceWORepo
             if (header == null)
                 throw new Exception($"TestResultHeader {headerId} not found");
 
-            var invoiceCase = await GetInvoiceCaseForTestAsync(header.LaboratoryTestID);
+            var inwardDate = await ResolveInwardDateAsync(header);
+            var invoiceCase = await GetInvoiceCaseForTestAsync(header.LaboratoryTestID, inwardDate);
 
             if (invoiceCase == null || !invoiceCase.InvoiceCasePrices.Any())
                 return new List<PriceBreakdownDto>();
@@ -211,7 +211,8 @@ namespace LIMSApi.ServiceWORepo
 
             // Build breakdown
             var breakdown = new List<PriceBreakdownDto>();
-            var invoiceCase = await GetInvoiceCaseForTestAsync(header.LaboratoryTestID);
+            var inwardDate = await ResolveInwardDateAsync(header);
+            var invoiceCase = await GetInvoiceCaseForTestAsync(header.LaboratoryTestID, inwardDate);
 
             string? message = null;
 
@@ -332,7 +333,8 @@ namespace LIMSApi.ServiceWORepo
                 ?? throw new KeyNotFoundException($"TestResultHeader {headerId} not found");
 
             var labTest = await _db.LaboratoryTests.FirstOrDefaultAsync(t => t.ID == header.LaboratoryTestID);
-            var invoiceCase = await GetInvoiceCaseForTestAsync(header.LaboratoryTestID);
+            var inwardDate = await ResolveInwardDateAsync(header);
+            var invoiceCase = await GetInvoiceCaseForTestAsync(header.LaboratoryTestID, inwardDate);
 
             var result = new PricingRecommendationDto
             {

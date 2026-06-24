@@ -63,6 +63,14 @@ namespace LIMSApi.Services
                         version.UploadReferenceID = fileUploadResponse.ID;
                     }
                 }
+
+                // Pick the default version: explicit flag → Active → first. Then ensure only one has IsDefault.
+                var defaultVersion = model.Versions.FirstOrDefault(v => v.IsDefault)
+                    ?? model.Versions.FirstOrDefault(v => v.Status == VersionStatus.Active)
+                    ?? model.Versions.First();
+
+                foreach (var v in model.Versions)
+                    v.IsDefault = v == defaultVersion;
             }
 
             await _TestMethodSpecificationRepository.AddTestMethodSpecification(model);
@@ -84,6 +92,7 @@ namespace LIMSApi.Services
 
             existingTestMethodSpecification.Name = model.Name;
             existingTestMethodSpecification.Part = model.Part;
+            existingTestMethodSpecification.DisplayTitle = model.DisplayTitle;
             existingTestMethodSpecification.StandardOrganizationID = model.StandardOrganizationID;
             existingTestMethodSpecification.TestMethodStandard = model.TestMethodStandard;
             existingTestMethodSpecification.IsDisabled = model.IsDisabled;
@@ -92,6 +101,17 @@ namespace LIMSApi.Services
             existingTestMethodSpecification.DefaultParameters = model.DefaultParameters;
             existingTestMethodSpecification.ModifiedOn = DateTime.UtcNow;
             existingTestMethodSpecification.ModifiedBy = loggedInUser.EmployeeID;
+
+            // Sync metal classifications (replace set)
+            existingTestMethodSpecification.MetalClassifications.Clear();
+            foreach (var mc in model.MetalClassifications)
+            {
+                existingTestMethodSpecification.MetalClassifications.Add(new TestMethodSpecificationMetalClassification
+                {
+                    TestMethodSpecificationID = existingTestMethodSpecification.ID,
+                    MetalClassificationID = mc.MetalClassificationID
+                });
+            }
 
             var activeCount = model.Versions.Count(v => v.Status == VersionStatus.Active);
             if (activeCount > 1)
@@ -145,6 +165,12 @@ namespace LIMSApi.Services
                     existingVersion.ReviewDate = versionModel.ReviewDate;
                     existingVersion.ChangeReason = versionModel.ChangeReason;
                     existingVersion.UploadReferenceID = versionModel.UploadReferenceID;
+                    existingVersion.IsDefault = versionModel.IsDefault;
+
+                    // Sync this version's parameters (replace set).
+                    existingVersion.Parameters.Clear();
+                    foreach (var p in BuildVersionParameters(versionModel))
+                        existingVersion.Parameters.Add(p);
                 }
                 else
                 {
@@ -160,7 +186,7 @@ namespace LIMSApi.Services
                         versionModel.EffectiveDate ??= DateTime.UtcNow;
                     }
 
-                    existingTestMethodSpecification.Versions.Add(new TestMethodSpecificationVersion
+                    var newVersion = new TestMethodSpecificationVersion
                     {
                         Version = versionModel.Version,
                         StandardFile = versionModel.StandardFile,
@@ -172,14 +198,78 @@ namespace LIMSApi.Services
                         ReviewDate = versionModel.ReviewDate,
                         ChangeReason = versionModel.ChangeReason,
                         UploadReferenceID = versionModel.UploadReferenceID,
+                        IsDefault = versionModel.IsDefault,
                         CreatedBy = loggedInUser.EmployeeID,
-                        CreatedOn = DateTime.UtcNow
-                    });
+                        CreatedOn = DateTime.UtcNow,
+                        Parameters = BuildVersionParameters(versionModel)
+                    };
+                    existingTestMethodSpecification.Versions.Add(newVersion);
                 }
             }
 
+            // Ensure exactly one version has IsDefault = true.
+            EnsureSingleDefault(existingTestMethodSpecification.Versions.ToList());
+
             await _TestMethodSpecificationRepository.UpdateTestMethodSpecification(existingTestMethodSpecification);
             _logger.LogInformation("TestMethodSpecification '{TestMethodSpecificationName}' updated successfully.", model.Name);
+        }
+
+        // Builds version-level parameter entities from a version DTO/model.
+        private static List<TestMethodSpecificationParameter> BuildVersionParameters(TestMethodSpecificationVersion versionModel)
+        {
+            return (versionModel.Parameters ?? new List<TestMethodSpecificationParameter>())
+                .Where(p => p.ParameterID > 0)
+                .Select((p, idx) => new TestMethodSpecificationParameter
+                {
+                    ParameterID = p.ParameterID,
+                    ParameterUnitID = p.ParameterUnitID,
+                    ParameterUnitEquivalentID = p.ParameterUnitEquivalentID,
+                    Comment = p.Comment,
+                    SortOrder = p.SortOrder != 0 ? p.SortOrder : idx
+                }).ToList();
+        }
+
+        /// <summary>
+        /// Ensures exactly one version in the collection has IsDefault = true.
+        /// Priority: version already flagged → Active → first.
+        /// </summary>
+        private static void EnsureSingleDefault(List<TestMethodSpecificationVersion> versions)
+        {
+            if (!versions.Any()) return;
+
+            var currentDefault = versions.FirstOrDefault(v => v.IsDefault);
+            if (currentDefault != null)
+            {
+                // Clear all others, keep the flagged one.
+                foreach (var v in versions.Where(v => v != currentDefault))
+                    v.IsDefault = false;
+                return;
+            }
+
+            // No version flagged — pick one.
+            var fallback = versions.FirstOrDefault(v => v.Status == VersionStatus.Active) ?? versions.First();
+            fallback.IsDefault = true;
+        }
+
+        public async Task SetDefaultVersion(long specId, long versionId)
+        {
+            var spec = await _TestMethodSpecificationRepository.GetTestMethodSpecificationById(specId);
+            if (spec == null)
+                throw new InvalidOperationException("TestMethodSpecification not found!");
+
+            var target = spec.Versions.FirstOrDefault(v => v.ID == versionId);
+            if (target == null)
+                throw new InvalidOperationException("Version not found!");
+
+            // Toggle IsDefault: set target to true, all others to false.
+            foreach (var v in spec.Versions)
+                v.IsDefault = v.ID == versionId;
+
+            spec.ModifiedOn = DateTime.UtcNow;
+            spec.ModifiedBy = loggedInUser.EmployeeID;
+
+            await _TestMethodSpecificationRepository.UpdateTestMethodSpecification(spec);
+            _logger.LogInformation("Default version '{VersionId}' set for TestMethodSpecification '{SpecId}'.", versionId, specId);
         }
 
         public async Task RemoveTestMethodSpecification(long id)
@@ -234,6 +324,11 @@ namespace LIMSApi.Services
             return await _TestMethodSpecificationRepository.GetTestMethodSpecificationsByStandard(standardId);
         }
 
+        public async Task<List<DropdwonSelector>> GetTestMethodsByMetalClassification(long metalClassificationId, string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _TestMethodSpecificationRepository.GetTestMethodsByMetalClassification(metalClassificationId, searchTerm, pageNo, pageSize);
+        }
+
         public async Task ActivateVersion(long specId, long versionId)
         {
             var spec = await _TestMethodSpecificationRepository.GetTestMethodSpecificationById(specId);
@@ -244,8 +339,8 @@ namespace LIMSApi.Services
             if (targetVersion == null)
                 throw new InvalidOperationException("Version not found!");
 
-            if (targetVersion.Status != VersionStatus.Draft)
-                throw new InvalidOperationException("Only Draft versions can be activated!");
+            if (targetVersion.Status != VersionStatus.Draft && targetVersion.Status != VersionStatus.Withdrawn)
+                throw new InvalidOperationException("Only Draft or Withdrawn versions can be activated!");
 
             var currentActive = spec.Versions.FirstOrDefault(v => v.Status == VersionStatus.Active);
             if (currentActive != null)
@@ -256,6 +351,10 @@ namespace LIMSApi.Services
 
             targetVersion.Status = VersionStatus.Active;
             targetVersion.EffectiveDate = DateTime.UtcNow;
+
+            // Activating a version also makes it the default selection.
+            foreach (var v in spec.Versions)
+                v.IsDefault = v.ID == versionId;
 
             spec.ModifiedOn = DateTime.UtcNow;
             spec.ModifiedBy = loggedInUser.EmployeeID;
@@ -293,9 +392,9 @@ namespace LIMSApi.Services
             return await _TestMethodSpecificationRepository.GetVersionImpactCount(versionId);
         }
 
-        public async Task<List<DropdwonSelector>> GetActiveVersionsBySpecId(long specId)
+        public async Task<List<DropdwonSelector>> GetVersionsBySpecId(long specId, bool includeAll = false)
         {
-            return await _TestMethodSpecificationRepository.GetActiveVersionsBySpecId(specId);
+            return await _TestMethodSpecificationRepository.GetVersionsBySpecId(specId, includeAll);
         }
     }
 }

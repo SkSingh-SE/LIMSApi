@@ -71,5 +71,24 @@ namespace LIMSApi.Controllers
                 message = $"InvoiceCase deleted successfully."
             });
         }
+
+        // Returns every year-version for a LaboratoryTest; the default-FY version is flagged IsCurrentFy.
+        [HttpGet("by-lab-test/{laboratoryTestId}")]
+        public async Task<ActionResult<InvoiceCaseByLabTestDto>> GetByLabTest(long laboratoryTestId)
+        {
+            return Ok(await _InvoiceCaseService.GetByLabTest(laboratoryTestId));
+        }
+
+        // Upserts all year-versions for a LaboratoryTest in one transaction.
+        [HttpPost("save-all")]
+        public async Task<IActionResult> SaveAll(SaveAllInvoiceCaseDto dto)
+        {
+            await _InvoiceCaseService.SaveAllInvoiceCases(dto);
+            return Ok(new
+            {
+                status = "success",
+                message = "Invoice Case prices saved successfully."
+            });
+        }
     }
 }

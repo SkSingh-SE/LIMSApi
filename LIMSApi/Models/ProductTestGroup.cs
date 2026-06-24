@@ -30,6 +30,6 @@ namespace LIMSApi.Models
         public virtual LaboratoryTest? LaboratoryTest { get; set; }
 
         [ForeignKey("TestMethodStandardID")]
-        public virtual TestMethodStandard? TestMethodStandard { get; set; }
+        public virtual TestMethodSpecification? TestMethodSpecification { get; set; }
     }
 }

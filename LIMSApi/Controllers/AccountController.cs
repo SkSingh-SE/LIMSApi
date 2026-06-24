@@ -136,9 +136,9 @@ namespace LIMSApi.Controllers
         // -----------------------------------
         [HttpPost("cases/{inwardId}/calculate-pricing")]
         [RequirePermission(Permissions.Account.CalculatePricing)]
-        public async Task<IActionResult> CalculatePricing(long inwardId)
+        public async Task<IActionResult> CalculatePricing(long inwardId, [FromQuery] bool confirmed = false)
         {
-            var result = await _priceCalculationService.CalculateAndCreateChargeEventsAsync(inwardId);
+            var result = await _priceCalculationService.CalculateAndCreateChargeEventsAsync(inwardId, confirmed);
             return Ok(result);
         }
 

@@ -1,4 +1,6 @@
-﻿using LIMSApi.Dtos;
+﻿using System.Security.Claims;
+using LIMSApi.Data;
+using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Middleware;
 using LIMSApi.Models;
@@ -6,6 +8,7 @@ using LIMSApi.Services;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Controllers
 {
@@ -14,10 +17,12 @@ namespace LIMSApi.Controllers
     public class UserPermissionController : ControllerBase
     {
         private readonly IUserPermissionService _UserPermissionService;
+        private readonly LIMSContext _context;
 
-        public UserPermissionController(IUserPermissionService UserPermissionService)
+        public UserPermissionController(IUserPermissionService UserPermissionService, LIMSContext context)
         {
             _UserPermissionService = UserPermissionService;
+            _context = context;
         }
 
         
@@ -44,6 +49,28 @@ namespace LIMSApi.Controllers
         [HttpGet("user-menu/{userId}")]
         public async Task<IActionResult> GetUserMenuWithPermission(long userId)
         {
+            var callerIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!long.TryParse(callerIdStr, out var callerId))
+                return Unauthorized();
+
+            // Allow own menu access; other users require ReadUserPermission or Admin
+            if (userId != callerId)
+            {
+                var role = User.FindFirst(ClaimTypes.Role)?.Value;
+                bool isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
+                if (!isAdmin)
+                {
+                    var hasPermission = await _context.UserPermissions
+                        .Include(up => up.Permission)
+                        .AnyAsync(up => up.UserID == callerId && up.IsGranted &&
+                                        up.Permission != null &&
+                                        up.Permission.Name == Permissions.Admin.ReadUserPermission);
+
+                    if (!hasPermission)
+                        return StatusCode(403, new { success = false, message = "You do not have permission to view another user's menu." });
+                }
+            }
+
             var data = await _UserPermissionService.GetUserMenusWithPermissions(userId);
             return data == null ? NoContent(): Ok(data);
         }

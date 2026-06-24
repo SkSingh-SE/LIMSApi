@@ -138,5 +138,12 @@ namespace LIMSApi.Controllers
             return Ok(await _MenuService.FetchSubMenuList(filter));
         }
 
+        [RequirePermission(Permissions.Menu.Read)]
+        [HttpGet("tree")]
+        public async Task<IActionResult> GetMenuTree()
+        {
+            return Ok(await _MenuService.GetMenuTree());
+        }
+
     }
 }

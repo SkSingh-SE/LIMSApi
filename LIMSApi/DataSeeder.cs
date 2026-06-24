@@ -1,4 +1,4 @@
-using LIMSApi.Data;
+﻿using LIMSApi.Data;
 using LIMSApi.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -30,9 +30,6 @@ public static class DataSeeder
                 logger.LogInformation("DataSeeder: first-time deployment detected — seeding core data...");
 
                 await SeedRolesAsync(db);
-                await SeedMenusAsync(db);
-                await SeedPermissionsAsync(db);
-                await SeedRoleMenuMappingsAsync(db);
                 await SeedConfigurationsAsync(db);
                 await SeedCurrenciesAsync(db);
                 await SeedDispatchModesAsync(db);
@@ -47,6 +44,16 @@ public static class DataSeeder
 
             // Always ensure admin user exists (idempotent — checks before creating)
             await SeedAdminUserAsync(db, logger);
+
+            // Menus — always runs via usp_SeedMenus (title-based, NOT EXISTS duplicate guard)
+            await SeedMenusAsync(db);
+
+            // Role-menu mappings — always runs (Admin → all active menus, NOT EXISTS guard)
+            await SeedRoleMenuMappingsAsync(db);
+
+            // Permissions — always runs so new permissions are picked up on every deployment
+            // Uses usp_SeedPermissions SP (title-based lookup, no hardcoded MenuIDs)
+            await SeedPermissionsAsync(db);
 
             // Master data (ProductForm, SpecimenType, etc.) always runs — idempotent with IF NOT EXISTS checks
             await SeedMasterDataAsync(db);
@@ -97,550 +104,667 @@ public static class DataSeeder
         ");
     }
 
-    // ───────────────────────────────────────────────
-    // 2. MENUS  (145 items, 4 hierarchy levels)
-    //    Top-level IDs remapped to 1001-1012 to avoid
-    //    conflict with child IDs 11,12 etc.
-    // ───────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+    // 2. MENUS  — stored procedure usp_SeedMenus
+    //
+    //   Approach: #Menus temp table holds (Title, Icon, Route, Color, ParentTitle).
+    //   ParentID resolved at runtime by joining MenuMasters on Title + Route IS NULL
+    //   (folder menus never have a Route, which disambiguates same-named folders
+    //   from same-named page items, e.g. 'Equipment' folder vs 'Equipment' page).
+    //   Three passes after root insert handle up to 4 hierarchy levels.
+    //   Duplicate guard: NOT EXISTS WHERE Title = X AND ParentID = Y.
+    //   No hardcoded IDs, no IDENTITY_INSERT.
+    // ─────────────────────────────────────────────────────────────────────────
     private static async Task SeedMenusAsync(LIMSContext db)
     {
+        // Step 1: Create / update the stored procedure
         await db.Database.ExecuteSqlRawAsync(@"
-            SET IDENTITY_INSERT MenuMasters ON;
+        CREATE OR ALTER PROCEDURE usp_SeedMenus
+        AS
+        BEGIN
+            SET NOCOUNT ON;
 
-            -- ══════ Level 0: Top-level menus ══════
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 1001) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (1001,N'Administration',N'bi-people',0,NULL,NULL,NULL);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 1002) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (1002,N'Specification',N'bi-box',0,NULL,NULL,NULL);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 1003) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (1003,N'Test',N'bi-file-earmark',0,NULL,NULL,NULL);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 1004) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (1004,N'Customer',N'bi-people',0,NULL,NULL,NULL);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 1005) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (1005,N'Sample',N'bi-layout-text-sidebar',0,NULL,NULL,NULL);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 1006) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (1006,N'Invoice',N'bi-receipt-cutoff',0,NULL,NULL,NULL);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 1007) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (1007,N'NABL ISO 17025',N'bi-shield-check',0,NULL,NULL,NULL);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 1008) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (1008,N'User Management',N'bi-person-fill-gear',0,NULL,NULL,NULL);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 1009) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (1009,N'Testing',N'bi-dropbox',0,NULL,NULL,NULL);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 1010) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (1010,N'Configuration',N'bi-gear',0,NULL,NULL,NULL);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 1011) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (1011,N'Reporting',N'bi-file-text',0,NULL,NULL,NULL);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 1012) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (1012,N'Accounts',N'bi-wallet2',0,NULL,NULL,NULL);
+            IF OBJECT_ID('tempdb..#Menus') IS NOT NULL DROP TABLE #Menus;
+            CREATE TABLE #Menus (
+                Title       NVARCHAR(200) NOT NULL,
+                Icon        NVARCHAR(100) NULL,
+                Route       NVARCHAR(300) NULL,
+                Color       NVARCHAR(50)  NULL,
+                ParentTitle NVARCHAR(200) NULL   -- NULL = top-level root
+            );
 
-            -- ══════ Level 1: Direct children of top-level ══════
-            -- Administration (1001)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 11)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (11,N'Department Master',NULL,0,N'/department',NULL,1001);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 12)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (12,N'Employee Master',NULL,0,N'/employee',NULL,1001);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 13)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (13,N'Designation Master',NULL,0,N'/designation',NULL,1001);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 14)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (14,N'Tax Master',NULL,0,N'/tax',NULL,1001);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 15)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (15,N'Bank Master',NULL,0,N'/bank',NULL,1001);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 16)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (16,N'Courier Master',NULL,0,N'/courier',NULL,1001);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 17)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (17,N'TPI Master',NULL,0,N'/tpi',NULL,1001);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 18)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (18,N'Supplier Master',NULL,0,N'/supplier',NULL,1001);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 19)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (19,N'Equipment',NULL,0,N'/equipment',NULL,1001);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 20)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (20,N'OEM Master',NULL,0,N'/oem',NULL,1001);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 21)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (21,N'Calibration Agency',NULL,0,N'/calibration-agency',NULL,1001);
-            -- Specification (1002)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 200) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (200,N'Material Specification',NULL,0,NULL,NULL,1002);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 202) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (202,N'Product Specification',NULL,0,NULL,NULL,1002);
-            -- Test (1003)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 35)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (35,N'Laboratory Test',NULL,0,N'/test',NULL,1003);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 36)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (36,N'Test Method Specification',NULL,0,N'/test-specification',NULL,1003);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 37)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (37,N'Invoice Case',NULL,0,N'/invoice-case',NULL,1003);
-            -- Customer (1004)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 38)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (38,N'Company Category',NULL,0,N'/company-category',NULL,1004);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 39)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (39,N'Customer Master',NULL,0,N'/customer',NULL,1004);
-            -- Sample (1005)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 40)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (40,N'Inward',NULL,0,N'/sample/inward',NULL,1005);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 41)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (41,N'Plan',NULL,0,N'/sample/plan',NULL,1005);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 42)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (42,N'Review',NULL,0,N'/sample/review',NULL,1005);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 500) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (500,N'Sample Preparation',NULL,0,NULL,NULL,1005);
-            -- Invoice (1006)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 47)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (47,N'Invoice Case Config',NULL,0,N'/invoice-case-config',NULL,1006);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 48)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (48,N'Invoice Case',NULL,0,N'/invoice-case',NULL,1006);
-            -- NABL ISO 17025 (1007)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 71)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (71,N'General Requirements',NULL,0,NULL,NULL,1007);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 72)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (72,N'Structural Requirements',NULL,0,NULL,NULL,1007);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 73)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (73,N'Resource Requirements',NULL,0,NULL,NULL,1007);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 74)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (74,N'Process Requirements',NULL,0,NULL,NULL,1007);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 75)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (75,N'Management System',NULL,0,NULL,NULL,1007);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 49)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (49,N'Lab Scope Master',NULL,0,N'/scope',NULL,1007);
-            -- User Management (1008)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 50)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (50,N'Lab Employee Master',NULL,0,N'/nabl/lab-employee',NULL,1008);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 51)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (51,N'Lab Score Master',NULL,0,N'/nabl/lab-score',NULL,1008);
-            -- Testing (1009)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 56)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (56,N'Testing Dashboard',NULL,0,N'/testing/dashboard',NULL,1009);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 57)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (57,N'Perform Test',NULL,0,N'/testing/perform/:id',NULL,1009);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 58)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (58,N'Long Term Tracking',NULL,0,N'/testing/longterm',NULL,1009);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 59)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (59,N'Test Results',NULL,0,N'/testing/results/:id',NULL,1009);
-            -- Configuration (1010)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 60)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (60,N'Configuration Manager',NULL,0,N'/config',NULL,1010);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 61)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (61,N'Menu Management',NULL,0,N'/menu',NULL,1010);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 62)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (62,N'Menu Permission',NULL,0,N'/menu-permission',NULL,1010);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 63)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (63,N'Role Management',NULL,0,N'/role',NULL,1010);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 64)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (64,N'User Permission',NULL,0,N'/user-permission',NULL,1010);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 65)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (65,N'Workflow',NULL,0,N'/workflow',NULL,1010);
-            -- Reporting (1011)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 66)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (66,N'Reporting Dashboard',NULL,0,N'/reporting/dashboard',NULL,1011);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 67)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (67,N'Report Formats',NULL,0,N'/report-format',NULL,1011);
-            -- Accounts (1012)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 121) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (121,N'Accounts Dashboard',NULL,0,N'/accounts/dashboard',NULL,1012);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 122) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (122,N'Case Accounts',NULL,0,N'/accounts/cases',NULL,1012);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 123) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (123,N'Customer Ledger',NULL,0,N'/account/ledger',NULL,1012);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 124) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (124,N'Record Payment',NULL,0,N'/account/record-payment',NULL,1012);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 125) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (125,N'Aging Report',NULL,0,N'/account/aging-report',NULL,1012);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 126) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (126,N'Outstanding Report',NULL,0,N'/account/outstanding-report',NULL,1012);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 127) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (127,N'Customer Purchase Orders',NULL,0,N'/accounts/purchase-orders',NULL,1012);
+            INSERT INTO #Menus (Title, Icon, Route, Color, ParentTitle) VALUES
+            -- ══ Level 0: Roots ══
+            (N'Administration',   N'bi-people',            NULL, NULL, NULL),
+            (N'Specification',    N'bi-box',                NULL, NULL, NULL),
+            (N'Test',             N'bi-file-earmark',       NULL, NULL, NULL),
+            (N'Customer',         N'bi-people',             NULL, NULL, NULL),
+            (N'Sample',           N'bi-layout-text-sidebar',NULL, NULL, NULL),
+            (N'Invoice',          N'bi-receipt-cutoff',     NULL, NULL, NULL),
+            (N'NABL ISO 17025',   N'bi-shield-check',       NULL, NULL, NULL),
+            (N'User Management',  N'bi-person-fill-gear',   NULL, NULL, NULL),
+            (N'Testing',          N'bi-dropbox',            NULL, NULL, NULL),
+            (N'Configuration',    N'bi-gear',               NULL, NULL, NULL),
+            (N'Reporting',        N'bi-file-text',          NULL, NULL, NULL),
+            (N'Accounts',         N'bi-wallet2',            NULL, NULL, NULL),
+            -- ══ Level 1: Administration ══
+            (N'Department Master',   NULL, N'/department',         NULL, N'Administration'),
+            (N'Employee Master',     NULL, N'/employee',           NULL, N'Administration'),
+            (N'Designation Master',  NULL, N'/designation',        NULL, N'Administration'),
+            (N'Tax Master',          NULL, N'/tax',                NULL, N'Administration'),
+            (N'Bank Master',         NULL, N'/bank',               NULL, N'Administration'),
+            (N'Courier Master',      NULL, N'/courier',            NULL, N'Administration'),
+            (N'Product Size Master', NULL, N'/product-size-master',NULL, N'Administration'),
+            (N'TPI Master',          NULL, N'/tpi',                NULL, N'Administration'),
+            (N'Supplier Master',     NULL, N'/supplier',           NULL, N'Administration'),
+            (N'Equipment',           NULL, N'/equipment',          NULL, N'Administration'),
+            (N'OEM Master',          NULL, N'/oem',                NULL, N'Administration'),
+            (N'Calibration Agency',  NULL, N'/calibration-agency', NULL, N'Administration'),
+            -- ══ Level 1: Specification — folders only ══
+            (N'Material Specification', NULL, NULL, NULL, N'Specification'),
+            (N'Product Specification',  NULL, NULL, NULL, N'Specification'),
+            -- ══ Level 1: Test ══
+            (N'Laboratory Test',           NULL, N'/test',              NULL, N'Test'),
+            (N'Test Method Specification', NULL, N'/test-specification', NULL, N'Test'),
+            (N'Invoice Case',              NULL, N'/invoice-case',       NULL, N'Test'),
+            -- ══ Level 1: Customer ══
+            (N'Company Category', NULL, N'/company-category', NULL, N'Customer'),
+            (N'Customer Master',  NULL, N'/customer',          NULL, N'Customer'),
+            -- ══ Level 1: Sample ══
+            (N'Inward',             NULL, N'/sample/inward',  NULL, N'Sample'),
+            (N'Plan',               NULL, N'/sample/plan',    NULL, N'Sample'),
+            (N'Review',             NULL, N'/sample/review',  NULL, N'Sample'),
+            (N'Sample Preparation', NULL, NULL,               NULL, N'Sample'),
+            -- ══ Level 1: Invoice ══
+            (N'Invoice Case Config', NULL, N'/invoice-case-config', NULL, N'Invoice'),
+            (N'Invoice Case',        NULL, N'/invoice-case',        NULL, N'Invoice'),
+            -- ══ Level 1: NABL ISO 17025 ══
+            (N'General Requirements',    NULL, NULL,      NULL, N'NABL ISO 17025'),
+            (N'Structural Requirements', NULL, NULL,      NULL, N'NABL ISO 17025'),
+            (N'Resource Requirements',   NULL, NULL,      NULL, N'NABL ISO 17025'),
+            (N'Process Requirements',    NULL, NULL,      NULL, N'NABL ISO 17025'),
+            (N'Management System',       NULL, NULL,      NULL, N'NABL ISO 17025'),
+            (N'Lab Scope Master',        NULL, N'/scope', NULL, N'NABL ISO 17025'),
+            -- ══ Level 1: User Management ══
+            (N'Lab Employee Master', NULL, N'/nabl/lab-employee', NULL, N'User Management'),
+            (N'Lab Score Master',    NULL, N'/nabl/lab-score',    NULL, N'User Management'),
+            -- ══ Level 1: Testing ══
+            (N'Testing Dashboard',  NULL, N'/testing/dashboard',   NULL, N'Testing'),
+            (N'Perform Test',       NULL, N'/testing/perform/:id', NULL, N'Testing'),
+            (N'Long Term Tracking', NULL, N'/testing/longterm',    NULL, N'Testing'),
+            (N'Test Results',       NULL, N'/testing/results/:id', NULL, N'Testing'),
+            -- ══ Level 1: Configuration ══
+            (N'Configuration Manager', NULL, N'/config',          NULL, N'Configuration'),
+            (N'Menu Management',       NULL, N'/menu',            NULL, N'Configuration'),
+            (N'Menu Permission',       NULL, N'/menu-permission', NULL, N'Configuration'),
+            (N'Role Management',       NULL, N'/role',            NULL, N'Configuration'),
+            (N'User Permission',       NULL, N'/user-permission', NULL, N'Configuration'),
+            (N'Workflow',              NULL, N'/workflow',        NULL, N'Configuration'),
+            -- ══ Level 1: Reporting ══
+            (N'Reporting Dashboard', NULL, N'/reporting/dashboard', NULL, N'Reporting'),
+            (N'Report Formats',      NULL, N'/report-format',       NULL, N'Reporting'),
+            -- ══ Level 1: Accounts ══
+            (N'Accounts Dashboard',       NULL, N'/accounts/dashboard',         NULL, N'Accounts'),
+            (N'Case Accounts',            NULL, N'/accounts/cases',             NULL, N'Accounts'),
+            (N'Customer Ledger',          NULL, N'/account/ledger',             NULL, N'Accounts'),
+            (N'Record Payment',           NULL, N'/account/record-payment',     NULL, N'Accounts'),
+            (N'Aging Report',             NULL, N'/account/aging-report',       NULL, N'Accounts'),
+            (N'Outstanding Report',       NULL, N'/account/outstanding-report', NULL, N'Accounts'),
+            (N'Customer Purchase Orders', NULL, N'/accounts/purchase-orders',   NULL, N'Accounts'),
+            -- ══ Level 2: Under Material Specification folder ══
+            (N'Material Specification',         NULL, N'/material-specification',        NULL, N'Material Specification'),
+            (N'Custom Material Specification',  NULL, N'/custom-material-specification', NULL, N'Material Specification'),
+            (N'Linked Masters',                 NULL, NULL,                              NULL, N'Material Specification'),
+            -- ══ Level 2: Under Product Specification folder ══
+            (N'Product Specification',          NULL, N'/product-specification',         NULL, N'Product Specification'),
+            (N'Custom Product Specification',   NULL, N'/custom-product-specification',  NULL, N'Product Specification'),
+            -- ══ Level 2: Under Sample Preparation ══
+            (N'Preparation Queue',   NULL, N'/sample/preparation',   NULL, N'Sample Preparation'),
+            (N'Sample Cutting',      NULL, N'/sample/cutting',       NULL, N'Sample Preparation'),
+            (N'Machining Charges',   NULL, N'/sample/machining',     NULL, N'Sample Preparation'),
+            (N'Cutting Price Master',NULL, N'/cutting-price-master', NULL, N'Sample Preparation'),
+            -- ══ Level 2: Under General Requirements ══
+            (N'F-2: Confidentiality Agree.', NULL, N'/supplier-confidentiality-agreement', NULL, N'General Requirements'),
+            (N'F-4: Impartiality Agree.',    NULL, N'/employee/impartiality-agreement',    NULL, N'General Requirements'),
+            -- ══ Level 2: Under Structural Requirements ══
+            (N'Organization Chart', NULL, N'/org-chart', NULL, N'Structural Requirements'),
+            -- ══ Level 2: Under Resource Requirements ══
+            (N'Personnel',               NULL, NULL, NULL, N'Resource Requirements'),
+            (N'Facilities & Environment',NULL, NULL, NULL, N'Resource Requirements'),
+            (N'Equipment',               NULL, NULL, NULL, N'Resource Requirements'),
+            (N'External Products',       NULL, NULL, NULL, N'Resource Requirements'),
+            -- ══ Level 2: Under Process Requirements ══
+            (N'F-27: Test Request',       NULL, N'/nabl/test-request',       NULL, N'Process Requirements'),
+            (N'Methods Management',       NULL, NULL,                         NULL, N'Process Requirements'),
+            (N'Sample Handling',          NULL, NULL,                         NULL, N'Process Requirements'),
+            (N'F-34: Technical Raw Data', NULL, N'/nabl/technical-raw-data', NULL, N'Process Requirements'),
+            (N'F-35: Uncertainty Rec.',   NULL, N'/measurement-uncertainty',  NULL, N'Process Requirements'),
+            (N'Ensuring Validity',        NULL, NULL,                         NULL, N'Process Requirements'),
+            (N'F-39: Test Report',        NULL, N'/test-report',              NULL, N'Process Requirements'),
+            (N'F-40: Complaint Reg.',     NULL, N'/complaint-register',       NULL, N'Process Requirements'),
+            (N'F-41: NC Work Records',    NULL, N'/non-conforming-work',      NULL, N'Process Requirements'),
+            -- ══ Level 2: Under Management System ══
+            (N'Documentation Control', NULL, NULL,                NULL, N'Management System'),
+            (N'F-46: Risk Assessment',  NULL, N'/risk-assessment', NULL, N'Management System'),
+            (N'Improvement & Actions', NULL, NULL,                NULL, N'Management System'),
+            (N'Internal Audits',       NULL, NULL,                NULL, N'Management System'),
+            (N'Management Review',     NULL, NULL,                NULL, N'Management System'),
+            -- ══ Level 3: Under Linked Masters ══
+            (N'Standard Organization', NULL, N'/standard-organization',  NULL, N'Linked Masters'),
+            (N'Metal Classification',  NULL, N'/metal-classification',   NULL, N'Linked Masters'),
+            (N'Chemical Parameter',    NULL, N'/chemical-parameter',     NULL, N'Linked Masters'),
+            (N'Mechanical Parameter',  NULL, N'/mechanical-parameter',   NULL, N'Linked Masters'),
+            (N'Parameter Unit',        NULL, N'/parameter-unit',         NULL, N'Linked Masters'),
+            (N'Heat Treatment',        NULL, N'/heat-treatment',         NULL, N'Linked Masters'),
+            (N'Product Condition',     NULL, N'/product-condition',      NULL, N'Linked Masters'),
+            (N'Specimen Orientation',  NULL, N'/specimen-orientation',   NULL, N'Linked Masters'),
+            (N'Specimen Type',         NULL, N'/specimen-type',          NULL, N'Linked Masters'),
+            (N'Product Form',          NULL, N'/product-form',           NULL, N'Linked Masters'),
+            (N'Dimensional Factor',    NULL, N'/dimesional-factor',      NULL, N'Linked Masters'),
+            (N'Universal Code Type',   NULL, N'/universal-code-type',    NULL, N'Linked Masters'),
+            -- ══ Level 3: Under Personnel ══
+            (N'F-1: Job Description',         NULL, N'/job-description',                       NULL, N'Personnel'),
+            (N'F-3: Resp. & Authority',        NULL, N'/responsibility-authority',               NULL, N'Personnel'),
+            (N'F-5: Competence Req.',          NULL, N'/competence-requirement',                 NULL, N'Personnel'),
+            (N'F-6: Induction Training',       NULL, N'/induction-training',                     NULL, N'Personnel'),
+            (N'F-7: Competence Report',        NULL, N'/employee/competence',                    NULL, N'Personnel'),
+            (N'F-8: Training Plan',            NULL, N'/training-plan',                          NULL, N'Personnel'),
+            (N'F-9: Training Attendance',      NULL, N'/training-attendance',                    NULL, N'Personnel'),
+            (N'F-10: Training Effectiv.',      NULL, N'/training-effectiveness',                  NULL, N'Personnel'),
+            (N'F-11: Skill Matrix',            NULL, N'/skill-matrix',                           NULL, N'Personnel'),
+            (N'F-13: Employee Authorization',  NULL, N'/employee/equipment-authorization/list',   NULL, N'Personnel'),
+            -- ══ Level 3: Under Facilities & Environment ══
+            (N'F-12: Environment Mon.', NULL, N'/environment-monitoring', NULL, N'Facilities & Environment'),
+            -- ══ Level 3: Under Equipment folder (under Resource Requirements) ══
+            (N'F-14: Equipment History', NULL, N'/equipment-history-card',           NULL, N'Equipment'),
+            (N'F-15: Calibration Review',NULL, N'/calibration-review',               NULL, N'Equipment'),
+            (N'F-16: Intermediate Check',NULL, N'/intermediate-check-records',        NULL, N'Equipment'),
+            (N'F-17: Ref. Material List',NULL, N'/reference-material',               NULL, N'Equipment'),
+            (N'F-18: CRM Consumption',   NULL, N'/reference-material-consumption',   NULL, N'Equipment'),
+            -- ══ Level 3: Under External Products ══
+            (N'F-19: Supplier Reg.',      NULL, N'/supplier-registration',          NULL, N'External Products'),
+            (N'F-20: Approved Suppliers', NULL, N'/approved-supplier',              NULL, N'External Products'),
+            (N'F-21: Purchase Indent',    NULL, N'/purchase-indent',                NULL, N'External Products'),
+            (N'F-22: Purchase Order',     NULL, N'/purchase-order',                 NULL, N'External Products'),
+            (N'F-23: Inspection Plan',    NULL, N'/product-inspection',             NULL, N'External Products'),
+            (N'F-24: Incoming Mat. Rec.', NULL, N'/incoming-material',              NULL, N'External Products'),
+            (N'F-25: Mat. Verification',  NULL, N'/purchase-material-verification', NULL, N'External Products'),
+            (N'F-26: Supplier Eval.',     NULL, N'/supplier-evaluation',            NULL, N'External Products'),
+            -- ══ Level 3: Under Methods Management ══
+            (N'F-28: Test Methods', NULL, N'/nabl/test-method',         NULL, N'Methods Management'),
+            (N'F-29: Verification', NULL, N'/nabl/method-verification', NULL, N'Methods Management'),
+            (N'F-30: Validation',   NULL, N'/nabl/method-validation',   NULL, N'Methods Management'),
+            -- ══ Level 3: Under Sample Handling ══
+            (N'F-31: Inward Register', NULL, N'/nabl/sample-inward-register', NULL, N'Sample Handling'),
+            (N'F-32: Muster Register', NULL, N'/nabl/sample-muster-register', NULL, N'Sample Handling'),
+            (N'F-33: Sample Label',    NULL, N'/nabl/sample-label',           NULL, N'Sample Handling'),
+            -- ══ Level 3: Under Ensuring Validity ══
+            (N'F-36: PT / ILC Plan',  NULL, N'/pt-ilc-plan',              NULL, N'Ensuring Validity'),
+            (N'F-37: QC Plan',        NULL, N'/quality-control-plan',      NULL, N'Ensuring Validity'),
+            (N'F-38: Retesting Rec.', NULL, N'/retesting-retained-sample', NULL, N'Ensuring Validity'),
+            -- ══ Level 3: Under Documentation Control ══
+            (N'F-43: Master Document', NULL, N'/master-document',         NULL, N'Documentation Control'),
+            (N'F-44: Doc. Change Req.',NULL, N'/document-change-request', NULL, N'Documentation Control'),
+            (N'F-45: Doc. Review Rec.',NULL, N'/document-review',         NULL, N'Documentation Control'),
+            -- ══ Level 3: Under Improvement & Actions ══
+            (N'F-47: Cust. Feedback',   NULL, N'/customer-feedback',    NULL, N'Improvement & Actions'),
+            (N'F-48: Feedback Analys.', NULL, N'/feedback-analysis',    NULL, N'Improvement & Actions'),
+            (N'F-42: NC & Corr. Action',NULL, N'/nc-corrective-action', NULL, N'Improvement & Actions'),
+            -- ══ Level 3: Under Internal Audits ══
+            (N'F-49: Internal Auditors',NULL, N'/internal-auditor', NULL, N'Internal Audits'),
+            (N'F-50: Audit Plan',       NULL, N'/audit-plan',       NULL, N'Internal Audits'),
+            (N'F-51: Audit Checklist',  NULL, N'/audit-checklist',  NULL, N'Internal Audits'),
+            (N'F-52: Audit Summary',    NULL, N'/audit-summary',    NULL, N'Internal Audits'),
+            -- ══ Level 3: Under Management Review ══
+            (N'F-53: Meeting Agenda',  NULL, N'/meeting-agenda',  NULL, N'Management Review'),
+            (N'F-54: Meeting Minutes', NULL, N'/meeting-minutes', NULL, N'Management Review');
 
-            -- ══════ Level 2: Sub-children ══════
-            -- Under Material Specification (200)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 31)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (31,N'Material Specification',NULL,0,N'/material-specification',NULL,200);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 32)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (32,N'Custom Material Specification',NULL,0,N'/custom-material-specification',NULL,200);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 201) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (201,N'Linked Masters',NULL,0,NULL,NULL,200);
-            -- Under Product Specification (202)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 33)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (33,N'Product Specification',NULL,0,N'/product-specification',NULL,202);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 34)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (34,N'Custom Product Specification',NULL,0,N'/custom-product-specification',NULL,202);
-            -- Under Sample Preparation (500)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 130) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (130,N'Preparation Queue',NULL,0,N'/sample/preparation',NULL,500);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 43)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (43,N'Sample Cutting',NULL,0,N'/sample/cutting',NULL,500);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 46)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (46,N'Machining Charges',NULL,0,N'/sample/machining',NULL,500);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 44)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (44,N'Cutting Price Master',NULL,0,N'/cutting-price-master',NULL,500);
-            -- Under General Requirements (71)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 7101) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (7101,N'F-2: Confidentiality Agree.',NULL,0,N'/supplier-confidentiality-agreement',NULL,71);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 7102) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (7102,N'F-4: Impartiality Agree.',NULL,0,N'/employee/impartiality-agreement',NULL,71);
-            -- Under Structural Requirements (72)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 7201) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (7201,N'Organization Chart',NULL,0,N'/org-chart',NULL,72);
-            -- Under Resource Requirements (73)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 7301) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (7301,N'Personnel',NULL,0,NULL,NULL,73);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 7302) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (7302,N'Facilities & Environment',NULL,0,NULL,NULL,73);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 7303) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (7303,N'Equipment',NULL,0,NULL,NULL,73);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 7304) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (7304,N'External Products',NULL,0,NULL,NULL,73);
-            -- Under Process Requirements (74)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 7401) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (7401,N'F-27: Test Request',NULL,0,N'/nabl/test-request',NULL,74);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 7402) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (7402,N'Methods Management',NULL,0,NULL,NULL,74);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 7403) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (7403,N'Sample Handling',NULL,0,NULL,NULL,74);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 7404) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (7404,N'F-34: Technical Raw Data',NULL,0,N'/nabl/technical-raw-data',NULL,74);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 7405) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (7405,N'F-35: Uncertainty Rec.',NULL,0,N'/measurement-uncertainty',NULL,74);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 7406) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (7406,N'Ensuring Validity',NULL,0,NULL,NULL,74);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 7407) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (7407,N'F-39: Test Report',NULL,0,N'/test-report',NULL,74);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 7408) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (7408,N'F-40: Complaint Reg.',NULL,0,N'/complaint-register',NULL,74);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 7409) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (7409,N'F-41: NC Work Records',NULL,0,N'/non-conforming-work',NULL,74);
-            -- Under Management System (75)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 7501) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (7501,N'Documentation Control',NULL,0,NULL,NULL,75);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 7502) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (7502,N'F-46: Risk Assessment',NULL,0,N'/risk-assessment',NULL,75);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 7503) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (7503,N'Improvement & Actions',NULL,0,NULL,NULL,75);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 7504) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (7504,N'Internal Audits',NULL,0,NULL,NULL,75);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 7505) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (7505,N'Management Review',NULL,0,NULL,NULL,75);
+            -- ── Step 1: Root menus (no parent) ──
+            INSERT INTO MenuMasters (Title, Icon, IsExpanded, Route, Color, ParentID)
+            SELECT m.Title, m.Icon, 0, m.Route, m.Color, NULL
+            FROM #Menus m
+            WHERE m.ParentTitle IS NULL
+              AND NOT EXISTS (
+                  SELECT 1 FROM MenuMasters mm
+                  WHERE mm.Title = m.Title AND mm.ParentID IS NULL
+              );
 
-            -- ══════ Level 3: Deep children ══════
-            -- Linked Masters (201)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 28)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (28,N'Standard Organization',NULL,0,N'/standard-organization',NULL,201);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 30)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (30,N'Metal Classification',NULL,0,N'/metal-classification',NULL,201);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 24)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (24,N'Chemical Parameter',NULL,0,N'/chemical-parameter',NULL,201);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 25)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (25,N'Mechanical Parameter',NULL,0,N'/mechanical-parameter',NULL,201);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 210) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (210,N'Parameter Unit',NULL,0,N'/parameter-unit',NULL,201);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 23)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (23,N'Heat Treatment',NULL,0,N'/heat-treatment',NULL,201);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 26)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (26,N'Product Condition',NULL,0,N'/product-condition',NULL,201);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 27)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (27,N'Specimen Orientation',NULL,0,N'/specimen-orientation',NULL,201);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 128) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (128,N'Specimen Type',NULL,0,N'/specimen-type',NULL,201);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 129) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (129,N'Product Form',NULL,0,N'/product-form',NULL,201);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 22)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (22,N'Dimensional Factor',NULL,0,N'/dimesional-factor',NULL,201);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 29)  INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (29,N'Universal Code Type',NULL,0,N'/universal-code-type',NULL,201);
-            -- Personnel (7301)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 730101) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (730101,N'F-1: Job Description',NULL,0,N'/job-description',NULL,7301);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 730102) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (730102,N'F-3: Resp. & Authority',NULL,0,N'/responsibility-authority',NULL,7301);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 730103) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (730103,N'F-5: Competence Req.',NULL,0,N'/competence-requirement',NULL,7301);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 730104) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (730104,N'F-6: Induction Training',NULL,0,N'/induction-training',NULL,7301);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 730105) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (730105,N'F-7: Competence Report',NULL,0,N'/employee/competence',NULL,7301);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 730106) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (730106,N'F-8: Training Plan',NULL,0,N'/training-plan',NULL,7301);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 730107) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (730107,N'F-9: Training Attendance',NULL,0,N'/training-attendance',NULL,7301);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 730108) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (730108,N'F-10: Training Effectiv.',NULL,0,N'/training-effectiveness',NULL,7301);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 730109) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (730109,N'F-11: Skill Matrix',NULL,0,N'/skill-matrix',NULL,7301);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 730110) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (730110,N'F-13: Employee Authorization',NULL,0,N'/employee/equipment-authorization/list',NULL,7301);
-            -- Facilities & Environment (7302)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 730201) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (730201,N'F-12: Environment Mon.',NULL,0,N'/environment-monitoring',NULL,7302);
-            -- Equipment (7303)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 730301) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (730301,N'F-14: Equipment History',NULL,0,N'/equipment-history-card',NULL,7303);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 730302) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (730302,N'F-15: Calibration Review',NULL,0,N'/calibration-review',NULL,7303);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 730303) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (730303,N'F-16: Intermediate Check',NULL,0,N'/intermediate-check-records',NULL,7303);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 730304) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (730304,N'F-17: Ref. Material List',NULL,0,N'/reference-material',NULL,7303);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 730305) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (730305,N'F-18: CRM Consumption',NULL,0,N'/reference-material-consumption',NULL,7303);
-            -- External Products (7304)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 730401) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (730401,N'F-19: Supplier Reg.',NULL,0,N'/supplier-registration',NULL,7304);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 730402) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (730402,N'F-20: Approved Suppliers',NULL,0,N'/approved-supplier',NULL,7304);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 730403) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (730403,N'F-21: Purchase Indent',NULL,0,N'/purchase-indent',NULL,7304);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 730404) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (730404,N'F-22: Purchase Order',NULL,0,N'/purchase-order',NULL,7304);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 730405) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (730405,N'F-23: Inspection Plan',NULL,0,N'/product-inspection',NULL,7304);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 730406) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (730406,N'F-24: Incoming Mat. Rec.',NULL,0,N'/incoming-material',NULL,7304);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 730407) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (730407,N'F-25: Mat. Verification',NULL,0,N'/purchase-material-verification',NULL,7304);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 730408) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (730408,N'F-26: Supplier Eval.',NULL,0,N'/supplier-evaluation',NULL,7304);
-            -- Methods Management (7402)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 740201) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (740201,N'F-28: Test Methods',NULL,0,N'/nabl/test-method',NULL,7402);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 740202) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (740202,N'F-29: Verification',NULL,0,N'/nabl/method-verification',NULL,7402);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 740203) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (740203,N'F-30: Validation',NULL,0,N'/nabl/method-validation',NULL,7402);
-            -- Sample Handling (7403)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 740301) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (740301,N'F-31: Inward Register',NULL,0,N'/nabl/sample-inward-register',NULL,7403);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 740302) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (740302,N'F-32: Muster Register',NULL,0,N'/nabl/sample-muster-register',NULL,7403);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 740303) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (740303,N'F-33: Sample Label',NULL,0,N'/nabl/sample-label',NULL,7403);
-            -- Ensuring Validity (7406)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 740601) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (740601,N'F-36: PT / ILC Plan',NULL,0,N'/pt-ilc-plan',NULL,7406);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 740602) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (740602,N'F-37: QC Plan',NULL,0,N'/quality-control-plan',NULL,7406);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 740603) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (740603,N'F-38: Retesting Rec.',NULL,0,N'/retesting-retained-sample',NULL,7406);
-            -- Documentation Control (7501)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 750101) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (750101,N'F-43: Master Document',NULL,0,N'/master-document',NULL,7501);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 750102) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (750102,N'F-44: Doc. Change Req.',NULL,0,N'/document-change-request',NULL,7501);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 750103) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (750103,N'F-45: Doc. Review Rec.',NULL,0,N'/document-review',NULL,7501);
-            -- Improvement & Actions (7503)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 750301) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (750301,N'F-47: Cust. Feedback',NULL,0,N'/customer-feedback',NULL,7503);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 750302) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (750302,N'F-48: Feedback Analys.',NULL,0,N'/feedback-analysis',NULL,7503);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 750303) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (750303,N'F-42: NC & Corr. Action',NULL,0,N'/nc-corrective-action',NULL,7503);
-            -- Internal Audits (7504)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 750401) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (750401,N'F-49: Internal Auditors',NULL,0,N'/internal-auditor',NULL,7504);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 750402) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (750402,N'F-50: Audit Plan',NULL,0,N'/audit-plan',NULL,7504);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 750403) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (750403,N'F-51: Audit Checklist',NULL,0,N'/audit-checklist',NULL,7504);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 750404) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (750404,N'F-52: Audit Summary',NULL,0,N'/audit-summary',NULL,7504);
-            -- Management Review (7505)
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 750501) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (750501,N'F-53: Meeting Agenda',NULL,0,N'/meeting-agenda',NULL,7505);
-            IF NOT EXISTS (SELECT 1 FROM MenuMasters WHERE ID = 750502) INSERT INTO MenuMasters (ID,Title,Icon,IsExpanded,Route,Color,ParentID) VALUES (750502,N'F-54: Meeting Minutes',NULL,0,N'/meeting-minutes',NULL,7505);
+            -- ── Steps 2-4: Child menus — 3 passes handle up to 3 levels of depth ──
+            -- Pass N inserts items whose parent was inserted in the previous pass.
+            -- Parent folders are found by Title + Route IS NULL (only folders lack a Route).
+            -- The NOT EXISTS guard makes every pass fully idempotent.
+            DECLARE @Pass INT = 0;
+            WHILE @Pass < 3
+            BEGIN
+                INSERT INTO MenuMasters (Title, Icon, IsExpanded, Route, Color, ParentID)
+                SELECT m.Title, m.Icon, 0, m.Route, m.Color, p.ID
+                FROM   #Menus m
+                JOIN   MenuMasters p ON p.Title = m.ParentTitle AND p.Route IS NULL
+                WHERE  m.ParentTitle IS NOT NULL
+                  AND  NOT EXISTS (
+                           SELECT 1 FROM MenuMasters mm
+                           WHERE mm.Title = m.Title AND mm.ParentID = p.ID
+                       );
+                SET @Pass = @Pass + 1;
+            END;
 
-            SET IDENTITY_INSERT MenuMasters OFF;
+            DROP TABLE #Menus;
+        END
         ");
+
+        // Step 2: Execute the SP to seed / update menus
+        await db.Database.ExecuteSqlRawAsync("EXEC usp_SeedMenus");
     }
 
-    // ───────────────────────────────────────────────
-    // 3. PERMISSIONS  (136 total: 112 read + 20 action + 4 backend)
-    // ───────────────────────────────────────────────
+    // ───────────────────────────────────────────────────────────────────────────
+    // 3. PERMISSIONS  — stored procedure usp_SeedPermissions
+    //
+    //   Approach: temp table holds (Name, DisplayName, MenuTitle, ParentTitle, Type).
+    //   A JOIN on MenuMasters.Title resolves MenuID at runtime — no hardcoded IDs.
+    //   ParentTitle disambiguates menus that share the same Title
+    //     e.g. 'Material Specification' folder (ID 200) vs leaf page (ID 31):
+    //          → leaf's parent is also 'Material Specification' → ParentTitle='Material Specification'
+    //     e.g. 'Invoice Case' under 'Test' (ID 37) vs under 'Invoice' (ID 48):
+    //          → ParentTitle='Test' picks 37; ParentTitle='Invoice' picks 48
+    //
+    //   Idempotent: NOT EXISTS check prevents duplicates.
+    //   Runs every startup so new permissions are picked up without DB reset.
+    // ───────────────────────────────────────────────────────────────────────────
     private static async Task SeedPermissionsAsync(LIMSContext db)
     {
-        // Use temp table for clean typed inserts
+        // Step 1: Create / update the stored procedure in the database
         await db.Database.ExecuteSqlRawAsync(@"
-            IF OBJECT_ID('tempdb..#SeedPerms') IS NOT NULL DROP TABLE #SeedPerms;
-            CREATE TABLE #SeedPerms (Name NVARCHAR(100), DisplayName NVARCHAR(200), MenuID BIGINT NULL, Type NVARCHAR(50));
+        CREATE OR ALTER PROCEDURE usp_SeedPermissions
+        AS
+        BEGIN
+            SET NOCOUNT ON;
 
-            INSERT INTO #SeedPerms (Name, DisplayName, MenuID, Type) VALUES
-            -- ── Administration ──
-            (N'CanReadDepartment',N'View Department',11,N'Read'),
-            (N'CanReadEmployee',N'View Employee',12,N'Read'),
-            (N'CanReadDesignation',N'View Designation',13,N'Read'),
-            (N'CanReadTax',N'View Tax',14,N'Read'),
-            (N'CanReadBank',N'View Bank',15,N'Read'),
-            (N'CanReadCourier',N'View Courier',16,N'Read'),
-            (N'CanReadTPI',N'View TPI',17,N'Read'),
-            (N'CanReadSupplier',N'View Supplier',18,N'Read'),
-            (N'CanReadEquipment',N'View Equipment',19,N'Read'),
-            (N'CanReadOEM',N'View OEM',20,N'Read'),
-            (N'CanReadCalibrationAgency',N'View Calibration Agency',21,N'Read'),
-            -- ── Specification ──
-            (N'CanReadMaterialSpecification',N'View Material Specification',31,N'Read'),
-            (N'CanReadCustomMaterialSpecification',N'View Custom Material Specification',32,N'Read'),
-            (N'CanReadStandardOrganization',N'View Standard Organization',28,N'Read'),
-            (N'CanReadMetalClassification',N'View Metal Classification',30,N'Read'),
-            (N'CanReadChemicalParameter',N'View Chemical Parameter',24,N'Read'),
-            (N'CanReadMechanicalParameter',N'View Mechanical Parameter',25,N'Read'),
-            (N'CanReadParameterUnit',N'View Parameter Unit',210,N'Read'),
-            (N'CanReadHeatTreatment',N'View Heat Treatment',23,N'Read'),
-            (N'CanReadProductCondition',N'View Product Condition',26,N'Read'),
-            (N'CanReadSpecimenOrientation',N'View Specimen Orientation',27,N'Read'),
-            (N'CanReadSpecimenType',N'View Specimen Type',128,N'Read'),
-            (N'CanReadProductForm',N'View Product Form',129,N'Read'),
-            (N'CanReadDimensionalFactors',N'View Dimensional Factors',22,N'Read'),
-            (N'CanReadUniversalCode',N'View Universal Code',29,N'Read'),
-            (N'CanReadProductSpecification',N'View Product Specification',33,N'Read'),
-            (N'CanReadCustomProductSpecification',N'View Custom Product Specification',34,N'Read'),
-            -- ── Test ──
-            (N'CanReadLaboratoryTest',N'View Laboratory Test',35,N'Read'),
-            (N'CanReadTestMethodSpecification',N'View Test Method Specification',36,N'Read'),
-            (N'CanReadInvoiceCase',N'View Invoice Case',37,N'Read'),
-            -- ── Customer ──
-            (N'CanReadCompanyCategory',N'View Company Category',38,N'Read'),
-            (N'CanReadCustomerMaster',N'View Customer Master',39,N'Read'),
-            -- ── Sample ──
-            (N'CanReadInward',N'View Inward',40,N'Read'),
-            (N'CanReadPlan',N'View Plan',41,N'Read'),
-            (N'CanReadReview',N'View Review',42,N'Read'),
-            (N'CanReadSampleCutting',N'View Sample Cutting',43,N'Read'),
-            (N'CanReadMachiningChallan',N'View Machining Challan',46,N'Read'),
-            (N'CanReadCuttingPrice',N'View Cutting Price',44,N'Read'),
-            -- ── Invoice ──
-            (N'CanReadInvoiceCaseConfig',N'View Invoice Case Config',47,N'Read'),
-            -- ── NABL: General Requirements ──
-            (N'CanReadConfidentialityAgreement',N'View Confidentiality Agreement',7101,N'Read'),
-            (N'CanReadImpartialityAgreement',N'View Impartiality Agreement',7102,N'Read'),
-            -- ── NABL: Structural ──
-            (N'CanReadOrgChart',N'View Organization Chart',7201,N'Read'),
-            -- ── NABL: Personnel ──
-            (N'CanReadJobDescription',N'View Job Description',730101,N'Read'),
-            (N'CanReadRA',N'View Resp. & Authority',730102,N'Read'),
-            (N'CanReadCompetenceRequirement',N'View Competence Requirement',730103,N'Read'),
-            (N'CanReadInductionTraining',N'View Induction Training',730104,N'Read'),
-            (N'CanReadEmployeeCompetence',N'View Employee Competence',730105,N'Read'),
-            (N'CanReadTrainingPlan',N'View Training Plan',730106,N'Read'),
-            (N'CanReadTrainingAttendance',N'View Training Attendance',730107,N'Read'),
-            (N'CanReadTrainingEffectiveness',N'View Training Effectiveness',730108,N'Read'),
-            (N'CanReadSkillMatrix',N'View Skill Matrix',730109,N'Read'),
-            (N'CanReadEmployeeAuthorization',N'View Employee Authorization',730110,N'Read'),
-            -- ── NABL: Facilities ──
-            (N'CanReadEnvironmentMonitoring',N'View Environment Monitoring',730201,N'Read'),
-            -- ── NABL: Equipment ──
-            (N'CanReadEquipmentHistory',N'View Equipment History',730301,N'Read'),
-            (N'CanReadCalibrationReview',N'View Calibration Review',730302,N'Read'),
-            (N'CanReadIntermediateCheck',N'View Intermediate Check',730303,N'Read'),
-            (N'CanReadReferenceMaterial',N'View Reference Material',730304,N'Read'),
-            (N'CanReadCRMConsumption',N'View CRM Consumption',730305,N'Read'),
-            -- ── NABL: External Products ──
-            (N'CanReadSupplierRegistration',N'View Supplier Registration',730401,N'Read'),
-            (N'CanReadApprovedSupplier',N'View Approved Supplier',730402,N'Read'),
-            (N'CanReadPurchaseIndent',N'View Purchase Indent',730403,N'Read'),
-            (N'CanReadPurchaseOrder',N'View Purchase Order',730404,N'Read'),
-            (N'CanReadProductInspection',N'View Product Inspection',730405,N'Read'),
-            (N'CanReadIncomingMaterial',N'View Incoming Material',730406,N'Read'),
-            (N'CanReadMaterialVerification',N'View Material Verification',730407,N'Read'),
-            (N'CanReadSupplierEvaluation',N'View Supplier Evaluation',730408,N'Read'),
-            -- ── NABL: Process Requirements ──
-            (N'CanReadTestRequest',N'View Test Request',7401,N'Read'),
-            (N'CanReadTestMethod',N'View Test Method',740201,N'Read'),
-            (N'CanReadMethodVerification',N'View Method Verification',740202,N'Read'),
-            (N'CanReadMethodValidation',N'View Method Validation',740203,N'Read'),
-            (N'CanReadSampleInwardRegister',N'View Inward Register',740301,N'Read'),
-            (N'CanReadSampleMusterRegister',N'View Muster Register',740302,N'Read'),
-            (N'CanReadSampleLabel',N'View Sample Label',740303,N'Read'),
-            (N'CanReadTechnicalRawData',N'View Technical Raw Data',7404,N'Read'),
-            (N'CanReadUncertainty',N'View Uncertainty Records',7405,N'Read'),
-            (N'CanReadPTPlan',N'View PT/ILC Plan',740601,N'Read'),
-            (N'CanReadQCPlan',N'View QC Plan',740602,N'Read'),
-            (N'CanReadRetesting',N'View Retesting Records',740603,N'Read'),
-            (N'CanReadTestReport',N'View Test Report',7407,N'Read'),
-            (N'CanReadComplaintRegister',N'View Complaint Register',7408,N'Read'),
-            (N'CanReadNonConformingWork',N'View Non-Conforming Work',7409,N'Read'),
-            -- ── NABL: Management System ──
-            (N'CanReadMasterDocument',N'View Master Document',750101,N'Read'),
-            (N'CanReadDocChangeRequest',N'View Document Change Request',750102,N'Read'),
-            (N'CanReadDocumentReview',N'View Document Review',750103,N'Read'),
-            (N'CanReadRiskAssessment',N'View Risk Assessment',7502,N'Read'),
-            (N'CanReadCustomerFeedback',N'View Customer Feedback',750301,N'Read'),
-            (N'CanReadFeedbackAnalysis',N'View Feedback Analysis',750302,N'Read'),
-            (N'CanReadNCAction',N'View NC & Corrective Action',750303,N'Read'),
-            (N'CanReadInternalAuditor',N'View Internal Auditors',750401,N'Read'),
-            (N'CanReadAuditPlan',N'View Audit Plan',750402,N'Read'),
-            (N'CanReadAuditChecklist',N'View Audit Checklist',750403,N'Read'),
-            (N'CanReadAuditSummary',N'View Audit Summary',750404,N'Read'),
-            (N'CanReadMeetingAgenda',N'View Meeting Agenda',750501,N'Read'),
-            (N'CanReadMeetingMinutes',N'View Meeting Minutes',750502,N'Read'),
-            -- ── Lab Scope ──
-            (N'CanReadLabScopeMaster',N'View Lab Scope',49,N'Read'),
-            -- ── User Management ──
-            (N'CanReadLabEmployeeMaster',N'View Lab Employee',50,N'Read'),
-            (N'CanReadLabScore',N'View Lab Score',51,N'Read'),
-            -- ── Testing ──
-            (N'CanReadTestingDashboard',N'View Testing Dashboard',56,N'Read'),
-            (N'CanReadPerformTest',N'View Perform Test',57,N'Read'),
-            (N'CanReadLongTermTracking',N'View Long Term Tracking',58,N'Read'),
-            (N'CanReadTestResults',N'View Test Results',59,N'Read'),
-            -- ── Configuration ──
-            (N'CanReadConfiguration',N'View Configuration',60,N'Read'),
-            (N'CanReadMenuManagement',N'View Menu Management',61,N'Read'),
-            (N'CanReadMenuPermission',N'View Menu Permission',62,N'Read'),
-            (N'CanReadRoleManagement',N'View Role Management',63,N'Read'),
-            (N'CanReadUserPermission',N'View User Permission',64,N'Read'),
-            (N'CanReadWorkflow',N'View Workflow',65,N'Read'),
-            -- ── Reporting ──
-            (N'CanReadReporting',N'View Reporting',66,N'Read'),
-            (N'CanReadReportFormat',N'View Report Formats',67,N'Read'),
-            (N'CanManageReportFormat',N'Manage Report Formats',67,N'Manage'),
-            -- ── Accounts ──
-            (N'CanReadAccountsDashboard',N'View Accounts Dashboard',121,N'Read'),
-            (N'CanReadCaseAccounts',N'View Case Accounts',122,N'Read'),
-            (N'CanReadCustomerLedger',N'View Customer Ledger',123,N'Read'),
-            (N'CanReadRecordPayment',N'View Record Payment',124,N'Read'),
-            (N'CanReadAgingReport',N'View Aging Report',125,N'Read'),
-            (N'CanReadOutstandingReport',N'View Outstanding Report',126,N'Read'),
-            (N'CanReadCustomerPO',N'View Customer Purchase Orders',127,N'Read'),
+            IF OBJECT_ID('tempdb..#Perms') IS NOT NULL DROP TABLE #Perms;
+            CREATE TABLE #Perms (
+                Name        NVARCHAR(100) NOT NULL,
+                DisplayName NVARCHAR(200) NOT NULL,
+                MenuTitle   NVARCHAR(200) NOT NULL,
+                ParentTitle NVARCHAR(200) NULL,   -- NULL = unique title; set to disambiguate duplicates
+                Type        NVARCHAR(50)  NOT NULL
+            );
 
-            -- ═══════════════════════════════════════
-            -- ACTION PERMISSIONS (frontend role-helper)
-            -- ═══════════════════════════════════════
-            (N'CanReadAccount',N'Read Account',1012,N'Read'),
-            (N'CanManageAccount',N'Manage Account',1012,N'Manage'),
-            (N'CanGeneratePI',N'Generate Proforma Invoice',122,N'Action'),
-            (N'CanGenerateInvoice',N'Generate Invoice',122,N'Action'),
-            (N'CanManageInvoice',N'Manage Invoice',122,N'Manage'),
-            (N'CanApproveReport',N'Approve Report',66,N'Action'),
-            (N'CanManageReporting',N'Manage Reporting',66,N'Manage'),
-            (N'CanAmendReport',N'Amend Report',66,N'Action'),
-            (N'CanReadTesting',N'Read Testing',1009,N'Read'),
-            (N'CanManageTesting',N'Manage Testing',1009,N'Manage'),
-            (N'CanPerformTest',N'Perform Test',57,N'Action'),
-            (N'CanReadSampleInward',N'Read Sample Inward',40,N'Read'),
-            (N'CanManageSampleInward',N'Manage Sample Inward',40,N'Manage'),
-            (N'CanCreateSampleInward',N'Create Sample Inward',40,N'Create'),
-            (N'CanUpdateSampleInward',N'Update Sample Inward',40,N'Update'),
-            (N'CanDeleteSampleInward',N'Delete Sample Inward',40,N'Delete'),
-            (N'CanCreateLabScopeMaster',N'Create Lab Scope',49,N'Create'),
-            (N'CanUpdateLabScopeMaster',N'Update Lab Scope',49,N'Update'),
-            (N'CanDeleteLabScopeMaster',N'Delete Lab Scope',49,N'Delete'),
-            (N'CanManageLabScopeMaster',N'Manage Lab Scope',49,N'Manage'),
+            INSERT INTO #Perms (Name, DisplayName, MenuTitle, ParentTitle, Type) VALUES
+            -- ═══════════════════════ Administration ═══════════════════════
+            ('CanReadDepartment','View Department','Department Master',NULL,'Read'),
+            ('CanCreateDepartment','Create Department','Department Master',NULL,'Create'),
+            ('CanUpdateDepartment','Update Department','Department Master',NULL,'Update'),
+            ('CanDeleteDepartment','Delete Department','Department Master',NULL,'Delete'),
+            ('CanManageDepartment','Manage Department','Department Master',NULL,'Manage'),
 
-            -- ═══════════════════════════════════════
-            -- BACKEND [RequirePermission] attributes
-            -- ═══════════════════════════════════════
-            (N'TEST_RESULT_SAVE',N'Save Test Result',59,N'Action'),
-            (N'TEST_PRICE_OVERRIDE',N'Override Test Price',59,N'Action'),
-            (N'TEST_RESULT_VERIFY',N'Verify Test Result',59,N'Action'),
-            (N'INVOICE_GENERATE',N'Generate Invoice (Backend)',122,N'Action'),
+            ('CanReadEmployee','View Employee','Employee Master',NULL,'Read'),
+            ('CanCreateEmployee','Create Employee','Employee Master',NULL,'Create'),
+            ('CanUpdateEmployee','Update Employee','Employee Master',NULL,'Update'),
+            ('CanDeleteEmployee','Delete Employee','Employee Master',NULL,'Delete'),
+            ('CanManageEmployee','Manage Employee','Employee Master',NULL,'Manage'),
 
-            -- ═══════════════════════════════════════
-            -- CRUD expansions for Group D Phase 2
-            -- ═══════════════════════════════════════
-            -- Masters CRUD (existing had Read only — add Create/Update/Delete/Manage)
-            (N'CanCreateBank',N'Create Bank',15,N'Create'),
-            (N'CanUpdateBank',N'Update Bank',15,N'Update'),
-            (N'CanDeleteBank',N'Delete Bank',15,N'Delete'),
-            (N'CanManageBank',N'Manage Bank',15,N'Manage'),
-            (N'CanCreateCourier',N'Create Courier',16,N'Create'),
-            (N'CanUpdateCourier',N'Update Courier',16,N'Update'),
-            (N'CanDeleteCourier',N'Delete Courier',16,N'Delete'),
-            (N'CanManageCourier',N'Manage Courier',16,N'Manage'),
-            (N'CanCreateTPI',N'Create TPI',17,N'Create'),
-            (N'CanUpdateTPI',N'Update TPI',17,N'Update'),
-            (N'CanDeleteTPI',N'Delete TPI',17,N'Delete'),
-            (N'CanManageTPI',N'Manage TPI',17,N'Manage'),
-            (N'CanCreateSupplier',N'Create Supplier',18,N'Create'),
-            (N'CanUpdateSupplier',N'Update Supplier',18,N'Update'),
-            (N'CanDeleteSupplier',N'Delete Supplier',18,N'Delete'),
-            (N'CanManageSupplier',N'Manage Supplier',18,N'Manage'),
-            (N'CanCreateEquipment',N'Create Equipment',19,N'Create'),
-            (N'CanUpdateEquipment',N'Update Equipment',19,N'Update'),
-            (N'CanDeleteEquipment',N'Delete Equipment',19,N'Delete'),
-            (N'CanManageEquipment',N'Manage Equipment',19,N'Manage'),
-            (N'CanCreateOEM',N'Create OEM',20,N'Create'),
-            (N'CanUpdateOEM',N'Update OEM',20,N'Update'),
-            (N'CanDeleteOEM',N'Delete OEM',20,N'Delete'),
-            (N'CanManageOEM',N'Manage OEM',20,N'Manage'),
-            (N'CanCreateCalibrationAgency',N'Create Calibration Agency',21,N'Create'),
-            (N'CanUpdateCalibrationAgency',N'Update Calibration Agency',21,N'Update'),
-            (N'CanDeleteCalibrationAgency',N'Delete Calibration Agency',21,N'Delete'),
-            (N'CanManageCalibrationAgency',N'Manage Calibration Agency',21,N'Manage'),
-            (N'CanCreateDepartment',N'Create Department',11,N'Create'),
-            (N'CanUpdateDepartment',N'Update Department',11,N'Update'),
-            (N'CanDeleteDepartment',N'Delete Department',11,N'Delete'),
-            (N'CanManageDepartment',N'Manage Department',11,N'Manage'),
-            (N'CanCreateEmployee',N'Create Employee',12,N'Create'),
-            (N'CanUpdateEmployee',N'Update Employee',12,N'Update'),
-            (N'CanDeleteEmployee',N'Delete Employee',12,N'Delete'),
-            (N'CanManageEmployee',N'Manage Employee',12,N'Manage'),
-            (N'CanCreateDesignation',N'Create Designation',13,N'Create'),
-            (N'CanUpdateDesignation',N'Update Designation',13,N'Update'),
-            (N'CanDeleteDesignation',N'Delete Designation',13,N'Delete'),
-            (N'CanManageDesignation',N'Manage Designation',13,N'Manage'),
-            (N'CanCreateTax',N'Create Tax',14,N'Create'),
-            (N'CanUpdateTax',N'Update Tax',14,N'Update'),
-            (N'CanDeleteTax',N'Delete Tax',14,N'Delete'),
-            (N'CanManageTax',N'Manage Tax',14,N'Manage'),
+            ('CanReadDesignation','View Designation','Designation Master',NULL,'Read'),
+            ('CanCreateDesignation','Create Designation','Designation Master',NULL,'Create'),
+            ('CanUpdateDesignation','Update Designation','Designation Master',NULL,'Update'),
+            ('CanDeleteDesignation','Delete Designation','Designation Master',NULL,'Delete'),
+            ('CanManageDesignation','Manage Designation','Designation Master',NULL,'Manage'),
 
-            -- Technical masters
-            (N'CanCreateMaterialSpecification',N'Create Material Spec',31,N'Create'),
-            (N'CanUpdateMaterialSpecification',N'Update Material Spec',31,N'Update'),
-            (N'CanDeleteMaterialSpecification',N'Delete Material Spec',31,N'Delete'),
-            (N'CanManageMaterialSpecification',N'Manage Material Spec',31,N'Manage'),
-            (N'CanCreateProductSpecification',N'Create Product Spec',33,N'Create'),
-            (N'CanUpdateProductSpecification',N'Update Product Spec',33,N'Update'),
-            (N'CanDeleteProductSpecification',N'Delete Product Spec',33,N'Delete'),
-            (N'CanManageProductSpecification',N'Manage Product Spec',33,N'Manage'),
-            (N'CanCreateLaboratoryTest',N'Create Laboratory Test',35,N'Create'),
-            (N'CanUpdateLaboratoryTest',N'Update Laboratory Test',35,N'Update'),
-            (N'CanDeleteLaboratoryTest',N'Delete Laboratory Test',35,N'Delete'),
-            (N'CanManageLaboratoryTest',N'Manage Laboratory Test',35,N'Manage'),
-            (N'CanCreateTestMethodSpecification',N'Create Test Method Spec',36,N'Create'),
-            (N'CanUpdateTestMethodSpecification',N'Update Test Method Spec',36,N'Update'),
-            (N'CanDeleteTestMethodSpecification',N'Delete Test Method Spec',36,N'Delete'),
-            (N'CanManageTestMethodSpecification',N'Manage Test Method Spec',36,N'Manage'),
-            (N'CanCreateMetalClassification',N'Create Metal Classification',30,N'Create'),
-            (N'CanUpdateMetalClassification',N'Update Metal Classification',30,N'Update'),
-            (N'CanDeleteMetalClassification',N'Delete Metal Classification',30,N'Delete'),
-            (N'CanManageMetalClassification',N'Manage Metal Classification',30,N'Manage'),
-            (N'CanCreateCompanyCategory',N'Create Company Category',38,N'Create'),
-            (N'CanUpdateCompanyCategory',N'Update Company Category',38,N'Update'),
-            (N'CanDeleteCompanyCategory',N'Delete Company Category',38,N'Delete'),
-            (N'CanManageCompanyCategory',N'Manage Company Category',38,N'Manage'),
-            (N'CanCreateCustomerMaster',N'Create Customer',39,N'Create'),
-            (N'CanUpdateCustomerMaster',N'Update Customer',39,N'Update'),
-            (N'CanDeleteCustomerMaster',N'Delete Customer',39,N'Delete'),
-            (N'CanManageCustomerMaster',N'Manage Customer',39,N'Manage'),
+            ('CanReadTax','View Tax','Tax Master',NULL,'Read'),
+            ('CanCreateTax','Create Tax','Tax Master',NULL,'Create'),
+            ('CanUpdateTax','Update Tax','Tax Master',NULL,'Update'),
+            ('CanDeleteTax','Delete Tax','Tax Master',NULL,'Delete'),
+            ('CanManageTax','Manage Tax','Tax Master',NULL,'Manage'),
 
-            -- Parameter
-            (N'CanCreateParameter',N'Create Parameter',24,N'Create'),
-            (N'CanUpdateParameter',N'Update Parameter',24,N'Update'),
-            (N'CanDeleteParameter',N'Delete Parameter',24,N'Delete'),
-            (N'CanManageParameter',N'Manage Parameter',24,N'Manage'),
+            ('CanReadBank','View Bank','Bank Master',NULL,'Read'),
+            ('CanCreateBank','Create Bank','Bank Master',NULL,'Create'),
+            ('CanUpdateBank','Update Bank','Bank Master',NULL,'Update'),
+            ('CanDeleteBank','Delete Bank','Bank Master',NULL,'Delete'),
+            ('CanManageBank','Manage Bank','Bank Master',NULL,'Manage'),
 
-            -- Flow — Plan workflow actions
-            (N'CanApprovePlan',N'Approve Plan Change',41,N'Action'),
-            (N'CanRejectPlan',N'Reject Plan Change',41,N'Action'),
-            (N'CanManagePlan',N'Manage Plan',41,N'Manage'),
-            (N'CanApproveReview',N'Approve Review',42,N'Action'),
-            (N'CanRejectReview',N'Reject Review',42,N'Action'),
-            (N'CanManageReview',N'Manage Review',42,N'Manage'),
+            ('CanReadCourier','View Courier','Courier Master',NULL,'Read'),
+            ('CanCreateCourier','Create Courier','Courier Master',NULL,'Create'),
+            ('CanUpdateCourier','Update Courier','Courier Master',NULL,'Update'),
+            ('CanDeleteCourier','Delete Courier','Courier Master',NULL,'Delete'),
+            ('CanManageCourier','Manage Courier','Courier Master',NULL,'Manage'),
 
-            -- Sample Preparation
-            (N'CanCreateSampleCutting',N'Create Cutting',43,N'Create'),
-            (N'CanUpdateSampleCutting',N'Update Cutting',43,N'Update'),
-            (N'CanManageSampleCutting',N'Manage Sample Prep',43,N'Manage'),
+            ('CanReadProductSizeMaster','View Product Size','Product Size Master',NULL,'Read'),
+            ('CanCreateProductSizeMaster','Create Product Size','Product Size Master',NULL,'Create'),
+            ('CanUpdateProductSizeMaster','Update Product Size','Product Size Master',NULL,'Update'),
+            ('CanDeleteProductSizeMaster','Delete Product Size','Product Size Master',NULL,'Delete'),
+            ('CanManageProductSizeMaster','Manage Product Size','Product Size Master',NULL,'Manage'),
 
-            -- Role / Menu / User (Admin section)
-            (N'CanCreateRole',N'Create Role',63,N'Create'),
-            (N'CanUpdateRole',N'Update Role',63,N'Update'),
-            (N'CanDeleteRole',N'Delete Role',63,N'Delete'),
-            (N'CanCreateMenu',N'Create Menu',61,N'Create'),
-            (N'CanUpdateMenu',N'Update Menu',61,N'Update'),
-            (N'CanDeleteMenu',N'Delete Menu',61,N'Delete'),
-            (N'CanAssignMenuPermission',N'Assign Menu Permission',62,N'Action'),
-            (N'CanReadUser',N'Read User',64,N'Read'),
-            (N'CanCreateUser',N'Create User',64,N'Create'),
-            (N'CanUpdateUser',N'Update User',64,N'Update'),
-            (N'CanDeleteUser',N'Delete User',64,N'Delete'),
-            (N'CanAssignUserPermission',N'Assign User Permission',64,N'Action'),
-            (N'CanResetUserPassword',N'Reset User Password',64,N'Action'),
-            (N'CanManageSettings',N'Manage Settings',60,N'Manage'),
-            (N'CanReadAdmin',N'Read Admin',63,N'Read'),
-            (N'CanCreateAdmin',N'Create Admin',63,N'Create'),
-            (N'CanUpdateAdmin',N'Update Admin',63,N'Update'),
-            (N'CanDeleteAdmin',N'Delete Admin',63,N'Delete'),
-            (N'CanManageAdmin',N'Manage Admin',63,N'Manage'),
+            ('CanReadTPI','View TPI','TPI Master',NULL,'Read'),
+            ('CanCreateTPI','Create TPI','TPI Master',NULL,'Create'),
+            ('CanUpdateTPI','Update TPI','TPI Master',NULL,'Update'),
+            ('CanDeleteTPI','Delete TPI','TPI Master',NULL,'Delete'),
+            ('CanManageTPI','Manage TPI','TPI Master',NULL,'Manage'),
 
-            -- Account / Billing expansions
-            (N'CanCalculatePricing',N'Calculate Case Pricing',122,N'Action'),
-            (N'CanValidatePricing',N'Validate Case Pricing',122,N'Action'),
-            (N'CanReadInvoiceLineItem',N'Read Invoice Line Items',122,N'Read'),
-            (N'CanManageInvoiceLineItem',N'Manage Invoice Line Items',122,N'Manage'),
-            (N'CanCloseCase',N'Close Case',122,N'Action'),
-            (N'CanRecordPayment',N'Record Payment',124,N'Action'),
-            (N'CanReadReceipt',N'Read Receipt',124,N'Read'),
-            (N'CanReadCollectionSummary',N'Read Collection Summary',125,N'Read'),
-            (N'CanReadCreditStatus',N'Read Credit Status',125,N'Read'),
-            (N'CanProcessPayment',N'Process Payment',124,N'Action'),
-            (N'CanValidatePayment',N'Validate Payment Token',124,N'Action'),
-            (N'CanSendPaymentLink',N'Send Payment Link',124,N'Action'),
+            ('CanReadSupplier','View Supplier','Supplier Master',NULL,'Read'),
+            ('CanCreateSupplier','Create Supplier','Supplier Master',NULL,'Create'),
+            ('CanUpdateSupplier','Update Supplier','Supplier Master',NULL,'Update'),
+            ('CanDeleteSupplier','Delete Supplier','Supplier Master',NULL,'Delete'),
+            ('CanManageSupplier','Manage Supplier','Supplier Master',NULL,'Manage'),
 
-            -- Invoice Case / Config / CustomerPO / CuttingPrice CRUD
-            (N'CanCreateInvoiceCase',N'Create Invoice Case',37,N'Create'),
-            (N'CanUpdateInvoiceCase',N'Update Invoice Case',37,N'Update'),
-            (N'CanDeleteInvoiceCase',N'Delete Invoice Case',37,N'Delete'),
-            (N'CanManageInvoiceCase',N'Manage Invoice Case',37,N'Manage'),
-            (N'CanCreateInvoiceCaseConfig',N'Create Invoice Case Config',47,N'Create'),
-            (N'CanUpdateInvoiceCaseConfig',N'Update Invoice Case Config',47,N'Update'),
-            (N'CanDeleteInvoiceCaseConfig',N'Delete Invoice Case Config',47,N'Delete'),
-            (N'CanManageInvoiceCaseConfig',N'Manage Invoice Case Config',47,N'Manage'),
-            (N'CanCreateCustomerPO',N'Create Customer PO',127,N'Create'),
-            (N'CanUpdateCustomerPO',N'Update Customer PO',127,N'Update'),
-            (N'CanDeleteCustomerPO',N'Delete Customer PO',127,N'Delete'),
-            (N'CanManageCustomerPO',N'Manage Customer PO',127,N'Manage'),
-            (N'CanCreateCuttingPrice',N'Create Cutting Price',44,N'Create'),
-            (N'CanUpdateCuttingPrice',N'Update Cutting Price',44,N'Update'),
-            (N'CanDeleteCuttingPrice',N'Delete Cutting Price',44,N'Delete'),
-            (N'CanManageCuttingPrice',N'Manage Cutting Price',44,N'Manage');
+            ('CanReadEquipment','View Equipment','Equipment',NULL,'Read'),
+            ('CanCreateEquipment','Create Equipment','Equipment',NULL,'Create'),
+            ('CanUpdateEquipment','Update Equipment','Equipment',NULL,'Update'),
+            ('CanDeleteEquipment','Delete Equipment','Equipment',NULL,'Delete'),
+            ('CanManageEquipment','Manage Equipment','Equipment',NULL,'Manage'),
 
-            -- Insert only permissions that don't already exist (by name)
+            ('CanReadOEM','View OEM','OEM Master',NULL,'Read'),
+            ('CanCreateOEM','Create OEM','OEM Master',NULL,'Create'),
+            ('CanUpdateOEM','Update OEM','OEM Master',NULL,'Update'),
+            ('CanDeleteOEM','Delete OEM','OEM Master',NULL,'Delete'),
+            ('CanManageOEM','Manage OEM','OEM Master',NULL,'Manage'),
+
+            ('CanReadCalibrationAgency','View Calibration Agency','Calibration Agency',NULL,'Read'),
+            ('CanCreateCalibrationAgency','Create Calibration Agency','Calibration Agency',NULL,'Create'),
+            ('CanUpdateCalibrationAgency','Update Calibration Agency','Calibration Agency',NULL,'Update'),
+            ('CanDeleteCalibrationAgency','Delete Calibration Agency','Calibration Agency',NULL,'Delete'),
+            ('CanManageCalibrationAgency','Manage Calibration Agency','Calibration Agency',NULL,'Manage'),
+
+            -- ═══════════════════════ Specification ═══════════════════════
+            -- 'Material Specification' title exists on BOTH folder (200) and leaf (31).
+            -- ParentTitle='Material Specification' picks the leaf (31) whose parent is the folder.
+            ('CanReadMaterialSpecification','View Material Specification','Material Specification','Material Specification','Read'),
+            ('CanCreateMaterialSpecification','Create Material Spec','Material Specification','Material Specification','Create'),
+            ('CanUpdateMaterialSpecification','Update Material Spec','Material Specification','Material Specification','Update'),
+            ('CanDeleteMaterialSpecification','Delete Material Spec','Material Specification','Material Specification','Delete'),
+            ('CanManageMaterialSpecification','Manage Material Spec','Material Specification','Material Specification','Manage'),
+
+            ('CanReadCustomMaterialSpecification','View Custom Material Specification','Custom Material Specification',NULL,'Read'),
+            ('CanReadStandardOrganization','View Standard Organization','Standard Organization',NULL,'Read'),
+
+            ('CanReadMetalClassification','View Metal Classification','Metal Classification',NULL,'Read'),
+            ('CanCreateMetalClassification','Create Metal Classification','Metal Classification',NULL,'Create'),
+            ('CanUpdateMetalClassification','Update Metal Classification','Metal Classification',NULL,'Update'),
+            ('CanDeleteMetalClassification','Delete Metal Classification','Metal Classification',NULL,'Delete'),
+            ('CanManageMetalClassification','Manage Metal Classification','Metal Classification',NULL,'Manage'),
+
+            ('CanReadChemicalParameter','View Chemical Parameter','Chemical Parameter',NULL,'Read'),
+            ('CanReadMechanicalParameter','View Mechanical Parameter','Mechanical Parameter',NULL,'Read'),
+            -- Parameter CRUD — linked to Chemical Parameter menu (covers both chemical + mechanical)
+            ('CanCreateParameter','Create Parameter','Chemical Parameter',NULL,'Create'),
+            ('CanUpdateParameter','Update Parameter','Chemical Parameter',NULL,'Update'),
+            ('CanDeleteParameter','Delete Parameter','Chemical Parameter',NULL,'Delete'),
+            ('CanManageParameter','Manage Parameter','Chemical Parameter',NULL,'Manage'),
+
+            ('CanReadParameterUnit','View Parameter Unit','Parameter Unit',NULL,'Read'),
+            ('CanReadHeatTreatment','View Heat Treatment','Heat Treatment',NULL,'Read'),
+            ('CanReadProductCondition','View Product Condition','Product Condition',NULL,'Read'),
+            ('CanReadSpecimenOrientation','View Specimen Orientation','Specimen Orientation',NULL,'Read'),
+            ('CanReadSpecimenType','View Specimen Type','Specimen Type',NULL,'Read'),
+            ('CanReadProductForm','View Product Form','Product Form',NULL,'Read'),
+            ('CanReadDimensionalFactors','View Dimensional Factors','Dimensional Factor',NULL,'Read'),
+            ('CanReadUniversalCode','View Universal Code','Universal Code Type',NULL,'Read'),
+
+            -- 'Product Specification' title exists on BOTH folder (202) and leaf (33).
+            -- ParentTitle='Product Specification' picks the leaf (33).
+            ('CanReadProductSpecification','View Product Specification','Product Specification','Product Specification','Read'),
+            ('CanCreateProductSpecification','Create Product Spec','Product Specification','Product Specification','Create'),
+            ('CanUpdateProductSpecification','Update Product Spec','Product Specification','Product Specification','Update'),
+            ('CanDeleteProductSpecification','Delete Product Spec','Product Specification','Product Specification','Delete'),
+            ('CanManageProductSpecification','Manage Product Spec','Product Specification','Product Specification','Manage'),
+
+            ('CanReadCustomProductSpecification','View Custom Product Specification','Custom Product Specification',NULL,'Read'),
+
+            -- ═══════════════════════ Test ═══════════════════════
+            ('CanReadLaboratoryTest','View Laboratory Test','Laboratory Test',NULL,'Read'),
+            ('CanCreateLaboratoryTest','Create Laboratory Test','Laboratory Test',NULL,'Create'),
+            ('CanUpdateLaboratoryTest','Update Laboratory Test','Laboratory Test',NULL,'Update'),
+            ('CanDeleteLaboratoryTest','Delete Laboratory Test','Laboratory Test',NULL,'Delete'),
+            ('CanManageLaboratoryTest','Manage Laboratory Test','Laboratory Test',NULL,'Manage'),
+
+            ('CanReadTestMethodSpecification','View Test Method Specification','Test Method Specification',NULL,'Read'),
+            ('CanCreateTestMethodSpecification','Create Test Method Spec','Test Method Specification',NULL,'Create'),
+            ('CanUpdateTestMethodSpecification','Update Test Method Spec','Test Method Specification',NULL,'Update'),
+            ('CanDeleteTestMethodSpecification','Delete Test Method Spec','Test Method Specification',NULL,'Delete'),
+            ('CanManageTestMethodSpecification','Manage Test Method Spec','Test Method Specification',NULL,'Manage'),
+
+            -- 'Invoice Case' exists under ''Test'' (ID 37) AND under ''Invoice'' (ID 48).
+            -- ParentTitle=''Test'' picks ID 37 (permissions side); ID 48 is a UI shortcut with same permissions.
+            ('CanReadInvoiceCase','View Invoice Case','Invoice Case','Test','Read'),
+            ('CanCreateInvoiceCase','Create Invoice Case','Invoice Case','Test','Create'),
+            ('CanUpdateInvoiceCase','Update Invoice Case','Invoice Case','Test','Update'),
+            ('CanDeleteInvoiceCase','Delete Invoice Case','Invoice Case','Test','Delete'),
+            ('CanManageInvoiceCase','Manage Invoice Case','Invoice Case','Test','Manage'),
+
+            -- ═══════════════════════ Customer ═══════════════════════
+            ('CanReadCompanyCategory','View Company Category','Company Category',NULL,'Read'),
+            ('CanCreateCompanyCategory','Create Company Category','Company Category',NULL,'Create'),
+            ('CanUpdateCompanyCategory','Update Company Category','Company Category',NULL,'Update'),
+            ('CanDeleteCompanyCategory','Delete Company Category','Company Category',NULL,'Delete'),
+            ('CanManageCompanyCategory','Manage Company Category','Company Category',NULL,'Manage'),
+
+            ('CanReadCustomerMaster','View Customer Master','Customer Master',NULL,'Read'),
+            ('CanCreateCustomerMaster','Create Customer','Customer Master',NULL,'Create'),
+            ('CanUpdateCustomerMaster','Update Customer','Customer Master',NULL,'Update'),
+            ('CanDeleteCustomerMaster','Delete Customer','Customer Master',NULL,'Delete'),
+            ('CanManageCustomerMaster','Manage Customer','Customer Master',NULL,'Manage'),
+
+            -- ═══════════════════════ Sample ═══════════════════════
+            ('CanReadInward','View Inward','Inward',NULL,'Read'),
+            ('CanReadSampleInward','Read Sample Inward','Inward',NULL,'Read'),
+            ('CanCreateSampleInward','Create Sample Inward','Inward',NULL,'Create'),
+            ('CanUpdateSampleInward','Update Sample Inward','Inward',NULL,'Update'),
+            ('CanDeleteSampleInward','Delete Sample Inward','Inward',NULL,'Delete'),
+            ('CanManageSampleInward','Manage Sample Inward','Inward',NULL,'Manage'),
+
+            ('CanReadPlan','View Plan','Plan',NULL,'Read'),
+            ('CanCreatePlan','Create Plan','Plan',NULL,'Create'),
+            ('CanUpdatePlan','Update Plan','Plan',NULL,'Update'),
+            ('CanDeletePlan','Delete Plan','Plan',NULL,'Delete'),
+            ('CanManagePlan','Manage Plan','Plan',NULL,'Manage'),
+            ('CanApprovePlan','Approve Plan Change','Plan',NULL,'Action'),
+            ('CanRejectPlan','Reject Plan Change','Plan',NULL,'Action'),
+
+            ('CanReadReview','View Review','Review',NULL,'Read'),
+            ('CanApproveReview','Approve Review','Review',NULL,'Action'),
+            ('CanRejectReview','Reject Review','Review',NULL,'Action'),
+            ('CanManageReview','Manage Review','Review',NULL,'Manage'),
+
+            ('CanReadSampleCutting','View Sample Cutting','Sample Cutting',NULL,'Read'),
+            ('CanCreateSampleCutting','Create Cutting','Sample Cutting',NULL,'Create'),
+            ('CanUpdateSampleCutting','Update Cutting','Sample Cutting',NULL,'Update'),
+            ('CanManageSampleCutting','Manage Sample Prep','Sample Cutting',NULL,'Manage'),
+
+            ('CanReadMachiningChallan','View Machining Challan','Machining Charges',NULL,'Read'),
+
+            ('CanReadCuttingPrice','View Cutting Price','Cutting Price Master',NULL,'Read'),
+            ('CanCreateCuttingPrice','Create Cutting Price','Cutting Price Master',NULL,'Create'),
+            ('CanUpdateCuttingPrice','Update Cutting Price','Cutting Price Master',NULL,'Update'),
+            ('CanDeleteCuttingPrice','Delete Cutting Price','Cutting Price Master',NULL,'Delete'),
+            ('CanManageCuttingPrice','Manage Cutting Price','Cutting Price Master',NULL,'Manage'),
+
+            ('CanReadMachiningCharge','View Machining Charge','Machining Charge Master',NULL,'Read'),
+            ('CanCreateMachiningCharge','Create Machining Charge','Machining Charge Master',NULL,'Create'),
+            ('CanUpdateMachiningCharge','Update Machining Charge','Machining Charge Master',NULL,'Update'),
+            ('CanDeleteMachiningCharge','Delete Machining Charge','Machining Charge Master',NULL,'Delete'),
+            ('CanManageMachiningCharge','Manage Machining Charge','Machining Charge Master',NULL,'Manage'),
+
+            -- ═══════════════════════ Invoice ═══════════════════════
+            ('CanReadInvoiceCaseConfig','View Invoice Case Config','Invoice Case Config',NULL,'Read'),
+            ('CanCreateInvoiceCaseConfig','Create Invoice Case Config','Invoice Case Config',NULL,'Create'),
+            ('CanUpdateInvoiceCaseConfig','Update Invoice Case Config','Invoice Case Config',NULL,'Update'),
+            ('CanDeleteInvoiceCaseConfig','Delete Invoice Case Config','Invoice Case Config',NULL,'Delete'),
+            ('CanManageInvoiceCaseConfig','Manage Invoice Case Config','Invoice Case Config',NULL,'Manage'),
+
+            -- ═══════════════════════ NABL: General Requirements ═══════════════════════
+            ('CanReadConfidentialityAgreement','View Confidentiality Agreement','F-2: Confidentiality Agree.',NULL,'Read'),
+            ('CanReadImpartialityAgreement','View Impartiality Agreement','F-4: Impartiality Agree.',NULL,'Read'),
+
+            -- ═══════════════════════ NABL: Structural ═══════════════════════
+            ('CanReadOrgChart','View Organization Chart','Organization Chart',NULL,'Read'),
+
+            -- ═══════════════════════ NABL: Personnel ═══════════════════════
+            ('CanReadJobDescription','View Job Description','F-1: Job Description',NULL,'Read'),
+            ('CanReadRA','View Resp. & Authority','F-3: Resp. & Authority',NULL,'Read'),
+            ('CanReadCompetenceRequirement','View Competence Requirement','F-5: Competence Req.',NULL,'Read'),
+            ('CanReadInductionTraining','View Induction Training','F-6: Induction Training',NULL,'Read'),
+            ('CanReadEmployeeCompetence','View Employee Competence','F-7: Competence Report',NULL,'Read'),
+            ('CanReadTrainingPlan','View Training Plan','F-8: Training Plan',NULL,'Read'),
+            ('CanReadTrainingAttendance','View Training Attendance','F-9: Training Attendance',NULL,'Read'),
+            ('CanReadTrainingEffectiveness','View Training Effectiveness','F-10: Training Effectiv.',NULL,'Read'),
+            ('CanReadSkillMatrix','View Skill Matrix','F-11: Skill Matrix',NULL,'Read'),
+            ('CanReadEmployeeAuthorization','View Employee Authorization','F-13: Employee Authorization',NULL,'Read'),
+
+            -- ═══════════════════════ NABL: Facilities ═══════════════════════
+            ('CanReadEnvironmentMonitoring','View Environment Monitoring','F-12: Environment Mon.',NULL,'Read'),
+
+            -- ═══════════════════════ NABL: Equipment ═══════════════════════
+            ('CanReadEquipmentHistory','View Equipment History','F-14: Equipment History',NULL,'Read'),
+            ('CanReadCalibrationReview','View Calibration Review','F-15: Calibration Review',NULL,'Read'),
+            ('CanReadIntermediateCheck','View Intermediate Check','F-16: Intermediate Check',NULL,'Read'),
+            ('CanReadReferenceMaterial','View Reference Material','F-17: Ref. Material List',NULL,'Read'),
+            ('CanReadCRMConsumption','View CRM Consumption','F-18: CRM Consumption',NULL,'Read'),
+
+            -- ═══════════════════════ NABL: External Products ═══════════════════════
+            ('CanReadSupplierRegistration','View Supplier Registration','F-19: Supplier Reg.',NULL,'Read'),
+            ('CanReadApprovedSupplier','View Approved Supplier','F-20: Approved Suppliers',NULL,'Read'),
+            ('CanReadPurchaseIndent','View Purchase Indent','F-21: Purchase Indent',NULL,'Read'),
+            ('CanReadPurchaseOrder','View Purchase Order','F-22: Purchase Order',NULL,'Read'),
+            ('CanReadProductInspection','View Product Inspection','F-23: Inspection Plan',NULL,'Read'),
+            ('CanReadIncomingMaterial','View Incoming Material','F-24: Incoming Mat. Rec.',NULL,'Read'),
+            ('CanReadMaterialVerification','View Material Verification','F-25: Mat. Verification',NULL,'Read'),
+            ('CanReadSupplierEvaluation','View Supplier Evaluation','F-26: Supplier Eval.',NULL,'Read'),
+
+            -- ═══════════════════════ NABL: Process Requirements ═══════════════════════
+            ('CanReadTestRequest','View Test Request','F-27: Test Request',NULL,'Read'),
+            ('CanReadTestMethod','View Test Method','F-28: Test Methods',NULL,'Read'),
+            ('CanReadMethodVerification','View Method Verification','F-29: Verification',NULL,'Read'),
+            ('CanReadMethodValidation','View Method Validation','F-30: Validation',NULL,'Read'),
+            ('CanReadSampleInwardRegister','View Inward Register','F-31: Inward Register',NULL,'Read'),
+            ('CanReadSampleMusterRegister','View Muster Register','F-32: Muster Register',NULL,'Read'),
+            ('CanReadSampleLabel','View Sample Label','F-33: Sample Label',NULL,'Read'),
+            ('CanReadTechnicalRawData','View Technical Raw Data','F-34: Technical Raw Data',NULL,'Read'),
+            ('CanReadUncertainty','View Uncertainty Records','F-35: Uncertainty Rec.',NULL,'Read'),
+            ('CanReadPTPlan','View PT/ILC Plan','F-36: PT / ILC Plan',NULL,'Read'),
+            ('CanReadQCPlan','View QC Plan','F-37: QC Plan',NULL,'Read'),
+            ('CanReadRetesting','View Retesting Records','F-38: Retesting Rec.',NULL,'Read'),
+            ('CanReadTestReport','View Test Report','F-39: Test Report',NULL,'Read'),
+            ('CanReadComplaintRegister','View Complaint Register','F-40: Complaint Reg.',NULL,'Read'),
+            ('CanReadNonConformingWork','View Non-Conforming Work','F-41: NC Work Records',NULL,'Read'),
+
+            -- ═══════════════════════ NABL: Management System ═══════════════════════
+            ('CanReadMasterDocument','View Master Document','F-43: Master Document',NULL,'Read'),
+            ('CanReadDocChangeRequest','View Document Change Request','F-44: Doc. Change Req.',NULL,'Read'),
+            ('CanReadDocumentReview','View Document Review','F-45: Doc. Review Rec.',NULL,'Read'),
+            ('CanReadRiskAssessment','View Risk Assessment','F-46: Risk Assessment',NULL,'Read'),
+            ('CanReadCustomerFeedback','View Customer Feedback','F-47: Cust. Feedback',NULL,'Read'),
+            ('CanReadFeedbackAnalysis','View Feedback Analysis','F-48: Feedback Analys.',NULL,'Read'),
+            ('CanReadNCAction','View NC & Corrective Action','F-42: NC & Corr. Action',NULL,'Read'),
+            ('CanReadInternalAuditor','View Internal Auditors','F-49: Internal Auditors',NULL,'Read'),
+            ('CanReadAuditPlan','View Audit Plan','F-50: Audit Plan',NULL,'Read'),
+            ('CanReadAuditChecklist','View Audit Checklist','F-51: Audit Checklist',NULL,'Read'),
+            ('CanReadAuditSummary','View Audit Summary','F-52: Audit Summary',NULL,'Read'),
+            ('CanReadMeetingAgenda','View Meeting Agenda','F-53: Meeting Agenda',NULL,'Read'),
+            ('CanReadMeetingMinutes','View Meeting Minutes','F-54: Meeting Minutes',NULL,'Read'),
+
+            -- ═══════════════════════ Lab Scope ═══════════════════════
+            ('CanReadLabScopeMaster','View Lab Scope','Lab Scope Master',NULL,'Read'),
+            ('CanCreateLabScopeMaster','Create Lab Scope','Lab Scope Master',NULL,'Create'),
+            ('CanUpdateLabScopeMaster','Update Lab Scope','Lab Scope Master',NULL,'Update'),
+            ('CanDeleteLabScopeMaster','Delete Lab Scope','Lab Scope Master',NULL,'Delete'),
+            ('CanManageLabScopeMaster','Manage Lab Scope','Lab Scope Master',NULL,'Manage'),
+
+            -- ═══════════════════════ User Management (NABL) ═══════════════════════
+            ('CanReadLabEmployeeMaster','View Lab Employee','Lab Employee Master',NULL,'Read'),
+            ('CanReadLabScore','View Lab Score','Lab Score Master',NULL,'Read'),
+
+            -- ═══════════════════════ Testing ═══════════════════════
+            ('CanReadTestingDashboard','View Testing Dashboard','Testing Dashboard',NULL,'Read'),
+            ('CanReadPerformTest','View Perform Test','Perform Test',NULL,'Read'),
+            ('CanReadLongTermTracking','View Long Term Tracking','Long Term Tracking',NULL,'Read'),
+            ('CanReadTestResults','View Test Results','Test Results',NULL,'Read'),
+            ('CanReadTesting','Read Testing','Testing',NULL,'Read'),
+            ('CanManageTesting','Manage Testing','Testing',NULL,'Manage'),
+            ('CanPerformTest','Perform Test','Perform Test',NULL,'Action'),
+
+            -- ═══════════════════════ Configuration ═══════════════════════
+            ('CanReadConfiguration','View Configuration','Configuration Manager',NULL,'Read'),
+            ('CanManageSettings','Manage Settings','Configuration Manager',NULL,'Manage'),
+            ('CanReadMenuManagement','View Menu Management','Menu Management',NULL,'Read'),
+            ('CanCreateMenu','Create Menu','Menu Management',NULL,'Create'),
+            ('CanUpdateMenu','Update Menu','Menu Management',NULL,'Update'),
+            ('CanDeleteMenu','Delete Menu','Menu Management',NULL,'Delete'),
+            ('CanReadMenuPermission','View Menu Permission','Menu Permission',NULL,'Read'),
+            ('CanAssignMenuPermission','Assign Menu Permission','Menu Permission',NULL,'Action'),
+            ('CanReadRoleManagement','View Role Management','Role Management',NULL,'Read'),
+            ('CanReadAdmin','Read Admin','Role Management',NULL,'Read'),
+            ('CanCreateRole','Create Role','Role Management',NULL,'Create'),
+            ('CanUpdateRole','Update Role','Role Management',NULL,'Update'),
+            ('CanDeleteRole','Delete Role','Role Management',NULL,'Delete'),
+            ('CanCreateAdmin','Create Admin','Role Management',NULL,'Create'),
+            ('CanUpdateAdmin','Update Admin','Role Management',NULL,'Update'),
+            ('CanDeleteAdmin','Delete Admin','Role Management',NULL,'Delete'),
+            ('CanManageAdmin','Manage Admin','Role Management',NULL,'Manage'),
+            ('CanReadUserPermission','View User Permission','User Permission',NULL,'Read'),
+            ('CanReadUser','Read User','User Permission',NULL,'Read'),
+            ('CanCreateUser','Create User','User Permission',NULL,'Create'),
+            ('CanUpdateUser','Update User','User Permission',NULL,'Update'),
+            ('CanDeleteUser','Delete User','User Permission',NULL,'Delete'),
+            ('CanAssignUserPermission','Assign User Permission','User Permission',NULL,'Action'),
+            ('CanResetUserPassword','Reset User Password','User Permission',NULL,'Action'),
+            ('CanReadWorkflow','View Workflow','Workflow',NULL,'Read'),
+
+            -- ═══════════════════════ Reporting ═══════════════════════
+            ('CanReadReporting','View Reporting','Reporting Dashboard',NULL,'Read'),
+            ('CanManageReporting','Manage Reporting','Reporting Dashboard',NULL,'Manage'),
+            ('CanApproveReport','Approve Report','Reporting Dashboard',NULL,'Action'),
+            ('CanAmendReport','Amend Report','Reporting Dashboard',NULL,'Action'),
+            ('CanReadReportFormat','View Report Formats','Report Formats',NULL,'Read'),
+            ('CanManageReportFormat','Manage Report Formats','Report Formats',NULL,'Manage'),
+
+            -- ═══════════════════════ Accounts ═══════════════════════
+            ('CanReadAccount','Read Account','Accounts',NULL,'Read'),
+            ('CanManageAccount','Manage Account','Accounts',NULL,'Manage'),
+            ('CanReadAccountsDashboard','View Accounts Dashboard','Accounts Dashboard',NULL,'Read'),
+            ('CanReadCaseAccounts','View Case Accounts','Case Accounts',NULL,'Read'),
+            ('CanGeneratePI','Generate Proforma Invoice','Case Accounts',NULL,'Action'),
+            ('CanGenerateInvoice','Generate Invoice','Case Accounts',NULL,'Action'),
+            ('CanManageInvoice','Manage Invoice','Case Accounts',NULL,'Manage'),
+            ('CanReadInvoiceLineItem','Read Invoice Line Items','Case Accounts',NULL,'Read'),
+            ('CanManageInvoiceLineItem','Manage Invoice Line Items','Case Accounts',NULL,'Manage'),
+            ('CanCalculatePricing','Calculate Case Pricing','Case Accounts',NULL,'Action'),
+            ('CanValidatePricing','Validate Case Pricing','Case Accounts',NULL,'Action'),
+            ('CanCloseCase','Close Case','Case Accounts',NULL,'Action'),
+            ('CanReadCustomerLedger','View Customer Ledger','Customer Ledger',NULL,'Read'),
+            ('CanReadRecordPayment','View Record Payment','Record Payment',NULL,'Read'),
+            ('CanRecordPayment','Record Payment','Record Payment',NULL,'Action'),
+            ('CanReadReceipt','Read Receipt','Record Payment',NULL,'Read'),
+            ('CanProcessPayment','Process Payment','Record Payment',NULL,'Action'),
+            ('CanValidatePayment','Validate Payment Token','Record Payment',NULL,'Action'),
+            ('CanSendPaymentLink','Send Payment Link','Record Payment',NULL,'Action'),
+            ('CanReadAgingReport','View Aging Report','Aging Report',NULL,'Read'),
+            ('CanReadCollectionSummary','Read Collection Summary','Aging Report',NULL,'Read'),
+            ('CanReadCreditStatus','Read Credit Status','Aging Report',NULL,'Read'),
+            ('CanReadOutstandingReport','View Outstanding Report','Outstanding Report',NULL,'Read'),
+            ('CanReadCustomerPO','View Customer Purchase Orders','Customer Purchase Orders',NULL,'Read'),
+            ('CanCreateCustomerPO','Create Customer PO','Customer Purchase Orders',NULL,'Create'),
+            ('CanUpdateCustomerPO','Update Customer PO','Customer Purchase Orders',NULL,'Update'),
+            ('CanDeleteCustomerPO','Delete Customer PO','Customer Purchase Orders',NULL,'Delete'),
+            ('CanManageCustomerPO','Manage Customer PO','Customer Purchase Orders',NULL,'Manage'),
+
+            -- ═══════════════════════ Backend [RequirePermission] guards ═══════════════════════
+            ('TEST_RESULT_SAVE','Save Test Result','Test Results',NULL,'Action'),
+            ('TEST_PRICE_OVERRIDE','Override Test Price','Test Results',NULL,'Action'),
+            ('TEST_RESULT_VERIFY','Verify Test Result','Test Results',NULL,'Action'),
+            ('INVOICE_GENERATE','Generate Invoice (Backend)','Case Accounts',NULL,'Action');
+
+            -- ── Resolve MenuTitle → MenuID and insert only new permissions ──
             INSERT INTO PermissionMasters (Name, DisplayName, MenuID, Type)
-            SELECT s.Name, s.DisplayName, s.MenuID, s.Type
-            FROM #SeedPerms s
-            WHERE NOT EXISTS (SELECT 1 FROM PermissionMasters p WHERE p.Name = s.Name);
+            SELECT p.Name, p.DisplayName, m.ID, p.Type
+            FROM #Perms p
+            JOIN  MenuMasters m      ON m.Title  = p.MenuTitle
+            LEFT JOIN MenuMasters par ON par.ID   = m.ParentID
+            WHERE (p.ParentTitle IS NULL OR par.Title = p.ParentTitle)
+              AND NOT EXISTS (SELECT 1 FROM PermissionMasters pm WHERE pm.Name = p.Name);
 
-            DROP TABLE #SeedPerms;
+            DROP TABLE #Perms;
+        END
         ");
+
+        // Step 2: Execute the SP to seed / update permissions
+        await db.Database.ExecuteSqlRawAsync("EXEC usp_SeedPermissions");
     }
 
     // ───────────────────────────────────────────────
@@ -652,54 +776,14 @@ public static class DataSeeder
             DECLARE @AdminRoleID BIGINT = (SELECT TOP 1 ID FROM RoleMasters WHERE Name = N'Admin' AND IsActive = 1);
             IF @AdminRoleID IS NULL RETURN;
 
-            -- All 145 menu IDs
+            -- Map Admin to every menu — no hardcoded IDs, picks up new menus automatically
             INSERT INTO RoleMenuMappings (RoleID, MenuID)
-            SELECT @AdminRoleID, v.MenuID
-            FROM (VALUES
-                -- Top level
-                (1001),(1002),(1003),(1004),(1005),(1006),(1007),(1008),(1009),(1010),(1011),(1012),
-                -- Administration
-                (11),(12),(13),(14),(15),(16),(17),(18),(19),(20),(21),
-                -- Specification
-                (200),(201),(202),(31),(32),(33),(34),(28),(30),(24),(25),(210),(23),(26),(27),(22),(29),
-                -- Test / Customer
-                (35),(36),(37),(38),(39),
-                -- Sample
-                (40),(41),(42),(500),(43),(46),(44),
-                -- Invoice
-                (47),(48),
-                -- NABL
-                (71),(72),(73),(74),(75),(49),
-                (7101),(7102),(7201),
-                (7301),(7302),(7303),(7304),
-                (730101),(730102),(730103),(730104),(730105),(730106),(730107),(730108),(730109),(730110),
-                (730201),
-                (730301),(730302),(730303),(730304),(730305),
-                (730401),(730402),(730403),(730404),(730405),(730406),(730407),(730408),
-                (7401),(7402),(7403),(7404),(7405),(7406),(7407),(7408),(7409),
-                (740201),(740202),(740203),
-                (740301),(740302),(740303),
-                (740601),(740602),(740603),
-                (7501),(7502),(7503),(7504),(7505),
-                (750101),(750102),(750103),
-                (750301),(750302),(750303),
-                (750401),(750402),(750403),(750404),
-                (750501),(750502),
-                -- User Management
-                (50),(51),
-                -- Testing
-                (56),(57),(58),(59),
-                -- Configuration
-                (60),(61),(62),(63),(64),(65),
-                -- Reporting
-                (66),
-                -- Accounts
-                (121),(122),(123),(124),(125),(126)
-            ) AS v(MenuID)
+            SELECT @AdminRoleID, m.ID
+            FROM MenuMasters m
             WHERE NOT EXISTS (
                 SELECT 1 FROM RoleMenuMappings rm
-                WHERE rm.RoleID = @AdminRoleID AND rm.MenuID = v.MenuID
-            );
+                WHERE rm.RoleID = @AdminRoleID AND rm.MenuID = m.ID
+              );
         ");
     }
 
@@ -739,7 +823,7 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
 
             IF NOT EXISTS (SELECT 1 FROM Configurations WHERE KeyName = N'Entity Type' AND CompanyCode = N'LIMS')
                 INSERT INTO Configurations (KeyName, GroupName, [Value], ValueType, [Description], CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'Entity Type', N'dropdown', N'Request Review|Report Review|Report Amendment|Test Result Verification', N'string', N'Entity types used for workflow configuration. Values must match the exact strings used by the workflow engine.', 0, GETUTCDATE(), N'LIMS', 1);
+                VALUES (N'Entity Type', N'dropdown', N'Request Review|Report Review|Report Amendment|Test Result Verification|Customer Field Change', N'string', N'Entity types used for workflow configuration. Values must match the exact strings used by the workflow engine.', 0, GETUTCDATE(), N'LIMS', 1);
 
             -- Migrate existing installs: rename old short-form TestResult to canonical Test Result Verification
 
@@ -748,6 +832,12 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
             WHERE KeyName = N'Entity Type' AND CompanyCode = N'LIMS'
               AND [Value] LIKE N'%TestResult%'
               AND [Value] NOT LIKE N'%Test Result Verification%';
+
+            -- Add Customer Field Change to existing installs if missing
+            UPDATE Configurations
+            SET [Value] = [Value] + N'|Customer Field Change'
+            WHERE KeyName = N'Entity Type' AND CompanyCode = N'LIMS'
+              AND [Value] NOT LIKE N'%Customer Field Change%';
 
             -- Fix any Workflow definitions using the old short-form label
             UPDATE Workflows SET EntityType = N'Test Result Verification'
@@ -770,26 +860,26 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
     {
         await db.Database.ExecuteSqlRawAsync(@"
             IF NOT EXISTS (SELECT 1 FROM CurrencyMasters WHERE Code = N'INR' AND IsActive = 1)
-                INSERT INTO CurrencyMasters (Name, Code, IsDefault, CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'Indian Rupee', N'INR', 1, 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO CurrencyMasters (Name, Code, Symbol, IsDefault, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Indian Rupee', N'INR', N'₹', 1, 0, GETUTCDATE(), N'LIMS', 1);
 
             IF NOT EXISTS (SELECT 1 FROM CurrencyMasters WHERE Code = N'USD' AND IsActive = 1)
-                INSERT INTO CurrencyMasters (Name, Code, IsDefault, CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'US Dollar', N'USD', 0, 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO CurrencyMasters (Name, Code, Symbol, IsDefault, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'US Dollar', N'USD', N'$', 0, 0, GETUTCDATE(), N'LIMS', 1);
+
+            IF NOT EXISTS (SELECT 1 FROM CurrencyMasters WHERE Code = N'EUR' AND IsActive = 1)
+                INSERT INTO CurrencyMasters (Name, Code, Symbol, IsDefault, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Euro', N'EUR', N'€', 0, 0, GETUTCDATE(), N'LIMS', 1);
+
+            IF NOT EXISTS (SELECT 1 FROM CurrencyMasters WHERE Code = N'GBP' AND IsActive = 1)
+                INSERT INTO CurrencyMasters (Name, Code, Symbol, IsDefault, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'British Pound', N'GBP', N'£', 0, 0, GETUTCDATE(), N'LIMS', 1);
 
             -- Ensure INR is marked as default if it already exists but IsDefault is 0
             UPDATE CurrencyMasters SET IsDefault = 1 WHERE Code = N'INR' AND IsActive = 1 AND IsDefault = 0;
             -- Ensure no other currency is marked as default
             UPDATE CurrencyMasters SET IsDefault = 0 WHERE Code != N'INR' AND IsActive = 1 AND IsDefault = 1;
         ");
-
-        //IF NOT EXISTS(SELECT 1 FROM CurrencyMasters WHERE Code = N'EUR' AND IsActive = 1)
-        //        INSERT INTO CurrencyMasters(Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive)
-        //        VALUES(N'Euro', N'EUR', 0, GETUTCDATE(), N'LIMS', 1);
-
-        //IF NOT EXISTS(SELECT 1 FROM CurrencyMasters WHERE Code = N'GBP' AND IsActive = 1)
-        //        INSERT INTO CurrencyMasters(Name, Code, CreatedBy, CreatedOn, CompanyCode, IsActive)
-        //        VALUES(N'British Pound', N'GBP', 0, GETUTCDATE(), N'LIMS', 1);
     }
 
     // ───────────────────────────────────────────────
@@ -1012,25 +1102,25 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
 
             -- Product Condition Master
             IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'Hot Rolled' AND IsActive = 1)
-                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Hot Rolled', 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO ProductConditionMasters (Name, CalibrationRequired, IsDestructive, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Hot Rolled', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'Cold Rolled' AND IsActive = 1)
-                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Cold Rolled', 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO ProductConditionMasters (Name, CalibrationRequired, IsDestructive, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Cold Rolled', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'Cold Drawn' AND IsActive = 1)
-                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Cold Drawn', 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO ProductConditionMasters (Name, CalibrationRequired, IsDestructive, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Cold Drawn', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'Hot Forged' AND IsActive = 1)
-                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Hot Forged', 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO ProductConditionMasters (Name, CalibrationRequired, IsDestructive, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Hot Forged', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'As Cast' AND IsActive = 1)
-                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'As Cast', 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO ProductConditionMasters (Name, CalibrationRequired, IsDestructive, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'As Cast', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'Machined' AND IsActive = 1)
-                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Machined', 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO ProductConditionMasters (Name, CalibrationRequired, IsDestructive, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Machined', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'As Welded' AND IsActive = 1)
-                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'As Welded', 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO ProductConditionMasters (Name, CalibrationRequired, IsDestructive, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'As Welded', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'PWHT Treated' AND IsActive = 1)
-                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'PWHT Treated', 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO ProductConditionMasters (Name, CalibrationRequired, IsDestructive, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'PWHT Treated', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'Galvanized' AND IsActive = 1)
-                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Galvanized', 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO ProductConditionMasters (Name, CalibrationRequired, IsDestructive, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Galvanized', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'Pickled' AND IsActive = 1)
-                INSERT INTO ProductConditionMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Pickled', 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO ProductConditionMasters (Name, CalibrationRequired, IsDestructive, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Pickled', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
         ");
     }
 
@@ -1191,6 +1281,10 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 "CanReadCuttingPrice", "CanCreateCuttingPrice",
                 "CanUpdateCuttingPrice", "CanDeleteCuttingPrice", "CanManageCuttingPrice",
 
+                // Machining charge (for quoting)
+                "CanReadMachiningCharge", "CanCreateMachiningCharge",
+                "CanUpdateMachiningCharge", "CanDeleteMachiningCharge", "CanManageMachiningCharge",
+
                 // Read flow stages for context (can see but not act)
                 "CanReadSampleInward", "CanReadPlan", "CanReadReview",
                 "CanReadReporting", "CanReadCustomerMaster",
@@ -1216,6 +1310,7 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 "CanReadMetalClassification", "CanReadHeatTreatment",
                 "CanReadProductCondition", "CanReadSpecimenOrientation",
                 "CanReadProductForm", "CanReadLaboratoryTest",
+                "CanReadProductSizeMaster",
             },
 
             ["Technical"] = new[]
@@ -1240,6 +1335,7 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 "CanReadSpecimenOrientation", "CanReadProductForm",
                 "CanReadDimensionalFactors", "CanReadStandardOrganization",
                 "CanReadEquipment", "CanReadCalibrationAgency",
+                "CanReadProductSizeMaster",
             },
 
             ["Lab"] = new[]
@@ -1311,7 +1407,7 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
 
                 // Invoice Case / Config — read only (Accounts manages)
                 "CanReadInvoiceCase", "CanReadInvoiceCaseConfig",
-                "CanReadCustomerPO", "CanReadCuttingPrice",
+                "CanReadCustomerPO", "CanReadCuttingPrice", "CanReadMachiningCharge",
 
                 // Account visibility (read, no manage)
                 "CanReadAccount", "CanReadAccountsDashboard", "CanReadCaseAccounts",
@@ -1354,6 +1450,10 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
         if (inserted > 0)
             logger.LogInformation("DataSeeder: inserted {Total} role-permission defaults total", inserted);
     }
+
+    // ─── NON-ADMIN ROLE MENU MAPPINGS: managed via UI (Menu Permission screen) ───
+    // Non-admin role→menu assignments are configured by Admin after first deployment.
+    // Only Admin role is seeded automatically (SeedRoleMenuMappingsAsync above).
 
     // ───────────────────────────────────────────────
     // PRICE DIMENSION TYPES

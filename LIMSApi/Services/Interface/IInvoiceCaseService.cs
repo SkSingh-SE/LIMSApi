@@ -11,5 +11,11 @@ namespace LIMSApi.Services.Interface
         Task<InvoiceCase> GetInvoiceCaseDetails(long id);
         Task<PagedResponse<object>> FetchInvoiceCaseList(PageFilter filter);
 
+        /// <summary>All year-versions for a LaboratoryTest, ★Current flagged on the default-FY version.</summary>
+        Task<InvoiceCaseByLabTestDto> GetByLabTest(long laboratoryTestId);
+
+        /// <summary>Upserts all year-versions for a LaboratoryTest in one transaction.</summary>
+        Task SaveAllInvoiceCases(SaveAllInvoiceCaseDto dto);
+
     }
 }

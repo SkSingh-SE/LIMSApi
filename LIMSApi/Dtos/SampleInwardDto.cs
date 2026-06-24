@@ -100,6 +100,7 @@ namespace LIMSApi.Dtos
         public long InwardID { get; set; }
         public string EmailId { get; set; } = string.Empty;
         public string MobileNo { get; set; } = string.Empty;
+        public long? CustomerID { get; set; }
     }
 
     public class SampleDetailDto
@@ -111,7 +112,9 @@ namespace LIMSApi.Dtos
         public string? MetalClassificationName { get; set; }
         public long? ProductConditionID { get; set; }
         public string? ProductConditionName { get; set; }
+        // UI hidden per client requirement — retained for data integrity
         public long? ProductFormID { get; set; }
+        // UI hidden per client requirement — retained for data integrity
         public long? SpecimenOrientationID { get; set; }
         public string? Remarks { get; set; }
         public int Quantity { get; set; }
@@ -131,6 +134,11 @@ namespace LIMSApi.Dtos
         public long? TpiAgencyID { get; set; }
         public string? Specimen { get; set; }
         public string? TestInstructions { get; set; }
+
+        // TPI joined fields (for display in review screens)
+        public string? TpiAgencyName { get; set; }
+        public string? TpiEmailId { get; set; }
+        public string? TpiContactNo { get; set; }
 
         // File
         public long? UploadReferenceID { get; set; }
@@ -193,6 +201,8 @@ namespace LIMSApi.Dtos
         public string? ReportNo { get; set; }
         public string? UlrNo { get; set; }
         public bool Cancel { get; set; }
+        public long? StandardID { get; set; }
+        public string? StandardName { get; set; }
     }
 
     public class ChemicalTestDto
@@ -202,7 +212,7 @@ namespace LIMSApi.Dtos
         public string? SampleNo { get; set; }
         public string? ReportNo { get; set; } = "";
         public string? UlrNo { get; set; } = "";
-        public Dictionary<string, bool> TestTypes { get; set; } = new();
+        public List<long> TestTypeIds { get; set; } = new();
         public long? MetalClassificationID { get; set; }
         public string? MetalClassificationName { get; set; }
         public long? Specification1 { get; set; }
@@ -260,5 +270,18 @@ namespace LIMSApi.Dtos
         public bool BillRequired { get; set; }
         public bool AdvancePIRequired { get; set; }
         public bool HoldTestingUntilPIApproved { get; set; }
+    }
+
+    public class SamplePrepReviewDto
+    {
+        public bool PreparationRequired { get; set; }
+        public bool MachiningRequired { get; set; }
+        public decimal MachiningAmount { get; set; }
+        public string? Specimen { get; set; }
+        public bool OtherPreparation { get; set; }
+        public decimal OtherPreparationCharge { get; set; }
+        public string? TestInstructions { get; set; }
+        public bool TpiRequired { get; set; }
+        public long? TpiAgencyID { get; set; }
     }
 }

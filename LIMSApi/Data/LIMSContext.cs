@@ -27,11 +27,14 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<ContactPerson> ContactPersons { get; set; }
     public virtual DbSet<CountryMaster> CountryMasters { get; set; }
     public virtual DbSet<CourierMaster> CourierMasters { get; set; }
+    public virtual DbSet<ProductSizeMaster> ProductSizeMasters { get; set; }
     public virtual DbSet<CurrencyMaster> CurrencyMasters { get; set; }
     public virtual DbSet<Customer> Customers { get; set; }
+    public virtual DbSet<CustomerChangeRequest> CustomerChangeRequests { get; set; }
     public virtual DbSet<CustomerCompanyCategory> CustomerCompanyCategories { get; set; }
     public virtual DbSet<CustomerDispatchMode> CustomerDispatchModes { get; set; }
     public virtual DbSet<CuttingPriceMaster> CuttingPriceMasters { get; set; }
+    public virtual DbSet<CuttingPriceVersion> CuttingPriceVersions { get; set; }
     public virtual DbSet<Configuration> Configurations { get; set; }
     public virtual DbSet<DepartmentMaster> DepartmentMasters { get; set; }
     public virtual DbSet<DesignationMaster> DesignationMasters { get; set; }
@@ -76,6 +79,7 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<OrganisationMaster> OrganisationMasters { get; set; }
     public virtual DbSet<ParameterMaster> ParameterMasters { get; set; }
     public virtual DbSet<ParameterUnitMaster> ParameterUnitMasters { get; set; }
+    public virtual DbSet<ParameterUnitEquivalent> ParameterUnitEquivalents { get; set; }
     public virtual DbSet<HardnessEquivalence> HardnessEquivalences { get; set; }
     public virtual DbSet<ToleranceMaster> ToleranceMasters { get; set; }
     public virtual DbSet<ProductConditionMaster> ProductConditionMasters { get; set; }
@@ -86,8 +90,10 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<SiteActivity> SiteActivities { get; set; }
     public virtual DbSet<SiteError> SiteErrors { get; set; }
     public virtual DbSet<SpecificationHeader> SpecificationHeaders { get; set; }
+    public virtual DbSet<SpecificationHeaderParameter> SpecificationHeaderParameters { get; set; }
     public virtual DbSet<SpecificationGrade> SpecificationGrades { get; set; }
     public virtual DbSet<SpecificationLine> SpecificationLines { get; set; }
+    public virtual DbSet<SpecificationLineTestMethod> SpecificationLineTestMethods { get; set; }
     public virtual DbSet<SpecimenOrientationMaster> SpecimenOrientationMasters { get; set; }
     public virtual DbSet<SpecimenTypeMaster> SpecimenTypeMasters { get; set; }
     public virtual DbSet<StandardOrganizationMaster> StandardOrganizationMasters { get; set; }
@@ -109,10 +115,11 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<TestMaster> TestMasters { get; set; }
     public virtual DbSet<LaboratoryTest> LaboratoryTests { get; set; }
     public virtual DbSet<LaboratoryTestInvoiceCase> LaboratoryTestInvoiceCase { get; set; }
-    public virtual DbSet<TestMethodStandard> TestMethodStandards { get; set; }
     public virtual DbSet<TestMethodSubGroup> TestMethodSubGroups { get; set; }
     public virtual DbSet<TestMethodSpecification> TestMethodSpecifications { get; set; }
     public virtual DbSet<TestMethodSpecificationVersion> TestMethodSpecificationVersions { get; set; }
+    public virtual DbSet<TestMethodSpecificationMetalClassification> TestMethodSpecificationMetalClassifications { get; set; }
+    public virtual DbSet<TestMethodSpecificationParameter> TestMethodSpecificationParameters { get; set; }
     public virtual DbSet<TestTypeMaster> TestTypeMasters { get; set; }
     public virtual DbSet<TPIMaster> TPIMasters { get; set; }
     public virtual DbSet<UniversalCodeTypeMaster> UniversalCodeTypeMasters { get; set; }
@@ -137,6 +144,8 @@ public partial class LIMSContext : DbContext
     public DbSet<CuttingChargeSample> CuttingChargeSamples { get; set; }
     public DbSet<CuttingChargeDetail> CuttingChargeDetails { get; set; }
     public DbSet<MachiningChargeItem> MachiningChargeItems { get; set; }
+    public DbSet<MachiningChargeMaster> MachiningChargeMasters { get; set; }
+    public DbSet<MachiningChargeVersion> MachiningChargeVersions { get; set; }
     public DbSet<SamplePreparationMaster> SamplePreparationMasters { get; set; }
     public DbSet<SamplePreparation> SamplePreparations { get; set; }
     public DbSet<ProductTestGroup> ProductTestGroups { get; set; }
@@ -293,6 +302,45 @@ public partial class LIMSContext : DbContext
 
         modelBuilder.Entity<MetalClassificationParameter>().HasKey(x => new { x.MetalClassificationID, x.ParameterID });
 
+        // Test Method Specification ↔ Metal Classification (junction).
+        // Spec FK cascades (owned child); Metal master FK is NoAction (block master delete).
+        modelBuilder.Entity<TestMethodSpecificationMetalClassification>()
+            .HasKey(x => new { x.TestMethodSpecificationID, x.MetalClassificationID });
+        modelBuilder.Entity<TestMethodSpecificationMetalClassification>()
+            .HasOne(x => x.TestMethodSpecification)
+            .WithMany(x => x.MetalClassifications)
+            .HasForeignKey(x => x.TestMethodSpecificationID)
+            .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<TestMethodSpecificationMetalClassification>()
+            .HasOne(x => x.MetalClassification)
+            .WithMany()
+            .HasForeignKey(x => x.MetalClassificationID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // Test Method Specification VERSION → Parameters (owned child, version-level).
+        // Version FK cascades; Parameter/Unit master FKs are NoAction.
+        modelBuilder.Entity<TestMethodSpecificationParameter>()
+            .HasOne(x => x.TestMethodSpecificationVersion)
+            .WithMany(x => x.Parameters)
+            .HasForeignKey(x => x.TestMethodSpecificationVersionID)
+            .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<TestMethodSpecificationParameter>()
+            .HasOne(x => x.Parameter)
+            .WithMany()
+            .HasForeignKey(x => x.ParameterID)
+            .OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<TestMethodSpecificationParameter>()
+            .HasOne(x => x.ParameterUnit)
+            .WithMany()
+            .HasForeignKey(x => x.ParameterUnitID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // TestMethodSpecificationVersion: at most one IsDefault=true per spec.
+        modelBuilder.Entity<TestMethodSpecificationVersion>()
+            .HasIndex(v => new { v.TestMethodSpecificationID, v.IsDefault })
+            .HasFilter("[IsDefault] = 1")
+            .IsUnique();
+
         modelBuilder.Entity<ParameterSpecimenOrientation>().HasKey(x => new { x.ParameterID, x.SpecimenOrientationID });
 
         modelBuilder.Entity<HeatTreatmentMetalClassification>().HasKey(x => new { x.HeatTreatmentID, x.MetalClassificationID });
@@ -340,6 +388,7 @@ public partial class LIMSContext : DbContext
             .HasOne(x => x.DefaultTestMethod)
             .WithMany()
             .HasForeignKey(x => x.DefaultTestMethodID)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.NoAction);
 
         modelBuilder.Entity<ParameterMaster>()
@@ -642,6 +691,72 @@ public partial class LIMSContext : DbContext
     .HasForeignKey(x => x.TokenID)
     .OnDelete(DeleteBehavior.Restrict);
 
+        // SpecificationHeaderParameter → SpecificationHeader (cascade with header)
+        modelBuilder.Entity<SpecificationHeaderParameter>()
+            .HasOne(x => x.SpecificationHeader)
+            .WithMany(h => h.HeaderParameters)
+            .HasForeignKey(x => x.SpecificationHeaderID)
+            .OnDelete(DeleteBehavior.Cascade);
+        // SpecificationHeaderParameter → Parameter / ParameterUnit (no cascade)
+        modelBuilder.Entity<SpecificationHeaderParameter>()
+            .HasOne(x => x.Parameter)
+            .WithMany()
+            .HasForeignKey(x => x.ParameterID)
+            .OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<SpecificationHeaderParameter>()
+            .HasOne(x => x.ParameterUnit)
+            .WithMany()
+            .HasForeignKey(x => x.ParameterUnitID)
+            .OnDelete(DeleteBehavior.NoAction);
+        // SpecificationLine → ProductSizeMaster (MS-D, no cascade)
+        modelBuilder.Entity<SpecificationLine>()
+            .HasOne(x => x.ProductSizeMaster)
+            .WithMany()
+            .HasForeignKey(x => x.ProductSizeMasterID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // ParameterUnitEquivalent → ParameterUnitMaster (cascade with base unit)
+        modelBuilder.Entity<ParameterUnitEquivalent>()
+            .HasOne(x => x.BaseParameterUnit)
+            .WithMany(u => u.Equivalents)
+            .HasForeignKey(x => x.BaseParameterUnitID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Phase 2: SpecificationLine / SpecificationHeaderParameter → ParameterUnitEquivalent (no cascade)
+        modelBuilder.Entity<SpecificationLine>()
+            .HasOne(x => x.ParameterUnitEquivalent)
+            .WithMany()
+            .HasForeignKey(x => x.ParameterUnitEquivalentID)
+            .OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<SpecificationLine>()
+            .HasOne(x => x.LaboratoryTest)
+            .WithMany()
+            .HasForeignKey(x => x.LaboratoryTestID)
+            .OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<SpecificationHeaderParameter>()
+            .HasOne(x => x.ParameterUnitEquivalent)
+            .WithMany()
+            .HasForeignKey(x => x.ParameterUnitEquivalentID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // MS-E: SpecificationLineTestMethod → SpecificationLine (cascade with line)
+        modelBuilder.Entity<SpecificationLineTestMethod>()
+            .HasOne(x => x.SpecificationLine)
+            .WithMany(l => l.TestMethodMappings)
+            .HasForeignKey(x => x.SpecificationLineID)
+            .OnDelete(DeleteBehavior.Cascade);
+        // MS-E: SpecificationLineTestMethod → LaboratoryTest / TestMethodSpecification (no cascade)
+        modelBuilder.Entity<SpecificationLineTestMethod>()
+            .HasOne(x => x.LaboratoryTest)
+            .WithMany()
+            .HasForeignKey(x => x.LaboratoryTestID)
+            .OnDelete(DeleteBehavior.NoAction);
+        modelBuilder.Entity<SpecificationLineTestMethod>()
+            .HasOne(x => x.TestMethodSpecification)
+            .WithMany()
+            .HasForeignKey(x => x.TestMethodSpecificationID)
+            .OnDelete(DeleteBehavior.NoAction);
+
         // ProductSpecificationGrade → SpecificationGrade (no cascade)
         modelBuilder.Entity<ProductSpecificationGrade>()
             .HasOne(x => x.SpecificationGrade)
@@ -682,6 +797,14 @@ public partial class LIMSContext : DbContext
             .HasOne(x => x.LaboratoryTest)
             .WithMany()
             .HasForeignKey(x => x.LaboratoryTestID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // ProductTestGroup → TestMethodSpecification (no cascade, nullable)
+        modelBuilder.Entity<ProductTestGroup>()
+            .HasOne(x => x.TestMethodSpecification)
+            .WithMany()
+            .HasForeignKey(x => x.TestMethodStandardID)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.NoAction);
 
         // TpiInspection FKs (no cascade)
@@ -793,6 +916,91 @@ public partial class LIMSContext : DbContext
             .WithMany()
             .HasForeignKey(x => x.LaboratoryTestID)
             .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<SamplePreparationMaster>()
+            .HasOne(x => x.TestMethodSpecification)
+            .WithMany()
+            .HasForeignKey(x => x.TestMethodStandardID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // MachiningChargeMaster FKs (no cascade)
+        modelBuilder.Entity<MachiningChargeMaster>()
+            .HasOne(x => x.LaboratoryTest)
+            .WithMany()
+            .HasForeignKey(x => x.LaboratoryTestID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<MachiningChargeMaster>()
+            .HasOne(x => x.TestMethodSpecification)
+            .WithMany()
+            .HasForeignKey(x => x.TestMethodStandardID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // MachiningChargeItem → MachiningChargeMaster (optional FK, no cascade)
+        modelBuilder.Entity<MachiningChargeItem>()
+            .HasOne(x => x.MachiningChargeMaster)
+            .WithMany()
+            .HasForeignKey(x => x.MachiningChargeMasterID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // CuttingPriceVersion → CuttingPriceMaster (no cascade; versions soft-deleted with the master)
+        modelBuilder.Entity<CuttingPriceVersion>()
+            .HasOne(x => x.CuttingPriceMaster)
+            .WithMany(m => m.Versions)
+            .HasForeignKey(x => x.CuttingPriceMasterID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // CuttingPriceVersion → FinancialYear (nullable derived field — no cascade)
+        modelBuilder.Entity<CuttingPriceVersion>()
+            .HasOne(x => x.FinancialYear)
+            .WithMany()
+            .HasForeignKey(x => x.FinancialYearId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // One rate version per effective date per master
+        modelBuilder.Entity<CuttingPriceVersion>()
+            .HasIndex(x => new { x.CuttingPriceMasterID, x.EffectiveFrom })
+            .IsUnique()
+            .HasFilter("[IsActive] = 1");
+
+        // MachiningChargeVersion → MachiningChargeMaster (no cascade; versions soft-deleted with the master)
+        modelBuilder.Entity<MachiningChargeVersion>()
+            .HasOne(x => x.MachiningChargeMaster)
+            .WithMany(m => m.Versions)
+            .HasForeignKey(x => x.MachiningChargeMasterID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // MachiningChargeVersion → FinancialYear (nullable derived field — no cascade)
+        modelBuilder.Entity<MachiningChargeVersion>()
+            .HasOne(x => x.FinancialYear)
+            .WithMany()
+            .HasForeignKey(x => x.FinancialYearId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // One price version per effective date per master
+        modelBuilder.Entity<MachiningChargeVersion>()
+            .HasIndex(x => new { x.MachiningChargeMasterID, x.EffectiveFrom })
+            .IsUnique()
+            .HasFilter("[IsActive] = 1");
+
+        // SampleInward → FinancialYear (nullable — stamped from CollectionTime on create)
+        modelBuilder.Entity<SampleInward>()
+            .HasOne(x => x.FinancialYear)
+            .WithMany()
+            .HasForeignKey(x => x.FinancialYearId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // One InvoiceCase price version per effective date per LaboratoryTest
+        // (LaboratoryTest acts as the master; each InvoiceCase row is a date-effective version)
+        modelBuilder.Entity<InvoiceCase>()
+            .HasIndex(x => new { x.LaboratoryTestID, x.EffectiveFrom })
+            .IsUnique()
+            .HasFilter("[IsActive] = 1");
 
         // EquipmentReferenceMaterial → EquipmentMaster (no cascade)
         modelBuilder.Entity<EquipmentReferenceMaterial>()

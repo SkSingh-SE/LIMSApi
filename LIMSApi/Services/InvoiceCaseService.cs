@@ -117,5 +117,92 @@ namespace LIMSApi.Services
             return await _InvoiceCaseRepository.GetAllInvoiceCases(filter);
         }
 
+        public async Task<InvoiceCaseByLabTestDto> GetByLabTest(long laboratoryTestId)
+        {
+            if (laboratoryTestId == 0)
+                throw new ArgumentException("LaboratoryTest is required!");
+
+            var versions = await _InvoiceCaseRepository.GetByLabTest(laboratoryTestId);
+            var currentFyId = await _InvoiceCaseRepository.GetCurrentFinancialYearId();
+
+            return new InvoiceCaseByLabTestDto
+            {
+                LaboratoryTestID = laboratoryTestId,
+                LaboratoryTest = versions.FirstOrDefault()?.LaboratoryTest?.Name,
+                Versions = versions.Select(v => new InvoiceCaseVersionDto
+                {
+                    ID = v.ID,
+                    EffectiveFrom = v.EffectiveFrom,
+                    FinancialYearId = v.FinancialYearId,
+                    FinancialYear = v.FinancialYearEntity?.Year,
+                    DefaultPricingType = v.DefaultPricingType,
+                    IsCurrentFy = currentFyId.HasValue && v.FinancialYearId == currentFyId,
+                    Prices = v.InvoiceCasePrices.Select(p => new InvoiceCasePriceDto
+                    {
+                        ID = p.ID,
+                        InvoiceCaseConfigID = p.InvoiceCaseConfigID,
+                        Name = p.Name,
+                        AliasName = p.AliasName,
+                        Price = p.Price
+                    }).ToList()
+                }).ToList()
+            };
+        }
+
+        public async Task SaveAllInvoiceCases(SaveAllInvoiceCaseDto dto)
+        {
+            if (dto.LaboratoryTestID == 0)
+                throw new ArgumentException("Sub Group Test is required!");
+
+            if (dto.Versions == null || !dto.Versions.Any())
+                throw new InvalidOperationException("At least one year version is required!");
+
+            // Validate each version
+            foreach (var v in dto.Versions)
+            {
+                if (!v.FinancialYearId.HasValue)
+                    throw new InvalidOperationException("Financial Year is required for every year version!");
+
+                if (v.EffectiveFrom == default)
+                    throw new InvalidOperationException("Effective From date is required for every year version!");
+
+                if (v.Prices == null || !v.Prices.Any())
+                    throw new InvalidOperationException($"Year version effective {v.EffectiveFrom:dd-MM-yyyy} must have at least one price row!");
+            }
+
+            // No two versions may share the same Effective From date
+            var duplicate = dto.Versions
+                .GroupBy(v => v.EffectiveFrom.Date)
+                .FirstOrDefault(g => g.Count() > 1);
+            if (duplicate != null)
+                throw new InvalidOperationException($"Duplicate Effective From date: {duplicate.Key:dd-MM-yyyy}. Each year version needs a distinct date.");
+
+            // Map DTO → entities. FinancialYearId is user-selected; EffectiveFrom is the resolution key.
+            var incoming = new List<InvoiceCase>();
+            foreach (var v in dto.Versions)
+            {
+                incoming.Add(new InvoiceCase
+                {
+                    ID = v.ID,
+                    LaboratoryTestID = dto.LaboratoryTestID,
+                    EffectiveFrom = v.EffectiveFrom,
+                    FinancialYearId = v.FinancialYearId,
+                    DefaultPricingType = v.DefaultPricingType,
+                    InvoiceCasePrices = v.Prices.Select(p => new InvoiceCasePrice
+                    {
+                        ID = p.ID,
+                        InvoiceCaseConfigID = p.InvoiceCaseConfigID,
+                        Name = p.Name,
+                        AliasName = p.AliasName,
+                        Price = p.Price
+                    }).ToList()
+                });
+            }
+
+            await _InvoiceCaseRepository.SaveAllVersions(dto.LaboratoryTestID, incoming);
+            _logger.LogInformation("InvoiceCase versions saved for LaboratoryTest {LabTestId}: {Count} year version(s).",
+                dto.LaboratoryTestID, incoming.Count);
+        }
+
     }
 }

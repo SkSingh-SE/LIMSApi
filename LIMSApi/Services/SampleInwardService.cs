@@ -94,11 +94,18 @@ namespace LIMSApi.Services
                     model.HoldTestingUntilPIApproved = true;
                 }
 
+                // Derive the financial year from CollectionTime for FY-aware pricing.
+                var inwardFyId = await _context.FinancialYears
+                    .Where(f => f.StartDate <= model.CollectionTime && f.EndDate >= model.CollectionTime)
+                    .Select(f => (long?)f.Id)
+                    .FirstOrDefaultAsync();
+
                 var entity = new SampleInward
                 {
                     CaseNo = caseAndSample.caseNo,
                     CustomerID = model.CustomerID,
                     PurchaseOrderId = model.PurchaseOrderId,
+                    FinancialYearId = inwardFyId,
                     Address = model.Address,
                     Area = model.Area,
                     State = model.State,
@@ -152,7 +159,8 @@ namespace LIMSApi.Services
                        Country = model.ReportingTo.Country,
                        Type = model.ReportingTo.Type,
                        MobileNo = model.ReportingTo.MobileNo,
-                          EmailId = model.ReportingTo.EmailId
+                          EmailId = model.ReportingTo.EmailId,
+                       CustomerID = model.ReportingTo.CustomerID
                    },
                    new SampleInwardAddressInfo
                    {
@@ -166,7 +174,8 @@ namespace LIMSApi.Services
                        Country = model.BillingTo.Country,
                        Type = model.BillingTo.Type,
                           MobileNo = model.BillingTo.MobileNo,
-                              EmailId = model.BillingTo.EmailId
+                              EmailId = model.BillingTo.EmailId,
+                       CustomerID = model.BillingTo.CustomerID
                    }
                },
 
@@ -485,7 +494,8 @@ namespace LIMSApi.Services
                     Country = model.ReportingTo.Country,
                     Type = model.ReportingTo.Type,
                     MobileNo = model.ReportingTo.MobileNo,
-                    EmailId = model.ReportingTo.EmailId
+                    EmailId = model.ReportingTo.EmailId,
+                    CustomerID = model.ReportingTo.CustomerID
                 });
                 entity.Addresses.Add(new SampleInwardAddressInfo
                 {
@@ -500,7 +510,8 @@ namespace LIMSApi.Services
                     Country = model.BillingTo.Country,
                     Type = model.BillingTo.Type,
                     MobileNo = model.BillingTo.MobileNo,
-                    EmailId = model.BillingTo.EmailId
+                    EmailId = model.BillingTo.EmailId,
+                    CustomerID = model.BillingTo.CustomerID
                 });
 
                 //  Only fetch next sample number if a new sample will be added
@@ -897,7 +908,8 @@ namespace LIMSApi.Services
                                 UlrNo = GenerateUlr(
                                     m.UlrNo, tcPrefix, year, labLocation,
                                     sample.SampleNo, ref ulrCounter),
-                                Cancel = m.Cancel
+                                Cancel = m.Cancel,
+                                StandardID = m.StandardID ?? 0
                             });
                         }
                     }
@@ -955,12 +967,8 @@ namespace LIMSApi.Services
                             });
                         }
 
-                        var addedLabTestIds = new HashSet<long>();
-                        foreach (var kvp in cDto.TestTypes)
+                        foreach (var labTestId in cDto.TestTypeIds ?? new List<long>())
                         {
-                            if (!long.TryParse(kvp.Key, out var labTestId)) continue;
-                            if (!addedLabTestIds.Add(labTestId)) continue; // skip duplicates
-
                             var labTest = await _context.LaboratoryTests
                                 .FirstOrDefaultAsync(x => x.ID == labTestId);
 
@@ -968,7 +976,7 @@ namespace LIMSApi.Services
                             {
                                 LaboratoryTestID = labTestId,
                                 Name = labTest?.Name ?? "",
-                                IsSelected = kvp.Value
+                                IsSelected = true
                             });
                         }
                     }
@@ -1070,7 +1078,7 @@ namespace LIMSApi.Services
             var hasAnyTest = model.SampleDetails?.Any(s =>
                 s.TestPlans?.Any(tp =>
                     (tp.GeneralTests?.Any(gt => gt.Methods?.Any(m => m.Cancel != true) == true) == true) ||
-                    (tp.ChemicalTests?.Any(ct => ct.TestTypes?.Any(t => t.Value) == true || ct.Elements?.Count > 0) == true)
+                    (tp.ChemicalTests?.Any(ct => (ct.TestTypeIds?.Count > 0) == true || ct.Elements?.Count > 0) == true)
                 ) == true
             ) == true;
 
@@ -1196,6 +1204,8 @@ namespace LIMSApi.Services
                 UploadReferenceID = sampleInward.UploadReferenceID,
                 Status = sampleInward.InwardStatus,
                 CollectionTime = sampleInward.CollectionTime,
+                StatementOfConformity = sampleInward.StatementOfConformity,
+                DecisionRule = sampleInward.DecisionRule,
 
                 DispatchModes = sampleInward.DispatchModes
                     .Select(d => new DispatchModeDto
@@ -1233,7 +1243,8 @@ namespace LIMSApi.Services
                         Country = a.Country,
                         Type = a.Type,
                         MobileNo = a.MobileNo,
-                        EmailId = a.EmailId
+                        EmailId = a.EmailId,
+                        CustomerID = a.CustomerID
                     })
                     .FirstOrDefault(),
 
@@ -1253,7 +1264,8 @@ namespace LIMSApi.Services
                         Country = a.Country,
                         Type = a.Type,
                         MobileNo = a.MobileNo,
-                        EmailId = a.EmailId
+                        EmailId = a.EmailId,
+                        CustomerID = a.CustomerID
                     })
                     .FirstOrDefault(),
 
@@ -1347,6 +1359,31 @@ namespace LIMSApi.Services
             if (sampleInward == null)
                 throw new InvalidOperationException("SampleInward not found!");
 
+            var tpiIds = sampleInward.SampleDetails
+                .Where(s => s.TpiAgencyID.HasValue)
+                .Select(s => s.TpiAgencyID!.Value)
+                .Distinct()
+                .ToList();
+            var tpiMap = tpiIds.Count > 0
+                ? await _context.TPIMasters
+                    .Where(t => tpiIds.Contains(t.ID))
+                    .ToDictionaryAsync(t => t.ID, t => t)
+                : new Dictionary<long, TPIMaster>();
+
+            var standardIds = sampleInward.SampleDetails
+                .SelectMany(s => s.TestPlans)
+                .SelectMany(tp => tp.GeneralTests)
+                .SelectMany(gt => gt.Methods)
+                .Where(m => m.StandardID != 0)
+                .Select(m => m.StandardID)
+                .Distinct()
+                .ToList();
+            var standardMap = standardIds.Count > 0
+                ? await _context.TestMethodSpecifications
+                    .Where(s => standardIds.Contains(s.ID))
+                    .ToDictionaryAsync(s => s.ID, s => s.Name ?? string.Empty)
+                : new Dictionary<long, string>();
+
             var dto = new SampleInwardDto
             {
                 ID = sampleInward.ID,
@@ -1419,7 +1456,8 @@ namespace LIMSApi.Services
                         Country = a.Country,
                         Type = a.Type,
                         MobileNo = a.MobileNo,
-                        EmailId = a.EmailId
+                        EmailId = a.EmailId,
+                        CustomerID = a.CustomerID
                     })
                     .FirstOrDefault(),
 
@@ -1439,7 +1477,8 @@ namespace LIMSApi.Services
                         Country = a.Country,
                         Type = a.Type,
                         MobileNo = a.MobileNo,
-                        EmailId = a.EmailId
+                        EmailId = a.EmailId,
+                        CustomerID = a.CustomerID
                     })
                     .FirstOrDefault(),
 
@@ -1474,6 +1513,9 @@ namespace LIMSApi.Services
                         OtherPreparationCharge = s.OtherPreparationCharge,
                         TpiRequired = s.TpiRequired,
                         TpiAgencyID = s.TpiAgencyID,
+                        TpiAgencyName = s.TpiAgencyID.HasValue && tpiMap.ContainsKey(s.TpiAgencyID.Value) ? tpiMap[s.TpiAgencyID.Value].AgencyName : null,
+                        TpiEmailId = s.TpiAgencyID.HasValue && tpiMap.ContainsKey(s.TpiAgencyID.Value) ? tpiMap[s.TpiAgencyID.Value].EmailId : null,
+                        TpiContactNo = s.TpiAgencyID.HasValue && tpiMap.ContainsKey(s.TpiAgencyID.Value) ? tpiMap[s.TpiAgencyID.Value].ContactNo : null,
                         Specimen = s.Specimen,
                         TestInstructions = s.TestInstructions,
                         Thickness = s.Thickness,
@@ -1522,7 +1564,9 @@ namespace LIMSApi.Services
                                 Quantity = m.Quantity,
                                 ReportNo = m.ReportNo,
                                 UlrNo = m.UlrNo,
-                                Cancel = m.Cancel
+                                Cancel = m.Cancel,
+                                StandardID = m.StandardID != 0 ? m.StandardID : null,
+                                StandardName = m.StandardID != 0 && standardMap.ContainsKey(m.StandardID) ? standardMap[m.StandardID] : null
                             }).ToList()
                         }).ToList(),
                         ChemicalTests = tp.ChemicalTests.Select(ct => new ChemicalTestDto
@@ -1534,9 +1578,9 @@ namespace LIMSApi.Services
                             MetalClassificationID = ct.MetalClassificationID,
                             Specification1 = ct.Specification1,
                             Specification2 = ct.Specification2,
-                            TestTypes = ct.TestTypes
-                                .GroupBy(tt => tt.LaboratoryTestID.ToString())
-                                .ToDictionary(g => g.Key, g => g.First().IsSelected),
+                            TestTypeIds = ct.TestTypes
+                                .Select(tt => tt.LaboratoryTestID ?? 0)
+                                .ToList(),
                             Elements = ct.Elements.Select(e => new ChemicalTestElementDto
                             {
                                 ID = e.ID,
@@ -1782,6 +1826,26 @@ namespace LIMSApi.Services
                 AdvancePIRequired = entity.AdvancePIRequired,
                 HoldTestingUntilPIApproved = entity.HoldTestingUntilPIApproved
             };
+        }
+
+        public async Task UpdateSamplePrepAsync(long sampleId, SamplePrepReviewDto dto)
+        {
+            var sample = await _context.SampleDetails.FindAsync(sampleId)
+                ?? throw new KeyNotFoundException($"Sample with ID {sampleId} not found.");
+
+            sample.PreparationRequired = dto.PreparationRequired;
+            sample.MachiningRequired = dto.MachiningRequired;
+            sample.MachiningAmount = dto.MachiningAmount;
+            sample.Specimen = dto.Specimen;
+            sample.OtherPreparation = dto.OtherPreparation;
+            sample.OtherPreparationCharge = dto.OtherPreparationCharge;
+            sample.TestInstructions = dto.TestInstructions;
+            sample.TpiRequired = dto.TpiRequired;
+            sample.TpiAgencyID = dto.TpiAgencyID;
+            sample.ModifiedBy = loggedInUser.EmployeeID;
+            sample.ModifiedOn = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
         }
 
     }

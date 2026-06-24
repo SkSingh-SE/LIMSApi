@@ -85,6 +85,10 @@ namespace LIMSApi.Models
         // PO linkage
         public long? PurchaseOrderId { get; set; }
 
+        // Financial year this sample belongs to — stamped from CollectionTime on create.
+        // Used by all pricing subsystems to resolve the correct price version.
+        public long? FinancialYearId { get; set; }
+
         // Navigation Properties
         public virtual ICollection<SampleInwardDispatchMode> DispatchModes { get; set; } = new List<SampleInwardDispatchMode>();
         public virtual ICollection<SampleInwardContactPerson> Contacts { get; set; } = new List<SampleInwardContactPerson>();
@@ -99,6 +103,9 @@ namespace LIMSApi.Models
 
         [ForeignKey(nameof(PurchaseOrderId))]
         public virtual CustomerPurchaseOrder? PurchaseOrder { get; set; }
+
+        [ForeignKey(nameof(FinancialYearId))]
+        public virtual FinancialYear? FinancialYear { get; set; }
 
         [NotMapped]
        public IFormFile File { get; set; } = null!;

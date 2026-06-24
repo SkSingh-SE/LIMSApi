@@ -80,5 +80,12 @@ namespace LIMSApi.Controllers
             return data == null ? NoContent(): Ok(data);
         }
 
+        // Equivalent units for a parameter's default unit (base unit + matching SimilarUnit1-7).
+        [HttpGet("equivalents/{unitId}")]
+        public async Task<IActionResult> GetEquivalentUnits(long unitId)
+        {
+            return Ok(await _ParameterUnitService.GetEquivalentUnits(unitId));
+        }
+
     }
 }

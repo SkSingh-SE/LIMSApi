@@ -22,5 +22,9 @@ namespace LIMSApi.Models
         public long InwardID { get; set; }
         [ForeignKey("InwardID"), JsonIgnore]
         public virtual SampleInward? SampleInward { get; set; } = null!;
+
+        public long? CustomerID { get; set; }
+        [ForeignKey("CustomerID"), JsonIgnore]
+        public virtual Customer? OverrideCustomer { get; set; }
     }
 }

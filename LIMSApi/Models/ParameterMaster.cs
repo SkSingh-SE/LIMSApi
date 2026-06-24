@@ -41,7 +41,7 @@ public partial class ParameterMaster : AuditProperty
     public virtual ParameterUnitMaster? ParameterUnit { get; set; }
 
     [ForeignKey("DefaultTestMethodID")]
-    public virtual TestMethodStandard? DefaultTestMethod { get; set; }
+    public virtual TestMethodSpecification? DefaultTestMethod { get; set; }
 
     [ForeignKey("ParameterCategoryID")]
     public virtual ParameterCategoryMaster? ParameterCategory { get; set; }

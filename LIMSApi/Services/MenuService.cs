@@ -181,5 +181,10 @@ namespace LIMSApi.Services
             _logger.LogInformation("Fetching permissions for menu ID {MenuId}", menuId);
             return _MenuRepository.GetMenuPermissions(menuId);
         }
+
+        public Task<List<MenuMaster>> GetMenuTree()
+        {
+            return _MenuRepository.GetMenuTree();
+        }
     }
 }
