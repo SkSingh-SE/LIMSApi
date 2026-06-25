@@ -210,6 +210,22 @@ namespace LIMSApi.Services
             // Ensure exactly one version has IsDefault = true.
             EnsureSingleDefault(existingTestMethodSpecification.Versions.ToList());
 
+            // CRITICAL: To avoid violating the unique index on (TestMethodSpecificationID, IsDefault),
+            // we must handle the IsDefault updates carefully. First, set all to false except the one we want,
+            // then update via the repository with proper ordering.
+            var versionToSetDefault = existingTestMethodSpecification.Versions.FirstOrDefault(v => v.IsDefault);
+            
+            // Clear IsDefault on all versions before saving
+            foreach (var v in existingTestMethodSpecification.Versions)
+            {
+                if (v != versionToSetDefault)
+                    v.IsDefault = false;
+            }
+
+            // Now ensure the target has IsDefault = true
+            if (versionToSetDefault != null)
+                versionToSetDefault.IsDefault = true;
+
             await _TestMethodSpecificationRepository.UpdateTestMethodSpecification(existingTestMethodSpecification);
             _logger.LogInformation("TestMethodSpecification '{TestMethodSpecificationName}' updated successfully.", model.Name);
         }
