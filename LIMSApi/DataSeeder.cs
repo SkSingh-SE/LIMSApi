@@ -1,4 +1,4 @@
-﻿using LIMSApi.Data;
+using LIMSApi.Data;
 using LIMSApi.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -45,6 +45,18 @@ public static class DataSeeder
             // Always ensure admin user exists (idempotent — checks before creating)
             await SeedAdminUserAsync(db, logger);
 
+            // FIX: Revert any user mistakenly assigned 'Super Admin' back to 'Admin' (except the default superadmin)
+            await db.Database.ExecuteSqlRawAsync(@"
+                DECLARE @AdminRoleID BIGINT = (SELECT TOP 1 ID FROM RoleMasters WHERE Name = 'Admin');
+                DECLARE @SuperAdminRoleID BIGINT = (SELECT TOP 1 ID FROM RoleMasters WHERE Name = 'Super Admin');
+                
+                IF @AdminRoleID IS NOT NULL AND @SuperAdminRoleID IS NOT NULL
+                BEGIN
+                    UPDATE UserMasters SET RoleID = @AdminRoleID, RoleName = 'Admin' WHERE RoleID = @SuperAdminRoleID AND UserName != 'superadmin';
+                    UPDATE EmployeeMasters SET RoleID = @AdminRoleID WHERE RoleID = @SuperAdminRoleID AND Name != 'Super Admin';
+                END
+            ");
+
             // Menus — always runs via usp_SeedMenus (title-based, NOT EXISTS duplicate guard)
             await SeedMenusAsync(db);
 
@@ -78,6 +90,10 @@ public static class DataSeeder
     private static async Task SeedRolesAsync(LIMSContext db)
     {
         await db.Database.ExecuteSqlRawAsync(@"
+            IF NOT EXISTS (SELECT 1 FROM RoleMasters WHERE Name = N'Super Admin')
+                INSERT INTO RoleMasters (Name, Description, IsAdmin, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Super Admin', N'Super Administrator with hidden UI access', 1, 0, GETUTCDATE(), N'LIMS', 1);
+
             IF NOT EXISTS (SELECT 1 FROM RoleMasters WHERE Name = N'Admin')
                 INSERT INTO RoleMasters (Name, Description, IsAdmin, CreatedBy, CreatedOn, CompanyCode, IsActive)
                 VALUES (N'Admin', N'System Administrator with full access', 1, 0, GETUTCDATE(), N'LIMS', 1);
@@ -926,90 +942,105 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
     // ───────────────────────────────────────────────
     private static async Task SeedAdminUserAsync(LIMSContext db, ILogger logger)
     {
-        // Check if admin user already exists
-        var exists = await db.Database
+        var passwordHasher = new PasswordHasher<UserMaster>();
+
+        // ------------------ ADMIN USER ------------------
+        var adminExists = await db.Database
             .SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM UserMasters WHERE UserName = N'admin' AND IsActive = 1")
             .FirstAsync();
-        if (exists > 0) return;
 
-        // Get Admin role
-        var adminRole = await db.RoleMasters
-            .FirstOrDefaultAsync(r => r.Name == "Admin" && r.IsActive);
-        if (adminRole == null)
+        if (adminExists == 0)
         {
-            logger.LogWarning("DataSeeder: Admin role not found — skipping user creation.");
-            return;
-        }
-
-        // Department
-        var dept = await db.DepartmentMasters
-            .FirstOrDefaultAsync(d => d.Name == "Administration" && d.IsActive);
-        if (dept == null)
-        {
-            dept = new DepartmentMaster { Name = "Administration", Description = "Administration Department" };
-            db.DepartmentMasters.Add(dept);
-            await db.SaveChangesAsync();
-        }
-
-        // Designation
-        var desig = await db.DesignationMasters
-            .FirstOrDefaultAsync(d => d.Name == "System Administrator" && d.IsActive);
-        if (desig == null)
-        {
-            desig = new DesignationMaster
+            var adminRole = await db.RoleMasters.FirstOrDefaultAsync(r => r.Name == "Admin" && r.IsActive);
+            if (adminRole != null)
             {
-                Name = "System Administrator",
-                Description = "Full system access",
-                RoleID = adminRole.ID
-            };
-            db.DesignationMasters.Add(desig);
-            await db.SaveChangesAsync();
+                var dept = await db.DepartmentMasters.FirstOrDefaultAsync(d => d.Name == "Administration" && d.IsActive);
+                if (dept == null)
+                {
+                    dept = new DepartmentMaster { Name = "Administration", Description = "Administration Department" };
+                    db.DepartmentMasters.Add(dept);
+                    await db.SaveChangesAsync();
+                }
+
+                var desig = await db.DesignationMasters.FirstOrDefaultAsync(d => d.Name == "System Administrator" && d.IsActive);
+                if (desig == null)
+                {
+                    desig = new DesignationMaster { Name = "System Administrator", Description = "Full system access", RoleID = adminRole.ID };
+                    db.DesignationMasters.Add(desig);
+                    await db.SaveChangesAsync();
+                }
+
+                var emp = await db.EmployeeMasters.FirstOrDefaultAsync(e => e.Name == "System Admin" && e.IsActive);
+                if (emp == null)
+                {
+                    emp = new EmployeeMaster
+                    {
+                        Name = "System Admin", EmailId = "admin@lims.com", Gender = "Male", DesignationID = desig.ID, DepartmentID = dept.ID,
+                        DateOfJoin = DateTime.UtcNow, DateOfBirth = new DateTime(1990, 1, 1), RoleID = adminRole.ID, MobileNo = "0000000000",
+                        ResidentialPinCode = "000000", ResidentialAreaID = 0, PermanentPinCode = "000000", PermanentAreaID = 0
+                    };
+                    db.EmployeeMasters.Add(emp);
+                    await db.SaveChangesAsync();
+                }
+
+                var user = new UserMaster
+                {
+                    UserName = "admin", EmailId = "admin@lims.com", Password = passwordHasher.HashPassword(null!, "Admin@123"),
+                    RoleID = adminRole.ID, RoleName = "Admin", IsAdmin = true, EmployeeID = emp.ID,
+                    IsLoginEnabled = true, AccountStatus = "Active", ForcePasswordChange = false
+                };
+                db.UserMasters.Add(user);
+                await db.SaveChangesAsync();
+
+                logger.LogInformation("DataSeeder: Admin user created (admin / Admin@123).");
+            }
         }
 
-        // Employee
-        var emp = await db.EmployeeMasters
-            .FirstOrDefaultAsync(e => e.Name == "System Admin" && e.IsActive);
-        if (emp == null)
+        // ------------------ SUPER ADMIN USER ------------------
+        var superAdminExists = await db.Database
+            .SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM UserMasters WHERE UserName = N'superadmin' AND IsActive = 1")
+            .FirstAsync();
+
+        if (superAdminExists == 0)
         {
-            emp = new EmployeeMaster
+            var superAdminRole = await db.RoleMasters.FirstOrDefaultAsync(r => r.Name == "Super Admin" && r.IsActive);
+            if (superAdminRole != null)
             {
-                Name = "System Admin",
-                EmailId = "admin@lims.com",
-                Gender = "Male",
-                DesignationID = desig.ID,
-                DepartmentID = dept.ID,
-                DateOfJoin = DateTime.UtcNow,
-                DateOfBirth = new DateTime(1990, 1, 1),
-                RoleID = adminRole.ID,
-                MobileNo = "0000000000",
-                ResidentialPinCode = "000000",
-                ResidentialAreaID = 0,
-                PermanentPinCode = "000000",
-                PermanentAreaID = 0
-            };
-            db.EmployeeMasters.Add(emp);
-            await db.SaveChangesAsync();
+                var dept = await db.DepartmentMasters.FirstOrDefaultAsync(d => d.Name == "Administration" && d.IsActive);
+                
+                var desig = await db.DesignationMasters.FirstOrDefaultAsync(d => d.Name == "Super Administrator" && d.IsActive);
+                if (desig == null)
+                {
+                    desig = new DesignationMaster { Name = "Super Administrator", Description = "Hidden full system access", RoleID = superAdminRole.ID };
+                    db.DesignationMasters.Add(desig);
+                    await db.SaveChangesAsync();
+                }
+
+                var emp = await db.EmployeeMasters.FirstOrDefaultAsync(e => e.Name == "Super Admin" && e.IsActive);
+                if (emp == null)
+                {
+                    emp = new EmployeeMaster
+                    {
+                        Name = "Super Admin", EmailId = "superadmin@lims.com", Gender = "Male", DesignationID = desig.ID, DepartmentID = dept?.ID ?? 0,
+                        DateOfJoin = DateTime.UtcNow, DateOfBirth = new DateTime(1990, 1, 1), RoleID = superAdminRole.ID, MobileNo = "0000000000",
+                        ResidentialPinCode = "000000", ResidentialAreaID = 0, PermanentPinCode = "000000", PermanentAreaID = 0
+                    };
+                    db.EmployeeMasters.Add(emp);
+                    await db.SaveChangesAsync();
+                }
+
+                var user = new UserMaster
+                {
+                    UserName = "superadmin", EmailId = "superadmin@lims.com", Password = passwordHasher.HashPassword(null!, "SuperAdmin@123"),
+                    RoleID = superAdminRole.ID, RoleName = "Super Admin", IsAdmin = true, EmployeeID = emp.ID,
+                    IsLoginEnabled = true, AccountStatus = "Active", ForcePasswordChange = false
+                };
+                db.UserMasters.Add(user);
+                await db.SaveChangesAsync();
+
+                logger.LogInformation("DataSeeder: Super Admin user created (superadmin / SuperAdmin@123).");
+            }
         }
-
-        // User with hashed password
-        var passwordHasher = new PasswordHasher<UserMaster>();
-        var user = new UserMaster
-        {
-            UserName = "admin",
-            EmailId = "admin@lims.com",
-            Password = passwordHasher.HashPassword(null!, "Admin@123"),
-            RoleID = adminRole.ID,
-            RoleName = "Admin",
-            IsAdmin = true,
-            EmployeeID = emp.ID,
-            IsLoginEnabled = true,
-            AccountStatus = "Active",
-            ForcePasswordChange = false
-        };
-        db.UserMasters.Add(user);
-        await db.SaveChangesAsync();
-
-        logger.LogInformation("DataSeeder: Admin user created (admin / Admin@123). Password change required on first login.");
     }
 
     // ───────────────────────────────────────────────

@@ -1,4 +1,4 @@
-﻿using System.Linq.Dynamic.Core;
+using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -230,6 +230,7 @@ namespace LIMSApi.Repositories
         {
             long rootEmployeeId = loggedInUser.EmployeeID;
             var employees = await _context.EmployeeMasters
+                .Where(e => !e.IsSystemAdmin)
                 .Include(e => e.Department)
                 .Include(e => e.Designation)
                 .AsNoTracking()
@@ -264,7 +265,7 @@ namespace LIMSApi.Repositories
         public async Task<List<OrgNodeDto>> GetDirectReportsAsync(long managerId)
         {
             return await _context.EmployeeMasters
-                .Where(e => e.ReportingManagerID == managerId)
+                .Where(e => e.ReportingManagerID == managerId && !e.IsSystemAdmin)
                 .Include(e => e.Department)
                 .Include(e => e.Designation)
                 .Select(e => new OrgNodeDto
