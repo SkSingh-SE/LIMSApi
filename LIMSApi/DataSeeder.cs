@@ -45,17 +45,7 @@ public static class DataSeeder
             // Always ensure admin user exists (idempotent — checks before creating)
             await SeedAdminUserAsync(db, logger);
 
-            // FIX: Revert any user mistakenly assigned 'Super Admin' back to 'Admin' (except the default superadmin)
-            await db.Database.ExecuteSqlRawAsync(@"
-                DECLARE @AdminRoleID BIGINT = (SELECT TOP 1 ID FROM RoleMasters WHERE Name = 'Admin');
-                DECLARE @SuperAdminRoleID BIGINT = (SELECT TOP 1 ID FROM RoleMasters WHERE Name = 'Super Admin');
-                
-                IF @AdminRoleID IS NOT NULL AND @SuperAdminRoleID IS NOT NULL
-                BEGIN
-                    UPDATE UserMasters SET RoleID = @AdminRoleID, RoleName = 'Admin' WHERE RoleID = @SuperAdminRoleID AND UserName != 'superadmin';
-                    UPDATE EmployeeMasters SET RoleID = @AdminRoleID WHERE RoleID = @SuperAdminRoleID AND Name != 'Super Admin';
-                END
-            ");
+
 
             // Menus — always runs via usp_SeedMenus (title-based, NOT EXISTS duplicate guard)
             await SeedMenusAsync(db);
@@ -90,9 +80,7 @@ public static class DataSeeder
     private static async Task SeedRolesAsync(LIMSContext db)
     {
         await db.Database.ExecuteSqlRawAsync(@"
-            IF NOT EXISTS (SELECT 1 FROM RoleMasters WHERE Name = N'Super Admin')
-                INSERT INTO RoleMasters (Name, Description, IsAdmin, CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'Super Admin', N'Super Administrator with hidden UI access', 1, 0, GETUTCDATE(), N'LIMS', 1);
+
 
             IF NOT EXISTS (SELECT 1 FROM RoleMasters WHERE Name = N'Admin')
                 INSERT INTO RoleMasters (Name, Description, IsAdmin, CreatedBy, CreatedOn, CompanyCode, IsActive)
@@ -1003,15 +991,15 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
 
         if (superAdminExists == 0)
         {
-            var superAdminRole = await db.RoleMasters.FirstOrDefaultAsync(r => r.Name == "Super Admin" && r.IsActive);
-            if (superAdminRole != null)
+            var adminRole = await db.RoleMasters.FirstOrDefaultAsync(r => r.Name == "Admin" && r.IsActive);
+            if (adminRole != null)
             {
                 var dept = await db.DepartmentMasters.FirstOrDefaultAsync(d => d.Name == "Administration" && d.IsActive);
                 
                 var desig = await db.DesignationMasters.FirstOrDefaultAsync(d => d.Name == "Super Administrator" && d.IsActive);
                 if (desig == null)
                 {
-                    desig = new DesignationMaster { Name = "Super Administrator", Description = "Hidden full system access", RoleID = superAdminRole.ID };
+                    desig = new DesignationMaster { Name = "Super Administrator", Description = "Hidden full system access", RoleID = adminRole.ID };
                     db.DesignationMasters.Add(desig);
                     await db.SaveChangesAsync();
                 }
@@ -1022,17 +1010,24 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                     emp = new EmployeeMaster
                     {
                         Name = "Super Admin", EmailId = "superadmin@lims.com", Gender = "Male", DesignationID = desig.ID, DepartmentID = dept?.ID ?? 0,
-                        DateOfJoin = DateTime.UtcNow, DateOfBirth = new DateTime(1990, 1, 1), RoleID = superAdminRole.ID, MobileNo = "0000000000",
-                        ResidentialPinCode = "000000", ResidentialAreaID = 0, PermanentPinCode = "000000", PermanentAreaID = 0
+                        DateOfJoin = DateTime.UtcNow, DateOfBirth = new DateTime(1990, 1, 1), RoleID = adminRole.ID, MobileNo = "0000000000",
+                        ResidentialPinCode = "000000", ResidentialAreaID = 0, PermanentPinCode = "000000", PermanentAreaID = 0,
+                        IsSystemAdmin = true
                     };
                     db.EmployeeMasters.Add(emp);
+                    await db.SaveChangesAsync();
+                }
+                else if (!emp.IsSystemAdmin)
+                {
+                    emp.IsSystemAdmin = true;
+                    db.EmployeeMasters.Update(emp);
                     await db.SaveChangesAsync();
                 }
 
                 var user = new UserMaster
                 {
                     UserName = "superadmin", EmailId = "superadmin@lims.com", Password = passwordHasher.HashPassword(null!, "SuperAdmin@123"),
-                    RoleID = superAdminRole.ID, RoleName = "Super Admin", IsAdmin = true, EmployeeID = emp.ID,
+                    RoleID = adminRole.ID, RoleName = "Admin", IsAdmin = true, EmployeeID = emp.ID,
                     IsLoginEnabled = true, AccountStatus = "Active", ForcePasswordChange = false
                 };
                 db.UserMasters.Add(user);
