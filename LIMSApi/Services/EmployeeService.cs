@@ -66,6 +66,10 @@ namespace LIMSApi.Services
             if (exists)
                 throw new InvalidOperationException("Employee already exists!");
 
+            // Prevent creating system admin through normal employee creation
+            if (model.IsSystemAdmin)
+                throw new InvalidOperationException("System administrator account can only be created through database seed script.");
+
             // Derive RoleID from Designation
             var designation = model.DesignationID.HasValue
                 ? await _designationRepository.GetDesignationById(model.DesignationID.Value)
@@ -81,7 +85,7 @@ namespace LIMSApi.Services
             {
                 EmployeeID = createdEmployee.ID,
                 UserName = model.Name,
-                Password = _authService.GetHashedPassword(model.Password),
+                Password = model.Password,
                 EmailId = model.EmailId,
                 RoleID = designation?.RoleID,
                 RoleName = role?.Name,
@@ -135,6 +139,10 @@ namespace LIMSApi.Services
             var existingEmployee = await _employeeRepository.GetEmployeeById(model.ID);
             if (existingEmployee == null)
                 throw new InvalidOperationException("Employee not found!");
+
+            // Prevent modification of system admin flag through normal employee update
+            if (existingEmployee.IsSystemAdmin && model.IsSystemAdmin != existingEmployee.IsSystemAdmin)
+                throw new InvalidOperationException("System administrator flag cannot be modified.");
 
             existingEmployee.Name = model.Name;
             existingEmployee.Gender = model.Gender;

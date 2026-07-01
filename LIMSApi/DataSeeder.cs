@@ -155,6 +155,8 @@ public static class DataSeeder
             (N'Bank Master',         NULL, N'/bank',               NULL, N'Administration'),
             (N'Courier Master',      NULL, N'/courier',            NULL, N'Administration'),
             (N'Product Size Master', NULL, N'/product-size-master',NULL, N'Administration'),
+            (N'Chemical Sample Category', NULL, N'/chemical-sample-category', NULL, N'Administration'),
+            (N'Analysis Technique',  NULL, N'/analysis-technique', NULL, N'Administration'),
             (N'TPI Master',          NULL, N'/tpi',                NULL, N'Administration'),
             (N'Supplier Master',     NULL, N'/supplier',           NULL, N'Administration'),
             (N'Equipment',           NULL, N'/equipment',          NULL, N'Administration'),
@@ -431,6 +433,18 @@ public static class DataSeeder
             ('CanUpdateProductSizeMaster','Update Product Size','Product Size Master',NULL,'Update'),
             ('CanDeleteProductSizeMaster','Delete Product Size','Product Size Master',NULL,'Delete'),
             ('CanManageProductSizeMaster','Manage Product Size','Product Size Master',NULL,'Manage'),
+
+            ('CanReadChemicalSampleCategory','View Chemical Sample Category','Chemical Sample Category',NULL,'Read'),
+            ('CanCreateChemicalSampleCategory','Create Chemical Sample Category','Chemical Sample Category',NULL,'Create'),
+            ('CanUpdateChemicalSampleCategory','Update Chemical Sample Category','Chemical Sample Category',NULL,'Update'),
+            ('CanDeleteChemicalSampleCategory','Delete Chemical Sample Category','Chemical Sample Category',NULL,'Delete'),
+            ('CanManageChemicalSampleCategory','Manage Chemical Sample Category','Chemical Sample Category',NULL,'Manage'),
+
+            ('CanReadAnalysisTechnique','View Analysis Technique','Analysis Technique Master',NULL,'Read'),
+            ('CanCreateAnalysisTechnique','Create Analysis Technique','Analysis Technique Master',NULL,'Create'),
+            ('CanUpdateAnalysisTechnique','Update Analysis Technique','Analysis Technique Master',NULL,'Update'),
+            ('CanDeleteAnalysisTechnique','Delete Analysis Technique','Analysis Technique Master',NULL,'Delete'),
+            ('CanManageAnalysisTechnique','Manage Analysis Technique','Analysis Technique Master',NULL,'Manage'),
 
             ('CanReadTPI','View TPI','TPI Master',NULL,'Read'),
             ('CanCreateTPI','Create TPI','TPI Master',NULL,'Create'),
@@ -1121,6 +1135,38 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 INSERT INTO ProductConditionMasters (Name, CalibrationRequired, IsDestructive, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Galvanized', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'Pickled' AND IsActive = 1)
                 INSERT INTO ProductConditionMasters (Name, CalibrationRequired, IsDestructive, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Pickled', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- Analysis Technique Master (chemical testing techniques)
+            IF NOT EXISTS (SELECT 1 FROM AnalysisTechniqueMasters WHERE Code = N'OES' AND IsActive = 1)
+                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, IsSpectro, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'OES', N'OES (Optical Emission Spectrometry)', N'Optical Emission Spectrometry', 1, 1, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM AnalysisTechniqueMasters WHERE Code = N'ICP' AND IsActive = 1)
+                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, IsSpectro, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'ICP', N'ICP (Inductively Coupled Plasma)', N'Inductively Coupled Plasma', 0, 2, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM AnalysisTechniqueMasters WHERE Code = N'WET' AND IsActive = 1)
+                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, IsSpectro, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'WET', N'Wet Chemical Analysis', N'Wet Chemical Analysis', 0, 3, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM AnalysisTechniqueMasters WHERE Code = N'LECO' AND IsActive = 1)
+                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, IsSpectro, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'LECO', N'LECO (Combustion Analysis)', N'LECO Combustion Analysis', 1, 4, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM AnalysisTechniqueMasters WHERE Code = N'WDXRF' AND IsActive = 1)
+                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, IsSpectro, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'WDXRF', N'WDXRF (Wavelength Dispersive XRF)', N'Wavelength Dispersive X-Ray Fluorescence', 1, 5, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM AnalysisTechniqueMasters WHERE Code = N'EDXRF' AND IsActive = 1)
+                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, IsSpectro, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'EDXRF', N'EDXRF (Energy Dispersive XRF)', N'Energy Dispersive X-Ray Fluorescence', 1, 6, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- Chemical Sample Category
+            IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Ferro Alloys' AND IsActive = 1)
+                INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Ferro Alloys', 1, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Pharma' AND IsActive = 1)
+                INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Pharma', 2, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Industrial' AND IsActive = 1)
+                INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Industrial', 3, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'ROHS' AND IsActive = 1)
+                INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'ROHS', 4, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Special Chemicals' AND IsActive = 1)
+                INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Special Chemicals', 5, 0, GETUTCDATE(), N'LIMS', 1);
         ");
     }
 
@@ -1310,7 +1356,7 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 "CanReadMetalClassification", "CanReadHeatTreatment",
                 "CanReadProductCondition", "CanReadSpecimenOrientation",
                 "CanReadProductForm", "CanReadLaboratoryTest",
-                "CanReadProductSizeMaster",
+                "CanReadProductSizeMaster", "CanReadChemicalSampleCategory", "CanReadAnalysisTechnique",
             },
 
             ["Technical"] = new[]
@@ -1335,7 +1381,7 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 "CanReadSpecimenOrientation", "CanReadProductForm",
                 "CanReadDimensionalFactors", "CanReadStandardOrganization",
                 "CanReadEquipment", "CanReadCalibrationAgency",
-                "CanReadProductSizeMaster",
+                "CanReadProductSizeMaster", "CanReadChemicalSampleCategory", "CanReadAnalysisTechnique",
             },
 
             ["Lab"] = new[]

@@ -63,7 +63,7 @@ namespace LIMSApi.Repositories
         public async Task<PagedResponse<object>> GetAllEmployees(PageFilter filter)
         {
             var _query = (from e in _context.EmployeeMasters
-                         where e.IsActive && e.CompanyCode == loggedInUser.CompanyCode
+                         where e.IsActive && e.CompanyCode == loggedInUser.CompanyCode && !e.IsSystemAdmin
                          join d in _context.DepartmentMasters on e.DepartmentID equals d.ID into dpGroup
                          from dp in dpGroup.DefaultIfEmpty()
 
@@ -112,7 +112,7 @@ namespace LIMSApi.Repositories
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.EmployeeMasters where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode select a;
+            var _query = from a in _context.EmployeeMasters where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode && !a.IsSystemAdmin select a;
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
