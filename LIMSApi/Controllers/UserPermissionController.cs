@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -57,7 +57,9 @@ namespace LIMSApi.Controllers
             if (userId != callerId)
             {
                 var role = User.FindFirst(ClaimTypes.Role)?.Value;
-                bool isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
+                var isAdminClaim = User.FindFirst("IsAdmin")?.Value;
+                bool isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase) ||
+                               string.Equals(isAdminClaim, "True", StringComparison.OrdinalIgnoreCase);
                 if (!isAdmin)
                 {
                     var hasPermission = await _context.UserPermissions

@@ -1,4 +1,4 @@
-﻿using LIMSApi.Data;
+using LIMSApi.Data;
 using LIMSApi.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -45,6 +45,8 @@ public static class DataSeeder
             // Always ensure admin user exists (idempotent — checks before creating)
             await SeedAdminUserAsync(db, logger);
 
+
+
             // Menus — always runs via usp_SeedMenus (title-based, NOT EXISTS duplicate guard)
             await SeedMenusAsync(db);
 
@@ -78,6 +80,8 @@ public static class DataSeeder
     private static async Task SeedRolesAsync(LIMSContext db)
     {
         await db.Database.ExecuteSqlRawAsync(@"
+
+
             IF NOT EXISTS (SELECT 1 FROM RoleMasters WHERE Name = N'Admin')
                 INSERT INTO RoleMasters (Name, Description, IsAdmin, CreatedBy, CreatedOn, CompanyCode, IsActive)
                 VALUES (N'Admin', N'System Administrator with full access', 1, 0, GETUTCDATE(), N'LIMS', 1);
@@ -155,6 +159,8 @@ public static class DataSeeder
             (N'Bank Master',         NULL, N'/bank',               NULL, N'Administration'),
             (N'Courier Master',      NULL, N'/courier',            NULL, N'Administration'),
             (N'Product Size Master', NULL, N'/product-size-master',NULL, N'Administration'),
+            (N'Chemical Sample Category', NULL, N'/chemical-sample-category', NULL, N'Administration'),
+            (N'Analysis Technique',  NULL, N'/analysis-technique', NULL, N'Administration'),
             (N'TPI Master',          NULL, N'/tpi',                NULL, N'Administration'),
             (N'Supplier Master',     NULL, N'/supplier',           NULL, N'Administration'),
             (N'Equipment',           NULL, N'/equipment',          NULL, N'Administration'),
@@ -431,6 +437,18 @@ public static class DataSeeder
             ('CanUpdateProductSizeMaster','Update Product Size','Product Size Master',NULL,'Update'),
             ('CanDeleteProductSizeMaster','Delete Product Size','Product Size Master',NULL,'Delete'),
             ('CanManageProductSizeMaster','Manage Product Size','Product Size Master',NULL,'Manage'),
+
+            ('CanReadChemicalSampleCategory','View Chemical Sample Category','Chemical Sample Category',NULL,'Read'),
+            ('CanCreateChemicalSampleCategory','Create Chemical Sample Category','Chemical Sample Category',NULL,'Create'),
+            ('CanUpdateChemicalSampleCategory','Update Chemical Sample Category','Chemical Sample Category',NULL,'Update'),
+            ('CanDeleteChemicalSampleCategory','Delete Chemical Sample Category','Chemical Sample Category',NULL,'Delete'),
+            ('CanManageChemicalSampleCategory','Manage Chemical Sample Category','Chemical Sample Category',NULL,'Manage'),
+
+            ('CanReadAnalysisTechnique','View Analysis Technique','Analysis Technique Master',NULL,'Read'),
+            ('CanCreateAnalysisTechnique','Create Analysis Technique','Analysis Technique Master',NULL,'Create'),
+            ('CanUpdateAnalysisTechnique','Update Analysis Technique','Analysis Technique Master',NULL,'Update'),
+            ('CanDeleteAnalysisTechnique','Delete Analysis Technique','Analysis Technique Master',NULL,'Delete'),
+            ('CanManageAnalysisTechnique','Manage Analysis Technique','Analysis Technique Master',NULL,'Manage'),
 
             ('CanReadTPI','View TPI','TPI Master',NULL,'Read'),
             ('CanCreateTPI','Create TPI','TPI Master',NULL,'Create'),
@@ -912,90 +930,112 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
     // ───────────────────────────────────────────────
     private static async Task SeedAdminUserAsync(LIMSContext db, ILogger logger)
     {
-        // Check if admin user already exists
-        var exists = await db.Database
+        var passwordHasher = new PasswordHasher<UserMaster>();
+
+        // ------------------ ADMIN USER ------------------
+        var adminExists = await db.Database
             .SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM UserMasters WHERE UserName = N'admin' AND IsActive = 1")
             .FirstAsync();
-        if (exists > 0) return;
 
-        // Get Admin role
-        var adminRole = await db.RoleMasters
-            .FirstOrDefaultAsync(r => r.Name == "Admin" && r.IsActive);
-        if (adminRole == null)
+        if (adminExists == 0)
         {
-            logger.LogWarning("DataSeeder: Admin role not found — skipping user creation.");
-            return;
-        }
-
-        // Department
-        var dept = await db.DepartmentMasters
-            .FirstOrDefaultAsync(d => d.Name == "Administration" && d.IsActive);
-        if (dept == null)
-        {
-            dept = new DepartmentMaster { Name = "Administration", Description = "Administration Department" };
-            db.DepartmentMasters.Add(dept);
-            await db.SaveChangesAsync();
-        }
-
-        // Designation
-        var desig = await db.DesignationMasters
-            .FirstOrDefaultAsync(d => d.Name == "System Administrator" && d.IsActive);
-        if (desig == null)
-        {
-            desig = new DesignationMaster
+            var adminRole = await db.RoleMasters.FirstOrDefaultAsync(r => r.Name == "Admin" && r.IsActive);
+            if (adminRole != null)
             {
-                Name = "System Administrator",
-                Description = "Full system access",
-                RoleID = adminRole.ID
-            };
-            db.DesignationMasters.Add(desig);
-            await db.SaveChangesAsync();
+                var dept = await db.DepartmentMasters.FirstOrDefaultAsync(d => d.Name == "Administration" && d.IsActive);
+                if (dept == null)
+                {
+                    dept = new DepartmentMaster { Name = "Administration", Description = "Administration Department" };
+                    db.DepartmentMasters.Add(dept);
+                    await db.SaveChangesAsync();
+                }
+
+                var desig = await db.DesignationMasters.FirstOrDefaultAsync(d => d.Name == "System Administrator" && d.IsActive);
+                if (desig == null)
+                {
+                    desig = new DesignationMaster { Name = "System Administrator", Description = "Full system access", RoleID = adminRole.ID };
+                    db.DesignationMasters.Add(desig);
+                    await db.SaveChangesAsync();
+                }
+
+                var emp = await db.EmployeeMasters.FirstOrDefaultAsync(e => e.Name == "System Admin" && e.IsActive);
+                if (emp == null)
+                {
+                    emp = new EmployeeMaster
+                    {
+                        Name = "System Admin", EmailId = "admin@lims.com", Gender = "Male", DesignationID = desig.ID, DepartmentID = dept.ID,
+                        DateOfJoin = DateTime.UtcNow, DateOfBirth = new DateTime(1990, 1, 1), RoleID = adminRole.ID, MobileNo = "0000000000",
+                        ResidentialPinCode = "000000", ResidentialAreaID = 0, PermanentPinCode = "000000", PermanentAreaID = 0
+                    };
+                    db.EmployeeMasters.Add(emp);
+                    await db.SaveChangesAsync();
+                }
+
+                var user = new UserMaster
+                {
+                    UserName = "admin", EmailId = "admin@lims.com", Password = passwordHasher.HashPassword(null!, "Admin@123"),
+                    RoleID = adminRole.ID, RoleName = "Admin", IsAdmin = true, EmployeeID = emp.ID,
+                    IsLoginEnabled = true, AccountStatus = "Active", ForcePasswordChange = false
+                };
+                db.UserMasters.Add(user);
+                await db.SaveChangesAsync();
+
+                logger.LogInformation("DataSeeder: Admin user created (admin / Admin@123).");
+            }
         }
 
-        // Employee
-        var emp = await db.EmployeeMasters
-            .FirstOrDefaultAsync(e => e.Name == "System Admin" && e.IsActive);
-        if (emp == null)
+        // ------------------ SUPER ADMIN USER ------------------
+        var superAdminExists = await db.Database
+            .SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM UserMasters WHERE UserName = N'superadmin' AND IsActive = 1")
+            .FirstAsync();
+
+        if (superAdminExists == 0)
         {
-            emp = new EmployeeMaster
+            var adminRole = await db.RoleMasters.FirstOrDefaultAsync(r => r.Name == "Admin" && r.IsActive);
+            if (adminRole != null)
             {
-                Name = "System Admin",
-                EmailId = "admin@lims.com",
-                Gender = "Male",
-                DesignationID = desig.ID,
-                DepartmentID = dept.ID,
-                DateOfJoin = DateTime.UtcNow,
-                DateOfBirth = new DateTime(1990, 1, 1),
-                RoleID = adminRole.ID,
-                MobileNo = "0000000000",
-                ResidentialPinCode = "000000",
-                ResidentialAreaID = 0,
-                PermanentPinCode = "000000",
-                PermanentAreaID = 0
-            };
-            db.EmployeeMasters.Add(emp);
-            await db.SaveChangesAsync();
+                var dept = await db.DepartmentMasters.FirstOrDefaultAsync(d => d.Name == "Administration" && d.IsActive);
+                
+                var desig = await db.DesignationMasters.FirstOrDefaultAsync(d => d.Name == "Super Administrator" && d.IsActive);
+                if (desig == null)
+                {
+                    desig = new DesignationMaster { Name = "Super Administrator", Description = "Hidden full system access", RoleID = adminRole.ID };
+                    db.DesignationMasters.Add(desig);
+                    await db.SaveChangesAsync();
+                }
+
+                var emp = await db.EmployeeMasters.FirstOrDefaultAsync(e => e.Name == "Super Admin" && e.IsActive);
+                if (emp == null)
+                {
+                    emp = new EmployeeMaster
+                    {
+                        Name = "Super Admin", EmailId = "superadmin@lims.com", Gender = "Male", DesignationID = desig.ID, DepartmentID = dept?.ID ?? 0,
+                        DateOfJoin = DateTime.UtcNow, DateOfBirth = new DateTime(1990, 1, 1), RoleID = adminRole.ID, MobileNo = "0000000000",
+                        ResidentialPinCode = "000000", ResidentialAreaID = 0, PermanentPinCode = "000000", PermanentAreaID = 0,
+                        IsSystemAdmin = true
+                    };
+                    db.EmployeeMasters.Add(emp);
+                    await db.SaveChangesAsync();
+                }
+                else if (!emp.IsSystemAdmin)
+                {
+                    emp.IsSystemAdmin = true;
+                    db.EmployeeMasters.Update(emp);
+                    await db.SaveChangesAsync();
+                }
+
+                var user = new UserMaster
+                {
+                    UserName = "superadmin", EmailId = "superadmin@lims.com", Password = passwordHasher.HashPassword(null!, "SuperAdmin@123"),
+                    RoleID = adminRole.ID, RoleName = "Admin", IsAdmin = true, EmployeeID = emp.ID,
+                    IsLoginEnabled = true, AccountStatus = "Active", ForcePasswordChange = false
+                };
+                db.UserMasters.Add(user);
+                await db.SaveChangesAsync();
+
+                logger.LogInformation("DataSeeder: Super Admin user created (superadmin / SuperAdmin@123).");
+            }
         }
-
-        // User with hashed password
-        var passwordHasher = new PasswordHasher<UserMaster>();
-        var user = new UserMaster
-        {
-            UserName = "admin",
-            EmailId = "admin@lims.com",
-            Password = passwordHasher.HashPassword(null!, "Admin@123"),
-            RoleID = adminRole.ID,
-            RoleName = "Admin",
-            IsAdmin = true,
-            EmployeeID = emp.ID,
-            IsLoginEnabled = true,
-            AccountStatus = "Active",
-            ForcePasswordChange = false
-        };
-        db.UserMasters.Add(user);
-        await db.SaveChangesAsync();
-
-        logger.LogInformation("DataSeeder: Admin user created (admin / Admin@123). Password change required on first login.");
     }
 
     // ───────────────────────────────────────────────
@@ -1121,6 +1161,38 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 INSERT INTO ProductConditionMasters (Name, CalibrationRequired, IsDestructive, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Galvanized', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM ProductConditionMasters WHERE Name = N'Pickled' AND IsActive = 1)
                 INSERT INTO ProductConditionMasters (Name, CalibrationRequired, IsDestructive, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Pickled', 0, 0, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- Analysis Technique Master (chemical testing techniques)
+            IF NOT EXISTS (SELECT 1 FROM AnalysisTechniqueMasters WHERE Code = N'OES' AND IsActive = 1)
+                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, IsSpectro, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'OES', N'OES (Optical Emission Spectrometry)', N'Optical Emission Spectrometry', 1, 1, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM AnalysisTechniqueMasters WHERE Code = N'ICP' AND IsActive = 1)
+                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, IsSpectro, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'ICP', N'ICP (Inductively Coupled Plasma)', N'Inductively Coupled Plasma', 0, 2, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM AnalysisTechniqueMasters WHERE Code = N'WET' AND IsActive = 1)
+                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, IsSpectro, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'WET', N'Wet Chemical Analysis', N'Wet Chemical Analysis', 0, 3, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM AnalysisTechniqueMasters WHERE Code = N'LECO' AND IsActive = 1)
+                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, IsSpectro, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'LECO', N'LECO (Combustion Analysis)', N'LECO Combustion Analysis', 1, 4, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM AnalysisTechniqueMasters WHERE Code = N'WDXRF' AND IsActive = 1)
+                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, IsSpectro, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'WDXRF', N'WDXRF (Wavelength Dispersive XRF)', N'Wavelength Dispersive X-Ray Fluorescence', 1, 5, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM AnalysisTechniqueMasters WHERE Code = N'EDXRF' AND IsActive = 1)
+                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, IsSpectro, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'EDXRF', N'EDXRF (Energy Dispersive XRF)', N'Energy Dispersive X-Ray Fluorescence', 1, 6, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- Chemical Sample Category
+            IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Ferro Alloys' AND IsActive = 1)
+                INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Ferro Alloys', 1, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Pharma' AND IsActive = 1)
+                INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Pharma', 2, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Industrial' AND IsActive = 1)
+                INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Industrial', 3, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'ROHS' AND IsActive = 1)
+                INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'ROHS', 4, 0, GETUTCDATE(), N'LIMS', 1);
+            IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Special Chemicals' AND IsActive = 1)
+                INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Special Chemicals', 5, 0, GETUTCDATE(), N'LIMS', 1);
         ");
     }
 
@@ -1310,7 +1382,7 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 "CanReadMetalClassification", "CanReadHeatTreatment",
                 "CanReadProductCondition", "CanReadSpecimenOrientation",
                 "CanReadProductForm", "CanReadLaboratoryTest",
-                "CanReadProductSizeMaster",
+                "CanReadProductSizeMaster", "CanReadChemicalSampleCategory", "CanReadAnalysisTechnique",
             },
 
             ["Technical"] = new[]
@@ -1335,7 +1407,7 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 "CanReadSpecimenOrientation", "CanReadProductForm",
                 "CanReadDimensionalFactors", "CanReadStandardOrganization",
                 "CanReadEquipment", "CanReadCalibrationAgency",
-                "CanReadProductSizeMaster",
+                "CanReadProductSizeMaster", "CanReadChemicalSampleCategory", "CanReadAnalysisTechnique",
             },
 
             ["Lab"] = new[]

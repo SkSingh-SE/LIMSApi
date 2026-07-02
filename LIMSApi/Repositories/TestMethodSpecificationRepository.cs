@@ -60,6 +60,21 @@ namespace LIMSApi.Repositories
 
         public async Task UpdateTestMethodSpecification(TestMethodSpecification model)
         {
+            var specId = model.ID;
+            var defaultVersionId = model.Versions.FirstOrDefault(v => v.IsDefault)?.ID ?? 0;
+
+            // To avoid unique constraint violation on (TestMethodSpecificationID, IsDefault),
+            // we must clear IsDefault on all other versions first before updating.
+            // This prevents EF from trying to set multiple versions as default simultaneously.
+            if (defaultVersionId > 0)
+            {
+                // Clear IsDefault on all versions for this spec except the one we're setting as default
+                await _context.TestMethodSpecificationVersions
+                    .Where(v => v.TestMethodSpecificationID == specId && v.ID != defaultVersionId && v.IsDefault)
+                    .ExecuteUpdateAsync(s => s.SetProperty(v => v.IsDefault, false));
+            }
+
+            // Now update the specification and its versions
             _context.TestMethodSpecifications.Update(model);
             await _context.SaveChangesAsync();
         }

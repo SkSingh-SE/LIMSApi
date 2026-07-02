@@ -1,4 +1,4 @@
-﻿using LIMSApi.Data;
+using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
@@ -83,7 +83,7 @@ namespace LIMSApi.Repositories
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in context.UserMasters where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode select a;
+            var _query = from a in context.UserMasters where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode && a.RoleName != "Super Admin" select a;
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
