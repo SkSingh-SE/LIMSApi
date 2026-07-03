@@ -217,7 +217,7 @@ namespace LIMSApi.Reporting
                         {
                             row.ConstantItem(60).AlignMiddle().Column(logoCol =>
                             {
-                                var logoPath = ResolveImagePath(_data.LabLogoPath, "logo.png");
+                                var logoPath = ResolveImagePath(_data.LabLogoPath, "TPTL-icon.png");
                                 if (logoPath != null)
                                 {
                                     try { logoCol.Item().Height(50).Image(logoPath).FitArea(); }

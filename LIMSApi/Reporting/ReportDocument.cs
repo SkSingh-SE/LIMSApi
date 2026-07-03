@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using Microsoft.VisualStudio.Web.CodeGenerators.Mvc.Templates.BlazorIdentity.Pages.Manage;
 using Org.BouncyCastle.Utilities.Collections;
@@ -24,7 +24,7 @@ namespace LIMSApi.Reporting
         {
             _report = report;
 
-            LogoPath = Path.Combine(Directory.GetCurrentDirectory(), "Assets", "logo.png");
+            LogoPath = Path.Combine(Directory.GetCurrentDirectory(), "Assets", "TPTL-icon.png");
             SignPath = Path.Combine(Directory.GetCurrentDirectory(), "Assets", "signature.png");
             QrCodePath = Path.Combine(Directory.GetCurrentDirectory(), "Assets", "qr_code.png");
             BasePath = Directory.GetCurrentDirectory();

@@ -65,7 +65,7 @@ namespace LIMSApi.Reporting
                     .Row(row =>
                     {
                         // Logo
-                        var logoPath = Path.Combine(AssetsPath, "logo.png");
+                        var logoPath = Path.Combine(AssetsPath, "TPTL-icon.png");
                         if (File.Exists(logoPath))
                         {
                             row.ConstantItem(50).AlignMiddle().Image(logoPath).FitArea();

@@ -62,7 +62,7 @@ namespace LIMSApi.Reporting
                 {
                     row.RelativeItem().Column(c =>
                     {
-                        var logoPath = Path.Combine(_assetsPath, "logo.png");
+                        var logoPath = Path.Combine(_assetsPath, "TPTL-icon.png");
                         if (File.Exists(logoPath))
                         {
                             c.Item().Height(50).Image(logoPath, ImageScaling.FitHeight);

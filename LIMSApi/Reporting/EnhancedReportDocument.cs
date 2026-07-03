@@ -84,7 +84,7 @@ namespace LIMSApi.Reporting
                         // LEFT: Company Logo
                         row.ConstantItem(55).AlignMiddle().Column(logoCol =>
                         {
-                            var logoPath = ResolveImagePath(_data.LabLogoPath, "logo.png");
+                            var logoPath = ResolveImagePath(_data.LabLogoPath, "TPTL-icon.png");
                             if (logoPath != null)
                             {
                                 try
