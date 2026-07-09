@@ -19,5 +19,6 @@ namespace LIMSApi.Repositories.Interface
         Task<int> GetVersionImpactCount(long versionId);
         Task<List<TestMethodSpecificationVersion>> GetVersionsDueForReview(DateTime cutoffDate);
         Task<List<DropdwonSelector>> GetVersionsBySpecId(long specId, bool includeAll = false);
+        Task<List<DropdwonSelector>> GetTestMethodSpecificationVersionDropdown(string? searchTerm, int pageNo, int pageSize);
     }
 }

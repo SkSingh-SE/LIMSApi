@@ -33,6 +33,17 @@ namespace LIMSApi.Services
                 throw new InvalidOperationException("Equipment already exists!");
 
             await _equipmentRepository.AddEquipment(model);
+
+            if (model.AnalysisTechniques != null && model.AnalysisTechniques.Any())
+            {
+                foreach (var t in model.AnalysisTechniques)
+                {
+                    t.EquipmentID = model.ID;
+                    _context.EquipmentAnalysisTechniques.Add(t);
+                }
+                await _context.SaveChangesAsync();
+            }
+
             _logger.LogInformation("Equipment '{EquipmentName}' created successfully.", model.Name);
         }
 
@@ -68,6 +79,8 @@ namespace LIMSApi.Services
             existingEquipment.CalibrationFrequencyDays = model.CalibrationFrequencyDays;
             existingEquipment.MaintenanceSchedule = model.MaintenanceSchedule;
             existingEquipment.ModifiedOn = DateTime.UtcNow;
+
+            await SyncAnalysisTechniques(existingEquipment, model.AnalysisTechniques);
 
             await _equipmentRepository.UpdateEquipment(existingEquipment);
             _logger.LogInformation("Equipment '{EquipmentName}' updated successfully.", model.Name);
@@ -277,6 +290,25 @@ namespace LIMSApi.Services
         public async Task<List<DropdwonSelector>> GetEquipmentDropdown(string? searchTerm, int pageNo, int pageSize)
         {
             return await _equipmentRepository.GetEquipmentDropdown(searchTerm, pageNo, pageSize);
+        }
+
+        private async Task SyncAnalysisTechniques(EquipmentMaster existing, ICollection<EquipmentAnalysisTechnique>? incoming)
+        {
+            var existingJunctions = await _context.Set<EquipmentAnalysisTechnique>()
+                .Where(j => j.EquipmentID == existing.ID)
+                .ToListAsync();
+            _context.Set<EquipmentAnalysisTechnique>().RemoveRange(existingJunctions);
+
+            if (incoming != null)
+            {
+                foreach (var t in incoming)
+                {
+                    t.EquipmentID = existing.ID;
+                    t.ID = 0;
+                    _context.Set<EquipmentAnalysisTechnique>().Add(t);
+                }
+            }
+            await _context.SaveChangesAsync();
         }
     }
 }

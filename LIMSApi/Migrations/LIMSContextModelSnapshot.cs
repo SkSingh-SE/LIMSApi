@@ -632,7 +632,7 @@ namespace LIMSApi.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
 
-                    b.Property<long?>("LaboratoryTestSubTypeID")
+                    b.Property<long?>("LaboratoryTestAnalysisTypeID")
                         .HasColumnType("bigint");
 
                     b.Property<long>("MetalClassificationID")
@@ -641,9 +641,6 @@ namespace LIMSApi.Migrations
                     b.Property<string>("ReportNo")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<long?>("SamplePlanID")
-                        .HasColumnType("bigint");
 
                     b.Property<long>("SampleTestPlanID")
                         .HasColumnType("bigint");
@@ -663,7 +660,7 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.HasIndex("LaboratoryTestSubTypeID");
+                    b.HasIndex("LaboratoryTestAnalysisTypeID");
 
                     b.HasIndex("SampleTestPlanID");
 
@@ -3273,6 +3270,9 @@ namespace LIMSApi.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
 
+                    b.Property<long?>("LaboratoryTestSubGroupID")
+                        .HasColumnType("bigint");
+
                     b.Property<long>("SampleTestPlanID")
                         .HasColumnType("bigint");
 
@@ -3283,6 +3283,8 @@ namespace LIMSApi.Migrations
                         .HasColumnType("bigint");
 
                     b.HasKey("ID");
+
+                    b.HasIndex("LaboratoryTestSubGroupID");
 
                     b.HasIndex("SampleTestPlanID");
 
@@ -3735,6 +3737,9 @@ namespace LIMSApi.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
 
+                    b.Property<long?>("AnalysisTypeID")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("CompanyCode")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -3768,6 +3773,8 @@ namespace LIMSApi.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("ID");
+
+                    b.HasIndex("AnalysisTypeID");
 
                     b.HasIndex("FinancialYearId");
 
@@ -3849,6 +3856,10 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("OverrideParameterIDs")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.Property<long?>("PriceDimensionTypeId")
                         .HasColumnType("bigint");
 
@@ -3896,6 +3907,9 @@ namespace LIMSApi.Migrations
 
                     b.Property<string>("AliasName")
                         .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ElementPrices")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<long>("InvoiceCaseConfigID")
@@ -4373,10 +4387,6 @@ namespace LIMSApi.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
 
-                    b.Property<string>("ChemicalCategory")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
                     b.Property<string>("CompanyCode")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -4392,10 +4402,6 @@ namespace LIMSApi.Migrations
 
                     b.Property<int>("GlobalUsageCount")
                         .HasColumnType("int");
-
-                    b.Property<string>("InvoiceCaption")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -4426,10 +4432,6 @@ namespace LIMSApi.Migrations
                     b.Property<int>("RecentUsageCount")
                         .HasColumnType("int");
 
-                    b.Property<string>("TestCaption")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
                     b.Property<int?>("TestDuration")
                         .HasColumnType("int");
 
@@ -4440,33 +4442,7 @@ namespace LIMSApi.Migrations
                     b.ToTable("LaboratoryTests");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestInvoiceCase", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<long>("InvoiceCaseConfigID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("LabTestID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("LaboratoryTestID")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("InvoiceCaseConfigID");
-
-                    b.HasIndex("LaboratoryTestID");
-
-                    b.ToTable("LaboratoryTestInvoiceCase");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestPricingConfiguration", b =>
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestAnalysisType", b =>
                 {
                     b.Property<long>("ID")
                         .ValueGeneratedOnAdd()
@@ -4484,86 +4460,13 @@ namespace LIMSApi.Migrations
                     b.Property<DateTime>("CreatedOn")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("FormulaExpression")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<long?>("InvoiceCaseConfigID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("InvoiceCaseID")
-                        .HasColumnType("bigint");
-
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
-                    b.Property<bool>("IsDefault")
-                        .HasColumnType("bit");
-
-                    b.Property<long>("LaboratoryTestProfileID")
+                    b.Property<long>("LaboratoryTestSubGroupID")
                         .HasColumnType("bigint");
 
-                    b.Property<long?>("ModifiedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime?>("ModifiedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("PricingRuleType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<int>("Priority")
-                        .HasColumnType("int");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("InvoiceCaseConfigID");
-
-                    b.HasIndex("InvoiceCaseID");
-
-                    b.HasIndex("LaboratoryTestProfileID");
-
-                    b.ToTable("LaboratoryTestPricingConfigurations");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestProfile", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<string>("CompanyCode")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<long>("CreatedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<int>("DisplayOrder")
-                        .HasColumnType("int");
-
-                    b.Property<string>("InvoiceCaption")
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsDefault")
-                        .HasColumnType("bit");
-
-                    b.Property<long>("LaboratoryTestTechniqueID")
+                    b.Property<long?>("MetalClassificationID")
                         .HasColumnType("bigint");
 
                     b.Property<long?>("ModifiedBy")
@@ -4577,96 +4480,19 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
 
-                    b.HasKey("ID");
-
-                    b.HasIndex("LaboratoryTestTechniqueID");
-
-                    b.ToTable("LaboratoryTestProfiles");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestProfileInvoiceCase", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<string>("CompanyCode")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<long>("CreatedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DefaultPricingType")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<DateTime>("EffectiveFrom")
-                        .HasColumnType("datetime2");
-
-                    b.Property<long?>("FinancialYearId")
-                        .HasColumnType("bigint");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<long>("LaboratoryTestProfileID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("ModifiedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime?>("ModifiedOn")
-                        .HasColumnType("datetime2");
+                    b.Property<int?>("TestDuration")
+                        .HasColumnType("int");
 
                     b.HasKey("ID");
 
-                    b.HasIndex("FinancialYearId");
+                    b.HasIndex("LaboratoryTestSubGroupID");
 
-                    b.HasIndex("LaboratoryTestProfileID", "EffectiveFrom")
-                        .IsUnique()
-                        .HasFilter("[IsActive] = 1");
+                    b.HasIndex("MetalClassificationID");
 
-                    b.ToTable("LaboratoryTestProfileInvoiceCases");
+                    b.ToTable("LaboratoryTestAnalysisTypes");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestProfileInvoiceCasePrice", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<long?>("InvoiceCaseConfigID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("LaboratoryTestProfileInvoiceCaseID")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.Property<decimal>("Price")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("InvoiceCaseConfigID");
-
-                    b.HasIndex("LaboratoryTestProfileInvoiceCaseID");
-
-                    b.ToTable("LaboratoryTestProfileInvoiceCasePrices");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestProfileMachine", b =>
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestAnalysisTypeEquipment", b =>
                 {
                     b.Property<long>("ID")
                         .ValueGeneratedOnAdd()
@@ -4680,19 +4506,42 @@ namespace LIMSApi.Migrations
                     b.Property<bool>("IsDefault")
                         .HasColumnType("bit");
 
-                    b.Property<long>("LaboratoryTestProfileID")
+                    b.Property<long>("LaboratoryTestAnalysisTypeID")
                         .HasColumnType("bigint");
 
                     b.HasKey("ID");
 
                     b.HasIndex("EquipmentID");
 
-                    b.HasIndex("LaboratoryTestProfileID");
+                    b.HasIndex("LaboratoryTestAnalysisTypeID");
 
-                    b.ToTable("LaboratoryTestProfileMachines");
+                    b.ToTable("LaboratoryTestAnalysisTypeEquipments");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestProfileMethod", b =>
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestAnalysisTypeInvoiceCase", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<long>("InvoiceCaseConfigID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("LaboratoryTestAnalysisTypeID")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("InvoiceCaseConfigID");
+
+                    b.HasIndex("LaboratoryTestAnalysisTypeID");
+
+                    b.ToTable("LaboratoryTestAnalysisTypeInvoiceCases");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestAnalysisTypeMethod", b =>
                 {
                     b.Property<long>("ID")
                         .ValueGeneratedOnAdd()
@@ -4703,22 +4552,27 @@ namespace LIMSApi.Migrations
                     b.Property<bool>("IsDefault")
                         .HasColumnType("bit");
 
-                    b.Property<long>("LaboratoryTestProfileID")
+                    b.Property<long>("LaboratoryTestAnalysisTypeID")
                         .HasColumnType("bigint");
 
                     b.Property<long>("TestMethodSpecificationID")
                         .HasColumnType("bigint");
 
+                    b.Property<long?>("TestMethodSpecificationVersionID")
+                        .HasColumnType("bigint");
+
                     b.HasKey("ID");
 
-                    b.HasIndex("LaboratoryTestProfileID");
+                    b.HasIndex("LaboratoryTestAnalysisTypeID");
 
                     b.HasIndex("TestMethodSpecificationID");
 
-                    b.ToTable("LaboratoryTestProfileMethods");
+                    b.HasIndex("TestMethodSpecificationVersionID");
+
+                    b.ToTable("LaboratoryTestAnalysisTypeMethods");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestProfileParameter", b =>
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestAnalysisTypeParameter", b =>
                 {
                     b.Property<long>("ID")
                         .ValueGeneratedOnAdd()
@@ -4732,7 +4586,7 @@ namespace LIMSApi.Migrations
                     b.Property<bool>("IsReportable")
                         .HasColumnType("bit");
 
-                    b.Property<long>("LaboratoryTestProfileID")
+                    b.Property<long>("LaboratoryTestAnalysisTypeID")
                         .HasColumnType("bigint");
 
                     b.Property<long>("ParameterID")
@@ -4743,14 +4597,14 @@ namespace LIMSApi.Migrations
 
                     b.HasKey("ID");
 
-                    b.HasIndex("LaboratoryTestProfileID");
+                    b.HasIndex("LaboratoryTestAnalysisTypeID");
 
                     b.HasIndex("ParameterID");
 
-                    b.ToTable("LaboratoryTestProfileParameters");
+                    b.ToTable("LaboratoryTestAnalysisTypeParameters");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestProfileSpecification", b =>
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestAnalysisTypeSpecification", b =>
                 {
                     b.Property<long>("ID")
                         .ValueGeneratedOnAdd()
@@ -4758,29 +4612,52 @@ namespace LIMSApi.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
 
-                    b.Property<long>("LaboratoryTestProfileID")
+                    b.Property<long>("LaboratoryTestAnalysisTypeID")
                         .HasColumnType("bigint");
 
                     b.Property<long?>("ProductSpecificationID")
                         .HasColumnType("bigint");
 
+                    b.Property<long?>("SpecificationGradeID")
+                        .HasColumnType("bigint");
+
                     b.Property<long?>("SpecificationHeaderID")
                         .HasColumnType("bigint");
 
-                    b.Property<string>("SpecificationType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
                     b.HasKey("ID");
 
-                    b.HasIndex("LaboratoryTestProfileID");
+                    b.HasIndex("LaboratoryTestAnalysisTypeID");
 
                     b.HasIndex("ProductSpecificationID");
 
+                    b.HasIndex("SpecificationGradeID");
+
                     b.HasIndex("SpecificationHeaderID");
 
-                    b.ToTable("LaboratoryTestProfileSpecifications");
+                    b.ToTable("LaboratoryTestAnalysisTypeSpecifications");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestAnalysisTypeTechnique", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<long>("AnalysisTechniqueID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("LaboratoryTestAnalysisTypeID")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("AnalysisTechniqueID");
+
+                    b.HasIndex("LaboratoryTestAnalysisTypeID");
+
+                    b.ToTable("LaboratoryTestAnalysisTypeTechniques");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.LaboratoryTestSubGroup", b =>
@@ -4824,6 +4701,14 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("ReportTestName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("TestDuration")
+                        .HasColumnType("int");
+
                     b.HasKey("ID");
 
                     b.HasIndex("LaboratoryTestID");
@@ -4833,7 +4718,7 @@ namespace LIMSApi.Migrations
                     b.ToTable("LaboratoryTestSubGroups");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestSubType", b =>
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestSubGroupEquipment", b =>
                 {
                     b.Property<long>("ID")
                         .ValueGeneratedOnAdd()
@@ -4841,62 +4726,25 @@ namespace LIMSApi.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
 
-                    b.Property<long?>("AnalysisTechniqueID")
+                    b.Property<long>("EquipmentID")
                         .HasColumnType("bigint");
 
-                    b.Property<string>("CompanyCode")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<long>("CreatedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("DisplayOrder")
-                        .HasColumnType("int");
-
-                    b.Property<string>("InvoiceCaption")
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
-
-                    b.Property<bool>("IsActive")
+                    b.Property<bool>("IsDefault")
                         .HasColumnType("bit");
 
                     b.Property<long>("LaboratoryTestSubGroupID")
                         .HasColumnType("bigint");
 
-                    b.Property<long?>("MetalClassificationID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("ModifiedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime?>("ModifiedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.Property<string>("PricingRuleType")
-                        .HasMaxLength(40)
-                        .HasColumnType("nvarchar(40)");
-
                     b.HasKey("ID");
 
-                    b.HasIndex("AnalysisTechniqueID");
+                    b.HasIndex("EquipmentID");
 
                     b.HasIndex("LaboratoryTestSubGroupID");
 
-                    b.HasIndex("MetalClassificationID");
-
-                    b.ToTable("LaboratoryTestSubTypes");
+                    b.ToTable("LaboratoryTestSubGroupEquipments");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestSubTypeInvoiceCase", b =>
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestSubGroupInvoiceCase", b =>
                 {
                     b.Property<long>("ID")
                         .ValueGeneratedOnAdd()
@@ -4904,81 +4752,22 @@ namespace LIMSApi.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
 
-                    b.Property<string>("CompanyCode")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<long>("CreatedBy")
+                    b.Property<long>("InvoiceCaseConfigID")
                         .HasColumnType("bigint");
 
-                    b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DefaultPricingType")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<DateTime>("EffectiveFrom")
-                        .HasColumnType("datetime2");
-
-                    b.Property<long?>("FinancialYearId")
+                    b.Property<long>("LaboratoryTestSubGroupID")
                         .HasColumnType("bigint");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<long>("LaboratoryTestSubTypeID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("ModifiedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime?>("ModifiedOn")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("FinancialYearId");
-
-                    b.HasIndex("LaboratoryTestSubTypeID", "EffectiveFrom")
-                        .IsUnique()
-                        .HasFilter("[IsActive] = 1");
-
-                    b.ToTable("LaboratoryTestSubTypeInvoiceCases");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestSubTypeInvoiceCasePrice", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<long?>("InvoiceCaseConfigID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("LaboratoryTestSubTypeInvoiceCaseID")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.Property<decimal>("Price")
-                        .HasColumnType("decimal(18,2)");
 
                     b.HasKey("ID");
 
                     b.HasIndex("InvoiceCaseConfigID");
 
-                    b.HasIndex("LaboratoryTestSubTypeInvoiceCaseID");
+                    b.HasIndex("LaboratoryTestSubGroupID");
 
-                    b.ToTable("LaboratoryTestSubTypeInvoiceCasePrices");
+                    b.ToTable("LaboratoryTestSubGroupInvoiceCases");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestTechnique", b =>
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestSubGroupMethod", b =>
                 {
                     b.Property<long>("ID")
                         .ValueGeneratedOnAdd()
@@ -4986,45 +4775,92 @@ namespace LIMSApi.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
 
-                    b.Property<long?>("AnalysisTechniqueID")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("CompanyCode")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<long>("CreatedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("DisplayOrder")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsActive")
+                    b.Property<bool>("IsDefault")
                         .HasColumnType("bit");
-
-                    b.Property<string>("Label")
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
 
                     b.Property<long>("LaboratoryTestSubGroupID")
                         .HasColumnType("bigint");
 
-                    b.Property<long?>("ModifiedBy")
+                    b.Property<long>("TestMethodSpecificationID")
                         .HasColumnType("bigint");
 
-                    b.Property<DateTime?>("ModifiedOn")
-                        .HasColumnType("datetime2");
+                    b.Property<long?>("TestMethodSpecificationVersionID")
+                        .HasColumnType("bigint");
 
                     b.HasKey("ID");
 
-                    b.HasIndex("AnalysisTechniqueID");
+                    b.HasIndex("LaboratoryTestSubGroupID");
+
+                    b.HasIndex("TestMethodSpecificationID");
+
+                    b.HasIndex("TestMethodSpecificationVersionID");
+
+                    b.ToTable("LaboratoryTestSubGroupMethods");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestSubGroupParameter", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<bool>("IsMandatory")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsReportable")
+                        .HasColumnType("bit");
+
+                    b.Property<long>("LaboratoryTestSubGroupID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ParameterID")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("int");
+
+                    b.HasKey("ID");
 
                     b.HasIndex("LaboratoryTestSubGroupID");
 
-                    b.ToTable("LaboratoryTestTechniques");
+                    b.HasIndex("ParameterID");
+
+                    b.ToTable("LaboratoryTestSubGroupParameters");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestSubGroupSpecification", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<long>("LaboratoryTestSubGroupID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("ProductSpecificationID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("SpecificationGradeID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("SpecificationHeaderID")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("LaboratoryTestSubGroupID");
+
+                    b.HasIndex("ProductSpecificationID");
+
+                    b.HasIndex("SpecificationGradeID");
+
+                    b.HasIndex("SpecificationHeaderID");
+
+                    b.ToTable("LaboratoryTestSubGroupSpecifications");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.LongTermRecord", b =>
@@ -20128,9 +19964,9 @@ namespace LIMSApi.Migrations
 
             modelBuilder.Entity("LIMSApi.Models.ChemicalTest", b =>
                 {
-                    b.HasOne("LIMSApi.Models.LaboratoryTestSubType", "SubType")
+                    b.HasOne("LIMSApi.Models.LaboratoryTestAnalysisType", "AnalysisType")
                         .WithMany()
-                        .HasForeignKey("LaboratoryTestSubTypeID")
+                        .HasForeignKey("LaboratoryTestAnalysisTypeID")
                         .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("LIMSApi.Models.SampleTestPlan", "SampleTestPlan")
@@ -20139,9 +19975,9 @@ namespace LIMSApi.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("SampleTestPlan");
+                    b.Navigation("AnalysisType");
 
-                    b.Navigation("SubType");
+                    b.Navigation("SampleTestPlan");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ChemicalTestElement", b =>
@@ -20668,6 +20504,11 @@ namespace LIMSApi.Migrations
 
             modelBuilder.Entity("LIMSApi.Models.GeneralTest", b =>
                 {
+                    b.HasOne("LIMSApi.Models.LaboratoryTestSubGroup", "SubGroup")
+                        .WithMany()
+                        .HasForeignKey("LaboratoryTestSubGroupID")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("LIMSApi.Models.SampleTestPlan", "SampleTestPlan")
                         .WithMany("GeneralTests")
                         .HasForeignKey("SampleTestPlanID")
@@ -20675,6 +20516,8 @@ namespace LIMSApi.Migrations
                         .IsRequired();
 
                     b.Navigation("SampleTestPlan");
+
+                    b.Navigation("SubGroup");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.GeneralTestMethod", b =>
@@ -20756,6 +20599,10 @@ namespace LIMSApi.Migrations
 
             modelBuilder.Entity("LIMSApi.Models.InvoiceCase", b =>
                 {
+                    b.HasOne("LIMSApi.Models.LaboratoryTestAnalysisType", "AnalysisType")
+                        .WithMany()
+                        .HasForeignKey("AnalysisTypeID");
+
                     b.HasOne("LIMSApi.Models.FinancialYear", "FinancialYearEntity")
                         .WithMany()
                         .HasForeignKey("FinancialYearId");
@@ -20765,6 +20612,8 @@ namespace LIMSApi.Migrations
                         .HasForeignKey("LaboratoryTestID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("AnalysisType");
 
                     b.Navigation("FinancialYearEntity");
 
@@ -20905,94 +20754,25 @@ namespace LIMSApi.Migrations
                     b.Navigation("LabDepartment");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestInvoiceCase", b =>
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestAnalysisType", b =>
                 {
-                    b.HasOne("LIMSApi.Models.InvoiceCaseConfiguration", "InvoiceCaseConfiguration")
-                        .WithMany()
-                        .HasForeignKey("InvoiceCaseConfigID")
+                    b.HasOne("LIMSApi.Models.LaboratoryTestSubGroup", "SubGroup")
+                        .WithMany("AnalysisTypes")
+                        .HasForeignKey("LaboratoryTestSubGroupID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("LIMSApi.Models.LaboratoryTest", null)
-                        .WithMany("InvoiceCases")
-                        .HasForeignKey("LaboratoryTestID");
-
-                    b.Navigation("InvoiceCaseConfiguration");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestPricingConfiguration", b =>
-                {
-                    b.HasOne("LIMSApi.Models.InvoiceCaseConfiguration", "Configuration")
+                    b.HasOne("LIMSApi.Models.MetalClassificationMaster", "MetalClassification")
                         .WithMany()
-                        .HasForeignKey("InvoiceCaseConfigID")
+                        .HasForeignKey("MetalClassificationID")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("LIMSApi.Models.InvoiceCase", "InvoiceCase")
-                        .WithMany()
-                        .HasForeignKey("InvoiceCaseID")
-                        .OnDelete(DeleteBehavior.NoAction);
+                    b.Navigation("MetalClassification");
 
-                    b.HasOne("LIMSApi.Models.LaboratoryTestProfile", "Profile")
-                        .WithMany("PricingConfigurations")
-                        .HasForeignKey("LaboratoryTestProfileID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Configuration");
-
-                    b.Navigation("InvoiceCase");
-
-                    b.Navigation("Profile");
+                    b.Navigation("SubGroup");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestProfile", b =>
-                {
-                    b.HasOne("LIMSApi.Models.LaboratoryTestTechnique", "Technique")
-                        .WithMany("Profiles")
-                        .HasForeignKey("LaboratoryTestTechniqueID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Technique");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestProfileInvoiceCase", b =>
-                {
-                    b.HasOne("LIMSApi.Models.FinancialYear", "FinancialYearEntity")
-                        .WithMany()
-                        .HasForeignKey("FinancialYearId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("LIMSApi.Models.LaboratoryTestProfile", "Profile")
-                        .WithMany("InvoiceCases")
-                        .HasForeignKey("LaboratoryTestProfileID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("FinancialYearEntity");
-
-                    b.Navigation("Profile");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestProfileInvoiceCasePrice", b =>
-                {
-                    b.HasOne("LIMSApi.Models.InvoiceCaseConfiguration", "Configuration")
-                        .WithMany()
-                        .HasForeignKey("InvoiceCaseConfigID")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("LIMSApi.Models.LaboratoryTestProfileInvoiceCase", "InvoiceCase")
-                        .WithMany("Prices")
-                        .HasForeignKey("LaboratoryTestProfileInvoiceCaseID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Configuration");
-
-                    b.Navigation("InvoiceCase");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestProfileMachine", b =>
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestAnalysisTypeEquipment", b =>
                 {
                     b.HasOne("LIMSApi.Models.EquipmentMaster", "Equipment")
                         .WithMany()
@@ -21000,22 +20780,41 @@ namespace LIMSApi.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.HasOne("LIMSApi.Models.LaboratoryTestProfile", "Profile")
-                        .WithMany("Machines")
-                        .HasForeignKey("LaboratoryTestProfileID")
+                    b.HasOne("LIMSApi.Models.LaboratoryTestAnalysisType", "AnalysisType")
+                        .WithMany("Equipments")
+                        .HasForeignKey("LaboratoryTestAnalysisTypeID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Equipment");
+                    b.Navigation("AnalysisType");
 
-                    b.Navigation("Profile");
+                    b.Navigation("Equipment");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestProfileMethod", b =>
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestAnalysisTypeInvoiceCase", b =>
                 {
-                    b.HasOne("LIMSApi.Models.LaboratoryTestProfile", "Profile")
-                        .WithMany("Methods")
-                        .HasForeignKey("LaboratoryTestProfileID")
+                    b.HasOne("LIMSApi.Models.InvoiceCaseConfiguration", "InvoiceCaseConfiguration")
+                        .WithMany()
+                        .HasForeignKey("InvoiceCaseConfigID")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("LIMSApi.Models.LaboratoryTestAnalysisType", "AnalysisType")
+                        .WithMany("InvoiceCases")
+                        .HasForeignKey("LaboratoryTestAnalysisTypeID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AnalysisType");
+
+                    b.Navigation("InvoiceCaseConfiguration");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestAnalysisTypeMethod", b =>
+                {
+                    b.HasOne("LIMSApi.Models.LaboratoryTestAnalysisType", "AnalysisType")
+                        .WithMany("TestMethods")
+                        .HasForeignKey("LaboratoryTestAnalysisTypeID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -21025,16 +20824,23 @@ namespace LIMSApi.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.Navigation("Profile");
+                    b.HasOne("LIMSApi.Models.TestMethodSpecificationVersion", "TestMethodSpecificationVersion")
+                        .WithMany()
+                        .HasForeignKey("TestMethodSpecificationVersionID")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("AnalysisType");
 
                     b.Navigation("TestMethodSpecification");
+
+                    b.Navigation("TestMethodSpecificationVersion");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestProfileParameter", b =>
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestAnalysisTypeParameter", b =>
                 {
-                    b.HasOne("LIMSApi.Models.LaboratoryTestProfile", "Profile")
+                    b.HasOne("LIMSApi.Models.LaboratoryTestAnalysisType", "AnalysisType")
                         .WithMany("Parameters")
-                        .HasForeignKey("LaboratoryTestProfileID")
+                        .HasForeignKey("LaboratoryTestAnalysisTypeID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -21044,16 +20850,16 @@ namespace LIMSApi.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.Navigation("Parameter");
+                    b.Navigation("AnalysisType");
 
-                    b.Navigation("Profile");
+                    b.Navigation("Parameter");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestProfileSpecification", b =>
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestAnalysisTypeSpecification", b =>
                 {
-                    b.HasOne("LIMSApi.Models.LaboratoryTestProfile", "Profile")
+                    b.HasOne("LIMSApi.Models.LaboratoryTestAnalysisType", "AnalysisType")
                         .WithMany("Specifications")
-                        .HasForeignKey("LaboratoryTestProfileID")
+                        .HasForeignKey("LaboratoryTestAnalysisTypeID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -21062,16 +20868,42 @@ namespace LIMSApi.Migrations
                         .HasForeignKey("ProductSpecificationID")
                         .OnDelete(DeleteBehavior.NoAction);
 
+                    b.HasOne("LIMSApi.Models.SpecificationGrade", "SpecificationGrade")
+                        .WithMany()
+                        .HasForeignKey("SpecificationGradeID")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("LIMSApi.Models.SpecificationHeader", "MaterialSpecification")
                         .WithMany()
                         .HasForeignKey("SpecificationHeaderID")
                         .OnDelete(DeleteBehavior.NoAction);
 
+                    b.Navigation("AnalysisType");
+
                     b.Navigation("MaterialSpecification");
 
                     b.Navigation("ProductSpecification");
 
-                    b.Navigation("Profile");
+                    b.Navigation("SpecificationGrade");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestAnalysisTypeTechnique", b =>
+                {
+                    b.HasOne("LIMSApi.Models.AnalysisTechniqueMaster", "AnalysisTechnique")
+                        .WithMany()
+                        .HasForeignKey("AnalysisTechniqueID")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("LIMSApi.Models.LaboratoryTestAnalysisType", "AnalysisType")
+                        .WithMany("AllowedTechniques")
+                        .HasForeignKey("LaboratoryTestAnalysisTypeID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AnalysisTechnique");
+
+                    b.Navigation("AnalysisType");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.LaboratoryTestSubGroup", b =>
@@ -21092,81 +20924,117 @@ namespace LIMSApi.Migrations
                     b.Navigation("MetalClassification");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestSubType", b =>
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestSubGroupEquipment", b =>
                 {
-                    b.HasOne("LIMSApi.Models.AnalysisTechniqueMaster", "AnalysisTechnique")
+                    b.HasOne("LIMSApi.Models.EquipmentMaster", "Equipment")
                         .WithMany()
-                        .HasForeignKey("AnalysisTechniqueID")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("LIMSApi.Models.LaboratoryTestSubGroup", "SubGroup")
-                        .WithMany("SubTypes")
-                        .HasForeignKey("LaboratoryTestSubGroupID")
+                        .HasForeignKey("EquipmentID")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.HasOne("LIMSApi.Models.MetalClassificationMaster", "MetalClassification")
-                        .WithMany()
-                        .HasForeignKey("MetalClassificationID")
-                        .OnDelete(DeleteBehavior.NoAction);
+                    b.HasOne("LIMSApi.Models.LaboratoryTestSubGroup", "SubGroup")
+                        .WithMany("Equipments")
+                        .HasForeignKey("LaboratoryTestSubGroupID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
-                    b.Navigation("AnalysisTechnique");
-
-                    b.Navigation("MetalClassification");
+                    b.Navigation("Equipment");
 
                     b.Navigation("SubGroup");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestSubTypeInvoiceCase", b =>
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestSubGroupInvoiceCase", b =>
                 {
-                    b.HasOne("LIMSApi.Models.FinancialYear", "FinancialYearEntity")
-                        .WithMany()
-                        .HasForeignKey("FinancialYearId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("LIMSApi.Models.LaboratoryTestSubType", "LaboratoryTestSubType")
-                        .WithMany("InvoiceCases")
-                        .HasForeignKey("LaboratoryTestSubTypeID")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.Navigation("FinancialYearEntity");
-
-                    b.Navigation("LaboratoryTestSubType");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestSubTypeInvoiceCasePrice", b =>
-                {
-                    b.HasOne("LIMSApi.Models.InvoiceCaseConfiguration", "Configuration")
+                    b.HasOne("LIMSApi.Models.InvoiceCaseConfiguration", "InvoiceCaseConfiguration")
                         .WithMany()
                         .HasForeignKey("InvoiceCaseConfigID")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("LIMSApi.Models.LaboratoryTestSubTypeInvoiceCase", "InvoiceCase")
-                        .WithMany("Prices")
-                        .HasForeignKey("LaboratoryTestSubTypeInvoiceCaseID")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
-
-                    b.Navigation("Configuration");
-
-                    b.Navigation("InvoiceCase");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestTechnique", b =>
-                {
-                    b.HasOne("LIMSApi.Models.AnalysisTechniqueMaster", "AnalysisTechnique")
-                        .WithMany()
-                        .HasForeignKey("AnalysisTechniqueID")
-                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("LIMSApi.Models.LaboratoryTestSubGroup", "SubGroup")
-                        .WithMany()
+                        .WithMany("InvoiceCases")
                         .HasForeignKey("LaboratoryTestSubGroupID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("InvoiceCaseConfiguration");
+
+                    b.Navigation("SubGroup");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestSubGroupMethod", b =>
+                {
+                    b.HasOne("LIMSApi.Models.LaboratoryTestSubGroup", "SubGroup")
+                        .WithMany("TestMethods")
+                        .HasForeignKey("LaboratoryTestSubGroupID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LIMSApi.Models.TestMethodSpecification", "TestMethodSpecification")
+                        .WithMany()
+                        .HasForeignKey("TestMethodSpecificationID")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
-                    b.Navigation("AnalysisTechnique");
+                    b.HasOne("LIMSApi.Models.TestMethodSpecificationVersion", "TestMethodSpecificationVersion")
+                        .WithMany()
+                        .HasForeignKey("TestMethodSpecificationVersionID")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("SubGroup");
+
+                    b.Navigation("TestMethodSpecification");
+
+                    b.Navigation("TestMethodSpecificationVersion");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestSubGroupParameter", b =>
+                {
+                    b.HasOne("LIMSApi.Models.LaboratoryTestSubGroup", "SubGroup")
+                        .WithMany("Parameters")
+                        .HasForeignKey("LaboratoryTestSubGroupID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LIMSApi.Models.ParameterMaster", "Parameter")
+                        .WithMany()
+                        .HasForeignKey("ParameterID")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Parameter");
+
+                    b.Navigation("SubGroup");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestSubGroupSpecification", b =>
+                {
+                    b.HasOne("LIMSApi.Models.LaboratoryTestSubGroup", "SubGroup")
+                        .WithMany("Specifications")
+                        .HasForeignKey("LaboratoryTestSubGroupID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LIMSApi.Models.ProductSpecification", "ProductSpecification")
+                        .WithMany()
+                        .HasForeignKey("ProductSpecificationID")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("LIMSApi.Models.SpecificationGrade", "SpecificationGrade")
+                        .WithMany()
+                        .HasForeignKey("SpecificationGradeID")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("LIMSApi.Models.SpecificationHeader", "MaterialSpecification")
+                        .WithMany()
+                        .HasForeignKey("SpecificationHeaderID")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("MaterialSpecification");
+
+                    b.Navigation("ProductSpecification");
+
+                    b.Navigation("SpecificationGrade");
 
                     b.Navigation("SubGroup");
                 });
@@ -22963,49 +22831,37 @@ namespace LIMSApi.Migrations
 
             modelBuilder.Entity("LIMSApi.Models.LaboratoryTest", b =>
                 {
-                    b.Navigation("InvoiceCases");
-
                     b.Navigation("SubGroups");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestProfile", b =>
+            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestAnalysisType", b =>
                 {
+                    b.Navigation("AllowedTechniques");
+
+                    b.Navigation("Equipments");
+
                     b.Navigation("InvoiceCases");
-
-                    b.Navigation("Machines");
-
-                    b.Navigation("Methods");
 
                     b.Navigation("Parameters");
 
-                    b.Navigation("PricingConfigurations");
-
                     b.Navigation("Specifications");
-                });
 
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestProfileInvoiceCase", b =>
-                {
-                    b.Navigation("Prices");
+                    b.Navigation("TestMethods");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.LaboratoryTestSubGroup", b =>
                 {
-                    b.Navigation("SubTypes");
-                });
+                    b.Navigation("AnalysisTypes");
 
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestSubType", b =>
-                {
+                    b.Navigation("Equipments");
+
                     b.Navigation("InvoiceCases");
-                });
 
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestSubTypeInvoiceCase", b =>
-                {
-                    b.Navigation("Prices");
-                });
+                    b.Navigation("Parameters");
 
-            modelBuilder.Entity("LIMSApi.Models.LaboratoryTestTechnique", b =>
-                {
-                    b.Navigation("Profiles");
+                    b.Navigation("Specifications");
+
+                    b.Navigation("TestMethods");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.LongTermTest", b =>

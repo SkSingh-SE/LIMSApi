@@ -1,4 +1,4 @@
-﻿using LIMSApi.Data;
+using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Helpers.Enums;
@@ -79,7 +79,7 @@ namespace LIMSApi.ServiceWORepo
                         {
                             TestName = _db.LaboratoryTests
                                         .Where(t => t.ID == h.LaboratoryTestID)
-                                        .Select(t => t.SubGroup)
+                                        .Select(t => t.Name)
                                         .FirstOrDefault(),
                         }).ToList(),
 
@@ -1769,7 +1769,7 @@ namespace LIMSApi.ServiceWORepo
                     headerId = lt.TestResultHeaderID,
                     header.SampleID,
                     sample.SampleNo,
-                    TestName = labTest.SubGroup,
+                    TestName = labTest.Name,
                     lt.DurationHours,
                     lt.StartedAt,
                     lt.EndedAt,
@@ -1890,7 +1890,7 @@ namespace LIMSApi.ServiceWORepo
                         .FirstOrDefault()
                     : null,
 
-                testName = labTest?.SubGroup,
+                testName = labTest?.Name,
 
                 durationHours = lt.DurationHours,
                 startedAt = lt.StartedAt,

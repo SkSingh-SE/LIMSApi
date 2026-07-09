@@ -412,5 +412,10 @@ namespace LIMSApi.Services
         {
             return await _TestMethodSpecificationRepository.GetVersionsBySpecId(specId, includeAll);
         }
+
+        public async Task<List<DropdwonSelector>> GetTestMethodSpecificationVersionDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _TestMethodSpecificationRepository.GetTestMethodSpecificationVersionDropdown(searchTerm, pageNo, pageSize);
+        }
     }
 }

@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories;
@@ -31,6 +31,15 @@ namespace LIMSApi.Services
                 if (await _InvoiceCaseConfigurationRepository.ExistsByNameAndSelectionType(model.Name, model.SelectionType))
                     throw new InvalidOperationException("Same InvoiceCaseConfiguration already exists!");
 
+                if (model.SelectionType == "ElementCountFormula")
+                {
+                    bool isBaseTier = Helpers.ConditionMatcher.IsBaseTier(model.Value);
+                    bool isOverride = Helpers.ConditionMatcher.IsOverride(model.Value);
+
+                    if (!isBaseTier && !isOverride)
+                        throw new ArgumentException("ElementCountFormula: Value must be a valid condition (e.g. <=1, ==2, >3) or 'override' for element overrides.");
+                }
+
                 // Extra-tier SpectroCombination configs require a base "Full" config to exist first
                 if (model.SelectionType == "SpectroCombination" && !model.IsBaseConfig)
                 {
@@ -61,6 +70,15 @@ namespace LIMSApi.Services
                 if (await _InvoiceCaseConfigurationRepository.ExistsByNameAndSelectionTypeAndNotId(model.Name, model.SelectionType, model.ID))
                     throw new InvalidOperationException("Same InvoiceCaseConfiguration already exists!");
 
+                if (model.SelectionType == "ElementCountFormula")
+                {
+                    bool isBaseTier = Helpers.ConditionMatcher.IsBaseTier(model.Value);
+                    bool isOverride = Helpers.ConditionMatcher.IsOverride(model.Value);
+
+                    if (!isBaseTier && !isOverride)
+                        throw new ArgumentException("ElementCountFormula: Value must be a valid condition (e.g. <=1, ==2, >3) or 'override' for element overrides.");
+                }
+
                 // Extra-tier SpectroCombination configs require a base "Full" config to exist
                 if (model.SelectionType == "SpectroCombination" && !model.IsBaseConfig)
                 {
@@ -83,6 +101,7 @@ namespace LIMSApi.Services
                 existingInvoiceCaseConfiguration.SourceParameterIDs = model.SourceParameterIDs;
                 existingInvoiceCaseConfiguration.IsBaseConfig = model.IsBaseConfig;
                 existingInvoiceCaseConfiguration.FallbackToUserInput = model.FallbackToUserInput;
+                existingInvoiceCaseConfiguration.OverrideParameterIDs = model.OverrideParameterIDs;
 
                 existingInvoiceCaseConfiguration.ModifiedOn = DateTime.UtcNow;
                 existingInvoiceCaseConfiguration.ModifiedBy = loggedInUser.EmployeeID;

@@ -456,9 +456,9 @@ namespace LIMSApi.Services
             long testPlanId,
             DateTime inwardDate)
         {
-            // Get all InvoiceCaseConfigurations linked to this LaboratoryTest
-            var configs = await _db.LaboratoryTestInvoiceCase
-                .Where(lt => lt.LabTestID == laboratoryTestId)
+            // Get all InvoiceCaseConfigurations linked to this General Test's SubGroup
+            var configs = await _db.LaboratoryTestSubGroupInvoiceCases
+                .Where(lt => lt.LaboratoryTestSubGroupID == generalTest.LaboratoryTestSubGroupID)
                 .Include(lt => lt.InvoiceCaseConfiguration)
                 .Where(lt => lt.InvoiceCaseConfiguration != null && lt.InvoiceCaseConfiguration.IsActive)
                 .Select(lt => lt.InvoiceCaseConfiguration!)
@@ -466,15 +466,6 @@ namespace LIMSApi.Services
 
             if (!configs.Any())
                 throw new Exception($"No pricing configuration found for LaboratoryTest {laboratoryTestId}");
-
-            // Get SpecificationLines for this GeneralTest (mechanical type)
-            var specificationLines = await _db.SpecificationLines
-                .Where(sl => (sl.SpecificationGradeID == generalTest.Specification1 || 
-                             (generalTest.Specification2.HasValue && sl.SpecificationGradeID == generalTest.Specification2.Value))
-                            && sl.Type == "mechanical"
-                            && sl.ParameterID.HasValue)
-                .Include(sl => sl.Parameter)
-                .ToListAsync();
 
             // Get sample ID from the test plan - get it from the generalTest's SampleTestPlan
             var testPlan = await _db.TestPlans
@@ -490,6 +481,48 @@ namespace LIMSApi.Services
                              && trh.SampleID == testPlan.SampleID)
                 .Include(trh => trh.Parameters)
                 .FirstOrDefaultAsync();
+
+            var ecfConfigs = configs.Where(c => c.SelectionType == "ElementCountFormula").ToList();
+            if (ecfConfigs.Any())
+            {
+                var selectedElementParamIds = testResultHeader?.Parameters
+                    .Where(p => p.IsBillable)
+                    .Select(p => p.ParameterID)
+                    .ToList() ?? new List<long>();
+
+                if (!selectedElementParamIds.Any())
+                {
+                    // Get SpecificationLines for this GeneralTest (mechanical type) to resolve fallback parameter IDs
+                    var specLines = await _db.SpecificationLines
+                        .Where(sl => (sl.SpecificationGradeID == generalTest.Specification1 || 
+                                     (generalTest.Specification2.HasValue && sl.SpecificationGradeID == generalTest.Specification2.Value))
+                                    && sl.Type == "mechanical"
+                                    && sl.ParameterID.HasValue)
+                        .ToListAsync();
+
+                    selectedElementParamIds = specLines
+                        .Select(sl => sl.ParameterID!.Value)
+                        .Distinct()
+                        .ToList();
+                }
+
+                return await CalculateElementCountFormulaRateAsync(
+                    laboratoryTestId,
+                    ecfConfigs,
+                    selectedElementParamIds,
+                    selectedElementParamIds.Count,
+                    inwardDate
+                );
+            }
+
+            // Get SpecificationLines for this GeneralTest (mechanical type)
+            var specificationLines = await _db.SpecificationLines
+                .Where(sl => (sl.SpecificationGradeID == generalTest.Specification1 || 
+                             (generalTest.Specification2.HasValue && sl.SpecificationGradeID == generalTest.Specification2.Value))
+                            && sl.Type == "mechanical"
+                            && sl.ParameterID.HasValue)
+                .Include(sl => sl.Parameter)
+                .ToListAsync();
 
             // For each configuration, try to find matching parameter and calculate rate
             foreach (var config in configs.OrderBy(c => c.SelectionType))
@@ -535,9 +568,9 @@ namespace LIMSApi.Services
             int usedElements,
             DateTime inwardDate)
         {
-            // Get all InvoiceCaseConfigurations linked to this LaboratoryTest
-            var configs = await _db.LaboratoryTestInvoiceCase
-                .Where(lt => lt.LabTestID == laboratoryTestId)
+            // Get all InvoiceCaseConfigurations linked to this Chemical Test's AnalysisType
+            var configs = await _db.LaboratoryTestAnalysisTypeInvoiceCases
+                .Where(lt => lt.LaboratoryTestAnalysisTypeID == chemicalTest.LaboratoryTestAnalysisTypeID)
                 .Include(lt => lt.InvoiceCaseConfiguration)
                 .Where(lt => lt.InvoiceCaseConfiguration != null && lt.InvoiceCaseConfiguration.IsActive)
                 .Select(lt => lt.InvoiceCaseConfiguration!)
@@ -545,6 +578,24 @@ namespace LIMSApi.Services
 
             if (!configs.Any())
                 throw new Exception($"No pricing configuration found for LaboratoryTest {laboratoryTestId}");
+
+            var ecfConfigs = configs.Where(c => c.SelectionType == "ElementCountFormula").ToList();
+            if (ecfConfigs.Any())
+            {
+                var selectedElementParamIds = chemicalTest.Elements
+                    .Where(e => e.Selected && e.ParameterID > 0)
+                    .Select(e => e.ParameterID)
+                    .ToList();
+
+                return await CalculateElementCountFormulaRateAsync(
+                    laboratoryTestId,
+                    ecfConfigs,
+                    selectedElementParamIds,
+                    usedElements,
+                    inwardDate,
+                    chemicalTest.LaboratoryTestAnalysisTypeID
+                );
+            }
 
             // For Element type, use element count
             var elementConfig = configs.FirstOrDefault(c => c.SelectionType == "Element");
@@ -554,7 +605,8 @@ namespace LIMSApi.Services
                     laboratoryTestId,
                     elementConfig,
                     usedElements,
-                    inwardDate
+                    inwardDate,
+                    chemicalTest.LaboratoryTestAnalysisTypeID
                 );
 
                 return (rate, configId, "Element", usedElements);
@@ -597,7 +649,8 @@ namespace LIMSApi.Services
                             laboratoryTestId,
                             config,
                             parameterValue.Value,
-                            inwardDate
+                            inwardDate,
+                            chemicalTest.LaboratoryTestAnalysisTypeID
                         );
 
                         return (rate, configId, config.SelectionType, parameterValue.Value);
@@ -629,8 +682,9 @@ namespace LIMSApi.Services
             long laboratoryTestId,
             InvoiceCaseConfiguration config,
             decimal usedValue,
-            DateTime inwardDate)
-            => _pricingEngine.MatchConfigAndGetRateAsync(laboratoryTestId, config, usedValue, inwardDate);
+            DateTime inwardDate,
+            long? analysisTypeId = null)
+            => _pricingEngine.MatchConfigAndGetRateAsync(laboratoryTestId, config, usedValue, inwardDate, analysisTypeId);
 
         public async Task<decimal> GetDraftTotalAsync(long inwardId)
         {
@@ -717,6 +771,155 @@ namespace LIMSApi.Services
 
             _logger.LogInformation("Created price snapshot for Case {CaseNo}: {Count} ChargeEvents moved to SNAPSHOT",
                 inward.CaseNo, draftEvents.Count);
+        }
+
+        private async Task<(decimal Rate, long ConfigId, string? SelectionType, decimal? UsedValue)> CalculateElementCountFormulaRateAsync(
+            long laboratoryTestId,
+            List<InvoiceCaseConfiguration> ecfConfigs,
+            List<long> selectedElementParamIds,
+            int elementCount,
+            DateTime inwardDate,
+            long? analysisTypeId = null)
+        {
+            var versions = await _db.InvoiceCases
+                .Where(ic => ic.LaboratoryTestID == laboratoryTestId && ic.AnalysisTypeID == analysisTypeId && ic.IsActive)
+                .Include(ic => ic.InvoiceCasePrices)
+                .ToListAsync();
+
+            var invoiceCase = PriceVersionResolver.Resolve(versions, v => v.EffectiveFrom, inwardDate);
+            if (invoiceCase == null)
+                throw new Exception($"No active pricing version found for LaboratoryTest {laboratoryTestId}");
+
+            var baseTiers = ecfConfigs.Where(c => Helpers.ConditionMatcher.IsBaseTier(c.Value)).ToList();
+            var overrides = ecfConfigs.Where(c => Helpers.ConditionMatcher.IsOverride(c.Value)).ToList();
+
+            InvoiceCaseConfiguration? matchedBaseConfig = null;
+            int baseCountLimit = 0;
+            foreach (var bt in baseTiers)
+            {
+                if (Helpers.ConditionMatcher.MatchesCount(bt.Value, elementCount))
+                {
+                    matchedBaseConfig = bt;
+                    baseCountLimit = Helpers.ConditionMatcher.ParseCountLimit(bt.Value);
+                    break;
+                }
+            }
+
+            decimal basePrice = 0;
+            long primaryConfigId = 0;
+
+            if (matchedBaseConfig != null)
+            {
+                var priceEntry = invoiceCase.InvoiceCasePrices.FirstOrDefault(p => p.InvoiceCaseConfigID == matchedBaseConfig.ID);
+                if (priceEntry != null)
+                {
+                    basePrice = priceEntry.Price;
+                    primaryConfigId = matchedBaseConfig.ID;
+                }
+            }
+
+            decimal baseUnitDeduction = 0;
+            var oneElementTier = baseTiers.FirstOrDefault(t => Helpers.ConditionMatcher.ParseCountLimit(t.Value) == 1);
+            if (oneElementTier != null)
+            {
+                var oneElementPriceEntry = invoiceCase.InvoiceCasePrices.FirstOrDefault(p => p.InvoiceCaseConfigID == oneElementTier.ID);
+                if (oneElementPriceEntry != null)
+                {
+                    baseUnitDeduction = oneElementPriceEntry.Price;
+                }
+            }
+
+            var parameterDetails = await _db.ParameterMasters
+                .Where(p => selectedElementParamIds.Contains(p.ID) && p.IsActive)
+                .ToListAsync();
+
+            var specialOrSuperParamIds = parameterDetails
+                .Where(p => string.Equals(p.ElementType, "special", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(p.ElementType, "super", StringComparison.OrdinalIgnoreCase))
+                .Select(p => p.ID)
+                .ToList();
+
+            var sortedSelectedParamIds = selectedElementParamIds.OrderBy(id => {
+                bool isOverride = overrides.Any(o => {
+                    if (string.IsNullOrEmpty(o.OverrideParameterIDs))
+                        return specialOrSuperParamIds.Contains(id);
+                    var ids = o.OverrideParameterIDs.Split(',').Select(idStr => long.TryParse(idStr.Trim(), out var pId) ? pId : 0).ToList();
+                    return ids.Contains(id);
+                });
+                return isOverride ? 1 : 0;
+            }).ToList();
+
+            decimal subsumedDeductions = 0;
+            decimal overrideSurcharges = 0;
+
+            for (int i = 0; i < sortedSelectedParamIds.Count; i++)
+            {
+                long paramId = sortedSelectedParamIds[i];
+
+                // 1. Check for specific override
+                var matchingOverrideConfig = overrides.FirstOrDefault(o => {
+                    if (string.IsNullOrEmpty(o.OverrideParameterIDs)) return false;
+                    var ids = o.OverrideParameterIDs.Split(',').Select(idStr => long.TryParse(idStr.Trim(), out var pId) ? pId : 0).ToList();
+                    return ids.Contains(paramId);
+                });
+
+                // 2. Fallback to wildcard override if parameter is special/super
+                if (matchingOverrideConfig == null && specialOrSuperParamIds.Contains(paramId))
+                {
+                    matchingOverrideConfig = overrides.FirstOrDefault(o => string.IsNullOrEmpty(o.OverrideParameterIDs));
+                }
+
+                if (matchingOverrideConfig != null)
+                {
+                    var overridePriceEntry = invoiceCase.InvoiceCasePrices.FirstOrDefault(p => p.InvoiceCaseConfigID == matchingOverrideConfig.ID);
+                    if (overridePriceEntry != null)
+                    {
+                        decimal overridePrice = overridePriceEntry.Price;
+                        if (!string.IsNullOrEmpty(overridePriceEntry.ElementPrices))
+                        {
+                            try
+                            {
+                                var dict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, decimal>>(overridePriceEntry.ElementPrices);
+                                if (dict != null)
+                                {
+                                    // 1. Look up specific parameter ID (Case B)
+                                    if (dict.TryGetValue(paramId.ToString(), out decimal elementSpecificPrice))
+                                    {
+                                        overridePrice = elementSpecificPrice;
+                                    }
+                                    else
+                                    {
+                                        // Get parameter element type
+                                        var pInfo = parameterDetails.FirstOrDefault(p => p.ID == paramId);
+                                        string? elType = pInfo?.ElementType?.ToLower()?.Trim();
+                                        if (!string.IsNullOrEmpty(elType) && dict.TryGetValue(elType, out decimal typeSpecificPrice))
+                                        {
+                                            // 2. Look up parameter type: normal, special, super (Case A)
+                                            overridePrice = typeSpecificPrice;
+                                        }
+                                    }
+                                }
+                            }
+                            catch
+                            {
+                                // fallback to flat rate if JSON deserialization fails
+                            }
+                        }
+
+                        overrideSurcharges += overridePrice;
+                        if (primaryConfigId == 0) primaryConfigId = matchingOverrideConfig.ID;
+
+                        int position = i + 1;
+                        if (position <= baseCountLimit)
+                        {
+                            subsumedDeductions += baseUnitDeduction;
+                        }
+                    }
+                }
+            }
+
+            decimal totalRate = basePrice - subsumedDeductions + overrideSurcharges;
+            return (totalRate, primaryConfigId, "ElementCountFormula", (decimal)elementCount);
         }
     }
 }

@@ -130,12 +130,13 @@ namespace LIMSApi.Helpers
             long laboratoryTestId,
             InvoiceCaseConfiguration config,
             decimal usedValue,
-            DateTime inwardDate)
+            DateTime inwardDate,
+            long? analysisTypeId = null)
         {
             // Date-effective InvoiceCase resolution: pick the version with the greatest
             // EffectiveFrom ≤ the sample inward date, falling back to the earliest version.
             var versions = await _db.InvoiceCases
-                .Where(x => x.LaboratoryTestID == laboratoryTestId && x.IsActive)
+                .Where(x => x.LaboratoryTestID == laboratoryTestId && x.AnalysisTypeID == analysisTypeId && x.IsActive)
                 .Include(x => x.InvoiceCasePrices)
                 .Include(x => x.FinancialYearEntity)
                 .ToListAsync();
@@ -175,14 +176,16 @@ namespace LIMSApi.Helpers
             else
             {
                 // Slab match: find nearest slab >= usedValue
-                var allConfigsForType = await _db.LaboratoryTestInvoiceCase
-                    .Where(lt => lt.LabTestID == laboratoryTestId)
-                    .Include(lt => lt.InvoiceCaseConfiguration)
-                    .Where(lt => lt.InvoiceCaseConfiguration != null
-                                && lt.InvoiceCaseConfiguration.IsActive
-                                && lt.InvoiceCaseConfiguration.SelectionType == config.SelectionType)
-                    .Select(lt => lt.InvoiceCaseConfiguration!)
-                    .Where(c => !string.IsNullOrWhiteSpace(c.Value))
+                var subgroupConfigs = _db.LaboratoryTestSubGroupInvoiceCases
+                    .Where(lt => lt.SubGroup != null && lt.SubGroup.LaboratoryTestID == laboratoryTestId)
+                    .Select(lt => lt.InvoiceCaseConfiguration!);
+
+                var analysisConfigs = _db.LaboratoryTestAnalysisTypeInvoiceCases
+                    .Where(lt => lt.AnalysisType != null && lt.AnalysisType.SubGroup != null && lt.AnalysisType.SubGroup.LaboratoryTestID == laboratoryTestId)
+                    .Select(lt => lt.InvoiceCaseConfiguration!);
+
+                var allConfigsForType = await subgroupConfigs.Union(analysisConfigs)
+                    .Where(c => c.IsActive && c.SelectionType == config.SelectionType && !string.IsNullOrWhiteSpace(c.Value))
                     .ToListAsync();
 
                 var matchingConfig = allConfigsForType

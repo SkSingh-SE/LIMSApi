@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Http;
@@ -72,11 +72,11 @@ namespace LIMSApi.Controllers
             });
         }
 
-        // Returns every year-version for a LaboratoryTest; the default-FY version is flagged IsCurrentFy.
+        // Returns every year-version for a LaboratoryTest and optional AnalysisType; the default-FY version is flagged IsCurrentFy.
         [HttpGet("by-lab-test/{laboratoryTestId}")]
-        public async Task<ActionResult<InvoiceCaseByLabTestDto>> GetByLabTest(long laboratoryTestId)
+        public async Task<ActionResult<InvoiceCaseByLabTestDto>> GetByLabTest(long laboratoryTestId, [FromQuery] long? analysisTypeId = null)
         {
-            return Ok(await _InvoiceCaseService.GetByLabTest(laboratoryTestId));
+            return Ok(await _InvoiceCaseService.GetByLabTest(laboratoryTestId, analysisTypeId));
         }
 
         // Upserts all year-versions for a LaboratoryTest in one transaction.

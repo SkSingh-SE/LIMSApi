@@ -19,6 +19,7 @@ namespace LIMSApi.Models
         public long? SpecimenOrientationID { get; set; } = null;
         // UI hidden per client requirement — field retained for data integrity
         public long? ProductFormID { get; set; }
+        public long? ChemicalSampleCategoryID { get; set; }
         public string? Remarks { get; set; }
         public int Quantity { get; set; }
         public bool IsCancelled { get; set; }
@@ -65,6 +66,9 @@ namespace LIMSApi.Models
         // UI hidden per client requirement — navigation property retained for DB integrity
         [ForeignKey("ProductFormID")]
         public virtual ProductFormMaster? ProductForm { get; set; }
+
+        [ForeignKey("ChemicalSampleCategoryID")]
+        public virtual ChemicalSampleCategory? ChemicalSampleCategory { get; set; }
 
         [NotMapped]
         public IFormFile File { get; set; } = null!;

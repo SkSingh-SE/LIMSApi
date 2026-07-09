@@ -86,6 +86,33 @@ namespace LIMSApi.Helpers
             public const string Manage = "CanManageProductSizeMaster";
         }
 
+        public static class ChemicalSampleCategory
+        {
+            public const string Read   = "CanReadChemicalSampleCategory";
+            public const string Create = "CanCreateChemicalSampleCategory";
+            public const string Update = "CanUpdateChemicalSampleCategory";
+            public const string Delete = "CanDeleteChemicalSampleCategory";
+            public const string Manage = "CanManageChemicalSampleCategory";
+        }
+
+        public static class AnalysisTechnique
+        {
+            public const string Read   = "CanReadAnalysisTechnique";
+            public const string Create = "CanCreateAnalysisTechnique";
+            public const string Update = "CanUpdateAnalysisTechnique";
+            public const string Delete = "CanDeleteAnalysisTechnique";
+            public const string Manage = "CanManageAnalysisTechnique";
+        }
+
+        public static class LaboratoryTestSubType
+        {
+            public const string Read   = "CanReadLaboratoryTestSubType";
+            public const string Create = "CanCreateLaboratoryTestSubType";
+            public const string Update = "CanUpdateLaboratoryTestSubType";
+            public const string Delete = "CanDeleteLaboratoryTestSubType";
+            public const string Manage = "CanManageLaboratoryTestSubType";
+        }
+
         public static class TPI
         {
             public const string Read   = "CanReadTPI";

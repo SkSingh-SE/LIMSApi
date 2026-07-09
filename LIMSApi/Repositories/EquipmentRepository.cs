@@ -1,4 +1,4 @@
-﻿using System.Linq.Dynamic.Core;
+using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -41,7 +41,10 @@ namespace LIMSApi.Repositories
             return await _context.EquipmentMasters
                 .Include(c => c.Calibrations)
                 .Include(m => m.Maintenances)
-                .Include(s => s.SOPs).FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+                .Include(s => s.SOPs)
+                .Include(t => t.AnalysisTechniques)
+                .ThenInclude(a => a.AnalysisTechnique)
+                .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
         public async Task UpdateEquipment(EquipmentMaster model)
@@ -125,6 +128,11 @@ namespace LIMSApi.Repositories
             {
                 Id = x.ID,
                 Name = x.Name,
+                AdditionalValues = new Dictionary<string, object>
+                {
+                    { "ModelNo", x.ModelNo ?? "" },
+                    { "Manufacturer", "TPTL Manufacturer" }
+                }
             })).ToListAsync();
 
             return data;

@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace LIMSApi.Models
@@ -21,6 +21,11 @@ namespace LIMSApi.Models
 
         [ForeignKey(nameof(LaboratoryTestID))]
         public virtual LaboratoryTest? LaboratoryTest { get; set; }
+
+        public long? AnalysisTypeID { get; set; }
+
+        [ForeignKey(nameof(AnalysisTypeID))]
+        public virtual LaboratoryTestAnalysisType? AnalysisType { get; set; }
 
         [StringLength(50)]
         public string? DefaultPricingType { get; set; }

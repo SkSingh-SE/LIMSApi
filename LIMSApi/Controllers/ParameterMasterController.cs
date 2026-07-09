@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Middleware;
 using LIMSApi.Models;
@@ -87,9 +87,9 @@ namespace LIMSApi.Controllers
         }
 
         [HttpGet("dropdown")]
-        public async Task<IActionResult> GetParameterDropdown(string? searchTerm, int pageNo, int pageSize)
+        public async Task<IActionResult> GetParameterDropdown(string? searchTerm, int pageNo, int pageSize, [FromQuery] string? elementTypes = null)
         {
-            var data = await _parameterService.GetParameterDropdown(searchTerm, pageNo, pageSize);
+            var data = await _parameterService.GetParameterDropdown(searchTerm, pageNo, pageSize, elementTypes);
             return data == null ? NoContent(): Ok(data);
         }
         [HttpGet("chemical-dropdown")]

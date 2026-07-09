@@ -1,4 +1,4 @@
-﻿using System.Linq.Dynamic.Core;
+using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -181,7 +181,7 @@ namespace LIMSApi.Repositories
         }
 
 
-        public async Task<List<DropdwonSelector>> GetParameterDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> GetParameterDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20, string? elementTypes = null)
         {
             if (pageNo < 0) pageNo = 0;
 
@@ -206,6 +206,18 @@ namespace LIMSApi.Repositories
                              unitID = a.ParameterUnitID,
                              unit = u != null ? u.Name : ""
                          };
+
+            if (!string.IsNullOrWhiteSpace(elementTypes))
+            {
+                var typesList = elementTypes.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                           .Select(t => t.Trim().ToLower())
+                                           .ToList();
+                if (typesList.Any())
+                {
+                    // EF Core SQL Server is CI by default. But just to be safe, we do not use .ToLower() in expression which might throw.
+                    _query = _query.Where(x => x.ElementType != null && typesList.Contains(x.ElementType));
+                }
+            }
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
