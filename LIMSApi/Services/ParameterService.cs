@@ -1,4 +1,4 @@
-﻿using LIMSApi.Data;
+using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
@@ -169,9 +169,9 @@ namespace LIMSApi.Services
         }
 
 
-        public async Task<List<DropdwonSelector>> GetParameterDropdown(string? searchTerm, int pageNo, int pageSize)
+        public async Task<List<DropdwonSelector>> GetParameterDropdown(string? searchTerm, int pageNo, int pageSize, string? elementTypes = null)
         {
-            return await _parameterRepository.GetParameterDropdown(searchTerm, pageNo, pageSize);
+            return await _parameterRepository.GetParameterDropdown(searchTerm, pageNo, pageSize, elementTypes);
         }
         public async Task<List<DropdwonSelector>> GetChemicalParameterDropdown(string? searchTerm, int pageNo, int pageSize)
         {

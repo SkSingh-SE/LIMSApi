@@ -1,27 +1,26 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Models
 {
-    [Index(nameof(SubGroup), IsUnique = true)]
     public class LaboratoryTest : AuditProperty
     {
         [Key]
         public long ID { get; set; }
+
         [Required]
         [StringLength(100)]
         public required string Name { get; set; }
+
         public long? LabDepartmentID { get; set; }
-        [StringLength(100),]
-        public required string SubGroup { get; set; }
+
         public string? Equation { get; set; }
 
-        [StringLength(500)]
-        public string? TestCaption { get; set; }
+        // True = chemical analysis test (drives Sub-Group -> AnalysisType hierarchy).
+        public bool IsChemicalTest { get; set; } = false;
 
-        [StringLength(500)]
-        public string? InvoiceCaption { get; set; }
+        // True = mechanical testing (tensile, impact, hardness, etc.).
+        public bool IsMechanical { get; set; } = false;
 
         [Range(1, 365)]
         public int? TestDuration { get; set; }
@@ -32,7 +31,7 @@ namespace LIMSApi.Models
 
         [ForeignKey("LabDepartmentID")]
         public virtual DepartmentMaster? LabDepartment { get; set; }
-        public ICollection<LaboratoryTestInvoiceCase> InvoiceCases { get; set; } = new List<LaboratoryTestInvoiceCase>();
 
+        public virtual ICollection<LaboratoryTestSubGroup> SubGroups { get; set; } = new List<LaboratoryTestSubGroup>();
     }
 }

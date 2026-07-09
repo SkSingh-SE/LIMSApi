@@ -1,4 +1,4 @@
-﻿// LIMSApi/ServiceWORepo/ReportingService.cs
+// LIMSApi/ServiceWORepo/ReportingService.cs
 using System.Linq.Dynamic.Core;
 using System.Text.Json;
 using LIMSApi.Data;
@@ -606,7 +606,7 @@ namespace LIMSApi.ServiceWORepo
                 LongTermTestId = ltt.ID,
 
                 TestName =
-                    ltt.TestResultHeader?.LaboratoryTest?.SubGroup
+                    ltt.TestResultHeader?.LaboratoryTest?.Name
                     ?? "Long Term Test",
 
                 DurationHours = ltt.DurationHours,
@@ -1523,11 +1523,11 @@ namespace LIMSApi.ServiceWORepo
                     TestName = testName,
                     TestType = testType,
                     TestCategory = DetermineTestCategory(header, testType),
-                    SpecificationName = header.LaboratoryTest?.SubGroup,
+                    SpecificationName = header.LaboratoryTest?.Name,
                     TestMethod = header.Parameters
                         .Select(p => p.TestMethodUsed)
                         .FirstOrDefault(m => !string.IsNullOrEmpty(m))
-                        ?? header.LaboratoryTest?.SubGroup,
+                        ?? header.LaboratoryTest?.Name,
                     DateOfTesting = header.CompletedAt?.ToString("dd-MM-yyyy") ?? "",
                     Parameters = header.Parameters
                         .OrderBy(p => p.ID)
@@ -1545,7 +1545,14 @@ namespace LIMSApi.ServiceWORepo
                             NablScopeStatus = p.NablScopeStatus,
                             ExpandedUncertainty = p.ExpandedUncertainty,
                             CoverageFactor = p.CoverageFactor,
-                            SubGroup = testType == "Chemical" ? (header.LaboratoryTest?.TestCaption ?? header.LaboratoryTest?.Name) : null
+                            SubGroup = testType == "Chemical"
+                                ? (_db.ChemicalTests
+                                    .Where(ct => ct.SampleTestPlanID == header.TestPlanID)
+                                    .Include(ct => ct.AnalysisType)
+                                        .ThenInclude(at => at.SubGroup)
+                                    .Select(ct => ct.AnalysisType != null && ct.AnalysisType.SubGroup != null ? ct.AnalysisType.SubGroup.ReportTestName : null)
+                                    .FirstOrDefault() ?? header.LaboratoryTest.Name)
+                                : null
                         })
                         .ToList(),
                     Images = header.Images

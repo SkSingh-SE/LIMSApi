@@ -194,6 +194,8 @@ builder.Services.AddScoped<ICompanyCategoryRepository, CompanyCategoryRepository
 builder.Services.AddScoped<ICountryRepository, CountryRepository>();
 builder.Services.AddScoped<ICourierRepository, CourierRepository>();
 builder.Services.AddScoped<IProductSizeMasterRepository, ProductSizeMasterRepository>();
+builder.Services.AddScoped<IChemicalSampleCategoryRepository, ChemicalSampleCategoryRepository>();
+builder.Services.AddScoped<IAnalysisTechniqueRepository, AnalysisTechniqueRepository>();
 builder.Services.AddScoped<ICurrencyRepository, CurrencyRepository>();
 builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
 builder.Services.AddScoped<IDepartmentRepository, DepartmentRepository>();
@@ -217,7 +219,8 @@ builder.Services.AddScoped<IProductConditionCategoryRepository, ProductCondition
 builder.Services.AddScoped<IPropertyTypeRepository, PropertyTypeRepository>();
 builder.Services.AddScoped<IItemMasterRepository, ItemMasterRepository>();
 builder.Services.AddScoped<ILaboratoryTestRepository, LaboratoryTestRepository>();
-builder.Services.AddScoped<ILaboratoryTestRepository, LaboratoryTestRepository>();
+builder.Services.AddScoped<ILaboratoryTestSubGroupRepository, LaboratoryTestSubGroupRepository>();
+builder.Services.AddScoped<ILaboratoryTestAnalysisTypeRepository, LaboratoryTestAnalysisTypeRepository>();
 builder.Services.AddScoped<ILabScopeRepository, LabScopeRepository>();
 builder.Services.AddScoped<IMetalClassificationRepository, MetalClassificationRepository>();
 builder.Services.AddScoped<IOEMRepository, OEMRepository>();
@@ -273,6 +276,8 @@ builder.Services.AddScoped<ICompanyCategoryService, CompanyCategoryService>();
 builder.Services.AddScoped<ICountryService, CountryService>();
 builder.Services.AddScoped<ICourierService, CourierService>();
 builder.Services.AddScoped<IProductSizeMasterService, ProductSizeMasterService>();
+builder.Services.AddScoped<IChemicalSampleCategoryService, ChemicalSampleCategoryService>();
+builder.Services.AddScoped<IAnalysisTechniqueService, AnalysisTechniqueService>();
 builder.Services.AddScoped<ICurrencyService, CurrencyService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IDepartmentService, DepartmentService>();
@@ -296,6 +301,8 @@ builder.Services.AddScoped<IProductConditionCategoryService, ProductConditionCat
 builder.Services.AddScoped<IPropertyTypeService, PropertyTypeService>();
 builder.Services.AddScoped<IItemMasterService, ItemMasterService>();
 builder.Services.AddScoped<ILaboratoryTestService, LaboratoryTestService>();
+builder.Services.AddScoped<ILaboratoryTestSubGroupService, LaboratoryTestSubGroupService>();
+builder.Services.AddScoped<ILaboratoryTestAnalysisTypeService, LaboratoryTestAnalysisTypeService>();
 builder.Services.AddScoped<ITestMasterService, TestMasterService>();
 builder.Services.AddScoped<ILabScopeService, LabScopeService>();
 builder.Services.AddScoped<IMetalClassificationService, MetalClassificationService>();

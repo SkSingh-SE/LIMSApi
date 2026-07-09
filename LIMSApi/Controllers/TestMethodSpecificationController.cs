@@ -238,5 +238,12 @@ namespace LIMSApi.Controllers
             await _testMethodService.SetDefaultVersion(dto.SpecificationId, dto.VersionId);
             return Ok(new { status = "success", message = "Default version set successfully." });
         }
+
+        [HttpGet("versions/dropdown")]
+        public async Task<IActionResult> GetTestMethodSpecificationVersionDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            var data = await _testMethodService.GetTestMethodSpecificationVersionDropdown(searchTerm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
     }
 }

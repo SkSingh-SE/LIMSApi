@@ -1,8 +1,7 @@
-﻿using LIMSApi.Data;
+using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
-using LIMSApi.Repositories;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
 using Microsoft.EntityFrameworkCore;
@@ -31,14 +30,28 @@ namespace LIMSApi.Services
 
             bool exists = await _testMethodRepository.ExistsByName(model.Name);
             if (exists)
-                throw new InvalidOperationException($"SubGroup {model.SubGroup} already exists!");
+                throw new InvalidOperationException($"Test name '{model.Name}' already exists!");
+
+            await ApplyDepartmentChemicalFlag(model);
 
             model.CreatedOn = DateTime.UtcNow;
             model.CreatedBy = loggedInUser.EmployeeID;
             model.CompanyCode = loggedInUser.CompanyCode;
 
             await _testMethodRepository.AddTestMethod(model);
-            _logger.LogInformation("SubGroup '{SubGroup}' created successfully.", model.SubGroup);
+            _logger.LogInformation("LaboratoryTest '{Name}' created successfully.", model.Name);
+        }
+
+        private async Task ApplyDepartmentChemicalFlag(LaboratoryTest model)
+        {
+            var isChemicalDept = await _context.DepartmentMasters
+                .AsNoTracking()
+                .Where(d => d.ID == model.LabDepartmentID)
+                .Select(d => (bool?)d.IsChemical)
+                .FirstOrDefaultAsync() ?? false;
+
+            model.IsChemicalTest = isChemicalDept;
+            model.IsMechanical = !isChemicalDept;
         }
 
         public async Task ModifyTestMethod(LaboratoryTest model)
@@ -46,8 +59,8 @@ namespace LIMSApi.Services
             if (model.ID == 0)
                 throw new ArgumentException("TestMethod ID should not be empty!");
 
-            if (await _testMethodRepository.ExistsByNameAndNotId(model.SubGroup, model.ID))
-                throw new InvalidOperationException($"Same Group {model.SubGroup} already exists!");
+            if (await _testMethodRepository.ExistsByNameAndNotId(model.Name, model.ID))
+                throw new InvalidOperationException($"Test name '{model.Name}' already exists!");
 
             var existingTestMethod = await _testMethodRepository.GetTestMethodById(model.ID);
             if (existingTestMethod == null)
@@ -55,51 +68,16 @@ namespace LIMSApi.Services
 
             existingTestMethod.Name = model.Name;
             existingTestMethod.LabDepartmentID = model.LabDepartmentID;
-            existingTestMethod.SubGroup = model.SubGroup;
             existingTestMethod.Equation = model.Equation;
-            existingTestMethod.TestCaption = model.TestCaption;
-            existingTestMethod.InvoiceCaption = model.InvoiceCaption;
             existingTestMethod.TestDuration = model.TestDuration;
+            
+            await ApplyDepartmentChemicalFlag(existingTestMethod);
+            
             existingTestMethod.ModifiedOn = DateTime.UtcNow;
             existingTestMethod.ModifiedBy = loggedInUser.EmployeeID;
 
-            existingTestMethod.InvoiceCases.Clear();
-            foreach (var invoiceCase in model.InvoiceCases)
-            {
-                invoiceCase.LabTestID = model.ID;
-                existingTestMethod.InvoiceCases.Add(invoiceCase);
-            }
-
             await _testMethodRepository.UpdateTestMethod(existingTestMethod);
-
-            // Sync InvoiceCasePrices: remove price rows whose config is no longer linked to this lab test
-            var activeConfigIds = model.InvoiceCases
-                .Select(ic => ic.InvoiceCaseConfigID)
-                .ToHashSet();
-
-            var invoiceCasesToSync = await _context.InvoiceCases
-                .Include(ic => ic.InvoiceCasePrices)
-                .Where(ic => ic.LaboratoryTestID == model.ID)
-                .ToListAsync();
-
-            bool hasStale = false;
-            foreach (var invoiceCase in invoiceCasesToSync)
-            {
-                var staleRows = invoiceCase.InvoiceCasePrices
-                    .Where(p => !activeConfigIds.Contains(p.InvoiceCaseConfigID))
-                    .ToList();
-
-                if (staleRows.Any())
-                {
-                    _context.InvoiceCasePrices.RemoveRange(staleRows);
-                    hasStale = true;
-                }
-            }
-
-            if (hasStale)
-                await _context.SaveChangesAsync();
-
-            _logger.LogInformation("SubGroup '{SubGroup}' updated successfully.", model.SubGroup);
+            _logger.LogInformation("LaboratoryTest '{Name}' updated successfully.", model.Name);
         }
 
         public async Task RemoveTestMethod(long id)
@@ -175,6 +153,222 @@ namespace LIMSApi.Services
         public async Task<List<string>> GetDistinctTestNames(string? searchTerm, int pageSize)
         {
             return await _testMethodRepository.GetDistinctTestNames(searchTerm, pageSize);
+        }
+
+        public async Task<long> DuplicateLaboratoryTest(long id)
+        {
+            var original = await _context.LaboratoryTests
+                .Include(lt => lt.SubGroups)
+                    .ThenInclude(sg => sg.Parameters)
+                .Include(lt => lt.SubGroups)
+                    .ThenInclude(sg => sg.TestMethods)
+                .Include(lt => lt.SubGroups)
+                    .ThenInclude(sg => sg.Equipments)
+                .Include(lt => lt.SubGroups)
+                    .ThenInclude(sg => sg.Specifications)
+                .Include(lt => lt.SubGroups)
+                    .ThenInclude(sg => sg.InvoiceCases)
+                .Include(lt => lt.SubGroups)
+                    .ThenInclude(sg => sg.AnalysisTypes)
+                        .ThenInclude(at => at.AllowedTechniques)
+                .Include(lt => lt.SubGroups)
+                    .ThenInclude(sg => sg.AnalysisTypes)
+                        .ThenInclude(at => at.Parameters)
+                .Include(lt => lt.SubGroups)
+                    .ThenInclude(sg => sg.AnalysisTypes)
+                        .ThenInclude(at => at.TestMethods)
+                .Include(lt => lt.SubGroups)
+                    .ThenInclude(sg => sg.AnalysisTypes)
+                        .ThenInclude(at => at.Equipments)
+                .Include(lt => lt.SubGroups)
+                    .ThenInclude(sg => sg.AnalysisTypes)
+                        .ThenInclude(at => at.Specifications)
+                .Include(lt => lt.SubGroups)
+                    .ThenInclude(sg => sg.AnalysisTypes)
+                        .ThenInclude(at => at.InvoiceCases)
+                .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+
+            if (original == null)
+                throw new KeyNotFoundException("Laboratory Test not found!");
+
+            var copyName = original.Name + " - Copy";
+            int copyCount = 1;
+            while (await _testMethodRepository.ExistsByName(copyName))
+            {
+                copyName = $"{original.Name} - Copy ({copyCount++})";
+            }
+
+            var duplicate = new LaboratoryTest
+            {
+                Name = copyName,
+                LabDepartmentID = original.LabDepartmentID,
+                IsChemicalTest = original.IsChemicalTest,
+                IsMechanical = original.IsMechanical,
+                Equation = original.Equation,
+                TestDuration = original.TestDuration,
+                IsActive = true,
+                CreatedBy = loggedInUser.EmployeeID,
+                CreatedOn = DateTime.UtcNow,
+                CompanyCode = loggedInUser.CompanyCode
+            };
+
+            foreach (var sg in original.SubGroups.Where(x => x.IsActive))
+            {
+                var sgCopy = new LaboratoryTestSubGroup
+                {
+                    Name = sg.Name,
+                    ReportTestName = sg.ReportTestName,
+                    TestDuration = sg.TestDuration,
+                    MetalClassificationID = sg.MetalClassificationID,
+                    IsActive = true,
+                    CreatedBy = loggedInUser.EmployeeID,
+                    CreatedOn = DateTime.UtcNow,
+                    CompanyCode = loggedInUser.CompanyCode
+                };
+
+                // Subgroup Parameters
+                foreach (var p in sg.Parameters)
+                {
+                    sgCopy.Parameters.Add(new LaboratoryTestSubGroupParameter
+                    {
+                        ParameterID = p.ParameterID,
+                        Sequence = p.Sequence,
+                        IsMandatory = p.IsMandatory,
+                        IsReportable = p.IsReportable
+                    });
+                }
+
+                // Subgroup Methods
+                foreach (var m in sg.TestMethods)
+                {
+                    sgCopy.TestMethods.Add(new LaboratoryTestSubGroupMethod
+                    {
+                        TestMethodSpecificationID = m.TestMethodSpecificationID,
+                        TestMethodSpecificationVersionID = m.TestMethodSpecificationVersionID,
+                        IsDefault = m.IsDefault
+                    });
+                }
+
+                // Subgroup Equipments
+                foreach (var e in sg.Equipments)
+                {
+                    sgCopy.Equipments.Add(new LaboratoryTestSubGroupEquipment
+                    {
+                        EquipmentID = e.EquipmentID,
+                        IsDefault = e.IsDefault
+                    });
+                }
+
+                // Subgroup Specs
+                foreach (var s in sg.Specifications)
+                {
+                    sgCopy.Specifications.Add(new LaboratoryTestSubGroupSpecification
+                    {
+                        SpecificationHeaderID = s.SpecificationHeaderID,
+                        SpecificationGradeID = s.SpecificationGradeID,
+                        ProductSpecificationID = s.ProductSpecificationID
+                    });
+                }
+
+                // Subgroup InvoiceCases
+                foreach (var ic in sg.InvoiceCases)
+                {
+                    sgCopy.InvoiceCases.Add(new LaboratoryTestSubGroupInvoiceCase
+                    {
+                        InvoiceCaseConfigID = ic.InvoiceCaseConfigID
+                    });
+                }
+
+                // Subgroup AnalysisTypes
+                foreach (var at in sg.AnalysisTypes.Where(x => x.IsActive))
+                {
+                    var atCopy = new LaboratoryTestAnalysisType
+                    {
+                        Name = at.Name,
+                        TestDuration = at.TestDuration,
+                        MetalClassificationID = at.MetalClassificationID,
+                        IsActive = true,
+                        CreatedBy = loggedInUser.EmployeeID,
+                        CreatedOn = DateTime.UtcNow,
+                        CompanyCode = loggedInUser.CompanyCode
+                    };
+
+                    // AnalysisType Techniques
+                    foreach (var tech in at.AllowedTechniques)
+                    {
+                        atCopy.AllowedTechniques.Add(new LaboratoryTestAnalysisTypeTechnique
+                        {
+                            AnalysisTechniqueID = tech.AnalysisTechniqueID
+                        });
+                    }
+
+                    // AnalysisType Parameters
+                    foreach (var p in at.Parameters)
+                    {
+                        atCopy.Parameters.Add(new LaboratoryTestAnalysisTypeParameter
+                        {
+                            ParameterID = p.ParameterID,
+                            Sequence = p.Sequence,
+                            IsMandatory = p.IsMandatory,
+                            IsReportable = p.IsReportable
+                        });
+                    }
+
+                    // AnalysisType Methods
+                    foreach (var m in at.TestMethods)
+                    {
+                        atCopy.TestMethods.Add(new LaboratoryTestAnalysisTypeMethod
+                        {
+                            TestMethodSpecificationID = m.TestMethodSpecificationID,
+                            TestMethodSpecificationVersionID = m.TestMethodSpecificationVersionID,
+                            IsDefault = m.IsDefault
+                        });
+                    }
+
+                    // AnalysisType Equipments
+                    foreach (var e in at.Equipments)
+                    {
+                        atCopy.Equipments.Add(new LaboratoryTestAnalysisTypeEquipment
+                        {
+                            EquipmentID = e.EquipmentID,
+                            IsDefault = e.IsDefault
+                        });
+                    }
+
+                    // AnalysisType Specs
+                    foreach (var s in at.Specifications)
+                    {
+                        atCopy.Specifications.Add(new LaboratoryTestAnalysisTypeSpecification
+                        {
+                            SpecificationHeaderID = s.SpecificationHeaderID,
+                            SpecificationGradeID = s.SpecificationGradeID,
+                            ProductSpecificationID = s.ProductSpecificationID
+                        });
+                    }
+
+                    // AnalysisType InvoiceCases
+                    foreach (var ic in at.InvoiceCases)
+                    {
+                        atCopy.InvoiceCases.Add(new LaboratoryTestAnalysisTypeInvoiceCase
+                        {
+                            InvoiceCaseConfigID = ic.InvoiceCaseConfigID
+                        });
+                    }
+
+                    sgCopy.AnalysisTypes.Add(atCopy);
+                }
+
+                duplicate.SubGroups.Add(sgCopy);
+            }
+
+            await _context.LaboratoryTests.AddAsync(duplicate);
+            await _context.SaveChangesAsync();
+            return duplicate.ID;
+        }
+
+        public async Task<List<PricingTemplateRowDto>> GetPricingTemplate(long labTestId, long? analysisTypeId)
+        {
+            return await _testMethodRepository.GetPricingTemplate(labTestId, analysisTypeId);
         }
     }
 }

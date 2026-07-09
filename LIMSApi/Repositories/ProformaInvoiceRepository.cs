@@ -1,4 +1,4 @@
-﻿
+
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -485,9 +485,9 @@ namespace LIMSApi.Repositories
             int usedElements,
             DateTime inwardDate)
         {
-            // Get all InvoiceCaseConfigurations linked to this LaboratoryTest
-            var configs = await _context.LaboratoryTestInvoiceCase
-                .Where(lt => lt.LabTestID == laboratoryTestId)
+            // Get all InvoiceCaseConfigurations linked to this Chemical Test's AnalysisType
+            var configs = await _context.LaboratoryTestAnalysisTypeInvoiceCases
+                .Where(lt => lt.LaboratoryTestAnalysisTypeID == chemicalTest.LaboratoryTestAnalysisTypeID)
                 .Include(lt => lt.InvoiceCaseConfiguration)
                 .Where(lt => lt.InvoiceCaseConfiguration != null && lt.InvoiceCaseConfiguration.IsActive)
                 .Select(lt => lt.InvoiceCaseConfiguration!)

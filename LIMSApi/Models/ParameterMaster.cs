@@ -11,6 +11,9 @@ public partial class ParameterMaster : AuditProperty
 
     public string? ParameterType { get; set; } // Checmical or Mechanical
 
+    // NOTE: element billing tier is the existing ElementType field (normal/special/super) — reused for
+    // ELEM_TIER (WET/ICP) pricing. No separate ChemicalElementTier (avoids a redundant column).
+
     [StringLength(100)]
     public required string Name { get; set; }
 

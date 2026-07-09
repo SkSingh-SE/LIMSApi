@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 
 namespace LIMSApi.Services.Interface
@@ -11,10 +11,10 @@ namespace LIMSApi.Services.Interface
         Task<InvoiceCase> GetInvoiceCaseDetails(long id);
         Task<PagedResponse<object>> FetchInvoiceCaseList(PageFilter filter);
 
-        /// <summary>All year-versions for a LaboratoryTest, ★Current flagged on the default-FY version.</summary>
-        Task<InvoiceCaseByLabTestDto> GetByLabTest(long laboratoryTestId);
+        /// <summary>All year-versions for a LaboratoryTest and optional AnalysisType, ★Current flagged on the default-FY version.</summary>
+        Task<InvoiceCaseByLabTestDto> GetByLabTest(long laboratoryTestId, long? analysisTypeId);
 
-        /// <summary>Upserts all year-versions for a LaboratoryTest in one transaction.</summary>
+        /// <summary>Upserts all year-versions in one transaction.</summary>
         Task SaveAllInvoiceCases(SaveAllInvoiceCaseDto dto);
 
     }

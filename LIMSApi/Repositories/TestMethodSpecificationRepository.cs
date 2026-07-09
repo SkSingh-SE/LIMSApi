@@ -250,5 +250,45 @@ namespace LIMSApi.Repositories
                 })
                 .ToListAsync();
         }
+
+        public async Task<List<DropdwonSelector>> GetTestMethodSpecificationVersionDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var query = _context.TestMethodSpecificationVersions
+                .Include(v => v.TestMethodSpecification)
+                .Where(v => v.Status == VersionStatus.Active 
+                    && v.TestMethodSpecification != null 
+                    && v.TestMethodSpecification.IsActive 
+                    && v.TestMethodSpecification.CompanyCode == loggedInUser.CompanyCode);
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var search = searchTerm.Trim().ToLower();
+                query = query.Where(v => (v.TestMethodSpecification.Name != null && v.TestMethodSpecification.Name.Contains(search)) 
+                    || (v.Version != null && v.Version.Contains(search)));
+            }
+
+            var skip = pageNo * pageSize;
+
+            return await query
+                .OrderBy(v => v.TestMethodSpecification.Name)
+                .ThenByDescending(v => v.CreatedOn)
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(v => new DropdwonSelector
+                {
+                    Id = v.ID,
+                    Name = v.TestMethodSpecification.Name + " (" + v.Version + ")",
+                    AdditionalValues = new Dictionary<string, object>
+                    {
+                        { "TestMethodStandard", v.TestMethodSpecification.TestMethodStandard },
+                        { "Name", v.TestMethodSpecification.Name },
+                        { "Version", v.Version },
+                        { "TestMethodSpecificationID", v.TestMethodSpecificationID }
+                    }
+                })
+                .ToListAsync();
+        }
     }
 }

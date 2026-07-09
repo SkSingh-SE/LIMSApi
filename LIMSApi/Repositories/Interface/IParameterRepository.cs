@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 
 namespace LIMSApi.Repositories.Interface
@@ -13,7 +13,7 @@ namespace LIMSApi.Repositories.Interface
         Task<PagedResponse<object>> GetAllMechanicalParameters(PageFilter filter);
         Task<PagedResponse<object>> ParameterList(PageFilter filter);
 
-        Task<List<DropdwonSelector>> GetParameterDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<DropdwonSelector>> GetParameterDropdown(string? searchTerm, int pageNo, int pageSize, string? elementTypes = null);
         Task<List<DropdwonSelector>> GetChemicalParameterDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<List<DropdwonSelector>> GetMechanicalParameterDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<bool> ExistsByName(string name);

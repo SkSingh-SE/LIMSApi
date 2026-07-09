@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Models
@@ -48,6 +48,10 @@ namespace LIMSApi.Models
         // Dynamic Pricing Dimension (Phase 3)
         public long? PriceDimensionTypeId { get; set; }
         public virtual PriceDimensionType? DimensionType { get; set; }
+
+        // Element Count Formula Override parameter linking (comma-separated IDs)
+        [MaxLength(1000)]
+        public string? OverrideParameterIDs { get; set; }
 
         // Navigation property
         public ICollection<InvoiceCaseAliasName> AliasNames { get; set; } = new List<InvoiceCaseAliasName>();

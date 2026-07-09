@@ -1,4 +1,4 @@
-﻿using System.Linq.Dynamic.Core;
+using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -39,22 +39,41 @@ namespace LIMSApi.Repositories
 
         public async Task<LaboratoryTest?> GetTestMethodById(long id)
         {
-            //return await _context.LaboratoryTests.Include(t => t.SubGroups).FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
-            return await _context.LaboratoryTests
-                .Include(y => y.InvoiceCases)
-                .ThenInclude(z => z.InvoiceCaseConfiguration)
+            var test = await _context.LaboratoryTests
+                .Include(y => y.SubGroups)
+                    .ThenInclude(g => g.MetalClassification)
+                .Include(y => y.SubGroups)
+                    .ThenInclude(g => g.AnalysisTypes)
+                        .ThenInclude(s => s.MetalClassification)
+                .Include(y => y.SubGroups)
+                    .ThenInclude(g => g.AnalysisTypes)
+                        .ThenInclude(s => s.AllowedTechniques)
+                            .ThenInclude(t => t.AnalysisTechnique)
                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+
+            if (test != null)
+            {
+                test.SubGroups = test.SubGroups.Where(sg => sg.IsActive).ToList();
+                foreach (var sg in test.SubGroups)
+                {
+                    sg.AnalysisTypes = sg.AnalysisTypes.Where(at => at.IsActive).ToList();
+                }
+            }
+
+            return test;
         }
 
         public async Task UpdateTestMethod(LaboratoryTest model)
         {
-            _context.LaboratoryTests.Update(model);
+            var tracked = _context.ChangeTracker.Entries<LaboratoryTest>()
+                .Any(e => e.Entity.ID == model.ID);
+            if (!tracked)
+                _context.LaboratoryTests.Update(model);
             await _context.SaveChangesAsync();
         }
 
         public async Task<PagedResponse<object>> GetAllTestMethods(PageFilter filter)
         {
-
             var _query = from c in _context.LaboratoryTests
                          where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
                          join d in _context.DepartmentMasters on c.LabDepartmentID equals d.ID into dsGroup
@@ -65,11 +84,10 @@ namespace LIMSApi.Repositories
                              c.Name,
                              c.LabDepartmentID,
                              DepartmentName = ds.Name,
-                             c.SubGroup,
+                             c.IsChemicalTest,
                              c.ModifiedOn,
                              c.CreatedOn
                          };
-
 
             _query = _query.AsQueryable().ApplyFilters(filter.Filter);
 
@@ -78,8 +96,7 @@ namespace LIMSApi.Repositories
                 var search = filter.searchTerm.Trim();
                 _query = _query.Where(x =>
                                     (!string.IsNullOrEmpty(x.Name) && x.Name.Contains(search)) ||
-                                    (!string.IsNullOrEmpty(x.DepartmentName) && x.DepartmentName.Contains(search)) ||
-                                    (!string.IsNullOrEmpty(x.SubGroup) && x.SubGroup.Contains(search))
+                                    (!string.IsNullOrEmpty(x.DepartmentName) && x.DepartmentName.Contains(search))
                                     );
             }
 
@@ -101,7 +118,7 @@ namespace LIMSApi.Repositories
                          select new
                          {
                              a.ID,
-                             a.SubGroup,
+                             a.Name,
                              Department = d.Name
                          };
 
@@ -114,7 +131,7 @@ namespace LIMSApi.Repositories
                 else
                 {
                     var search = searchTerm.Trim();
-                    _query = _query.Where(x => (x.SubGroup != null && x.SubGroup.Contains(search)));
+                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
                 }
             }
 
@@ -123,11 +140,12 @@ namespace LIMSApi.Repositories
             var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
             {
                 Id = x.ID,
-                Name = $"{x.SubGroup} ({x.Department}) ",
+                Name = $"{x.Name} ({x.Department}) ",
             })).ToListAsync();
 
             return data;
         }
+
         public async Task<List<DropdwonSelector>> GetGeneralTestMethodDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
         {
             if (pageNo < 0) pageNo = 0;
@@ -139,7 +157,7 @@ namespace LIMSApi.Repositories
                          select new
                          {
                              a.ID,
-                             a.SubGroup,
+                             a.Name,
                              Department = d.Name
                          };
 
@@ -152,7 +170,7 @@ namespace LIMSApi.Repositories
                 else
                 {
                     var search = searchTerm.Trim();
-                    _query = _query.Where(x => (x.SubGroup != null && x.SubGroup.Contains(search)));
+                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
                 }
             }
 
@@ -161,7 +179,7 @@ namespace LIMSApi.Repositories
             var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
             {
                 Id = x.ID,
-                Name = $"{x.SubGroup} ({x.Department}) ",
+                Name = $"{x.Name} ({x.Department}) ",
             })).ToListAsync();
 
             return data;
@@ -178,7 +196,7 @@ namespace LIMSApi.Repositories
                          select new
                          {
                              a.ID,
-                             a.SubGroup,
+                             a.Name,
                              Department = d.Name
                          };
             if (!string.IsNullOrWhiteSpace(searchTerm))
@@ -190,7 +208,7 @@ namespace LIMSApi.Repositories
                 else
                 {
                     var search = searchTerm.Trim();
-                    _query = _query.Where(x => (x.SubGroup != null && x.SubGroup.Contains(search)));
+                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
                 }
             }
 
@@ -199,7 +217,7 @@ namespace LIMSApi.Repositories
             var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
             {
                 Id = x.ID,
-                Name = $"{x.SubGroup} ({x.Department}) ",
+                Name = $"{x.Name} ({x.Department}) ",
             })).ToListAsync();
 
             return data;
@@ -233,25 +251,127 @@ namespace LIMSApi.Repositories
 
         public async Task<List<object>> GetTestCases(long testMethodId)
         {
-            var query = (
-                from l in _context.LaboratoryTests
-                join li in _context.LaboratoryTestInvoiceCase on l.ID equals li.LabTestID
-                join c in _context.InvoiceCaseConfigurations on li.InvoiceCaseConfigID equals c.ID
-                where l.ID == testMethodId && c.IsActive
-                select new
-                {
-                    c.ID,
-                    c.SelectionType,   // Element / Hours / Load / Day …
-                    c.Name,            // "1 Element", "Up to 24 hrs"
-                    c.Value,           // 1, 24, 5
-                    c.Unit             // Element, hr, ton, day
-                }
-            ).Distinct();
+            var subgroupCases = from l in _context.LaboratoryTests
+                                 join sg in _context.LaboratoryTestSubGroups on l.ID equals sg.LaboratoryTestID
+                                 join ic in _context.LaboratoryTestSubGroupInvoiceCases on sg.ID equals ic.LaboratoryTestSubGroupID
+                                 join c in _context.InvoiceCaseConfigurations on ic.InvoiceCaseConfigID equals c.ID
+                                 where l.ID == testMethodId && c.IsActive && sg.IsActive
+                                 select new
+                                 {
+                                     c.ID,
+                                     c.SelectionType,
+                                     c.Name,
+                                     c.Value,
+                                     c.Unit
+                                 };
+
+            var analysistypeCases = from l in _context.LaboratoryTests
+                                     join sg in _context.LaboratoryTestSubGroups on l.ID equals sg.LaboratoryTestID
+                                     join at in _context.LaboratoryTestAnalysisTypes on sg.ID equals at.LaboratoryTestSubGroupID
+                                     join ic in _context.LaboratoryTestAnalysisTypeInvoiceCases on at.ID equals ic.LaboratoryTestAnalysisTypeID
+                                     join c in _context.InvoiceCaseConfigurations on ic.InvoiceCaseConfigID equals c.ID
+                                     where l.ID == testMethodId && c.IsActive && sg.IsActive && at.IsActive
+                                     select new
+                                     {
+                                         c.ID,
+                                         c.SelectionType,
+                                         c.Name,
+                                         c.Value,
+                                         c.Unit
+                                     };
+
+            var query = subgroupCases.Union(analysistypeCases).Distinct();
 
             var data = await query.ToListAsync();
-
             var result = data.Cast<object>().ToList();
             return result;
+        }
+
+        public async Task<List<PricingTemplateRowDto>> GetPricingTemplate(long labTestId, long? analysisTypeId)
+        {
+            List<PricingTemplateRowDto> rows = new();
+
+            if (analysisTypeId.HasValue)
+            {
+                // Chemical test -> Fetch configurations for this specific AnalysisType
+                rows = await (
+                    from sg in _context.LaboratoryTestSubGroups
+                    join at in _context.LaboratoryTestAnalysisTypes on sg.ID equals at.LaboratoryTestSubGroupID
+                    join ic in _context.LaboratoryTestAnalysisTypeInvoiceCases on at.ID equals ic.LaboratoryTestAnalysisTypeID
+                    join c in _context.InvoiceCaseConfigurations on ic.InvoiceCaseConfigID equals c.ID
+                    where sg.LaboratoryTestID == labTestId && sg.IsActive && at.IsActive && c.IsActive && at.ID == analysisTypeId.Value
+                    select new PricingTemplateRowDto
+                    {
+                        InvoiceCaseConfigID  = c.ID,
+                        ConfigName           = c.Name,
+                        SelectionType        = c.SelectionType,
+                        ConfigValue          = c.Value,
+                        GroupName            = at.Name,
+                        GroupType            = "AnalysisType",
+                        IsOverride           = c.Value == "OVERRIDE",
+                        OverrideParameterIDs = c.OverrideParameterIDs
+                    }
+                ).ToListAsync();
+            }
+            else
+            {
+                // Non-chemical test -> Fetch configurations for SubGroups
+                rows = await (
+                    from sg in _context.LaboratoryTestSubGroups
+                    join ic in _context.LaboratoryTestSubGroupInvoiceCases on sg.ID equals ic.LaboratoryTestSubGroupID
+                    join c in _context.InvoiceCaseConfigurations on ic.InvoiceCaseConfigID equals c.ID
+                    where sg.LaboratoryTestID == labTestId && sg.IsActive && c.IsActive
+                    select new PricingTemplateRowDto
+                    {
+                        InvoiceCaseConfigID  = c.ID,
+                        ConfigName           = c.Name,
+                        SelectionType        = c.SelectionType,
+                        ConfigValue          = c.Value,
+                        GroupName            = sg.Name,
+                        GroupType            = "SubGroup",
+                        IsOverride           = c.Value == "OVERRIDE",
+                        OverrideParameterIDs = c.OverrideParameterIDs
+                    }
+                ).ToListAsync();
+            }
+
+            var mergedRows = rows
+                .GroupBy(r => r.InvoiceCaseConfigID)
+                .Select(g => g.First())
+                .ToList();
+
+            var uniqueParamIds = mergedRows
+                .Where(r => !string.IsNullOrEmpty(r.OverrideParameterIDs))
+                .SelectMany(r => r.OverrideParameterIDs!.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(idStr => long.TryParse(idStr.Trim(), out var id) ? id : 0))
+                .Where(id => id > 0)
+                .Distinct()
+                .ToList();
+
+            if (uniqueParamIds.Any())
+            {
+                var paramNamesDict = await _context.ParameterMasters
+                    .Where(p => uniqueParamIds.Contains(p.ID))
+                    .ToDictionaryAsync(p => p.ID, p => p.Name);
+
+                foreach (var row in mergedRows)
+                {
+                    if (!string.IsNullOrEmpty(row.OverrideParameterIDs))
+                    {
+                        var ids = row.OverrideParameterIDs.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                            .Select(idStr => long.TryParse(idStr.Trim(), out var id) ? id : 0)
+                            .Where(id => id > 0);
+                        var names = ids.Select(id => paramNamesDict.TryGetValue(id, out var name) ? name : id.ToString());
+                        row.OverrideParameterNames = string.Join(", ", names);
+                    }
+                }
+            }
+
+            return mergedRows
+                .OrderBy(r => r.IsOverride)
+                .ThenBy(r => r.GroupName)
+                .ThenBy(r => r.ConfigName)
+                .ToList();
         }
     }
 }

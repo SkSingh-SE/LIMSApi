@@ -96,5 +96,13 @@ namespace LIMSApi.Controllers
             return data == null ? NoContent(): Ok(data);
         }
 
+        /// Analysis techniques valid for a metal base (inherits from parent if none configured). L3 cascade.
+        [HttpGet("technologies/{id}")]
+        public async Task<IActionResult> GetMetalTechniques(long id)
+        {
+            var data = await _MetalClassificationService.GetTechniquesForMetal(id);
+            return Ok(data);
+        }
+
     }
 }

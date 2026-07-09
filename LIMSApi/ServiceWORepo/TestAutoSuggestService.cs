@@ -32,7 +32,7 @@ namespace LIMSApi.ServiceWORepo
                     {
                         LaboratoryTestID = lt.ID,
                         LaboratoryTestName = lt.Name,
-                        SubGroup = lt.SubGroup,
+                        SubGroup = lt.SubGroups.Select(x => x.Name).FirstOrDefault() ?? "",
                         Source = "Specification",
                         IsPerBatch = false,
                         TestMethodStandardID = null,
@@ -56,7 +56,7 @@ namespace LIMSApi.ServiceWORepo
                 {
                     LaboratoryTestID = ptg.LaboratoryTestID,
                     LaboratoryTestName = ptg.LaboratoryTest != null ? ptg.LaboratoryTest.Name : string.Empty,
-                    SubGroup = ptg.LaboratoryTest != null ? ptg.LaboratoryTest.SubGroup : string.Empty,
+                    SubGroup = ptg.LaboratoryTest != null ? (ptg.LaboratoryTest.SubGroups.Select(x => x.Name).FirstOrDefault() ?? "") : string.Empty,
                     Source = "ProductTestGroup",
                     IsPerBatch = ptg.IsPerBatch,
                     TestMethodStandardID = ptg.TestMethodStandardID,
@@ -98,7 +98,7 @@ namespace LIMSApi.ServiceWORepo
 
             return new TestAutoSuggestResult
             {
-                SuggestedTests = mergedTests.OrderBy(t => t.SubGroup).ThenBy(t => t.LaboratoryTestName).ToList(),
+                SuggestedTests = mergedTests.OrderBy(t => t.LaboratoryTestName).ToList(),
                 SpecificationTestCount = specTests.Count,
                 ProductTestGroupCount = productTests.Count
             };
@@ -169,7 +169,7 @@ namespace LIMSApi.ServiceWORepo
                         {
                             LaboratoryTestID = stat.LaboratoryTestID,
                             LaboratoryTestName = stat.LaboratoryTest.Name,
-                            SubGroup = stat.LaboratoryTest.SubGroup,
+                            SubGroup = stat.LaboratoryTest.SubGroups.Select(x => x.Name).FirstOrDefault() ?? "",
                             Source = "LabScope",
                             Score = 0,
                             Tags = new List<string>()
@@ -202,7 +202,7 @@ namespace LIMSApi.ServiceWORepo
                         {
                             LaboratoryTestID = stat.LaboratoryTestID,
                             LaboratoryTestName = stat.LaboratoryTest.Name,
-                            SubGroup = stat.LaboratoryTest.SubGroup,
+                            SubGroup = stat.LaboratoryTest.SubGroups.Select(x => x.Name).FirstOrDefault() ?? "",
                             Source = "CustomerHistory",
                             Score = 0,
                             Tags = new List<string>()
@@ -237,7 +237,7 @@ namespace LIMSApi.ServiceWORepo
                         {
                             LaboratoryTestID = stat.LaboratoryTestID,
                             LaboratoryTestName = stat.LaboratoryTest.Name,
-                            SubGroup = stat.LaboratoryTest.SubGroup,
+                            SubGroup = stat.LaboratoryTest.SubGroups.Select(x => x.Name).FirstOrDefault() ?? "",
                             Source = "GlobalFrequency",
                             Score = 0,
                             Tags = new List<string>()

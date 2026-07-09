@@ -187,6 +187,7 @@ namespace LIMSApi.Services
                         ProductConditionID = s.ProductConditionID,
                         ProductFormID = s.ProductFormID,
                         SpecimenOrientationID = s.SpecimenOrientationID,
+                        ChemicalSampleCategoryID = s.ChemicalSampleCategoryID,
                         Remarks = s.Remarks,
                         Quantity = s.Quantity,
                         UploadReferenceID = s.UploadReferenceID,
@@ -542,6 +543,7 @@ namespace LIMSApi.Services
                         existingSample.ProductConditionID = s.ProductConditionID;
                         existingSample.ProductFormID = s.ProductFormID;
                         existingSample.SpecimenOrientationID = s.SpecimenOrientationID;
+                        existingSample.ChemicalSampleCategoryID = s.ChemicalSampleCategoryID;
                         existingSample.TpiAgencyID = s.TpiAgencyID;
                         existingSample.Remarks = s.Remarks;
                         existingSample.Quantity = s.Quantity;
@@ -607,6 +609,7 @@ namespace LIMSApi.Services
                             ProductConditionID = s.ProductConditionID,
                             ProductFormID = s.ProductFormID,
                             SpecimenOrientationID = s.SpecimenOrientationID,
+                            ChemicalSampleCategoryID = s.ChemicalSampleCategoryID,
                             Remarks = s.Remarks,
                             Quantity = s.Quantity,
                             Thickness = s.Thickness,
@@ -1279,6 +1282,7 @@ namespace LIMSApi.Services
                         ProductConditionID = s.ProductConditionID,
                         ProductFormID = s.ProductFormID,
                         SpecimenOrientationID = s.SpecimenOrientationID,
+                        ChemicalSampleCategoryID = s.ChemicalSampleCategoryID,
                         Remarks = s.Remarks,
                         Quantity = s.Quantity,
                         IsCancelled = s.IsCancelled,
@@ -1496,6 +1500,8 @@ namespace LIMSApi.Services
                         ProductConditionName = s.ProductCondition?.Name,
                         ProductFormID = s.ProductFormID,
                         SpecimenOrientationID = s.SpecimenOrientationID,
+                        ChemicalSampleCategoryID = s.ChemicalSampleCategoryID,
+                        ChemicalSampleCategoryName = s.ChemicalSampleCategory != null ? s.ChemicalSampleCategory.Name : null,
                         Remarks = s.Remarks,
                         Quantity = s.Quantity,
                         IsCancelled = s.IsCancelled,
