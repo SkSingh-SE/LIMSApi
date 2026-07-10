@@ -35,5 +35,18 @@ namespace LIMSApi.Models
         public decimal? RemainingAfterUse { get; set; }
 
         public bool IsExhausted { get; set; }
+        public string? Type { get; set; }
+        public string? MaterialClassification { get; set; }
+        public string? BatchNo { get; set; }
+        public string? CertificateNo { get; set; }
+        public DateTime? ValidityDate { get; set; }
+        public decimal AvailableQuantity { get; set; }
+        public decimal OpeningQuantity { get; set; }
+        public decimal TotalConsumed { get; set; }
+        public decimal RemainingQuantity { get; set; }
+        public string? Notes { get; set; }
+        public ICollection<ReferenceMaterialConsumptionLog> Logs { get; set; } = new List<ReferenceMaterialConsumptionLog>();
+
+
     }
 }

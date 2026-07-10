@@ -49,5 +49,46 @@ namespace LIMSApi.Models
 
         [ForeignKey("CustomerFeedbackId")]
         public virtual NablCustomerFeedback? CustomerFeedback { get; set; }
+
+        public long? CustomerID { get; set; }
+        public string? ActionDetails { get; set; }
+        public string? ActionTaken { get; set; }
+        public string? Address { get; set; }
+        public string? AnalysisNo { get; set; }
+        public string? ContactPerson { get; set; }
+        public string? CorrectiveActionRequired { get; set; }
+        public string? CustomerName { get; set; }
+        public string? CustomerRemarks { get; set; }
+        public string? EffectivenessStatus { get; set; }
+        public string? Email { get; set; }
+        public string? FinalStatus { get; set; }
+        public string? Suggestions { get; set; }
+        public string? ImprovementOpportunity { get; set; }
+        public string? IssuesIdentified { get; set; }
+        public string? MobileNo { get; set; }
+        public string? RootCause { get; set; }
+        public string? ResponsiblePerson { get; set; }
+        public string? NewRequirement { get; set; }
+        public string? OverallConclusion { get; set; }
+        public string? OverallCustomerSatisfaction { get; set; }
+        public string? OverallGrade { get; set; }
+        public decimal? AverageRating { get; set; }
+        public string? PositiveObservations { get; set; }
+        public string? VerificationRemarks { get; set; }
+        public DateTime? AnalysisDate { get; set; }
+        public DateTime? TargetCompletionDate { get; set; }
+        public DateTime? VerificationDate { get; set; }
+        public DateTime? FeedbackDate { get; set; }
+        public string? RatingsJson { get; set; }
+
+        [NotMapped]
+        public List<FeedbackRatings> FeedbackRatings{ get; set; }
+    }
+
+    [NotMapped]
+    public class FeedbackRatings
+    {
+        public string? ParameterName { get; set; }
+        public int? Rating { get; set; }
     }
 }

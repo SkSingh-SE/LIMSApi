@@ -35,5 +35,8 @@ namespace LIMSApi.Models
         public string? NCCategory { get; set; } // Minor/Major
 
         public string? RootCauseAnalysis { get; set; }
+        public string? CorrectiveAction { get; set; }
+        public string? SignatureTDQM { get; set; }
+        public DateTime? CloserDate { get; set; }
     }
 }

@@ -1,3 +1,4 @@
+using Humanizer;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -7,6 +8,7 @@ using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
 using Microsoft.CodeAnalysis.Operations;
 using Microsoft.EntityFrameworkCore;
+using System.Data.Common;
 using System.Text.Json;
 
 namespace LIMSApi.Services
@@ -40,7 +42,7 @@ namespace LIMSApi.Services
             { "TrainingAttendance", "F-9" },
             { "TrainingEffectiveness", "F-10" },
             { "EnvironmentMonitoring", "F-11" },
-            { "QualityControlPlan", "F-12" },
+            { "QualityControlPlan", "F-37" },
             { "TestRequest", "F-27" },
             { "TestMethod", "F-28" },
             { "MethodVerification", "F-29" },
@@ -53,8 +55,8 @@ namespace LIMSApi.Services
             { "EquipmentHistory", "F-22" },
             { "CalibrationReview", "F-23" },
             { "IntermediateCheck", "F-24" },
-            { "ReferenceMaterial", "F-25" },
-            { "CrmConsumption", "F-26" },
+            { "ReferenceMaterial", "F-17" },
+            { "CrmConsumption", "F-18" },
             { "SupplierRegistration", "F-19" },
             { "SupplierEvaluation", "F-26" },
             { "ApprovedSupplier", "F-20" },
@@ -64,18 +66,18 @@ namespace LIMSApi.Services
             { "PurchaseIndent", "F-21" },
             { "PurchaseOrder", "F-22" },
             { "PurchaseMaterialVerification", "F-25" },
-            { "Complaint", "F-36" },
-            { "CustomerFeedback", "F-37" },
-            { "FeedbackAnalysis", "F-38" },
+            { "Complaint", "F-40" },
+            { "CustomerFeedback", "F-47" },
+            { "FeedbackAnalysis", "F-48" },
             { "AuditPlan", "F-39" },
             { "AuditChecklist", "F-40" },
             { "AuditSummary", "F-41" },
             { "InternalAuditor", "F-42" },
-            { "MeetingAgenda", "F-43" },
-            { "MeetingMinutes", "F-44" },
-            { "NonConformingWork", "F-45" },
+            { "MeetingAgenda", "F-53" },
+            { "MeetingMinutes", "F-54" },
+            { "NonConformingWork", "F-41" },
             { "NcCorrectiveAction", "F-46" },
-            { "Retesting", "F-47" },
+            { "Retesting", "F-38" },
             { "RiskAssessment", "F-48" },
             { "DocumentChangeRequest", "F-49" },
             { "DocumentReview", "F-50" },
@@ -267,6 +269,54 @@ namespace LIMSApi.Services
                         }
                         return result;
                     }
+                case "ReferenceMaterial":
+                    {
+                        var result = data as NablReferenceMaterial;
+                        if (result != null && !string.IsNullOrEmpty(result.ParameterJson))
+                        {
+                            result.Parameters = JsonSerializer.Deserialize<List<Parameters>>(result.ParameterJson);
+                        }
+                        return result;
+                    }
+                case "CustomerFeedback":
+                    {
+                        var result = data as NablCustomerFeedback;
+                        if (result != null && !string.IsNullOrEmpty(result.RatingsJson))
+                        {
+                            result.Ratings = JsonSerializer.Deserialize<List<Ratings>>(result.RatingsJson);
+                        }
+                        return result;
+                    }
+                case "MeetingAgenda":
+                    {
+                        var result = data as NablMeetingAgenda;
+                        if (result != null && !string.IsNullOrEmpty(result.AgendaItemsJson))
+                        {
+                            result.AgendaItems = JsonSerializer.Deserialize<List<AgendaItems>>(result.AgendaItemsJson);
+                        }
+                        if (result != null && !string.IsNullOrEmpty(result.ParticipantsJson))
+                        {
+                            result.Participants= JsonSerializer.Deserialize<List<Participants>>(result.ParticipantsJson);
+                        }
+                        return result;
+                    }
+                case "MeetingMinutes":
+                    {
+                        var result = data as NablMeetingMinutes;
+                        if (result != null && !string.IsNullOrEmpty(result.ActionPlanJson))
+                        {
+                            result.ActionItems = JsonSerializer.Deserialize<List<ActionItems>>(result.ActionPlanJson);
+                        }
+                        if (result != null && !string.IsNullOrEmpty(result.AttendeesJson))
+                        {
+                            result.ParticipantItems= JsonSerializer.Deserialize<List<ParticipantItems>>(result.AttendeesJson);
+                        }
+                        if (result != null && !string.IsNullOrEmpty(result.AgendaItemsJson))
+                        {
+                            result.AgendaList= JsonSerializer.Deserialize<List<AgendaList>>(result.AgendaItemsJson);
+                        }
+                        return result;
+                    }
 
 
                 default:
@@ -355,6 +405,8 @@ namespace LIMSApi.Services
                 "MasterDocument" => await SaveMasterDocument(body),
                 "MeasurementUncertainty" => await SaveMeasurementUncertainty(body),
                 "PtIlcPlan" => await SavePtIlcPlan(body),
+                "InventoryMaster" => await SaveInventoryMaster(body),
+
                 _ => throw new ArgumentException($"Unknown form type: {formType}")
             };
         }
@@ -1316,6 +1368,16 @@ namespace LIMSApi.Services
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
+                if (model.Activities != null && model.Activities.Any())
+                {
+                    foreach (var activity in model.Activities)
+                    {
+                        activity.IsActive = true;
+                        activity.EffectiveFrom = activity.EffectiveFrom;
+                        activity.EffectiveTo = model.EffectiveTo;
+                        activity.NextDueDate = CalculateNextDuaDate(activity.FrequencyType, activity.EffectiveFrom);
+                    }
+                }
 
                 var id = await _repository.Add("QualityControlPlan", model);
                 await LogAudit("QualityControlPlan", id, "Created", null, body.GetRawText());
@@ -1325,7 +1387,9 @@ namespace LIMSApi.Services
             else
             {
                 var existing = await _context.NablQualityControlPlans
-                    .FirstOrDefaultAsync(x => x.ID == model.ID && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+                    .FirstOrDefaultAsync(x => x.ID == model.ID
+                        && x.IsActive
+                        && x.CompanyCode == loggedInUser.CompanyCode);
 
                 if (existing == null)
                     throw new InvalidOperationException("QualityControlPlan not found!");
@@ -1347,10 +1411,105 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.PreparedBy = model.PreparedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.PlanNo = model.PlanNo;
+                existing.RetentionPeriod = model.RetentionPeriod;
+                existing.LabIncharge = model.LabIncharge;
+                existing.MaterialProductGroup = model.MaterialProductGroup;
+                existing.Discipline = model.Discipline;
+                existing.PlanYear = model.PlanYear;
+                existing.EffectiveFrom = model.EffectiveFrom;
+                existing.EffectiveTo = model.EffectiveTo;
 
-                await _repository.Update("QualityControlPlan", existing);
+                var dbActivities = await _context.NablQualityControlPlanActivities
+                    .Where(x => x.QualityControlPlanId == existing.ID && x.IsActive)
+                    .ToListAsync();
+
+                var modelActivities = model.Activities ?? new List<NablQualityControlPlanActivity>();
+
+                var modelActivityIds = modelActivities
+                    .Where(x => x.ID > 0)
+                    .Select(x => x.ID)
+                    .ToList();
+
+                foreach (var dbActivity in dbActivities)
+                {
+                    if (!modelActivityIds.Contains(dbActivity.ID))
+                    {
+                        dbActivity.IsActive = false;
+                    }
+                }
+
+                foreach (var activity in modelActivities)
+                {
+                    if (activity.ID > 0)
+                    {
+                        var dbActivity = dbActivities.FirstOrDefault(x => x.ID == activity.ID);
+
+                        if (dbActivity == null)
+                            continue;
+
+                        dbActivity.ActivityName = activity.ActivityName;
+                        dbActivity.DepartmentID = activity.DepartmentID;
+                        dbActivity.TestMethodId = activity.TestMethodId;
+                        dbActivity.ReferenceType = activity.ReferenceType;
+                        dbActivity.ReferenceId = activity.ReferenceId;
+                        dbActivity.ReferenceName = activity.ReferenceName;
+                        dbActivity.FrequencyType = activity.FrequencyType;
+                        dbActivity.FrequencyName = activity.FrequencyName;
+                        dbActivity.EmployeeId = activity.EmployeeId;
+                        dbActivity.AcceptanceCriteria = activity.AcceptanceCriteria;
+                        dbActivity.ResultStatus = activity.ResultStatus;
+                        dbActivity.Remarks = activity.Remarks;
+                        dbActivity.EffectiveFrom = existing.EffectiveFrom;
+                        dbActivity.EffectiveTo = existing.EffectiveTo;
+                        dbActivity.DepartmentName = activity.DepartmentName;
+                        dbActivity.TestMethod = activity.TestMethod;
+                        dbActivity.EmployeeName = activity.EmployeeName;
+                        dbActivity.IsActive = true;
+                        dbActivity.NextDueDate = CalculateNextDuaDate(activity.FrequencyType, activity.EffectiveFrom);
+                    }
+                    else
+                    {
+                        var newActivity = new NablQualityControlPlanActivity
+                        {
+                            QualityControlPlanId = existing.ID,
+                            ActivityName = activity.ActivityName,
+                            DepartmentID = activity.DepartmentID,
+                            TestMethodId = activity.TestMethodId,
+                            ReferenceType = activity.ReferenceType,
+                            ReferenceId = activity.ReferenceId,
+                            ReferenceName = activity.ReferenceName,
+                            FrequencyType = activity.FrequencyType,
+                            FrequencyName = activity.FrequencyName,
+                            EmployeeId = activity.EmployeeId,
+                            AcceptanceCriteria = activity.AcceptanceCriteria,
+                            ResultStatus = activity.ResultStatus,
+                            Remarks = activity.Remarks,
+                            EffectiveFrom = existing.EffectiveFrom,
+                            EffectiveTo = existing.EffectiveTo,
+                            DepartmentName = activity.DepartmentName,
+                            TestMethod = activity.TestMethod,
+                            EmployeeName = activity.EmployeeName,
+                            NextDueDate = CalculateNextDuaDate(activity.FrequencyType, activity.EffectiveFrom),
+                            IsActive = true
+                        };
+
+                        _context.NablQualityControlPlanActivities.Add(newActivity);
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+
                 await LogAudit("QualityControlPlan", existing.ID, "Updated", null, body.GetRawText());
+
                 _logger.LogInformation("QualityControlPlan ID {Id} updated.", existing.ID);
+
                 return existing.ID;
             }
         }
@@ -1655,7 +1814,7 @@ namespace LIMSApi.Services
                 existing.Repeatability= model.Repeatability;
                 existing.Accuracy= model.Accuracy;
                 existing.Robustness = model.Robustness;
-                
+
                 await _repository.Update("MethodValidation", existing);
                 await LogAudit("MethodValidation", existing.ID, "Updated", null, body.GetRawText());
                 _logger.LogInformation("MethodValidation ID {Id} updated.", existing.ID);
@@ -2089,6 +2248,7 @@ namespace LIMSApi.Services
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
+                model.ParameterJson = JsonSerializer.Serialize(model.Parameters);
 
                 var id = await _repository.Add("ReferenceMaterial", model);
                 await LogAudit("ReferenceMaterial", id, "Created", null, body.GetRawText());
@@ -2112,7 +2272,7 @@ namespace LIMSApi.Services
                 existing.CertificateNo = model.CertificateNo;
                 existing.ReceivedDate = model.ReceivedDate;
                 existing.ExpiryDate = model.ExpiryDate;
-                existing.StorageCondition = model.StorageCondition;
+                existing.StorageCondition = null;
                 existing.CertifiedValue = model.CertifiedValue;
                 existing.Uncertainty = model.Uncertainty;
                 existing.Unit = model.Unit;
@@ -2123,6 +2283,30 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.ParameterJson = JsonSerializer.Serialize(model.Parameters);
+                existing.MaterialDescription = model.MaterialDescription;
+                existing.Type = model.Type;
+                existing.Supplier = model.Supplier;
+                existing.MatrixType = model.MatrixType;
+                existing.StorageLocation= model.StorageLocation;
+                existing.Traceability= model.Traceability;
+                existing.CertificationDate= model.CertificationDate;
+                existing.ValidityDate= model.ValidityDate;
+                existing.InitialQuantity= model.InitialQuantity;
+                existing.AvailableQuantity= model.AvailableQuantity;
+                existing.MinimumQuantity= model.MinimumQuantity;
+                existing.UnitOfMeasure= model.UnitOfMeasure;
+                existing.Specifications = model.Specifications;
+                existing.ItemId = model.ItemId;
+                existing.DepartmentID = model.DepartmentID;
+                existing.InventoryId = model.InventoryId;
+                existing.ItemCode = model.ItemCode;
+                existing.ItemName = model.ItemName;
 
                 await _repository.Update("ReferenceMaterial", existing);
                 await LogAudit("ReferenceMaterial", existing.ID, "Updated", null, body.GetRawText());
@@ -2136,6 +2320,9 @@ namespace LIMSApi.Services
             var model = JsonSerializer.Deserialize<NablCrmConsumption>(body.GetRawText(), _jsonOptions)
                 ?? throw new ArgumentException("Invalid CrmConsumption data.");
 
+            if (model.ReferenceMaterialId <= 0)
+                throw new ArgumentException("Reference Material not found.");
+
             if (model.ID == 0)
             {
                 model.FormCode = FormCodeMap["CrmConsumption"];
@@ -2144,7 +2331,18 @@ namespace LIMSApi.Services
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
+                if (model.Logs != null && model.Logs.Any())
+                {
+                    foreach (var log in model.Logs)
+                    {
+                        log.ReferenceMaterialId = model.ReferenceMaterialId;
+                        log.ReferenceMaterialConsumptionId = 0;
+                        log.IsActive = true;
+                        log.CreatedBy = loggedInUser.EmployeeID;
+                        log.CreatedDate = DateTime.UtcNow;
 
+                    }
+                }
                 var id = await _repository.Add("CrmConsumption", model);
                 await LogAudit("CrmConsumption", id, "Created", null, body.GetRawText());
                 _logger.LogInformation("CrmConsumption created with ID {Id}.", id);
@@ -2173,6 +2371,39 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
+                existing.OpeningQuantity = model.OpeningQuantity;
+                existing.TotalConsumed = model.TotalConsumed;
+                existing.RemainingQuantity = model.RemainingQuantity;
+                existing.Notes = model.Notes;
+                existing.PreparedBy = model.PreparedBy;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ApprovedBy = model.ApprovedBy;
+                if (model.Logs != null && model.Logs.Any())
+                {
+                    foreach (var log in model.Logs)
+                    {
+                        if (log.Id > 0)
+                            continue;
+
+                        var newlog = new ReferenceMaterialConsumptionLog
+                        {
+                            ReferenceMaterialConsumptionId = existing.ID,
+                            ReferenceMaterialId = existing.ReferenceMaterialId,
+                            ConsumptionDate = log.ConsumptionDate,
+                            QuantityConsumed = log.QuantityConsumed,
+                            //PreviousBalanceQty = log.PreviousBalanceQty,
+                            BalanceQty = log.BalanceQty,
+                            Purpose = log.Purpose,
+                            EquipmentOrTest = log.EquipmentOrTest,
+                            UsedBy = log.UsedBy,
+                            Remarks = log.Remarks,
+                            IsActive = true,
+                            CreatedBy = loggedInUser.EmployeeID,
+                            CreatedDate = DateTime.UtcNow
+                        };
+                        existing.Logs.Add(newlog);
+                    }
+                }
 
                 await _repository.Update("CrmConsumption", existing);
                 await LogAudit("CrmConsumption", existing.ID, "Updated", null, body.GetRawText());
@@ -2869,7 +3100,19 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
-
+                existing.PreparedBy = model.PreparedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.MonthYear = model.MonthYear;
+                existing.ReferenceNoDate = model.ReferenceNoDate;
+                existing.ComplainantName = model.ComplainantName;
+                existing.ComplaintNo = model.ComplaintNo;
+                existing.ValidationOfComplaint = model.ValidationOfComplaint;
+                existing.OutcomeOfInvestigation = model.OutcomeOfInvestigation;
+                existing.SignatureQM = model.SignatureQM;
                 await _repository.Update("Complaint", existing);
                 await LogAudit("Complaint", existing.ID, "Updated", null, body.GetRawText());
                 _logger.LogInformation("Complaint ID {Id} updated.", existing.ID);
@@ -2890,6 +3133,7 @@ namespace LIMSApi.Services
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
+                model.RatingsJson = JsonSerializer.Serialize(model.Ratings);
 
                 var id = await _repository.Add("CustomerFeedback", model);
                 await LogAudit("CustomerFeedback", id, "Created", null, body.GetRawText());
@@ -2920,11 +3164,19 @@ namespace LIMSApi.Services
                 existing.WouldRecommend = model.WouldRecommend;
                 existing.CollectedBy = model.CollectedBy;
                 existing.ContactPerson = model.ContactPerson;
-                existing.RatingsJson = model.RatingsJson;
                 existing.Suggestions = model.Suggestions;
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
+                existing.RatingsJson = JsonSerializer.Serialize(model.Ratings);
+                existing.ContactPerson = model.ContactPerson;
+                existing.CompanyAddress = model.CompanyAddress;
+                existing.Email = model.Email;
+                existing.Note= model.Note;
+                existing.MobileNo= model.MobileNo;
+                existing.CompanyName= model.CompanyName;
+                existing.Designation= model.Designation;
+                existing.ReportedBy = model.ReportedBy;
 
                 await _repository.Update("CustomerFeedback", existing);
                 await LogAudit("CustomerFeedback", existing.ID, "Updated", null, body.GetRawText());
@@ -2946,6 +3198,7 @@ namespace LIMSApi.Services
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
+                model.RatingsJson = JsonSerializer.Serialize(model.FeedbackRatings);
 
                 var id = await _repository.Add("FeedbackAnalysis", model);
                 await LogAudit("FeedbackAnalysis", id, "Created", null, body.GetRawText());
@@ -2980,6 +3233,43 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
+                existing.PreparedBy = model.PreparedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.CustomerID = model.CustomerID;
+                existing.RatingsJson = JsonSerializer.Serialize(model.FeedbackRatings);
+                existing.ActionDetails  = model.ActionDetails;
+                existing.ActionTaken = model.ActionTaken;
+                existing.Address = model.Address;
+                existing.AnalysisNo = model.AnalysisNo;
+                existing.ContactPerson = model.ContactPerson;
+                existing.CorrectiveActionRequired = model.CorrectiveActionRequired;
+                existing.CustomerName = model.CustomerName;
+                existing.CustomerRemarks = model.CustomerRemarks;
+                existing.EffectivenessStatus = model.EffectivenessStatus;
+                existing.Email = model.Email;
+                existing.FinalStatus = model.FinalStatus;
+                existing.Suggestions = model.Suggestions;
+                existing.ImprovementOpportunity = model.ImprovementOpportunity;
+                existing.IssuesIdentified = model.IssuesIdentified;
+                existing.MobileNo = model.MobileNo;
+                existing.RootCause =model.RootCause;
+                existing.ResponsiblePerson =model.ResponsiblePerson;
+                existing.NewRequirement = model.NewRequirement;
+                existing.OverallConclusion = model.OverallConclusion;
+                existing.OverallCustomerSatisfaction = model.OverallCustomerSatisfaction;
+                existing.OverallGrade = model.OverallGrade;
+                existing.AverageRating = model.AverageRating;
+                existing.PositiveObservations = model.PositiveObservations;
+                existing.VerificationRemarks = model.VerificationRemarks;
+                existing.AnalysisDate = model.AnalysisDate;
+                existing.TargetCompletionDate = model.TargetCompletionDate;
+                existing.VerificationDate = model.VerificationDate;
+                existing.FeedbackDate = model.FeedbackDate;
+
 
                 await _repository.Update("FeedbackAnalysis", existing);
                 await LogAudit("FeedbackAnalysis", existing.ID, "Updated", null, body.GetRawText());
@@ -3211,7 +3501,8 @@ namespace LIMSApi.Services
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
-
+                model.AgendaItemsJson = JsonSerializer.Serialize(model.AgendaItems);
+                model.ParticipantsJson = JsonSerializer.Serialize(model.Participants);
                 var id = await _repository.Add("MeetingAgenda", model);
                 await LogAudit("MeetingAgenda", id, "Created", null, body.GetRawText());
                 _logger.LogInformation("MeetingAgenda created with ID {Id}.", id);
@@ -3239,7 +3530,15 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
-
+                existing.AgendaItemsJson = JsonSerializer.Serialize(model.AgendaItems);
+                existing.ParticipantsJson = JsonSerializer.Serialize(model.Participants);
+                existing.MeetingNo = model.MeetingNo;
+                existing.MeetingTime = model.MeetingTime;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ApprovedDate = model.ApprovedDate;
                 await _repository.Update("MeetingAgenda", existing);
                 await LogAudit("MeetingAgenda", existing.ID, "Updated", null, body.GetRawText());
                 _logger.LogInformation("MeetingAgenda ID {Id} updated.", existing.ID);
@@ -3260,6 +3559,9 @@ namespace LIMSApi.Services
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
+                model.AgendaItemsJson = JsonSerializer.Serialize(model.AgendaList);
+                model.AttendeesJson = JsonSerializer.Serialize(model.ParticipantItems);
+                model.ActionPlanJson = JsonSerializer.Serialize(model.ActionItems);
 
                 var id = await _repository.Add("MeetingMinutes", model);
                 await LogAudit("MeetingMinutes", id, "Created", null, body.GetRawText());
@@ -3280,14 +3582,25 @@ namespace LIMSApi.Services
                 existing.MeetingDate = model.MeetingDate;
                 existing.MeetingType = model.MeetingType;
                 existing.ChairpersonName = model.ChairpersonName;
-                existing.AttendeesJson = model.AttendeesJson;
-                existing.MinutesJson = model.MinutesJson;
                 existing.NextMeetingDate = model.NextMeetingDate;
                 existing.NextMeetingAgenda = model.NextMeetingAgenda;
                 existing.ActionClosureStatus = model.ActionClosureStatus;
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
+                existing.AgendaItemsJson = JsonSerializer.Serialize(model.AgendaList);
+                existing.AttendeesJson = JsonSerializer.Serialize(model.ParticipantItems);
+                existing.ActionPlanJson = JsonSerializer.Serialize(model.ActionItems);
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.MeetingId = model.MeetingId;
+                existing.MeetingNo = model.MeetingNo;
+                existing.MeetingVenue = model.MeetingVenue;
+                existing.MeetingTime = model.MeetingTime;
+                existing.OverallConclusion = model.OverallConclusion;
 
                 await _repository.Update("MeetingMinutes", existing);
                 await LogAudit("MeetingMinutes", existing.ID, "Updated", null, body.GetRawText());
@@ -3340,6 +3653,14 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.CorrectiveAction = model.CorrectiveAction;
+                existing.CloserDate = model.CloserDate;
+                existing.SignatureTDQM = model.SignatureTDQM;
 
                 await _repository.Update("NonConformingWork", existing);
                 await LogAudit("NonConformingWork", existing.ID, "Updated", null, body.GetRawText());
@@ -3403,6 +3724,7 @@ namespace LIMSApi.Services
             }
         }
 
+
         private async Task<long> SaveRetesting(JsonElement body)
         {
             var model = JsonSerializer.Deserialize<NablRetesting>(body.GetRawText(), _jsonOptions)
@@ -3412,20 +3734,37 @@ namespace LIMSApi.Services
             {
                 model.FormCode = FormCodeMap["Retesting"];
                 await AssignDocumentNumber(model, "Retesting");
+
                 model.Status = "Draft";
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
 
+                foreach (var log in model.InitialTestingLogs)
+                {
+                    //log.NablRetesting = model;
+
+                    log.LatestResultPrefix = log.ResultPrefix;
+                    log.LatestResultValue = log.ResultValue;
+
+                    log.ModifiedDate = DateTime.UtcNow;
+                }
                 var id = await _repository.Add("Retesting", model);
+
                 await LogAudit("Retesting", id, "Created", null, body.GetRawText());
                 _logger.LogInformation("Retesting created with ID {Id}.", id);
+
                 return id;
             }
             else
             {
                 var existing = await _context.NablRetestings
-                    .FirstOrDefaultAsync(x => x.ID == model.ID && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+                    .Include(x => x.InitialTestingLogs)
+                    .Include(x => x.RetestingLogs)
+                    .FirstOrDefaultAsync(x =>
+                        x.ID == model.ID &&
+                        x.IsActive &&
+                        x.CompanyCode == loggedInUser.CompanyCode);
 
                 if (existing == null)
                     throw new InvalidOperationException("Retesting not found!");
@@ -3437,7 +3776,7 @@ namespace LIMSApi.Services
                 existing.RetestReason = model.RetestReason;
                 existing.RetestDate = model.RetestDate;
                 existing.TestParameter = model.TestParameter;
-                existing.TestMethod = model.TestMethod;
+                existing.TestMethodName = model.TestMethodName;
                 existing.OriginalResult = model.OriginalResult;
                 existing.RetestResult = model.RetestResult;
                 existing.Unit = model.Unit;
@@ -3446,13 +3785,100 @@ namespace LIMSApi.Services
                 existing.TestedBy = model.TestedBy;
                 existing.AuthorizedBy = model.AuthorizedBy;
                 existing.Remarks = model.Remarks;
+
+                existing.QcPlanNoId = model.QcPlanNoId;
+                existing.QcPlanActivityId = model.QcPlanActivityId;
+                existing.PlanNo = model.PlanNo;
+                existing.PlanYear = model.PlanYear;
+                existing.Discipline = model.Discipline;
+                existing.MaterialProductGroup = model.MaterialProductGroup;
+                existing.LabIncharge = model.LabIncharge;
+                existing.QcActivity = model.QcActivity;
+                existing.DepartmentName = model.DepartmentName;
+                existing.ReferenceType = model.ReferenceType;
+                existing.ReferenceName = model.ReferenceName;
+                existing.FrequencyType = model.FrequencyType;
+                existing.ResponsibleEmployee = model.ResponsibleEmployee;
+                existing.EffectiveFrom = model.EffectiveFrom;
+                existing.EffectiveTo = model.EffectiveTo;
+                existing.NextDueDate = model.NextDueDate;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ApprovedDate = model.ApprovedDate;
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
+                foreach (var log in model.InitialTestingLogs)
+                {
+                    var existingLog = existing.InitialTestingLogs
+                        .FirstOrDefault(x => x.Id == log.Id);
+
+                    if (existingLog == null)
+                    {
+                        log.RetestingRetainedSampleId = existing.ID;
+
+                        log.LatestResultPrefix = log.ResultPrefix;
+                        log.LatestResultValue = log.ResultValue;
+                        log.ModifiedDate = DateTime.UtcNow;
+
+                        existing.InitialTestingLogs.Add(log);
+                    }
+                    else
+                    {
+                        existingLog.DateOfTesting = log.DateOfTesting;
+                        existingLog.SampleId = log.SampleId;
+
+                        existingLog.ResultPrefix = log.ResultPrefix;
+                        existingLog.ResultValue = log.ResultValue;
+
+                        existingLog.TestedById = log.TestedById;
+                        existingLog.TestedByName = log.TestedByName;
+
+                        existingLog.Remarks = log.Remarks;
+                    }
+                }
+                foreach (var log in model.RetestingLogs)
+                {
+                    var existingLog = existing.RetestingLogs
+                        .FirstOrDefault(x => x.Id == log.Id);
+
+                    if (existingLog == null)
+                    {
+                        log.RetestingRetainedSampleId = existing.ID;
+
+                        existing.RetestingLogs.Add(log);
+
+                        var initial = existing.InitialTestingLogs
+                            .FirstOrDefault(x => x.Id == log.InitialTestLogId);
+
+                        if (initial != null)
+                        {
+                            bool previousChanged =
+                                initial.ResultPrefix != log.PreviousPrefix ||
+                                initial.ResultValue != log.PreviousValue;
+
+                            // User ne Previous Test Result edit kiya
+                            if (previousChanged)
+                            {
+                                initial.ResultPrefix = log.PreviousPrefix;
+                                initial.ResultValue = log.PreviousValue;
+                                initial.ModifiedDate = DateTime.UtcNow;
+                            }
+
+                            // Latest Test Result hamesha Retesting Result hoga
+                            initial.LatestResultPrefix = log.RetestPrefix;
+                            initial.LatestResultValue = log.RetestValue;
+                        }
+                    }
+                }
 
                 await _repository.Update("Retesting", existing);
+
                 await LogAudit("Retesting", existing.ID, "Updated", null, body.GetRawText());
                 _logger.LogInformation("Retesting ID {Id} updated.", existing.ID);
+
                 return existing.ID;
             }
         }
@@ -4172,6 +4598,323 @@ namespace LIMSApi.Services
         public async Task<NablTestMethodValidationDto> TestMethodDetails(string testmethodCode)
         {
             return await _repository.TestMethodDetails(testmethodCode);
+        }
+        public async Task<string> GetNextMaterialNo()
+        {
+            const string prefix = "CRM";
+
+            var lastRecord = await _context.NablReferenceMaterials
+                .Where(x => !string.IsNullOrEmpty(x.RMCode)
+                            && x.RMCode.StartsWith(prefix))
+                .OrderByDescending(x => x.ID)
+                .FirstOrDefaultAsync();
+
+            int nextNumber = 1;
+
+            if (lastRecord != null)
+            {
+                var parts = lastRecord.RMCode.Split('-');
+
+                if (parts.Length > 1 &&
+                    int.TryParse(parts[1], out int lastNumber))
+                {
+                    nextNumber = lastNumber + 1;
+                }
+            }
+
+            return $"{prefix}-{nextNumber:D3}";
+        }
+        public async Task<List<DropdwonSelector>> GetSupplierDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _repository.GetSupplierDropdown(searchTerm, pageNo, pageSize);
+        }
+        private async Task<long> SaveInventoryMaster(JsonElement body)
+        {
+            var model = JsonSerializer.Deserialize<InventoryManagement>(body.GetRawText(), _jsonOptions)
+                ?? throw new ArgumentException("Invalid Inventory Management data.");
+
+            if (model.ID == 0)
+            {
+                model.CreatedOn = DateTime.UtcNow;
+                model.CreatedBy = loggedInUser.EmployeeID;
+                model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
+                var id = await _repository.Add("InventoryMaster", model);
+                return id;
+            }
+            else
+            {
+                var existing = await _context.InventoryManagements
+                    .FirstOrDefaultAsync(x => x.ID == model.ID && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+
+                if (existing == null)
+                    throw new InvalidOperationException("Inventory Management not found!");
+
+
+                existing.ItemCode = model.ItemCode;
+                existing.ItemName= model.ItemName;
+                existing.ItemCategory= model.ItemCategory;
+                existing.Quantity = model.Quantity;
+                existing.MinimumQuantity= model.MinimumQuantity;
+                existing.ItemDescription= model.ItemDescription;
+                existing.DepartmentID= model.DepartmentID;
+                existing.SupplierId= model.SupplierId;
+                existing.Manufacturer = model.Manufacturer;
+                existing.BatchNo= model.BatchNo;
+                existing.Unit= model.Unit;
+                existing.StorageLocation= model.StorageLocation;
+                existing.Date= model.Date;
+                existing.Remarks= model.Remarks;
+                existing.ModifiedOn = DateTime.UtcNow;
+                existing.ModifiedBy = loggedInUser.EmployeeID;
+                await _repository.Update("InventoryMaster", existing);
+                await LogAudit("PtIlcPlan", existing.ID, "Updated", null, body.GetRawText());
+                _logger.LogInformation("PtIlcPlan ID {Id} updated.", existing.ID);
+                return existing.ID;
+            }
+        }
+
+        public async Task<InventoryQuantityLog> Addquantity(string? formType, JsonElement body)
+        {
+            var model = JsonSerializer.Deserialize<AddInventoryQuantityDto>(body.GetRawText(), _jsonOptions)
+                  ?? throw new ArgumentException("Invalid Inventory Management data.");
+            if (model.InventoryId <= 0)
+                throw new InvalidOperationException("Inventory Management not found!");
+            if (model.AddedQuantity <= 0)
+                throw new InvalidOperationException("Inventory Management not found!");
+
+            var existing = await _context.InventoryManagements
+                     .FirstOrDefaultAsync(x => x.ID == model.InventoryId && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            var previousQty = existing.Quantity;
+            var newQty = previousQty + model.AddedQuantity;
+            existing.Quantity = newQty;
+            existing.ModifiedOn = DateTime.UtcNow;
+            await _repository.Update("InventoryMaster", existing);
+            var log = new InventoryQuantityLog
+            {
+                InventoryId = existing.ID,   // FK stored here
+                AddedQuantity = model.AddedQuantity,
+                PreviousQuantity = previousQty,
+                NewQuantity = newQty,
+                AddedDate = DateTime.UtcNow,
+                AddedBy = loggedInUser.EmployeeID,
+                IsActive = true
+            };
+            await _repository.AddQuantityLog(log);
+            return log;
+        }
+        public async Task<List<InventoryQuantityLog>?> GetQuantityLogs(string formType, long inventoryId)
+        {
+            var existing = await _context.InventoryQuantityLogs
+                     .Where(x => x.InventoryId == inventoryId && x.IsActive).ToListAsync();
+
+            return existing;
+        }
+        public async Task<List<DropdwonSelector>> GetMaterialData(string formType, string type)
+        {
+            return await _repository.GetMaterialData(formType, type);
+        }
+        public async Task<InventoryManagementDto> GetInventoryDetails(string itemCode, string itemName)
+        {
+            return await _repository.GetInventoryDetails(itemCode, itemName);
+        }
+        public async Task<ReferenceMaterialConsumptionLog> AddConsumption(string? formType, JsonElement body)
+        {
+            var model = JsonSerializer.Deserialize<CrmConsumptionLogDto>(body.GetRawText(), _jsonOptions)
+                ?? throw new ArgumentException("Invalid Reference Material data.");
+
+            if (model.ReferenceMaterialId <= 0)
+                throw new InvalidOperationException("Reference Material not found!");
+
+            if (model.QuantityConsumed <= 0)
+                throw new InvalidOperationException("Consumed quantity must be greater than 0.");
+
+            var referenceMaterial = await _context.NablReferenceMaterials
+                .FirstOrDefaultAsync(x =>
+                    x.ID == model.ReferenceMaterialId &&
+                    x.IsActive &&
+                    x.CompanyCode == loggedInUser.CompanyCode);
+
+            if (referenceMaterial == null)
+                throw new InvalidOperationException("Reference Material not found!");
+
+            var lastLog = await _context.ReferenceMaterialConsumptionLogs
+                .Where(x =>
+                    x.ReferenceMaterialId == model.ReferenceMaterialId &&
+                    x.IsActive)
+                .OrderByDescending(x => x.Id)
+                .FirstOrDefaultAsync();
+
+            decimal previousQty;
+
+            if (lastLog == null)
+            {
+                previousQty = referenceMaterial.InitialQuantity;
+            }
+            else
+            {
+                previousQty = lastLog.BalanceQty;
+            }
+
+            if (previousQty <= 0)
+                throw new InvalidOperationException(
+                    $"No quantity available for consumption. Current balance is {previousQty} {referenceMaterial.Unit}."
+                );
+
+            if (model.QuantityConsumed > previousQty)
+                throw new InvalidOperationException(
+                    $"Consumed quantity ({model.QuantityConsumed} {referenceMaterial.Unit}) cannot be greater than available balance ({previousQty} {referenceMaterial.Unit})."
+                );
+
+            var newQty = previousQty - model.QuantityConsumed;
+
+            var log = new ReferenceMaterialConsumptionLog
+            {
+                ReferenceMaterialId = referenceMaterial.ID,
+                QuantityConsumed = model.QuantityConsumed,
+                PreviousBalanceQty = previousQty,
+                BalanceQty = newQty,
+                ConsumptionDate = model.ConsumptionDate,
+                UsedBy = model.UsedBy,
+                EquipmentOrTest = model.EquipmentOrTest,
+                Purpose = model.Purpose,
+                Remarks = model.Remarks,
+                IsActive = true,
+            };
+
+            await _context.ReferenceMaterialConsumptionLogs.AddAsync(log);
+            await _context.SaveChangesAsync();
+
+            return log;
+        }
+        public async Task<List<DropdwonSelector>> GetEmployeesDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _repository.GetEmployeesDropdown(searchTerm, pageNo, pageSize);
+        }
+        public async Task<List<DropdwonSelector>> GetReferenceOptions(string? referenceType)
+        {
+            return await _repository.GetReferenceOptions(referenceType);
+        }
+        public async Task<string> GetNextQCPlanNo()
+        {
+            var year = DateTime.Now.Year;
+            var prefix = $"QC-PLAN-{year}";
+
+            var lastRecord = await _context.NablQualityControlPlans
+                .Where(x => x.IsActive
+                            && !string.IsNullOrEmpty(x.PlanNo)
+                            && x.PlanNo.StartsWith(prefix))
+                .OrderByDescending(x => x.ID)
+                .FirstOrDefaultAsync();
+
+            int nextNumber = 1;
+
+            if (lastRecord != null)
+            {
+                var parts = lastRecord.PlanNo.Split('-');
+
+                if (parts.Length >= 4 &&
+                    int.TryParse(parts[3], out int lastNumber))
+                {
+                    nextNumber = lastNumber + 1;
+                }
+            }
+
+            return $"{prefix}-{nextNumber:D3}";
+        }
+        private DateTime? CalculateNextDuaDate(string frequencyType, DateTime? effectiveForm)
+        {
+            if (effectiveForm == null || string.IsNullOrEmpty(frequencyType))
+                return null;
+
+            return frequencyType switch
+            {
+                "Daily" => effectiveForm.Value.AddDays(1),
+                "Weekly" => effectiveForm.Value.AddDays(7),
+                "Monthly" => effectiveForm.Value.AddMonths(1),
+                "Quarterly" => effectiveForm.Value.AddMonths(3),
+                "Half-Yearly" => effectiveForm.Value.AddMonths(6),
+                "Yearly" => effectiveForm.Value.AddYears(1),
+                _ => null
+            };
+        }
+        public async Task<List<DropdwonSelector>> GetQcplannoDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _repository.GetQcplannoDropdown(searchTerm, pageNo, pageSize);
+        }
+        public async Task<RetestingQcPlanDetailsDto> QCDetails(long id)
+        {
+            return await _repository.QCDetails(id);
+        }
+        public async Task<List<DropdwonSelector>> GetCustomerDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _repository.GetCustomerDropdown(searchTerm, pageNo, pageSize);
+        }
+        public async Task<CustomerFeedbackAnalysisDto> GetFeedbackDetails(long id)
+        {
+            return await _repository.GetFeedbackDetails(id);
+        }
+        public async Task<string> GetNextAnalysisNo()
+        {
+            var year = DateTime.Now.Year;
+            const string companyCode = "CFA";
+
+            // Format: CFA-2026-
+            var prefix = $"{companyCode}-{year}-";
+
+            var lastRecord = await _context.NablFeedbackAnalyses
+                .Where(x => x.AnalysisNo != null && x.AnalysisNo.StartsWith(prefix))
+                .OrderByDescending(x => x.ID)
+                .FirstOrDefaultAsync();
+
+            int nextNumber = 1;
+
+            if (lastRecord != null)
+            {
+                var lastNumberText = lastRecord.AnalysisNo.Split('-').Last();
+
+                if (int.TryParse(lastNumberText, out int lastNumber))
+                {
+                    nextNumber = lastNumber + 1;
+                }
+            }
+
+            // Final Format: CFA-2026-001
+            return $"{companyCode}-{year}-{nextNumber:D3}";
+        }
+        public async Task<string> GetNextMeetingNo()
+        {
+            var year = DateTime.Now.Year;
+            const string companyCode = "MRM";
+
+            // Format: CFA-2026-
+            var prefix = $"{companyCode}-{year}-";
+
+            var lastRecord = await _context.NablMeetingAgendas
+                .Where(x => x.MeetingNo != null && x.MeetingNo.StartsWith(prefix))
+                .OrderByDescending(x => x.ID)
+                .FirstOrDefaultAsync();
+
+            int nextNumber = 1;
+
+            if (lastRecord != null)
+            {
+                var lastNumberText = lastRecord.MeetingNo.Split('-').Last();
+
+                if (int.TryParse(lastNumberText, out int lastNumber))
+                {
+                    nextNumber = lastNumber + 1;
+                }
+            }
+
+            return $"{companyCode}-{year}-{nextNumber:D3}";
+        }
+        public async Task<List<DropdwonSelector>> GetMeetinglist(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _repository.GetMeetinglist(searchTerm, pageNo, pageSize);
+        }
+        public async Task<MeetingAgendaDto> GetMeetingDetails(string meetingNo)
+        {
+            return await _repository.GetMeetingDetails(meetingNo);
         }
     }
 }

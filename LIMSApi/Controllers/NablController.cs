@@ -256,7 +256,117 @@ namespace LIMSApi.Controllers
             var data = await _service.TestMethodDetails(testmethodCode);
             return data == null ? NoContent() : Ok(data);
         }
+        [HttpGet("{formType}/next-material-no")]
+        public async Task<IActionResult> GetNextMaterialNo()
+        {
+            var rmCode = await _service.GetNextMaterialNo();
+            return Ok(new { rmCode });
+        }
+        [HttpGet("{formType}/dropdown")]
+        public async Task<IActionResult> GetSupplierDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            var data = await _service.GetSupplierDropdown(searchTerm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+
+        [HttpPost("{formType}/add-quantity")]
+        public async Task<IActionResult> Addquantity(string formType, [FromBody] JsonElement body)
+        {
+            var id = await _service.Addquantity(formType, body);
+            return Ok(new { message = $"{formType} saved successfully", id });
+        }
+        [HttpGet("{formType}/quantity-logs/{inventoryId}")]
+        public async Task<IActionResult> GetQuantityLogs(string formType, long inventoryId)
+        {
+            var entity = await _service.GetQuantityLogs(formType, inventoryId);
+            return entity == null ? NoContent() : Ok(entity);
+        }
+        [HttpGet("{formType}/material-dropdown/{type}")]
+        public async Task<IActionResult> GetMaterialData(string formType, string type)
+        {
+            var entity = await _service.GetMaterialData(formType, type);
+            return entity == null ? NoContent() : Ok(entity);
+        }
+        [HttpGet("{formType}/inventory-details/{itemCode}/{itemName}")]
+        public async Task<IActionResult> GetInventoryDetails(string itemCode, string itemName)
+        {
+            var entity = await _service.GetInventoryDetails(itemCode, itemName);
+            return entity == null ? NoContent() : Ok(entity);
+        }
+        //[HttpPost("{formType}/add-consumption")]
+        //public async Task<IActionResult> AddConsumption(string formType, [FromBody] JsonElement body)
+        //{
+        //    var log = await _service.AddConsumption(formType, body);
+        //    return Ok(new { message = $"{formType} saved successfully", log });
+        //}
+        [HttpGet("{formType}/employeesdropdown")]
+        public async Task<IActionResult> GetEmployeesDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            var data = await _service.GetEmployeesDropdown(searchTerm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("{formType}/ReferenceOptions/{referenceType}")]
+        public async Task<IActionResult> GetReferenceOptions(string referenceType)
+        {
+            var data = await _service.GetReferenceOptions(referenceType);
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("{formType}/next-qc-plan-no")]
+        public async Task<IActionResult> GetNextQCPlanNo()
+        {
+            var planNo = await _service.GetNextQCPlanNo();
+            return Ok(new { planNo });
+        }
+        [HttpGet("{formType}/qcplanno-dropdown")]
+        public async Task<IActionResult> GetQcplannoDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            var data = await _service.GetQcplannoDropdown(searchTerm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("{formType}/qcDetails/{id}")]
+        public async Task<IActionResult> QCDetails(long id)
+        {
+            var entity = await _service.QCDetails(id);
+            return entity == null ? NoContent() : Ok(entity);
+        }
+        [HttpGet("{formType}/customer-dropdown")]
+        public async Task<IActionResult> GetCustomerDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            var data = await _service.GetCustomerDropdown(searchTerm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("{formType}/feedback-details/{id}")]
+        public async Task<IActionResult> GetFeedbackDetails(long id)
+        {
+            var entity = await _service.GetFeedbackDetails(id);
+            return entity == null ? NoContent() : Ok(entity);
+        }
+        [HttpGet("{formType}/next-analysis-no")]
+        public async Task<IActionResult> GetNextAnalysisNo()
+        {
+            var analysisNo = await _service.GetNextAnalysisNo();
+            return Ok(new { analysisNo });
+        }
+        [HttpGet("{formType}/next-meeting-no")]
+        public async Task<IActionResult> GetNextMeetingNo()
+        {
+            var meetingNo = await _service.GetNextMeetingNo();
+            return Ok(new { meetingNo });
+        }
+        [HttpGet("{formType}/all-meeting-list")]
+        public async Task<IActionResult> GetMeetinglist(string? searchTearm, int pageNo, int pageSize)
+        {
+            var data = await _service.GetMeetinglist(searchTearm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("{formType}/meeting-details/{meetingNo}")]
+        public async Task<IActionResult> GetMeetingDetails(string meetingNo)
+        {
+            var entity = await _service.GetMeetingDetails(meetingNo);
+            return entity == null ? NoContent() : Ok(entity);
+        }
     }
+
 
     // DTO for reject endpoint
     public class RejectRequest

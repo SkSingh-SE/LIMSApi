@@ -14,6 +14,7 @@ namespace LIMSApi.Services.Interface
         Task<string> GetNextRegisterNo();
         Task<string> GetNextIndentNo();
         Task<string> GetNextPlanNo();
+        Task<string> GetNextMaterialNo();
 
         // Workflow
         Task Submit(string formType, long id);
@@ -44,5 +45,22 @@ namespace LIMSApi.Services.Interface
         Task<NablPurchaseIndentDto> IndentDetails(string indentNo);
         Task<UploadFile> UploadSignatureAsync(IFormFile file, CancellationToken cancellationToken = default);
         Task<NablTestMethodValidationDto> TestMethodDetails(string testmethodCode);
+        Task<List<DropdwonSelector>> GetSupplierDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<InventoryQuantityLog> Addquantity(string formType, JsonElement body);
+        Task<List<InventoryQuantityLog?>> GetQuantityLogs(string formType, long inventoryId);
+        Task<List<DropdwonSelector>> GetMaterialData(string formType, string type);
+        Task<InventoryManagementDto> GetInventoryDetails(string itemCode, string itemName);
+        Task<List<DropdwonSelector>> GetEmployeesDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<DropdwonSelector>> GetReferenceOptions(string referenceType);
+        //Task<ReferenceMaterialConsumptionLog> AddConsumption(string formType, JsonElement body);
+        Task<string> GetNextQCPlanNo();
+        Task<List<DropdwonSelector>> GetQcplannoDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<RetestingQcPlanDetailsDto?> QCDetails(long id);
+        Task<List<DropdwonSelector>> GetCustomerDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<CustomerFeedbackAnalysisDto?> GetFeedbackDetails(long id);
+        Task<string> GetNextAnalysisNo();
+        Task<string> GetNextMeetingNo();
+        Task<List<DropdwonSelector>> GetMeetinglist(string? searchTerm, int pageNo, int pageSize);
+        Task<MeetingAgendaDto?> GetMeetingDetails(string meetingNo);
     }
 }

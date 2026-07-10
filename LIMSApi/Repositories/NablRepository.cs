@@ -11,6 +11,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq.Dynamic.Core;
 using System.Reflection;
 using System.Text.Json;
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace LIMSApi.Repositories
 {
@@ -104,6 +105,7 @@ namespace LIMSApi.Repositories
                 "MasterDocument" => await GetAllTyped<NablMasterDocument>(filter),
                 "MeasurementUncertainty" => await GetAllTyped<NablMeasurementUncertainty>(filter),
                 "PtIlcPlan" => await GetAllTyped<NablPtIlcPlan>(filter),
+                "InventoryMaster" => await GetInventoryMasterList(filter),
                 _ => throw new ArgumentException($"Unknown form type: {formType}")
             };
         }
@@ -125,7 +127,7 @@ namespace LIMSApi.Repositories
                 "TrainingAttendance" => await GetByIdTyped<NablTrainingAttendance>(id),
                 "TrainingEffectiveness" => await GetByIdTyped<NablTrainingEffectiveness>(id),
                 "EnvironmentMonitoring" => await GetByIdTyped<NablEnvironmentMonitoring>(id),
-                "QualityControlPlan" => await GetByIdTyped<NablQualityControlPlan>(id),
+                "QualityControlPlan" => await GetQualityControlPlanByIdTyped(id),
                 "TestRequest" => await GetByIdTyped<NablTestRequest>(id),
                 "TestMethod" => await GetByIdTyped<NablTestMethod>(id),
                 "MethodVerification" => await GetByIdTyped<NablMethodVerification>(id),
@@ -139,7 +141,7 @@ namespace LIMSApi.Repositories
                 "CalibrationReview" => await GetByIdTyped<NablCalibrationReview>(id),
                 "IntermediateCheck" => await GetByIdTyped<NablIntermediateCheck>(id),
                 "ReferenceMaterial" => await GetByIdTyped<NablReferenceMaterial>(id),
-                "CrmConsumption" => await GetByIdTyped<NablCrmConsumption>(id),
+                "CrmConsumption" => await GetByReferenceMaterialId(id),
                 "SupplierRegistration" => await GetByIdTyped<NablSupplierRegistration>(id),
                 "SupplierEvaluation" => await GetByIdTyped<NablSupplierEvaluation>(id),
                 "ApprovedSupplier" => await GetByIdTyped<NablApprovedSupplier>(id),
@@ -160,13 +162,14 @@ namespace LIMSApi.Repositories
                 "MeetingMinutes" => await GetByIdTyped<NablMeetingMinutes>(id),
                 "NonConformingWork" => await GetByIdTyped<NablNonConformingWork>(id),
                 "NcCorrectiveAction" => await GetByIdTyped<NablNcCorrectiveAction>(id),
-                "Retesting" => await GetByIdTyped<NablRetesting>(id),
+                "Retesting" => await GetNablRetesting(id),
                 "RiskAssessment" => await GetByIdTyped<NablRiskAssessment>(id),
                 "DocumentChangeRequest" => await GetByIdTyped<NablDocumentChangeRequest>(id),
                 "DocumentReview" => await GetByIdTyped<NablDocumentReview>(id),
                 "MasterDocument" => await GetByIdTyped<NablMasterDocument>(id),
                 "MeasurementUncertainty" => await GetByIdTyped<NablMeasurementUncertainty>(id),
                 "PtIlcPlan" => await GetByIdTyped<NablPtIlcPlan>(id),
+                "InventoryMaster" => await GetInventoryMaster(id),
                 _ => throw new ArgumentException($"Unknown form type: {formType}")
             };
         }
@@ -230,6 +233,7 @@ namespace LIMSApi.Repositories
                 "MasterDocument" => await AddTyped((NablMasterDocument)model),
                 "MeasurementUncertainty" => await AddTyped((NablMeasurementUncertainty)model),
                 "PtIlcPlan" => await AddTyped((NablPtIlcPlan)model),
+                "InventoryMaster" => await AddInventoryMaster((InventoryManagement)model),
                 _ => throw new ArgumentException($"Unknown form type: {formType}")
             };
         }
@@ -402,6 +406,9 @@ namespace LIMSApi.Repositories
                     break;
                 case "PtIlcPlan":
                     await UpdateTyped((NablPtIlcPlan)model);
+                    break;
+                case "InventoryMaster":
+                    await UpdateInventoryMaster((InventoryManagement)model);
                     break;
                 default:
                     throw new ArgumentException($"Unknown form type: {formType}");
@@ -577,6 +584,9 @@ namespace LIMSApi.Repositories
                 case "PtIlcPlan":
                     await DeleteTyped<NablPtIlcPlan>(id);
                     break;
+                case "InventoryMaster":
+                    await DeleteInventoryMaster<InventoryManagement>(id);
+                    break;
                 default:
                     throw new ArgumentException($"Unknown form type: {formType}");
             }
@@ -630,6 +640,16 @@ namespace LIMSApi.Repositories
         private async Task<NablEmployeeAuthorization> GetEmployeeAuthorization(long id)
         {
             var data = await _context.NablEmployeeAuthorizations.Include(c => c.EmployeeEquipmentAuth).Include(c => c.LabTestAuth).Include(c => c.TestMethodAuth).FirstOrDefaultAsync(c => c.ID == id && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
+            return data;
+        }
+        private async Task<InventoryManagement> GetInventoryMaster(long id)
+        {
+            var data = await _context.InventoryManagements.FirstOrDefaultAsync(c => c.ID == id && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
+            return data;
+        }
+        private async Task<NablRetesting> GetNablRetesting(long id)
+        {
+            var data = await _context.NablRetestings.Include(c => c.InitialTestingLogs).Include(c => c.RetestingLogs).FirstOrDefaultAsync(c => c.ID == id && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
             return data;
         }
         private async Task<PagedResponse<object>> GetEquipmentAuthorizationList(PageFilter filter)
@@ -1414,7 +1434,7 @@ namespace LIMSApi.Repositories
             var data = await _context.NablMethodVerifications
                 .Where(x =>
                     x.IsActive &&
-                    x.TestMethodCode == testmethodCode).Select(c => new 
+                    x.TestMethodCode == testmethodCode).Select(c => new
                     {
                         c.TestMethodName,
                         c.RevIssue,
@@ -1543,6 +1563,567 @@ namespace LIMSApi.Repositories
 
             return result;
         }
+        public async Task<List<DropdwonSelector>> GetSupplierDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
 
+            var _query = from a in _context.NablSupplierRegistrations
+                         where a.IsActive
+                         select a;
+
+
+            _query = _query.Where(x => !string.IsNullOrWhiteSpace(x.SupplierName));
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => x.SupplierName.Contains(search));
+                }
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await _query
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = x.SupplierName
+                })
+                .ToListAsync();
+
+            return data;
+        }
+        private async Task<long> AddInventoryMaster(InventoryManagement obj)
+        {
+            await _context.InventoryManagements.AddAsync(obj);
+            await _context.SaveChangesAsync();
+
+            return obj.ID;
+        }
+        private async Task UpdateInventoryMaster(InventoryManagement obj)
+        {
+            _context.InventoryManagements.Update(obj);
+            await _context.SaveChangesAsync();
+        }
+        private async Task<PagedResponse<object>> GetInventoryMasterList(PageFilter filter)
+        {
+            var query = _context.InventoryManagements
+                .Where(c => c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
+
+            if (filter.Filter != null)
+            {
+                query = query.AsQueryable().ApplyFilters(filter.Filter);
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.searchTerm))
+            {
+                var search = filter.searchTerm.Trim();
+
+                decimal? qty = decimal.TryParse(search, out var parsedQty) ? parsedQty : (decimal?)null;
+
+                query = query.Where(x =>
+                    (x.ItemName != null && x.ItemName.Contains(search)) ||
+                    (x.ItemCode != null && x.ItemCode.Contains(search)) ||
+                    (x.ItemCategory != null && x.ItemCategory.Contains(search)) ||
+                    (x.Unit!= null && x.Unit.Contains(search)) ||
+                    (qty != null && x.Quantity == qty)
+                );
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.SortByColumn))
+            {
+                string direction = filter.SortOrder?.ToLower() == "asc" ? "ascending" : "descending";
+                query = query.OrderBy($"{filter.SortByColumn} {direction}");
+            }
+            else
+            {
+                query = query.OrderByDescending(x => x.ID);
+            }
+
+            return await query.Cast<object>().ToPagedAsync(filter);
+        }
+
+        private async Task DeleteInventoryMaster<T>(long id)
+        {
+            var entity = await _context.InventoryManagements
+                .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+
+            if (entity != null)
+            {
+                entity.IsActive = false;
+                entity.ModifiedOn = DateTime.UtcNow;
+                entity.ModifiedBy = loggedInUser.EmployeeID;
+                _context.InventoryManagements.Update(entity);
+                await _context.SaveChangesAsync();
+            }
+        }
+        public async Task AddQuantityLog(InventoryQuantityLog log)
+        {
+            await _context.InventoryQuantityLogs.AddAsync(log);
+            await _context.SaveChangesAsync();
+        }
+        public async Task<List<DropdwonSelector>> GetMaterialData(string formType, string type)
+        {
+            string? searchTerm; int pageNo = 0; int pageSize = 20;
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = from a in _context.InventoryManagements
+                         where a.IsActive
+                         select a;
+
+
+            _query = _query.Where(x => x.ItemCategory == type);
+
+
+            var skip = pageNo * pageSize;
+
+            var data = await _query
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = (x.ItemCode ?? "") + "/" + (x.ItemName)
+                })
+                .ToListAsync();
+
+            return data;
+        }
+        public async Task<InventoryManagementDto> GetInventoryDetails(string itemCode, string itemName)
+        {
+            var data = await _context.InventoryManagements.Where(x => x.IsActive && x.ItemCode == itemCode && x.ItemName == itemName).FirstOrDefaultAsync();
+
+            var res = new InventoryManagementDto
+            {
+                ItemName = data.ItemName,
+                ItemCode = data.ItemCode,
+                Unit = data.Unit,
+                BatchNo = data.BatchNo,
+                Date = data.Date,
+                ItemCategory = data.ItemCategory,
+                Manufacturer = data.Manufacturer,
+                MinimumQuantity = data.MinimumQuantity,
+                Quantity = data.Quantity,
+                StorageLocation = data.StorageLocation,
+                SupplierId = data.SupplierId,
+                InventoryId =data.ID,
+                DepartmentID =data.DepartmentID,
+
+
+            };
+            return res;
+        }
+        private async Task<CrmConsumptionDetailsDto> GetByReferenceMaterialId(long id)
+        {
+
+            var crm = await _context.NablReferenceMaterials.FirstOrDefaultAsync(c => c.ID == id && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
+            if (crm == null)
+            {
+                throw new ArgumentException("Reference Material not found.");
+            }
+            var consumption = await _context.NablCrmConsumptions
+                .Include(c => c.Logs.Where(c => c.IsActive)).
+                FirstOrDefaultAsync(c => c.ReferenceMaterialId== id && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
+            return new CrmConsumptionDetailsDto
+            {
+                CrmDetails = new CrmDetailsDto
+                {
+                    ReferenceMaterialId = crm.ID,
+                    DocumentNo = crm.DocumentNo,
+                    BatchNo = crm.BatchNo,
+                    CertificateNo = crm.CertificateNo,
+                    Manufacturer = crm.Manufacturer,
+                    MaterialClassification = crm.MatrixType,
+                    MinimumQuantity = crm.MinimumQuantity,
+                    Quantity = crm.InitialQuantity,
+                    RmCode = crm.RMCode,
+                    RmName = crm.RMName,
+                    Type = crm.Type,
+                    Unit = crm.Unit,
+                    ValidityDate = crm.ValidityDate,
+                    PreparedBy = crm.PreparedBy,
+                    PreparedDate = crm.PreparedDate,
+                    ApprovedBy = crm.ApprovedBy,
+                    ReviewedBy = crm.ReviewedBy,
+                    ApprovedDate = crm.ApprovedDate,
+                    ReceivedDate = crm.ReceivedDate,
+                    Date = crm.Date,
+
+
+                },
+                ConsumptionHeader = consumption == null
+            ? null
+            : new CrmConsumptionHeaderDto
+            {
+                Id = consumption.ID,
+                ReferenceMaterialId = consumption.ReferenceMaterialId,
+                FormNo = consumption.FormCode,
+                DocumentNo = consumption.DocumentNo,
+                IssueNo = consumption.IssueNo,
+                RevNo = consumption.RevNo,
+                RecordDate = consumption.Date,
+                OpeningQuantity = consumption.OpeningQuantity,
+                TotalConsumed = consumption.TotalConsumed,
+                RemainingQuantity = consumption.RemainingQuantity,
+                Notes = consumption.Notes,
+                PreparedBy = consumption.PreparedBy,
+                ReviewedBy = consumption.ReviewedBy,
+                ApprovedBy = consumption.ApprovedBy
+            },
+
+                Logs = consumption?.Logs?
+            .OrderByDescending(x => x.ConsumptionDate)
+            .Select(x => new CrmConsumptionLogDto
+            {
+                Id = x.Id,
+                ConsumptionDate = x.ConsumptionDate,
+                QuantityConsumed = x.QuantityConsumed,
+                PreviousBalanceQty = x.PreviousBalanceQty,
+                BalanceQty = x.BalanceQty,
+                Purpose = x.Purpose,
+                EquipmentOrTest = x.EquipmentOrTest,
+                UsedBy = x.UsedBy,
+                Remarks = x.Remarks
+            })
+            .ToList() ?? new List<CrmConsumptionLogDto>()
+            };
+        }
+        private async Task<NablQualityControlPlan> GetQualityControlPlanByIdTyped(long id)
+        {
+
+            var qcPlan = await _context.NablQualityControlPlans.Include(c => c.Activities.Where(a => a.IsActive)).FirstOrDefaultAsync(c => c.ID == id && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
+            if (qcPlan == null)
+            {
+                throw new ArgumentException("Reference Material not found.");
+            }
+            return qcPlan;
+        }
+        public async Task<List<DropdwonSelector>> GetEmployeesDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = from a in _context.EmployeeMasters
+                         where a.IsActive
+                         select a;
+
+
+            _query = _query.Where(x => !string.IsNullOrWhiteSpace(x.Name));
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => x.Name.Contains(search));
+                }
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await _query
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = x.Name
+                })
+                .ToListAsync();
+
+            return data;
+        }
+        public async Task<List<DropdwonSelector>> GetReferenceOptions(string referenceType)
+        {
+            string? searchTerm = null;
+            int pageNo = 0;
+            int pageSize = 20;
+            if (pageNo < 0) pageNo = 0;
+            if (pageSize <= 0) pageSize = 20;
+
+            var skip = pageNo * pageSize;
+
+            if (referenceType == "CRM")
+            {
+                var query = _context.NablReferenceMaterials
+                    .Where(x => x.IsActive);
+
+                if (!string.IsNullOrWhiteSpace(searchTerm))
+                {
+                    var search = searchTerm.Trim();
+
+                    if (FilterHelper.IsExactIdSearch(search, out long exactId))
+                    {
+                        query = query.Where(x => x.ID == exactId);
+                    }
+                    else
+                    {
+                        query = query.Where(x =>
+                            x.RMCode.Contains(search) ||
+                            x.RMName.Contains(search));
+                    }
+                }
+
+                return await query
+                    .OrderBy(x => x.RMCode)
+                    .Skip(skip)
+                    .Take(pageSize)
+                    .Select(x => new DropdwonSelector
+                    {
+                        Id = x.ID,
+                        Name = x.RMCode + " - " + x.RMName
+                    })
+                    .ToListAsync();
+            }
+
+            if (referenceType == "Equipment")
+            {
+                var query = _context.EquipmentMasters
+                    .Where(x => x.IsActive);
+
+                if (!string.IsNullOrWhiteSpace(searchTerm))
+                {
+                    var search = searchTerm.Trim();
+
+                    if (FilterHelper.IsExactIdSearch(search, out long exactId))
+                    {
+                        query = query.Where(x => x.ID == exactId);
+                    }
+                    else
+                    {
+                        query = query.Where(x =>
+                            x.EquipmentNo.Contains(search) ||
+                            x.Name.Contains(search));
+                    }
+                }
+
+                return await query
+                    .OrderBy(x => x.EquipmentNo)
+                    .Skip(skip)
+                    .Take(pageSize)
+                    .Select(x => new DropdwonSelector
+                    {
+                        Id = x.ID,
+                        Name = x.EquipmentNo + " - " + x.Name
+                    })
+                    .ToListAsync();
+            }
+
+            return new List<DropdwonSelector>();
+        }
+        public async Task<List<DropdwonSelector>> GetQcplannoDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = _context.NablQualityControlPlans.Where(c => c.IsActive && c.Activities.Any(c => c.IsActive && c.ActivityName == "Retesting of Retained Sample"));
+
+            _query = _query.Where(x => !string.IsNullOrWhiteSpace(x.PlanNo));
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => x.PlanNo.Contains(search));
+                }
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await _query
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = x.PlanNo
+                })
+                .ToListAsync();
+
+            return data;
+        }
+        public async Task<RetestingQcPlanDetailsDto?> QCDetails(long id)
+        {
+            var plan = await _context.NablQualityControlPlans.Include(c => c.Activities).FirstOrDefaultAsync(c => c.ID == id && c.IsActive);
+
+            if (plan == null)
+                return null;
+
+            var activity = plan.Activities.FirstOrDefault(c => c.QualityControlPlanId == id && c.ActivityName == "Retesting of Retained Sample" && c.IsActive);
+            if (activity == null)
+                return null;
+
+            return new RetestingQcPlanDetailsDto
+            {
+                QCPlanId = plan.ID,
+                QCPlanActivityId = activity.ID,
+
+                PlanNo = plan.PlanNo,
+                PlanYear = plan.PlanYear,
+                Discipline = plan.Discipline,
+                MaterialProductGroup = plan.MaterialProductGroup,
+                LabIncharge = plan.LabIncharge,
+                EffectiveFrom = activity.EffectiveFrom,
+                EffectiveTo = activity.EffectiveTo,
+
+                QCActivity = activity.ActivityName,
+                DepartmentName = activity.DepartmentName,
+                TestMethodName = activity.TestMethod,
+                ReferenceType = activity.ReferenceType,
+                ReferenceName = activity.ReferenceName,
+                FrequencyType = activity.FrequencyType,
+                ResponsibleEmployee = activity.EmployeeName,
+                AcceptanceCriteria = activity.AcceptanceCriteria,
+                NextDueDate = activity.NextDueDate
+
+
+            };
+        }
+        public async Task<List<DropdwonSelector>> GetCustomerDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = _context.NablCustomerFeedbacks.Where(c => c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
+
+            _query = _query.Where(x => !string.IsNullOrWhiteSpace(x.CompanyName));
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => x.CompanyName.Contains(search));
+                }
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await _query
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = x.CompanyName
+                })
+                .ToListAsync();
+
+            return data;
+        }
+        public async Task<CustomerFeedbackAnalysisDto?> GetFeedbackDetails(long id)
+        {
+            var customerFeedback = await _context.NablCustomerFeedbacks.FirstOrDefaultAsync(c => c.ID == id && c.IsActive);
+
+            if (customerFeedback == null)
+                return null;
+            var ratings = string.IsNullOrWhiteSpace(customerFeedback.RatingsJson) ? new List<FeedbackRatingDto>() : JsonSerializer.Deserialize<List<FeedbackRatingDto>>(customerFeedback.RatingsJson)
+        ?? new List<FeedbackRatingDto>();
+            var validRating = ratings.Where(c => c.Rating.HasValue).Select(c => c.Rating!.Value).ToList();
+            decimal averageRating = validRating.Any() ? Math.Round((decimal)validRating.Average(), 2) : 0;
+
+
+            return new CustomerFeedbackAnalysisDto
+            {
+                CustomerId = customerFeedback.ID,
+                CustomerName = customerFeedback.CustomerName,
+                CompanyName = customerFeedback.CompanyName,
+                Address = customerFeedback.CompanyAddress,
+                ContactPerson = customerFeedback.ContactPerson,
+                Designation = customerFeedback.Designation,
+                FeedbackDate = customerFeedback.FeedbackDate,
+                Email = customerFeedback.Email,
+                MobileNo = customerFeedback.MobileNo,
+                Suggestions = customerFeedback.Suggestions,
+                NewRequirement = customerFeedback.CommentsSuggestions,
+                Ratings = ratings,
+                AverageRating = averageRating
+            };
+
+        }
+        public async Task<List<DropdwonSelector>> GetMeetinglist(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = from a in _context.NablMeetingAgendas
+                         where a.IsActive
+                         select a;
+
+
+            _query = _query.Where(x => !string.IsNullOrWhiteSpace(x.MeetingNo));
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => x.MeetingNo.Contains(search));
+                }
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await _query
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = (x.MeetingNo ?? "")
+                })
+                .ToListAsync();
+
+            return data;
+        }
+        public async Task<MeetingAgendaDto> GetMeetingDetails(string meetingNo)
+        {
+            var meetingAgenda = await _context.NablMeetingAgendas.FirstOrDefaultAsync(c => c.MeetingNo == meetingNo && c.IsActive);
+
+            if (meetingAgenda == null)
+                return null;
+            var participants = string.IsNullOrWhiteSpace(meetingAgenda.ParticipantsJson) ? new List<ParticipantsDto>() : JsonSerializer.Deserialize<List<ParticipantsDto>>(meetingAgenda.ParticipantsJson)
+        ?? new List<ParticipantsDto>();
+
+            var agendaItems = string.IsNullOrWhiteSpace(meetingAgenda.AgendaItemsJson) ? new List<AgendaItemsDto>() : JsonSerializer.Deserialize<List<AgendaItemsDto>>(meetingAgenda.AgendaItemsJson)
+        ?? new List<AgendaItemsDto>();
+
+
+            return new MeetingAgendaDto
+            {
+                MeetingId = meetingAgenda.ID,
+                ParticipantItems = participants,
+                Agendalist = agendaItems,
+                MeetingNo = meetingAgenda.MeetingNo,
+                MeetingTime = meetingAgenda.MeetingTime,
+                ChairpersonName = meetingAgenda.ChairpersonName,
+                MeetingDate = meetingAgenda.MeetingDate,
+                MeetingType = meetingAgenda.MeetingType,
+                MeetingVenue = meetingAgenda.MeetingVenue
+            };
+
+        }
     }
+
 }

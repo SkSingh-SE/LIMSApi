@@ -25,6 +25,18 @@ namespace LIMSApi.Repositories.Interface
         Task<List<InspectionParameters>> InspectionPlanDetails(string inspectionPlanNo);
         Task<NablPurchaseIndentDto> IndentDetails(string indentNo);
         Task<NablTestMethodValidationDto> TestMethodDetails(string testmethodCode);
+        Task<List<DropdwonSelector>> GetSupplierDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task AddQuantityLog(InventoryQuantityLog dto);
+        Task<List<DropdwonSelector>> GetMaterialData(string formType, string type);
+        Task<InventoryManagementDto> GetInventoryDetails(string itemCode, string itemName);
+        Task<List<DropdwonSelector>> GetEmployeesDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<DropdwonSelector>> GetReferenceOptions(string? referenceType);
+        Task<List<DropdwonSelector>> GetQcplannoDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<RetestingQcPlanDetailsDto?> QCDetails(long id);
+        Task<List<DropdwonSelector>> GetCustomerDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<CustomerFeedbackAnalysisDto?> GetFeedbackDetails(long id);
+        Task<List<DropdwonSelector>> GetMeetinglist(string? searchTerm, int pageNo, int pageSize);
+        Task<MeetingAgendaDto> GetMeetingDetails(string meetingNo);
 
     }
 }
