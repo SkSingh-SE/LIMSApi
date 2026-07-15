@@ -1,4 +1,4 @@
-﻿using LIMSApi.Data;
+using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
@@ -199,6 +199,8 @@ namespace LIMSApi.Services
                         existingLine.ParameterID = line.ParameterID;
                         existingLine.MinValue = line.MinValue;
                         existingLine.MaxValue = line.MaxValue;
+                        existingLine.TextValue = line.TextValue;
+                        existingLine.InputType = line.InputType;
                         existingLine.Notes = line.Notes;
                         existingLine.Equation = line.Equation;
                         existingLine.ParameterUnitID = line.ParameterUnitID;
