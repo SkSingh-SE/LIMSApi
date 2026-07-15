@@ -1,4 +1,4 @@
-﻿using System.Linq.Dynamic.Core;
+using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -58,7 +58,7 @@ namespace LIMSApi.Repositories
                 var search = filter.searchTerm.Trim();
                 _query = _query.Where(x =>
                     (x.Name != null && x.Name.Contains(search))
-                    || (x.ConversaionFactor != null && x.ConversaionFactor.Contains(search))
+                    || (x.ConversionFactor != null && x.ConversionFactor.ToString().Contains(search))
                 );
             }
             if (filter.SortByColumn != null)

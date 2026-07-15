@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -22,6 +22,9 @@ public partial class SpecificationLine
 
     [Column(TypeName = "decimal(18,6)")]
     public decimal? MaxValue { get; set; }
+
+    public string? TextValue { get; set; }
+    public string? InputType { get; set; }
 
     public string? Notes { get; set; }
     public string? Equation { get; set; }

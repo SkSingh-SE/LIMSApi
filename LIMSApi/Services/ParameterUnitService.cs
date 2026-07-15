@@ -1,4 +1,4 @@
-﻿using LIMSApi.Data;
+using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
@@ -39,7 +39,6 @@ namespace LIMSApi.Services
                 e.DisplayOrder = ++order;
                 e.IsActive = true;
             }
-            SyncInlineFromEquivalents(model);
 
             await _ParameterUnitRepository.AddParameterUnit(model);
             _logger.LogInformation("ParameterUnit '{ParameterUnitName}' created successfully.", model.Name);
@@ -59,12 +58,11 @@ namespace LIMSApi.Services
                 throw new InvalidOperationException("ParameterUnit not found!");
 
             existingParameterUnit.Name = model.Name;
-            existingParameterUnit.ConversaionFactor = model.ConversaionFactor;
+            existingParameterUnit.ConversionFactor = model.ConversionFactor;
 
             // Equivalents = source of truth. Upsert by ID, soft-delete the removed ones
             // (so future FK references survive), then sync inline columns for legacy readers.
             ApplyEquivalents(existingParameterUnit, model.Equivalents);
-            SyncInlineFromEquivalents(existingParameterUnit);
             existingParameterUnit.ModifiedOn = DateTime.UtcNow;
 
             await _ParameterUnitRepository.UpdateParameterUnit(existingParameterUnit);
@@ -105,29 +103,7 @@ namespace LIMSApi.Services
                 e.IsActive = false;
         }
 
-        // Mirror the first 7 active equivalents back into inline SimilarUnit1-7 so legacy
-        // readers (TestResult/Report) keep working until they migrate to the child table.
-        private static void SyncInlineFromEquivalents(ParameterUnitMaster unit)
-        {
-            var active = unit.Equivalents
-                .Where(e => e.IsActive && !string.IsNullOrWhiteSpace(e.Name))
-                .OrderBy(e => e.DisplayOrder ?? int.MaxValue)
-                .ThenBy(e => e.ID)
-                .Take(7)
-                .ToList();
 
-            string?[] names = new string?[7];
-            decimal?[] factors = new decimal?[7];
-            for (int i = 0; i < active.Count; i++) { names[i] = active[i].Name; factors[i] = active[i].ConversionFactor; }
-
-            unit.SimilarUnit1 = names[0]; unit.ConversionFactor1 = factors[0];
-            unit.SimilarUnit2 = names[1]; unit.ConversionFactor2 = factors[1];
-            unit.SimilarUnit3 = names[2]; unit.ConversionFactor3 = factors[2];
-            unit.SimilarUnit4 = names[3]; unit.ConversionFactor4 = factors[3];
-            unit.SimilarUnit5 = names[4]; unit.ConversionFactor5 = factors[4];
-            unit.SimilarUnit6 = names[5]; unit.ConversionFactor6 = factors[5];
-            unit.SimilarUnit7 = names[6]; unit.ConversionFactor7 = factors[6];
-        }
 
         public async Task RemoveParameterUnit(long id)
         {
@@ -178,7 +154,7 @@ namespace LIMSApi.Services
                 EquivalentId = null,
                 BaseUnitId = baseUnit.ID,
                 Name = baseUnit.Name,
-                ConversionFactor = decimal.TryParse(baseUnit.ConversaionFactor, out var bf) ? bf : (decimal?)null,
+                ConversionFactor = baseUnit.ConversionFactor,
                 IsBase = true
             });
 

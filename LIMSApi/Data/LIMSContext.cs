@@ -66,10 +66,10 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<MakerMaster> MakerMasters { get; set; }
     public virtual DbSet<MenuMaster> MenuMasters { get; set; }
     public virtual DbSet<MetalClassificationMaster> MetalClassificationMasters { get; set; }
-    public virtual DbSet<ParameterCategoryMaster> ParameterCategoryMasters { get; set; }
+    // ParameterCategoryMasters — table dropped (see migration Parameter-InputType-DropdownOptions-Cleanup)
     public virtual DbSet<HeatTreatmentCategoryMaster> HeatTreatmentCategoryMasters { get; set; }
     public virtual DbSet<CoolingMediumMaster> CoolingMediumMasters { get; set; }
-    public virtual DbSet<ParameterSpecimenOrientation> ParameterSpecimenOrientations { get; set; }
+    // ParameterSpecimenOrientations — table dropped (see migration Parameter-InputType-DropdownOptions-Cleanup)
     public virtual DbSet<HeatTreatmentMetalClassification> HeatTreatmentMetalClassifications { get; set; }
     public virtual DbSet<ProductFormMaster> ProductFormMasters { get; set; }
     public virtual DbSet<SpecimenOrientationCategoryMaster> SpecimenOrientationCategoryMasters { get; set; }
@@ -82,6 +82,7 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<OEMMaster> OEMMasters { get; set; }
     public virtual DbSet<OrganisationMaster> OrganisationMasters { get; set; }
     public virtual DbSet<ParameterMaster> ParameterMasters { get; set; }
+    public virtual DbSet<ParameterDropdownOption> ParameterDropdownOptions { get; set; }
     public virtual DbSet<ParameterUnitMaster> ParameterUnitMasters { get; set; }
     public virtual DbSet<ParameterUnitEquivalent> ParameterUnitEquivalents { get; set; }
     public virtual DbSet<HardnessEquivalence> HardnessEquivalences { get; set; }
@@ -374,11 +375,6 @@ public partial class LIMSContext : DbContext
             .HasFilter("[IsActive] = 1 AND [Code] IS NOT NULL")
             .HasDatabaseName("IX_MetalClassificationMaster_Code");
 
-        modelBuilder.Entity<ParameterMaster>()
-            .HasIndex(x => x.Code)
-            .IsUnique()
-            .HasFilter("[IsActive] = 1 AND [Code] IS NOT NULL")
-            .HasDatabaseName("IX_ParameterMaster_Code");
 
         modelBuilder.Entity<HeatTreatmentMaster>()
             .HasIndex(x => x.Code)
@@ -431,19 +427,6 @@ public partial class LIMSContext : DbContext
             .HasForeignKey(x => x.CoolingMediumID)
             .OnDelete(DeleteBehavior.NoAction);
 
-        // ParameterMaster FK configs
-        modelBuilder.Entity<ParameterMaster>()
-            .HasOne(x => x.DefaultTestMethod)
-            .WithMany()
-            .HasForeignKey(x => x.DefaultTestMethodID)
-            .IsRequired(false)
-            .OnDelete(DeleteBehavior.NoAction);
-
-        modelBuilder.Entity<ParameterMaster>()
-            .HasOne(x => x.ParameterCategory)
-            .WithMany()
-            .HasForeignKey(x => x.ParameterCategoryID)
-            .OnDelete(DeleteBehavior.NoAction);
 
         modelBuilder.Entity<ParameterMaster>()
             .HasOne(x => x.ParameterUnit)

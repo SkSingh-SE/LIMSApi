@@ -212,7 +212,7 @@ builder.Services.AddScoped<IGroupRepository, GroupRepository>();
 builder.Services.AddScoped<IHeatTreatmentRepository, HeatTreatmentRepository>();
 builder.Services.AddScoped<IHeatTreatmentCategoryRepository, HeatTreatmentCategoryRepository>();
 builder.Services.AddScoped<ICoolingMediumRepository, CoolingMediumRepository>();
-builder.Services.AddScoped<IParameterCategoryRepository, ParameterCategoryRepository>();
+
 builder.Services.AddScoped<IProductFormRepository, ProductFormRepository>();
 builder.Services.AddScoped<ISpecimenOrientationCategoryRepository, SpecimenOrientationCategoryRepository>();
 builder.Services.AddScoped<IProductConditionCategoryRepository, ProductConditionCategoryRepository>();
@@ -294,7 +294,7 @@ builder.Services.AddScoped<IGroupService, GroupService>();
 builder.Services.AddScoped<IHeatTreatmentService, HeatTreatmentService>();
 builder.Services.AddScoped<IHeatTreatmentCategoryService, HeatTreatmentCategoryService>();
 builder.Services.AddScoped<ICoolingMediumService, CoolingMediumService>();
-builder.Services.AddScoped<IParameterCategoryService, ParameterCategoryService>();
+
 builder.Services.AddScoped<IProductFormService, ProductFormService>();
 builder.Services.AddScoped<ISpecimenOrientationCategoryService, SpecimenOrientationCategoryService>();
 builder.Services.AddScoped<IProductConditionCategoryService, ProductConditionCategoryService>();

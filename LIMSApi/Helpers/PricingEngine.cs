@@ -85,12 +85,10 @@ namespace LIMSApi.Helpers
                         continue;
 
                     var paramName = paramMaster.Name?.ToLower().Trim() ?? "";
-                    var paramAlias = paramMaster.AliasName?.ToLower().Trim() ?? "";
                     var trpParamName = trp.ParameterName?.ToLower().Trim() ?? "";
 
                     // Strict matching: try each name variant against config
                     bool matched = StrictMatchesName(paramName, configNameLower, configAliasLower)
-                                || (!string.IsNullOrEmpty(paramAlias) && StrictMatchesName(paramAlias, configNameLower, configAliasLower))
                                 || (!string.IsNullOrEmpty(trpParamName) && StrictMatchesName(trpParamName, configNameLower, configAliasLower));
 
                     if (matched && trp.Value.HasValue)
@@ -108,10 +106,8 @@ namespace LIMSApi.Helpers
                 if (specLine.Parameter == null) continue;
 
                 var paramName = specLine.Parameter.Name?.ToLower().Trim() ?? "";
-                var paramAlias = specLine.Parameter.AliasName?.ToLower().Trim() ?? "";
 
-                bool matched = StrictMatchesName(paramName, configNameLower, configAliasLower)
-                            || (!string.IsNullOrEmpty(paramAlias) && StrictMatchesName(paramAlias, configNameLower, configAliasLower));
+                bool matched = StrictMatchesName(paramName, configNameLower, configAliasLower);
 
                 if (matched)
                 {
