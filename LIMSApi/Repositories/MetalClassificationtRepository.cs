@@ -67,7 +67,7 @@ namespace LIMSApi.Repositories
                     .AsNoTracking()
                     .Where(j => j.MetalClassificationID == node.ID && j.IsActive
                                 && j.AnalysisTechnique != null && j.AnalysisTechnique.IsActive)
-                    .OrderBy(j => j.AnalysisTechnique!.SortOrder).ThenBy(j => j.AnalysisTechnique!.Name)
+                    .OrderBy(j => j.AnalysisTechnique!.Name)
                     .Select(j => new DropdwonSelector { Id = j.AnalysisTechniqueID, Name = j.AnalysisTechnique!.Name })
                     .ToListAsync();
 

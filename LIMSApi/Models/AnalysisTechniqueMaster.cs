@@ -25,13 +25,8 @@ namespace LIMSApi.Models
         [StringLength(500)]
         public string? AliasNames { get; set; }
 
-        /// True for spectrometric techniques (OES / LECO / WDXRF / EDXRF) — drives spectro-style pricing.
-        public bool IsSpectro { get; set; } = false;
-
         /// Optional notes on purpose / typical use.
         [StringLength(1000)]
         public string? Description { get; set; }
-
-        public int SortOrder { get; set; } = 0;
     }
 }

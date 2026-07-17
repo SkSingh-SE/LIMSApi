@@ -60,9 +60,7 @@ namespace LIMSApi.Services
             existing.Name = model.Name;
             existing.Code = model.Code;
             existing.AliasNames = model.AliasNames;
-            existing.IsSpectro = model.IsSpectro;
             existing.Description = model.Description;
-            existing.SortOrder = model.SortOrder;
             existing.ModifiedOn = DateTime.UtcNow;
             existing.ModifiedBy = loggedInUser.EmployeeID;
 

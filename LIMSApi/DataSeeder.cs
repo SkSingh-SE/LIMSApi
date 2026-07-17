@@ -1164,23 +1164,23 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
 
             -- Analysis Technique Master (chemical testing techniques)
             IF NOT EXISTS (SELECT 1 FROM AnalysisTechniqueMasters WHERE Code = N'OES' AND IsActive = 1)
-                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, IsSpectro, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'OES', N'OES (Optical Emission Spectrometry)', N'Optical Emission Spectrometry', 1, 1, 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'OES', N'OES (Optical Emission Spectrometry)', N'Optical Emission Spectrometry', 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM AnalysisTechniqueMasters WHERE Code = N'ICP' AND IsActive = 1)
-                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, IsSpectro, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'ICP', N'ICP (Inductively Coupled Plasma)', N'Inductively Coupled Plasma', 0, 2, 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'ICP', N'ICP (Inductively Coupled Plasma)', N'Inductively Coupled Plasma', 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM AnalysisTechniqueMasters WHERE Code = N'WET' AND IsActive = 1)
-                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, IsSpectro, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'WET', N'Wet Chemical Analysis', N'Wet Chemical Analysis', 0, 3, 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'WET', N'Wet Chemical Analysis', N'Wet Chemical Analysis', 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM AnalysisTechniqueMasters WHERE Code = N'LECO' AND IsActive = 1)
-                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, IsSpectro, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'LECO', N'LECO (Combustion Analysis)', N'LECO Combustion Analysis', 1, 4, 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'LECO', N'LECO (Combustion Analysis)', N'LECO Combustion Analysis', 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM AnalysisTechniqueMasters WHERE Code = N'WDXRF' AND IsActive = 1)
-                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, IsSpectro, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'WDXRF', N'WDXRF (Wavelength Dispersive XRF)', N'Wavelength Dispersive X-Ray Fluorescence', 1, 5, 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'WDXRF', N'WDXRF (Wavelength Dispersive XRF)', N'Wavelength Dispersive X-Ray Fluorescence', 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM AnalysisTechniqueMasters WHERE Code = N'EDXRF' AND IsActive = 1)
-                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, IsSpectro, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'EDXRF', N'EDXRF (Energy Dispersive XRF)', N'Energy Dispersive X-Ray Fluorescence', 1, 6, 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'EDXRF', N'EDXRF (Energy Dispersive XRF)', N'Energy Dispersive X-Ray Fluorescence', 0, GETUTCDATE(), N'LIMS', 1);
 
             -- Chemical Sample Category
             IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Ferro Alloys' AND IsActive = 1)

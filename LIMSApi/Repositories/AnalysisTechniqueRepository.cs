@@ -65,7 +65,7 @@ namespace LIMSApi.Repositories
             }
             else
             {
-                _query = _query.OrderBy(x => x.SortOrder).ThenBy(x => x.Name);
+                _query = _query.OrderBy(x => x.Name);
             }
 
             var projected = _query.Select(x => new
@@ -74,9 +74,7 @@ namespace LIMSApi.Repositories
                 x.Name,
                 x.Code,
                 x.AliasNames,
-                x.IsSpectro,
                 x.Description,
-                x.SortOrder,
                 x.CreatedBy,
                 x.CreatedOn,
                 x.ModifiedBy,
@@ -113,7 +111,7 @@ namespace LIMSApi.Repositories
 
             var skip = pageNo * pageSize;
 
-            var data = await (_query.OrderBy(x => x.SortOrder).ThenBy(x => x.Name).Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            var data = await (_query.OrderBy(x => x.Name).Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
             {
                 Id = x.ID,
                 Name = x.Name,
