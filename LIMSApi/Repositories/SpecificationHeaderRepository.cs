@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
@@ -40,7 +40,13 @@ namespace LIMSApi.Repositories
 
         public async Task<SpecificationHeader?> GetSpecificationHeaderById(long id)
         {
+            // AsSplitQuery: prevents Cartesian explosion from multiple ThenInclude chains on
+            // the same Grades/SpecificationLines collections. EF Core issues separate SQL queries
+            // per Include chain instead of a single mega-JOIN that multiplies rows.
             return await _context.SpecificationHeaders
+                 .AsSplitQuery()
+                 .Include(x => x.Grades)
+                     .ThenInclude(g => g.MetalClassification)
                  .Include(x => x.Grades)
                      .ThenInclude(sl => sl.SpecificationLines)
                          .ThenInclude(l => l.Parameter)
