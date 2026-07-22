@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20260717062645_NablNonConformingWorkModifiedTbls")]
+    partial class NablNonConformingWorkModifiedTbls
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -8899,12 +8902,6 @@ namespace LIMSApi.Migrations
                     b.Property<DateTime?>("EffectiveDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<long?>("EquipmentID")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("EquipmentName")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<decimal?>("ExpandedUncertainty")
                         .HasColumnType("decimal(18,6)");
 
@@ -8923,15 +8920,6 @@ namespace LIMSApi.Migrations
                         .IsRequired()
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
-
-                    b.Property<long?>("LaboratoryTestID")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("LaboratoryTestName")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("MUCode")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("MatrixType")
                         .HasMaxLength(200)
@@ -8964,9 +8952,6 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<string>("Remarks")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("RevNo")
                         .IsRequired()
                         .HasMaxLength(10)
@@ -8995,13 +8980,7 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
-                    b.Property<decimal?>("SumOfSquares")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<long?>("TestMethodID")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("TestMethodName")
+                    b.Property<string>("TestMethod")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
@@ -9020,9 +8999,6 @@ namespace LIMSApi.Migrations
                     b.Property<string>("ValidatedBy")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("Version")
-                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("ID");
 
@@ -10162,9 +10138,6 @@ namespace LIMSApi.Migrations
                     b.Property<string>("NCSource")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("NcNo")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("NextReviewDate")
                         .HasColumnType("datetime2");

@@ -42,5 +42,35 @@ namespace LIMSApi.Models
 
         [MaxLength(200)]
         public string? ClosedBy { get; set; }
+        public string? ActivityAssessed { get; set; }
+        public string? AuditNo { get; set; }
+        public string? Auditee { get; set; }
+        public string? Auditor { get; set; }
+        public string? CorrectiveActionProposed { get; set; }
+        public long? DepartmentID { get; set; }
+        public long? ImplementedById { get; set; }
+        public long? ObservedByID { get; set; }
+        public long? ProposedById { get; set; }
+        public long? SignOfAuditorID { get; set; }
+        public long? SignatureOfQMID { get; set; }
+        public long? VerifiedById { get; set; }
+        public string? ClauseNo { get; set; }
+        public string? VerifiedByName { get; set; }
+        public string? SignatureOfQMName { get; set; }
+        public string? TimeRequirement { get; set; }
+        public string? ProposedByName { get; set; }
+        public string? ObservedByName { get; set; }
+        public string? SignOfAuditorName { get; set; }
+        public string? ImplementedByName { get; set; }
+        public string? DepartmentName { get; set; }
+        public string? EffectivenessOfAction { get; set; }
+        public string? NcNo { get; set; }
+        public string? NcObserved { get; set; }
+        public DateTime? CorrectiveActionDate { get; set; }
+        public DateTime? ImplementedDate { get; set; }
+        public DateTime? VerifiedDate { get; set; }
+        public string? CorrectiveActionTaken { get; set; }
+        public long? AuditorId { get; set; }
+        public long? AuditeeId { get; set; }
     }
 }

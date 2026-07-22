@@ -20,6 +20,7 @@ namespace LIMSApi.Models
         public string? StorageLocation { get; set; }
         public DateTime Date{ get; set; }
         public string? Remarks { get; set; }
+        public string? SupplierName { get; set; }
 
     }
 }

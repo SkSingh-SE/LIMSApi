@@ -32,35 +32,35 @@ namespace LIMSApi.Services
         {
             { "JobDescription", "F-3" },
             { "ResponsibilityAuthority", "F-4" },
-            { "EmployeeCompetence", "F-7" },
-            { "EmployeeAuthorization", "F-7B" },
-            { "CompetenceRequirement", "F-7D" },
-            { "InductionTraining", "F-6" },
+            { "EmployeeCompetence", "F-7A" },
+            { "EmployeeAuthorization", "F-13" },
+            { "CompetenceRequirement", "F-7C" },
+            { "InductionTraining", "F-11" },
             { "SkillMatrix", "F-6" },
             { "SkillMatrixDecision", "F-6A" },
             { "TrainingPlan", "F-8" },
             { "TrainingAttendance", "F-9" },
             { "TrainingEffectiveness", "F-10" },
-            { "EnvironmentMonitoring", "F-11" },
+            { "EnvironmentMonitoring", "F-12" },
             { "QualityControlPlan", "F-37" },
             { "TestRequest", "F-27" },
             { "TestMethod", "F-28" },
             { "MethodVerification", "F-29" },
             { "MethodValidation", "F-30" },
-            { "SampleInwardRegister", "F-17" },
-            { "SampleMusterRegister", "F-18" },
-            { "SampleLabel", "F-19" },
-            { "TechnicalRawData", "F-20" },
-            { "TestReport", "F-21" },
+            { "SampleInwardRegister", "F-31" },
+            { "SampleMusterRegister", "F-32" },
+            { "SampleLabel", "F-33" },
+            { "TechnicalRawData", "F-34" },
+            { "TestReport", "F-39" },
             { "EquipmentHistory", "F-22" },
             { "CalibrationReview", "F-23" },
-            { "IntermediateCheck", "F-24" },
+            { "IntermediateCheck", "F-16" },
             { "ReferenceMaterial", "F-17" },
             { "CrmConsumption", "F-18" },
             { "SupplierRegistration", "F-19" },
             { "SupplierEvaluation", "F-26" },
             { "ApprovedSupplier", "F-20" },
-            { "SupplierConfidentiality", "F-30" },
+            { "SupplierConfidentiality", "F-2" },
             { "IncomingMaterial", "F-24" },
             { "ProductInspection", "F-23" },
             { "PurchaseIndent", "F-21" },
@@ -69,20 +69,20 @@ namespace LIMSApi.Services
             { "Complaint", "F-40" },
             { "CustomerFeedback", "F-47" },
             { "FeedbackAnalysis", "F-48" },
-            { "AuditPlan", "F-39" },
-            { "AuditChecklist", "F-40" },
-            { "AuditSummary", "F-41" },
-            { "InternalAuditor", "F-42" },
+            { "AuditPlan", "F-50" },
+            { "AuditChecklist", "F-51" },
+            { "AuditSummary", "F-52" },
+            { "InternalAuditor", "F-49" },
             { "MeetingAgenda", "F-53" },
             { "MeetingMinutes", "F-54" },
             { "NonConformingWork", "F-41" },
-            { "NcCorrectiveAction", "F-46" },
+            { "NcCorrectiveAction", "F-42" },
             { "Retesting", "F-38" },
-            { "RiskAssessment", "F-48" },
-            { "DocumentChangeRequest", "F-49" },
-            { "DocumentReview", "F-50" },
-            { "MasterDocument", "F-51" },
-            { "MeasurementUncertainty", "F-52" },
+            { "RiskAssessment", "F-46" },
+            { "DocumentChangeRequest", "F-44" },
+            { "DocumentReview", "F-45" },
+            { "MasterDocument", "F-43" },
+            { "MeasurementUncertainty", "F-35" },
             { "PtIlcPlan", "F-36" },
             { "EmployeePerformanceRecord", "F-54" },
         };
@@ -315,6 +315,16 @@ namespace LIMSApi.Services
                         {
                             result.AgendaList= JsonSerializer.Deserialize<List<AgendaList>>(result.AgendaItemsJson);
                         }
+                        return result;
+                    }
+                case "MeasurementUncertainty":
+                    {
+                        var result = data as NablMeasurementUncertainty;
+                        if (result != null && !string.IsNullOrEmpty(result.SourcesJson))
+                        {
+                            result.UncertaintySources = JsonSerializer.Deserialize<List<UncertaintySources>>(result.SourcesJson);
+                        }
+
                         return result;
                     }
 
@@ -3617,54 +3627,132 @@ namespace LIMSApi.Services
             if (model.ID == 0)
             {
                 model.FormCode = FormCodeMap["NonConformingWork"];
+
                 await AssignDocumentNumber(model, "NonConformingWork");
+
                 model.Status = "Draft";
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
 
+                // First saved tab
+                model.CurrentStep = model.RequestStep;
+
                 var id = await _repository.Add("NonConformingWork", model);
+
                 await LogAudit("NonConformingWork", id, "Created", null, body.GetRawText());
+
                 _logger.LogInformation("NonConformingWork created with ID {Id}.", id);
+
                 return id;
             }
             else
             {
                 var existing = await _context.NablNonConformingWorks
-                    .FirstOrDefaultAsync(x => x.ID == model.ID && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+                    .FirstOrDefaultAsync(x =>
+                        x.ID == model.ID &&
+                        x.IsActive &&
+                        x.CompanyCode == loggedInUser.CompanyCode);
 
                 if (existing == null)
                     throw new InvalidOperationException("NonConformingWork not found!");
 
                 await SaveRevisionSnapshot("NonConformingWork", existing);
 
-                existing.NCDate = model.NCDate;
-                existing.SampleCode = model.SampleCode;
-                existing.TestParameter = model.TestParameter;
-                existing.NCDescription = model.NCDescription;
-                existing.NCSource = model.NCSource;
-                existing.DetectedBy = model.DetectedBy;
-                existing.IdentifiedBy = model.IdentifiedBy;
-                existing.SuspendedWork = model.SuspendedWork;
-                existing.AffectedResults = model.AffectedResults;
-                existing.ImmediateAction = model.ImmediateAction;
-                existing.NCCategory = model.NCCategory;
-                existing.RootCauseAnalysis = model.RootCauseAnalysis;
-                existing.Date = model.Date;
+                // ===========================
+                // Common Fields
+                // ===========================
+
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
-                existing.ApprovedBy = model.ApprovedBy;
-                existing.PreparedDate = model.PreparedDate;
-                existing.ReviewedDate = model.ReviewedDate;
-                existing.ReviewedBy = model.ReviewedBy;
-                existing.ApprovedDate = model.ApprovedDate;
-                existing.CorrectiveAction = model.CorrectiveAction;
-                existing.CloserDate = model.CloserDate;
-                existing.SignatureTDQM = model.SignatureTDQM;
 
-                await _repository.Update("NonConformingWork", existing);
+                existing.RequestStep = model.RequestStep;
+
+                if (existing.CurrentStep < model.RequestStep)
+                {
+                    existing.CurrentStep = model.RequestStep;
+                }
+
+                if (existing.CurrentStep >= 5)
+                {
+                    existing.Status = "Completed";
+                }
+
+                // ===========================
+                // Update Main Table only when
+                // General tab is submitted
+                // ===========================
+
+                if (model.RequestStep == 1)
+                {
+                    existing.NCDate = model.NCDate;
+                    existing.Date = model.Date;
+
+                    existing.SampleCode = model.SampleCode;
+                    existing.TestParameter = model.TestParameter;
+                    existing.NCDescription = model.NCDescription;
+                    existing.NCSource = model.NCSource;
+
+                    existing.DetectedBy = model.DetectedBy;
+                    existing.IdentifiedBy = model.IdentifiedBy;
+
+                    existing.SuspendedWork = model.SuspendedWork;
+                    existing.AffectedResults = model.AffectedResults;
+
+                    existing.NCCategory = model.NCCategory;
+                    existing.RootCauseAnalysis = model.RootCauseAnalysis;
+
+                    existing.DepartmentId = model.DepartmentId;
+                    existing.DepartmentName = model.DepartmentName;
+
+                    existing.ReportedByEmployeeId = model.ReportedByEmployeeId;
+                    existing.ReportedByEmployeeName = model.ReportedByEmployeeName;
+
+                    existing.NcNo = model.NcNo;
+
+                    existing.Source = model.Source;
+                    existing.Category = model.Category;
+                    existing.Priority = model.Priority;
+
+                    existing.ReferenceModule = model.ReferenceModule;
+                    existing.ReferenceId = model.ReferenceId;
+                    existing.ReferenceNo = model.ReferenceNo;
+
+                    existing.CustomerAffected = model.CustomerAffected;
+
+                    existing.Description = model.Description;
+                    existing.ImmediateAction = model.ImmediateAction;
+                    existing.ProblemDescription = model.ProblemDescription;
+
+                    existing.PreparedDate = model.PreparedDate;
+                    existing.ReviewedDate = model.ReviewedDate;
+                    existing.ApprovedDate = model.ApprovedDate;
+
+                    existing.ReviewedBy = model.ReviewedBy;
+                    existing.ApprovedBy = model.ApprovedBy;
+
+                    existing.CloserDate = model.CloserDate;
+                    existing.SignatureTDQM = model.SignatureTDQM;
+                }
+
+                // Keep latest workflow values in request model
+                model.CurrentStep = existing.CurrentStep;
+                model.Status = existing.Status;
+                model.ModifiedOn = existing.ModifiedOn;
+                model.ModifiedBy = existing.ModifiedBy;
+                model.CompanyCode = existing.CompanyCode;
+                model.CreatedOn = existing.CreatedOn;
+                model.CreatedBy = existing.CreatedBy;
+                model.FormCode = existing.FormCode;
+                model.DocumentNo = existing.DocumentNo;
+
+                // Repository receives ORIGINAL request model
+                await _repository.Update("NonConformingWork", model);
+
                 await LogAudit("NonConformingWork", existing.ID, "Updated", null, body.GetRawText());
+
                 _logger.LogInformation("NonConformingWork ID {Id} updated.", existing.ID);
+
                 return existing.ID;
             }
         }
@@ -3716,6 +3804,39 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ActivityAssessed = model.ActivityAssessed;
+                existing.AuditNo = model.AuditNo;
+                existing.Auditee = model.Auditee;
+                existing.Auditor = model.Auditor;
+                existing.CorrectiveActionProposed = model.CorrectiveActionProposed;
+                existing.DepartmentID = model.DepartmentID;
+                existing.ImplementedById = model.ImplementedById;
+                existing.ObservedByID = model.ObservedByID;
+                existing.ProposedById = model.ProposedById;
+                existing.SignOfAuditorID = model.SignOfAuditorID;
+                existing.SignatureOfQMID = model.SignatureOfQMID;
+                existing.VerifiedById = model.VerifiedById;
+                existing.ClauseNo = model.ClauseNo;
+                existing.VerifiedByName = model.VerifiedByName;
+                existing.SignatureOfQMName = model.SignatureOfQMName;
+                existing.TimeRequirement = model.TimeRequirement;
+                existing.ProposedByName = model.ProposedByName;
+                existing.ObservedByName = model.ObservedByName;
+                existing.SignOfAuditorName = model.SignOfAuditorName;
+                existing.ImplementedByName = model.ImplementedByName;
+                existing.DepartmentName = model.DepartmentName;
+                existing.EffectivenessOfAction = model.EffectivenessOfAction;
+                existing.NcNo = model.NcNo;
+                existing.NcObserved = model.NcObserved;
+                existing.CorrectiveActionDate = model.CorrectiveActionDate;
+                existing.ImplementedDate = model.ImplementedDate;
+                existing.VerifiedDate = model.VerifiedDate;
+                existing.CorrectiveActionTaken= model.CorrectiveActionTaken;
+
 
                 await _repository.Update("NcCorrectiveAction", existing);
                 await LogAudit("NcCorrectiveAction", existing.ID, "Updated", null, body.GetRawText());
@@ -4099,6 +4220,7 @@ namespace LIMSApi.Services
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
+                model.SourcesJson = JsonSerializer.Serialize(model.UncertaintySources);
 
                 var id = await _repository.Add("MeasurementUncertainty", model);
                 await LogAudit("MeasurementUncertainty", id, "Created", null, body.GetRawText());
@@ -4116,10 +4238,10 @@ namespace LIMSApi.Services
                 await SaveRevisionSnapshot("MeasurementUncertainty", existing);
 
                 existing.TestParameter = model.TestParameter;
-                existing.TestMethod = model.TestMethod;
+                existing.TestMethodName = model.TestMethodName;
                 existing.MatrixType = model.MatrixType;
                 existing.UncertaintyType = model.UncertaintyType;
-                existing.SourcesJson = model.SourcesJson;
+                existing.SourcesJson = JsonSerializer.Serialize(model.UncertaintySources);
                 existing.CombinedUncertainty = model.CombinedUncertainty;
                 existing.ExpandedUncertainty = model.ExpandedUncertainty;
                 existing.CoverageFactor = model.CoverageFactor;
@@ -4130,7 +4252,22 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
-
+                existing.EffectiveDate = model.EffectiveDate;
+                existing.MUCode = model.MUCode;
+                existing.LaboratoryTestID = model.LaboratoryTestID;
+                existing.TestMethodID = model.TestMethodID;
+                existing.EquipmentID = model.EquipmentID;
+                existing.EquipmentName = model.EquipmentName;
+                existing.LaboratoryTestName = model.LaboratoryTestName;
+                existing.Version = model.Version;
+                existing.Remarks = model.Remarks;
+                existing.SumOfSquares = model.SumOfSquares;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.PreparedBy = model.PreparedBy;
+                existing.PreparedDate = model.PreparedDate;
                 await _repository.Update("MeasurementUncertainty", existing);
                 await LogAudit("MeasurementUncertainty", existing.ID, "Updated", null, body.GetRawText());
                 _logger.LogInformation("MeasurementUncertainty ID {Id} updated.", existing.ID);
@@ -4666,9 +4803,10 @@ namespace LIMSApi.Services
                 existing.Remarks= model.Remarks;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
+                existing.SupplierName = model.SupplierName;
                 await _repository.Update("InventoryMaster", existing);
-                await LogAudit("PtIlcPlan", existing.ID, "Updated", null, body.GetRawText());
-                _logger.LogInformation("PtIlcPlan ID {Id} updated.", existing.ID);
+                await LogAudit("InventoryMaster", existing.ID, "Updated", null, body.GetRawText());
+                _logger.LogInformation("InventoryMaster ID {Id} updated.", existing.ID);
                 return existing.ID;
             }
         }
@@ -4908,6 +5046,7 @@ namespace LIMSApi.Services
 
             return $"{companyCode}-{year}-{nextNumber:D3}";
         }
+
         public async Task<List<DropdwonSelector>> GetMeetinglist(string? searchTerm, int pageNo, int pageSize)
         {
             return await _repository.GetMeetinglist(searchTerm, pageNo, pageSize);
@@ -4915,6 +5054,98 @@ namespace LIMSApi.Services
         public async Task<MeetingAgendaDto> GetMeetingDetails(string meetingNo)
         {
             return await _repository.GetMeetingDetails(meetingNo);
+        }
+        public async Task<List<PurchaseMaterialVerificationPrintDto>> GetPurchaseMaterialVerificationPrintList()
+        {
+            return await _repository.GetPurchaseMaterialVerificationPrintList();
+        }
+        public async Task<string> GetNextNCNo()
+        {
+            var year = DateTime.Now.Year;
+            const string prefix = "NC";
+
+            // Format: NC-2026-001
+            var codePrefix = $"{prefix}-{year}-";
+
+            var lastRecord = await _context.NablNonConformingWorks
+                .Where(x => !string.IsNullOrEmpty(x.NcNo) &&
+                            x.NcNo.StartsWith(codePrefix))
+                .OrderByDescending(x => x.ID)
+                .FirstOrDefaultAsync();
+
+            int nextNumber = 1;
+
+            if (lastRecord != null)
+            {
+                var lastPart = lastRecord.NcNo.Split('-').Last();
+
+                if (int.TryParse(lastPart, out int lastNumber))
+                {
+                    nextNumber = lastNumber + 1;
+                }
+            }
+
+            return $"{prefix}-{year}-{nextNumber:D3}";
+        }
+        public async Task<string> GetNextActionNo()
+        {
+            var year = DateTime.Now.Year;
+            const string prefix = "CA";
+
+            // Format : CA-2026-001
+            var codePrefix = $"{prefix}-{year}-";
+
+            var lastRecord = await _context.NablNonConformingWorkCorrectiveActions
+                .Where(x => !string.IsNullOrWhiteSpace(x.ActionNo)
+                         && x.ActionNo.StartsWith(codePrefix))
+                .OrderByDescending(x => x.Id)
+                .FirstOrDefaultAsync();
+
+            int nextNumber = 1;
+
+            if (lastRecord != null)
+            {
+                var lastPart = lastRecord.ActionNo.Split('-').LastOrDefault();
+
+                if (int.TryParse(lastPart, out int lastNumber))
+                {
+                    nextNumber = lastNumber + 1;
+                }
+            }
+
+            return $"{prefix}-{year}-{nextNumber:D3}";
+        }
+        public async Task<PagedResponse<object>> NcPrintList(PageFilter filter)
+        {
+            return await _repository.NcPrintList(filter);
+        }
+        public async Task<string> GetNextMUNo()
+        {
+            var year = DateTime.Now.Year;
+            const string prefix = "MU";
+
+            // Format : CA-2026-001
+            var codePrefix = $"{prefix}-{year}-";
+
+            var lastRecord = await _context.NablMeasurementUncertainties
+                .Where(x => !string.IsNullOrWhiteSpace(x.MUCode)
+                         && x.MUCode.StartsWith(codePrefix))
+                .OrderByDescending(x => x.ID)
+                .FirstOrDefaultAsync();
+
+            int nextNumber = 1;
+
+            if (lastRecord != null)
+            {
+                var lastPart = lastRecord.MUCode.Split('-').LastOrDefault();
+
+                if (int.TryParse(lastPart, out int lastNumber))
+                {
+                    nextNumber = lastNumber + 1;
+                }
+            }
+
+            return $"{prefix}-{year}-{nextNumber:D3}";
         }
     }
 }

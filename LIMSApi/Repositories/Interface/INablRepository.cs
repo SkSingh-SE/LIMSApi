@@ -37,6 +37,8 @@ namespace LIMSApi.Repositories.Interface
         Task<CustomerFeedbackAnalysisDto?> GetFeedbackDetails(long id);
         Task<List<DropdwonSelector>> GetMeetinglist(string? searchTerm, int pageNo, int pageSize);
         Task<MeetingAgendaDto> GetMeetingDetails(string meetingNo);
+        Task<List<PurchaseMaterialVerificationPrintDto>> GetPurchaseMaterialVerificationPrintList();
+        Task<PagedResponse<object>> NcPrintList(PageFilter filter);
 
     }
 }

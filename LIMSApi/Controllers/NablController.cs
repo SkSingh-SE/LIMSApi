@@ -365,6 +365,36 @@ namespace LIMSApi.Controllers
             var entity = await _service.GetMeetingDetails(meetingNo);
             return entity == null ? NoContent() : Ok(entity);
         }
+        [HttpGet("{formType}/print-list")]
+        public async Task<IActionResult> GetPurchaseMaterialVerificationPrintList()
+        {
+            var data = await _service.GetPurchaseMaterialVerificationPrintList();
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("{formType}/next-nc-no")]
+        public async Task<IActionResult> GetNextNCNo()
+        {
+            var ncNo = await _service.GetNextNCNo();
+            return Ok(new { ncNo });
+        
+        }
+        [HttpGet("{formType}/next-action-no")]
+        public async Task<IActionResult> GetNextActionNo()
+        {
+            var actionNo = await _service.GetNextActionNo();
+            return Ok(new { actionNo });
+        }
+        [HttpPost("{formType}/nc-print-list")]
+        public async Task<IActionResult> NcPrintList(PageFilter filter)
+        {
+            return Ok(await _service.NcPrintList(filter));
+        }
+        [HttpGet("{formType}/next-mu-no")]
+        public async Task<IActionResult> GetNextMUNo()
+        {
+            var muCode = await _service.GetNextMUNo();
+            return Ok(new { muCode });
+        }
     }
 
 

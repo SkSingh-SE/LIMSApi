@@ -274,6 +274,10 @@ public partial class LIMSContext : DbContext
     public DbSet<NablQualityControlPlanActivity> NablQualityControlPlanActivities { get; set; }
     public DbSet<RetestingInitialTestLog> RetestingInitialTestLogs { get; set; }
     public DbSet<RetestingComparisonLog> RetestingComparisonLogs { get; set; }
+    public DbSet<NablNonConformingWorkInvestigation> NablNonConformingWorkInvestigations { get; set; }
+    public DbSet<NablNonConformingWorkCorrectiveAction> NablNonConformingWorkCorrectiveActions { get; set; }
+    public DbSet<NablNonConformingWorkVerification> NablNonConformingWorkVerifications { get; set; }
+    public DbSet<NablNonConformingWorkClosure> NablNonConformingWorkClosures { get; set; }
     //    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     //#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the BankName= syntax to read it from _configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
     //        => optionsBuilder.UseSqlServer("Data Source=localhost;Initial Catalog=LIMS_Backup;Integrated Security=True;Encrypt=False");

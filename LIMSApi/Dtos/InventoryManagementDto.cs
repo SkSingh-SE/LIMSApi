@@ -15,5 +15,6 @@
         public decimal MinimumQuantity { get; set; }
         public string? StorageLocation { get; set; }
         public DateTime Date { get; set; }
+        public string? SupplierName { get; set; }
     }
 }

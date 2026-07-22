@@ -28,15 +28,75 @@ namespace LIMSApi.Models
         public bool? SuspendedWork { get; set; }
 
         public string? AffectedResults { get; set; }
-
-        public string? ImmediateAction { get; set; }
-
         [MaxLength(50)]
         public string? NCCategory { get; set; } // Minor/Major
 
         public string? RootCauseAnalysis { get; set; }
-        public string? CorrectiveAction { get; set; }
         public string? SignatureTDQM { get; set; }
         public DateTime? CloserDate { get; set; }
+        public long? DepartmentId { get; set; }
+
+        [MaxLength(200)]
+        public string? DepartmentName { get; set; }
+        public long? ReportedByEmployeeId { get; set; }
+
+        [MaxLength(200)]
+        public string? ReportedByEmployeeName { get; set; }
+
+        // ===========================
+        // Classification
+        // ===========================
+
+        [MaxLength(100)]
+        public string? Source { get; set; }
+
+        [MaxLength(100)]
+        public string? Category { get; set; }
+
+        [MaxLength(100)]
+        public string? Priority { get; set; }
+
+        [MaxLength(100)]
+        public string? ReferenceModule { get; set; }
+
+        public int? ReferenceId { get; set; }
+
+        [MaxLength(100)]
+        public string? ReferenceNo { get; set; }
+
+        public bool CustomerAffected { get; set; }
+
+        // ===========================
+        // Description
+        // ===========================
+
+        public string? Description { get; set; }
+
+        public string? ImmediateAction { get; set; }
+
+        public string? ProblemDescription { get; set; }
+
+        // ===========================
+        // Workflow
+        // ===========================
+
+        [MaxLength(30)]
+        public string? Status { get; set; }
+
+        public int CurrentStep { get; set; }
+        public string? NcNo { get; set; }
+
+        // Navigation Properties
+
+        public virtual NablNonConformingWorkInvestigation? Investigation { get; set; }
+
+        public virtual NablNonConformingWorkCorrectiveAction? CorrectiveAction { get; set; }
+
+        public virtual NablNonConformingWorkVerification? Verification { get; set; }
+
+        public virtual NablNonConformingWorkClosure? Closure { get; set; }
+
+        [NotMapped]
+        public int RequestStep { get; set; }
     }
 }

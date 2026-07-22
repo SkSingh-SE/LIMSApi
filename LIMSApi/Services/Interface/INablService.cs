@@ -62,5 +62,10 @@ namespace LIMSApi.Services.Interface
         Task<string> GetNextMeetingNo();
         Task<List<DropdwonSelector>> GetMeetinglist(string? searchTerm, int pageNo, int pageSize);
         Task<MeetingAgendaDto?> GetMeetingDetails(string meetingNo);
+        Task<List<PurchaseMaterialVerificationPrintDto>> GetPurchaseMaterialVerificationPrintList();
+        Task<string> GetNextNCNo();
+        Task<string> GetNextActionNo();
+        Task<PagedResponse<object>> NcPrintList(PageFilter filter);
+        Task<string> GetNextMUNo();
     }
 }

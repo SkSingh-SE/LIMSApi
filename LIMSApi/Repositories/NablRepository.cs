@@ -160,7 +160,7 @@ namespace LIMSApi.Repositories
                 "InternalAuditor" => await GetByIdTyped<NablInternalAuditor>(id),
                 "MeetingAgenda" => await GetByIdTyped<NablMeetingAgenda>(id),
                 "MeetingMinutes" => await GetByIdTyped<NablMeetingMinutes>(id),
-                "NonConformingWork" => await GetByIdTyped<NablNonConformingWork>(id),
+                "NonConformingWork" => await GetByIdNonConformingWork(id),
                 "NcCorrectiveAction" => await GetByIdTyped<NablNcCorrectiveAction>(id),
                 "Retesting" => await GetNablRetesting(id),
                 "RiskAssessment" => await GetByIdTyped<NablRiskAssessment>(id),
@@ -224,7 +224,7 @@ namespace LIMSApi.Repositories
                 "InternalAuditor" => await AddTyped((NablInternalAuditor)model),
                 "MeetingAgenda" => await AddTyped((NablMeetingAgenda)model),
                 "MeetingMinutes" => await AddTyped((NablMeetingMinutes)model),
-                "NonConformingWork" => await AddTyped((NablNonConformingWork)model),
+                "NonConformingWork" => await AddNonConformingWork((NablNonConformingWork)model),
                 "NcCorrectiveAction" => await AddTyped((NablNcCorrectiveAction)model),
                 "Retesting" => await AddTyped((NablRetesting)model),
                 "RiskAssessment" => await AddTyped((NablRiskAssessment)model),
@@ -381,7 +381,7 @@ namespace LIMSApi.Repositories
                     await UpdateTyped((NablMeetingMinutes)model);
                     break;
                 case "NonConformingWork":
-                    await UpdateTyped((NablNonConformingWork)model);
+                    await UpdateNonConformingWork((NablNonConformingWork)model);
                     break;
                 case "NcCorrectiveAction":
                     await UpdateTyped((NablNcCorrectiveAction)model);
@@ -725,7 +725,6 @@ namespace LIMSApi.Repositories
             _context.NablSupplierEvaluations.Update(obj);
             await _context.SaveChangesAsync();
         }
-
         private async Task UpdateTyped<T>(T model) where T : NablFormBase
         {
             _context.Set<T>().Update(model);
@@ -883,7 +882,8 @@ namespace LIMSApi.Repositories
                 { "Email", x.Email ?? "" },
                 { "RegisterNo", x.RegisterNo ?? "" },
                 {"GSTNo",x.GstNo?? "" },
-                {"Address",x.Address ?? "" }
+                {"Address",x.Address ?? "" },
+                {"ProductsServicesOffered",x.ProductsServicesOffered ?? "" }
                     }
                 })
                 .ToList();
@@ -1716,6 +1716,7 @@ namespace LIMSApi.Repositories
                 SupplierId = data.SupplierId,
                 InventoryId =data.ID,
                 DepartmentID =data.DepartmentID,
+                SupplierName = data.SupplierName
 
 
             };
@@ -2123,6 +2124,361 @@ namespace LIMSApi.Repositories
                 MeetingVenue = meetingAgenda.MeetingVenue
             };
 
+        }
+
+        public async Task<List<PurchaseMaterialVerificationPrintDto>> GetPurchaseMaterialVerificationPrintList()
+        {
+            var purchaseVerifications = await _context.NablPurchaseMaterialVerifications
+                .Where(x => x.IsActive)
+                .OrderByDescending(x => x.Date)
+                .ToListAsync();
+
+            if (!purchaseVerifications.Any())
+                return new List<PurchaseMaterialVerificationPrintDto>();
+
+            var result = new List<PurchaseMaterialVerificationPrintDto>();
+
+            foreach (var verification in purchaseVerifications)
+            {
+                var materialDetails = string.IsNullOrWhiteSpace(verification.ItemsVerificationJson)
+      ? new List<PurchaseMaterialVerificationItemDto>()
+      : JsonSerializer.Deserialize<List<PurchaseMaterialVerificationItemDto>>
+          (verification.ItemsVerificationJson)
+          ?? new List<PurchaseMaterialVerificationItemDto>();
+
+                result.Add(new PurchaseMaterialVerificationPrintDto
+                {
+                    Date = verification.Date,
+                    PONo = verification.PurchaseOrderNo,
+                    SupplierName = verification.SupplierName,
+
+                    MaterialDetails = materialDetails
+                });
+            }
+
+            return result;
+        }
+
+        private async Task<long> AddNonConformingWork(NablNonConformingWork model)
+        {
+            switch (model.RequestStep)
+            {
+                case 1:
+
+                    return await AddTyped(model);
+
+                case 2:
+
+                    model.Investigation.NablNonConformingWorkId = model.ID;
+
+                    await _context.NablNonConformingWorkInvestigations.AddAsync(model.Investigation);
+
+                    await _context.SaveChangesAsync();
+
+                    return model.ID;
+
+                case 3:
+
+                    model.CorrectiveAction.NablNonConformingWorkId = model.ID;
+
+                    await _context.NablNonConformingWorkCorrectiveActions.AddAsync(model.CorrectiveAction);
+
+                    await _context.SaveChangesAsync();
+
+                    return model.ID;
+
+                case 4:
+
+                    model.Verification.NablNonConformingWorkId = model.ID;
+
+                    await _context.NablNonConformingWorkVerifications.AddAsync(model.Verification);
+
+                    await _context.SaveChangesAsync();
+
+                    return model.ID;
+
+                case 5:
+
+                    model.Closure.NablNonConformingWorkId = model.ID;
+
+                    await _context.NablNonConformingWorkClosures.AddAsync(model.Closure);
+
+                    await _context.SaveChangesAsync();
+
+                    return model.ID;
+
+                default:
+
+                    throw new Exception("Invalid Request Step");
+            }
+        }
+        private async Task UpdateNonConformingWork(NablNonConformingWork model)
+        {
+            switch (model.RequestStep)
+            {
+                //==================================================
+                // General
+                //==================================================
+
+                case 1:
+
+                    var general = await _context.NablNonConformingWorks
+                        .FirstOrDefaultAsync(x => x.ID == model.ID);
+
+                    if (general == null)
+                        throw new Exception("Record not found.");
+
+                    general.NCDate = model.NCDate;
+                    general.SampleCode = model.SampleCode;
+                    general.TestParameter = model.TestParameter;
+                    general.NCDescription = model.NCDescription;
+                    general.NCSource = model.NCSource;
+
+                    general.DetectedBy = model.DetectedBy;
+                    general.IdentifiedBy = model.IdentifiedBy;
+
+                    general.SuspendedWork = model.SuspendedWork;
+                    general.AffectedResults = model.AffectedResults;
+
+                    general.NCCategory = model.NCCategory;
+                    general.RootCauseAnalysis = model.RootCauseAnalysis;
+
+                    general.DepartmentId = model.DepartmentId;
+                    general.DepartmentName = model.DepartmentName;
+
+                    general.ReportedByEmployeeId = model.ReportedByEmployeeId;
+                    general.ReportedByEmployeeName = model.ReportedByEmployeeName;
+
+                    general.Source = model.Source;
+                    general.Category = model.Category;
+                    general.Priority = model.Priority;
+
+                    general.ReferenceModule = model.ReferenceModule;
+                    general.ReferenceId = model.ReferenceId;
+                    general.ReferenceNo = model.ReferenceNo;
+
+                    general.CustomerAffected = model.CustomerAffected;
+
+                    general.Description = model.Description;
+                    general.ImmediateAction = model.ImmediateAction;
+                    general.ProblemDescription = model.ProblemDescription;
+
+                    general.PreparedDate = model.PreparedDate;
+                    general.ReviewedDate = model.ReviewedDate;
+                    general.ApprovedDate = model.ApprovedDate;
+
+                    general.ReviewedBy = model.ReviewedBy;
+                    general.ApprovedBy = model.ApprovedBy;
+
+                    general.CloserDate = model.CloserDate;
+                    general.SignatureTDQM = model.SignatureTDQM;
+
+                    general.ModifiedOn = model.ModifiedOn;
+                    general.ModifiedBy = model.ModifiedBy;
+
+                    break;
+
+                //==================================================
+                // Investigation
+                //==================================================
+
+                case 2:
+
+                    if (model.Investigation == null)
+                        break;
+
+                    var investigation = await _context.NablNonConformingWorkInvestigations
+                        .FirstOrDefaultAsync(x => x.NablNonConformingWorkId == model.ID);
+
+                    if (investigation == null)
+                    {
+                        model.Investigation.NablNonConformingWorkId = model.ID;
+
+                        await _context.NablNonConformingWorkInvestigations
+                            .AddAsync(model.Investigation);
+                    }
+                    else
+                    {
+                        investigation.AssignedToEmployeeId = model.Investigation.AssignedToEmployeeId;
+                        investigation.AssignedToEmployeeName = model.Investigation.AssignedToEmployeeName;
+                        investigation.InvestigationDate = model.Investigation.InvestigationDate;
+                        investigation.InvestigationMethod = model.Investigation.InvestigationMethod;
+                        investigation.RootCause = model.Investigation.RootCause;
+                        investigation.ContributingFactors = model.Investigation.ContributingFactors;
+                        investigation.InvestigationDetails = model.Investigation.InvestigationDetails;
+                        investigation.RecommendedAction = model.Investigation.RecommendedAction;
+                    }
+
+                    break;
+
+                //==================================================
+                // Corrective Action
+                //==================================================
+
+                case 3:
+
+                    if (model.CorrectiveAction == null)
+                        break;
+
+                    var correctiveAction = await _context.NablNonConformingWorkCorrectiveActions
+                        .FirstOrDefaultAsync(x => x.NablNonConformingWorkId == model.ID);
+
+                    if (correctiveAction == null)
+                    {
+                        model.CorrectiveAction.NablNonConformingWorkId = model.ID;
+
+                        await _context.NablNonConformingWorkCorrectiveActions
+                            .AddAsync(model.CorrectiveAction);
+                    }
+                    else
+                    {
+                        correctiveAction.ActionNo = model.CorrectiveAction.ActionNo;
+                        correctiveAction.CorrectiveAction = model.CorrectiveAction.CorrectiveAction;
+                        correctiveAction.ResponsiblePersonId = model.CorrectiveAction.ResponsiblePersonId;
+                        correctiveAction.ResponsiblePersonName = model.CorrectiveAction.ResponsiblePersonName;
+                        correctiveAction.TargetDate = model.CorrectiveAction.TargetDate;
+                        correctiveAction.CompletionDate = model.CorrectiveAction.CompletionDate;
+                        correctiveAction.ResourcesRequired = model.CorrectiveAction.ResourcesRequired;
+                        correctiveAction.PreventiveAction = model.CorrectiveAction.PreventiveAction;
+                    }
+
+                    break;
+
+                //==================================================
+                // Verification
+                //==================================================
+
+                case 4:
+
+                    if (model.Verification == null)
+                        break;
+
+                    var verification = await _context.NablNonConformingWorkVerifications
+                        .FirstOrDefaultAsync(x => x.NablNonConformingWorkId == model.ID);
+
+                    if (verification == null)
+                    {
+                        model.Verification.NablNonConformingWorkId = model.ID;
+
+                        await _context.NablNonConformingWorkVerifications
+                            .AddAsync(model.Verification);
+                    }
+                    else
+                    {
+                        verification.VerificationDate = model.Verification.VerificationDate;
+                        verification.VerifiedByEmployeeId = model.Verification.VerifiedByEmployeeId;
+                        verification.VerifiedByEmployeeName = model.Verification.VerifiedByEmployeeName;
+                        verification.VerificationMethod = model.Verification.VerificationMethod;
+                        verification.Observation = model.Verification.Observation;
+                        verification.Result = model.Verification.Result;
+                        verification.Remarks = model.Verification.Remarks;
+                    }
+
+                    break;
+
+                //==================================================
+                // Closure
+                //==================================================
+
+                case 5:
+
+                    if (model.Closure == null)
+                        break;
+
+                    var closure = await _context.NablNonConformingWorkClosures
+                        .FirstOrDefaultAsync(x => x.NablNonConformingWorkId == model.ID);
+
+                    if (closure == null)
+                    {
+                        model.Closure.NablNonConformingWorkId = model.ID;
+
+                        await _context.NablNonConformingWorkClosures
+                            .AddAsync(model.Closure);
+                    }
+                    else
+                    {
+                        closure.ClosureDate = model.Closure.ClosureDate;
+                        closure.ClosedByEmployeeId = model.Closure.ClosedByEmployeeId;
+                        closure.ClosedByEmployeeName = model.Closure.ClosedByEmployeeName;
+                        closure.FinalRemarks = model.Closure.FinalRemarks;
+                        closure.Status = model.Closure.Status;
+                    }
+
+                    break;
+
+                default:
+
+                    throw new Exception("Invalid Request Step");
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        private async Task<NablNonConformingWork> GetByIdNonConformingWork(long id)
+        {
+            var data = await _context.NablNonConformingWorks.Include(c=>c.Investigation).Include(c=>c.CorrectiveAction).Include(c=>c.Verification).Include(c=>c.Closure).FirstOrDefaultAsync(c => c.ID == id && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
+            return data;
+        }
+        public async Task<PagedResponse<object>> NcPrintList(PageFilter filter)
+        {
+            var query = _context.NablNonConformingWorks
+                .Where(x => x.IsActive &&
+                            x.CompanyCode == loggedInUser.CompanyCode);
+
+            if (filter.Filter != null)
+            {
+                query = query.ApplyFilters(filter.Filter);
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.searchTerm))
+            {
+                var search = filter.searchTerm.Trim().ToLower();
+
+                query = query.Where(x =>
+                    (x.NcNo != null && x.NcNo.ToLower().Contains(search)) ||
+                    (x.Description != null && x.Description.ToLower().Contains(search)) ||
+                    (x.RootCauseAnalysis != null && x.RootCauseAnalysis.ToLower().Contains(search)));
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.SortByColumn))
+            {
+                string direction = filter.SortOrder?.ToLower() == "asc"
+                    ? "ascending"
+                    : "descending";
+
+                query = query.OrderBy($"{filter.SortByColumn} {direction}");
+            }
+            else
+            {
+                query = query.OrderByDescending(x => x.ID);
+            }
+
+            var result = query.Select(x => new NonConformingWorkPrintDto
+            {
+                Id = x.ID,
+
+                NcNo = x.NcNo,
+
+                NcDate = x.NCDate,
+
+                Description = x.Description,
+
+                RootCauseAnalysis = x.Investigation != null
+                    ? x.Investigation.RootCause
+                    : string.Empty,
+
+                CorrectiveAction = x.CorrectiveAction != null
+                    ? x.CorrectiveAction.CorrectiveAction
+                    : string.Empty,
+
+                ClosureDate = x.Closure != null
+                    ? x.Closure.ClosureDate
+                    : null,
+
+                SignatureTDQM = x.SignatureTDQM
+            });
+
+            return await result.Cast<object>().ToPagedAsync(filter);
         }
     }
 
