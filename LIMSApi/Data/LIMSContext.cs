@@ -292,12 +292,51 @@ public partial class LIMSContext : DbContext
     public DbSet<LaboratoryTestAnalysisTypeEquipment> LaboratoryTestAnalysisTypeEquipments { get; set; }
     public DbSet<LaboratoryTestAnalysisTypeSpecification> LaboratoryTestAnalysisTypeSpecifications { get; set; }
 
+    public DbSet<ProductMaster> ProductMasters { get; set; }
+    public DbSet<ProductMasterMetalClassification> ProductMasterMetalClassifications { get; set; }
+    public DbSet<ProductMasterVersion> ProductMasterVersions { get; set; }
+    public DbSet<ProductMasterVersionGrade> ProductMasterVersionGrades { get; set; }
+    public DbSet<ProductMasterVersionGradeCondition> ProductMasterVersionGradeConditions { get; set; }
+
     //    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     //#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the BankName= syntax to read it from _configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
     //        => optionsBuilder.UseSqlServer("Data Source=localhost;Initial Catalog=LIMS_Backup;Integrated Security=True;Encrypt=False");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<ProductMasterMetalClassification>()
+            .HasKey(x => new { x.ProductMasterID, x.MetalClassificationID });
+
+        modelBuilder.Entity<ProductMasterMetalClassification>()
+            .HasOne(x => x.ProductMaster)
+            .WithMany(p => p.MetalClassifications)
+            .HasForeignKey(x => x.ProductMasterID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProductMasterMetalClassification>()
+            .HasOne(x => x.MetalClassification)
+            .WithMany()
+            .HasForeignKey(x => x.MetalClassificationID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<ProductMasterVersionGrade>()
+            .HasOne(x => x.ProductMasterVersion)
+            .WithMany(v => v.Grades)
+            .HasForeignKey(x => x.ProductMasterVersionID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProductMasterVersionGrade>()
+            .HasOne(x => x.SpecificationGrade)
+            .WithMany()
+            .HasForeignKey(x => x.SpecificationGradeID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<ProductMasterVersionGradeCondition>()
+            .HasOne(x => x.ProductMasterVersionGrade)
+            .WithMany(g => g.Conditions)
+            .HasForeignKey(x => x.ProductMasterVersionGradeID)
+            .OnDelete(DeleteBehavior.Cascade);
+
         // RolePermission — one (Role, Permission) pair only when active
         modelBuilder.Entity<RolePermission>()
             .HasIndex(x => new { x.RoleID, x.PermissionID })

@@ -5,6 +5,7 @@ using LIMSApi.Helpers.Enums;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
+using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Services
 {
@@ -14,13 +15,15 @@ namespace LIMSApi.Services
         private readonly ILogger<TestMethodSpecificationService> _logger;
         private LoggedInUserDTO loggedInUser;
         private readonly IFileUploadService _uploadService;
+        private readonly string _pdfFolderPath;
 
-        public TestMethodSpecificationService(ITestMethodSpecificationRepository TestMethodSpecificationRepo, ILogger<TestMethodSpecificationService> logger, IFileUploadService uploadService)
+        public TestMethodSpecificationService(ITestMethodSpecificationRepository TestMethodSpecificationRepo, ILogger<TestMethodSpecificationService> logger, IFileUploadService uploadService, IConfiguration configuration)
         {
             _TestMethodSpecificationRepository = TestMethodSpecificationRepo;
             _logger = logger;
             loggedInUser = LoggedInUserProvider.CurrentUser;
             _uploadService = uploadService;
+            _pdfFolderPath = configuration["ImportSettings:TestMethodSpecPdfFolder"] ?? string.Empty;
         }
 
         public async Task CreateTestMethodSpecification(TestMethodSpecification model)
@@ -416,6 +419,337 @@ namespace LIMSApi.Services
         public async Task<List<DropdwonSelector>> GetTestMethodSpecificationVersionDropdown(string? searchTerm, int pageNo, int pageSize)
         {
             return await _TestMethodSpecificationRepository.GetTestMethodSpecificationVersionDropdown(searchTerm, pageNo, pageSize);
+        }
+
+        // ── PDF Matching Helpers (optional folder scan) ─────────────────────
+        private static readonly Dictionary<string, string> OrgFolderMap = new(StringComparer.OrdinalIgnoreCase)
+        {
+            { "ANSI/NACE (AMPP)", "NACE" },
+            { "NACE (AMPP)", "NACE" },
+            // Default: use org name as folder name
+        };
+
+        /// <summary>Map Excel org name to folder name under Updated Std List.</summary>
+        private static string MapOrgToFolder(string orgName)
+        {
+            var trimmed = orgName.Trim();
+            return OrgFolderMap.TryGetValue(trimmed, out var mapped) ? mapped : trimmed;
+        }
+
+        /// <summary>Construct the PDF filename prefix from row data.</summary>
+        private static string ConstructPdfPrefix(ImportTestMethodSpecItemDto item)
+        {
+            var orgAbbr = MapOrgToFolder(item.StandardOrganization);
+            var stdPart = item.TestMethodStandard.Replace("/", "-").Replace(" ", "-");
+            while (stdPart.Contains("--")) stdPart = stdPart.Replace("--", "-");
+            return $"{orgAbbr}-{stdPart}";
+        }
+
+        /// <summary>
+        /// Search the configured PDF folder for a file matching the row data.
+        /// Returns (foundPdfFileName, fullFilePath) or (null, null).
+        /// </summary>
+        private (string? fileName, string? filePath) ResolvePdfFile(ImportTestMethodSpecItemDto item)
+        {
+            if (string.IsNullOrWhiteSpace(_pdfFolderPath) || !Directory.Exists(_pdfFolderPath))
+                return (null, null);
+
+            var orgFolder = MapOrgToFolder(item.StandardOrganization);
+            var searchDir = Path.Combine(_pdfFolderPath, orgFolder);
+            if (!Directory.Exists(searchDir))
+                return (null, null);
+
+            var prefix = ConstructPdfPrefix(item);
+
+            // Build candidate suffixes to try (longest match first)
+            var candidates = new List<string>();
+            if (!string.IsNullOrWhiteSpace(item.Version))
+            {
+                // Try version digits only (e.g. "24a" → "24")
+                var verDigits = new string(item.Version.Where(char.IsDigit).ToArray());
+                if (verDigits.Length > 0)
+                {
+                    candidates.Add($"{prefix}-{verDigits}.pdf");
+                    // Also try the short year suffix (last 2 chars of year)
+                    if (!string.IsNullOrWhiteSpace(item.Year) && item.Year.Length >= 2)
+                        candidates.Add($"{prefix}-{item.Year[^2..]}.pdf");
+                }
+            }
+            if (!string.IsNullOrWhiteSpace(item.Year))
+                candidates.Add($"{prefix}-{item.Year}.pdf");
+
+            candidates.Add($"{prefix}.pdf"); // fallback: no year
+
+            // Try exact matches first
+            foreach (var candidate in candidates.Distinct())
+            {
+                var exactPath = Path.Combine(searchDir, candidate);
+                if (File.Exists(exactPath))
+                    return (candidate, exactPath);
+            }
+
+            // Fallback: prefix-based search (handles suffixes like (R2021), (RA2024))
+            var files = Directory.GetFiles(searchDir, "*.pdf");
+            var match = files.FirstOrDefault(f =>
+                Path.GetFileNameWithoutExtension(f).StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+            if (match != null)
+                return (Path.GetFileName(match), match);
+
+            return (null, null);
+        }
+
+        /// <summary>
+        /// Upload a PDF from disk to the system via IFileUploadService.
+        /// Returns UploadReferenceID or null.
+        /// </summary>
+        private async Task<long?> UploadPdfFromDisk(string filePath, string fileName, long specId)
+        {
+            try
+            {
+                var fileBytes = await File.ReadAllBytesAsync(filePath);
+                var stream = new MemoryStream(fileBytes);
+                // ContentType = application/octet-stream is accepted by FileUploadValidator as fallback
+                var formFile = new FormFile(stream, 0, fileBytes.Length, "file", fileName)
+                {
+                    Headers = new HeaderDictionary(),
+                    ContentType = "application/octet-stream"
+                };
+
+                // Use FileType.Other — same as manual upload in the regular create/edit flow
+                var uploaded = await _uploadService.UploadFileAsync(formFile, FileType.Other, null, $"import-{specId}");
+                return uploaded?.ID;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to upload PDF '{FileName}' for spec {SpecId}.", fileName, specId);
+                return null;
+            }
+        }
+
+        public async Task<List<ImportValidationResultDto>> ValidateImport(List<ImportTestMethodSpecItemDto> items)
+        {
+            var orgs = await _TestMethodSpecificationRepository.GetAllStandardOrganizations();
+            var orgMap = orgs.ToDictionary(x => x.Name!.Trim().ToLower(), x => x.Id);
+
+            var results = new List<ImportValidationResultDto>();
+
+            foreach (var item in items)
+            {
+                var r = new ImportValidationResultDto
+                {
+                    RowNumber = item.RowNumber,
+                    StandardOrganization = item.StandardOrganization,
+                    TestMethodStandard = item.TestMethodStandard,
+                    Part = item.Part,
+                    OfficialTitle = item.OfficialTitle,
+                    Version = item.Version,
+                    Year = item.Year,
+                };
+
+                var orgKey = item.StandardOrganization.Trim().ToLower();
+                if (orgMap.TryGetValue(orgKey, out var orgId))
+                {
+                    r.StandardOrganizationID = orgId;
+                }
+                else
+                {
+                    r.Status = "error";
+                    r.Messages.Add($"Standard Organization '{item.StandardOrganization}' not found in the system.");
+                }
+
+                if (string.IsNullOrWhiteSpace(item.TestMethodStandard))
+                {
+                    r.Status = "error";
+                    r.Messages.Add("Test Method Standard is required.");
+                }
+
+                if (r.StandardOrganizationID > 0 && !string.IsNullOrWhiteSpace(item.TestMethodStandard))
+                {
+                    var exists = await _TestMethodSpecificationRepository.ExistsByOrgAndStandard(
+                        r.StandardOrganizationID.Value, item.TestMethodStandard.Trim(), item.Part?.Trim());
+                    r.Exists = exists;
+                    if (exists)
+                    {
+                        r.Status = "error";
+                        r.Messages.Add($"Already exists: '{item.StandardOrganization} {item.TestMethodStandard}{(string.IsNullOrEmpty(item.Part) ? "" : " " + item.Part)}'.");
+                    }
+                }
+
+                if (string.IsNullOrWhiteSpace(item.OfficialTitle) && string.IsNullOrWhiteSpace(item.TestMethodStandard))
+                {
+                    r.Status = "error";
+                    r.Messages.Add("Both Official Title and Test Method Standard are empty.");
+                }
+
+                // PDF match check (optional — info only if folder is configured)
+                if (!string.IsNullOrWhiteSpace(_pdfFolderPath) && Directory.Exists(_pdfFolderPath))
+                {
+                    var (pdfName, pdfPath) = ResolvePdfFile(item);
+                    r.PdfFileName = pdfName;
+                    r.PdfFound = pdfPath != null;
+                    if (pdfPath != null)
+                        r.Messages.Add($"PDF found: {pdfName}");
+                }
+
+                results.Add(r);
+            }
+
+            return results;
+        }
+
+        public async Task<BulkImportResultDto> BulkImport(List<ImportTestMethodSpecItemDto> items)
+        {
+            var orgs = await _TestMethodSpecificationRepository.GetAllStandardOrganizations();
+            var orgMap = orgs.ToDictionary(x => x.Name!.Trim().ToLower(), x => x.Id);
+
+            var specs = new List<TestMethodSpecification>();
+            var errors = new List<string>();
+            int skipped = 0;
+            int pdfMatched = 0;
+            int pdfUploaded = 0;
+
+            foreach (var item in items)
+            {
+                var orgKey = item.StandardOrganization.Trim().ToLower();
+                if (!orgMap.TryGetValue(orgKey, out var orgId))
+                {
+                    skipped++;
+                    errors.Add($"Row {item.RowNumber}: Organization '{item.StandardOrganization}' not found.");
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(item.TestMethodStandard))
+                {
+                    skipped++;
+                    errors.Add($"Row {item.RowNumber}: Test Method Standard is empty.");
+                    continue;
+                }
+
+                var exists = await _TestMethodSpecificationRepository.ExistsByOrgAndStandard(
+                    orgId, item.TestMethodStandard.Trim(), item.Part?.Trim());
+                if (exists)
+                {
+                    skipped++;
+                    errors.Add($"Row {item.RowNumber}: '{item.StandardOrganization} {item.TestMethodStandard}' already exists.");
+                    continue;
+                }
+
+                var name = !string.IsNullOrWhiteSpace(item.OfficialTitle)
+                    ? item.OfficialTitle.Trim()
+                    : $"{item.StandardOrganization} {item.TestMethodStandard}{(string.IsNullOrEmpty(item.Part) ? "" : " " + item.Part)}";
+
+                var displayTitle = $"{item.StandardOrganization} {item.TestMethodStandard}"
+                    + (string.IsNullOrEmpty(item.Part) ? "" : " " + item.Part)
+                    + (string.IsNullOrEmpty(item.Version) ? "" : " " + item.Version)
+                    + (string.IsNullOrEmpty(item.Year) ? "" : " (" + item.Year + ")");
+
+                var versionYear = !string.IsNullOrWhiteSpace(item.Year) ? item.Year : null;
+                var versionLabel = !string.IsNullOrWhiteSpace(item.Version) ? item.Version : (versionYear ?? "1.0");
+
+                var spec = new TestMethodSpecification
+                {
+                    StandardOrganizationID = orgId,
+                    TestMethodStandard = item.TestMethodStandard.Trim(),
+                    Part = item.Part?.Trim(),
+                    Name = name,
+                    DisplayTitle = displayTitle,
+                    IsActive = true,
+                    CompanyCode = loggedInUser.CompanyCode,
+                    CreatedBy = loggedInUser.EmployeeID,
+                    CreatedOn = DateTime.UtcNow,
+                    Versions = new List<TestMethodSpecificationVersion>
+                    {
+                        new TestMethodSpecificationVersion
+                        {
+                            Version = versionLabel,
+                            Year = versionYear,
+                            Status = VersionStatus.Active,
+                            IsDefault = true,
+                            EffectiveDate = DateTime.UtcNow,
+                            CreatedBy = loggedInUser.EmployeeID,
+                            CreatedOn = DateTime.UtcNow,
+                        }
+                    }
+                };
+
+                // Try to match and upload PDF file (optional)
+                var (pdfFileName, pdfFilePath) = ResolvePdfFile(item);
+                if (pdfFilePath != null)
+                {
+                    pdfMatched++;
+                    // We need to save the spec first to get its ID for file linking
+                    // Temporarily store PDF info for later processing
+                    spec.Versions.First().StandardFile = pdfFileName;
+                }
+
+                specs.Add(spec);
+            }
+
+            int importedCount = 0;
+            if (specs.Any())
+            {
+                await _TestMethodSpecificationRepository.AddRangeAsync(specs);
+                importedCount = specs.Count;
+                _logger.LogInformation("Bulk import completed: {Count} specifications created.", importedCount);
+
+                // Second pass: upload matched PDFs individually
+                foreach (var spec in specs)
+                {
+                    if (spec.ID == 0) continue; // safety: must have DB-generated ID
+                    var version = spec.Versions.FirstOrDefault();
+                    if (version == null || string.IsNullOrWhiteSpace(version.StandardFile))
+                        continue;
+
+                    // Re-find the matching item
+                    var item = items.FirstOrDefault(i =>
+                        i.TestMethodStandard.Trim() == spec.TestMethodStandard);
+                    if (item == null) continue;
+
+                    var (pdfFileName, pdfFilePath) = ResolvePdfFile(item);
+                    if (pdfFilePath == null) continue;
+
+                    try
+                    {
+                        var uploaded = await _uploadService.UploadFileAsync(
+                            new FormFile(
+                                new MemoryStream(await File.ReadAllBytesAsync(pdfFilePath)),
+                                0, new FileInfo(pdfFilePath).Length, "file", pdfFileName)
+                            {
+                                Headers = new HeaderDictionary(),
+                                ContentType = "application/octet-stream"
+                            },
+                            FileType.Other, null, $"import-{spec.ID}");
+
+                        if (uploaded != null)
+                        {
+                            // Update the version record directly
+                            await _TestMethodSpecificationRepository.UpdateVersionFileRef(
+                                version.ID, uploaded.FilePath, uploaded.OriginalFileName, uploaded.ID);
+                            pdfUploaded++;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to upload PDF for spec {SpecId}.", spec.ID);
+                        errors.Add($"Row for '{spec.TestMethodStandard}': PDF upload failed - {ex.Message}");
+                    }
+                }
+            }
+
+            return new BulkImportResultDto
+            {
+                TotalRows = items.Count,
+                Imported = importedCount,
+                Skipped = skipped,
+                Errors = errors,
+                PdfMatched = pdfMatched,
+                PdfUploaded = pdfUploaded,
+            };
+        }
+
+        public async Task<List<DropdwonSelector>> GetAllStandardOrganizations()
+        {
+            return await _TestMethodSpecificationRepository.GetAllStandardOrganizations();
         }
     }
 }

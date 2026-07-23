@@ -230,6 +230,7 @@ builder.Services.AddScoped<IProductConditionRepository, ProductConditionReposito
 builder.Services.AddScoped<IProductSpecificationRepository, ProductSpecificationRepository>();
 builder.Services.AddScoped<IProductTestGroupRepository, ProductTestGroupRepository>();
 builder.Services.AddScoped<IProductSpecificationGradeRepository, ProductSpecificationGradeRepository>();
+builder.Services.AddScoped<IProductMasterRepository, ProductMasterRepository>();
 builder.Services.AddScoped<IRemarkRepository, RemarkRepository>();
 builder.Services.AddScoped<ISiteActivityRepository, SiteActivityRepository>();
 builder.Services.AddScoped<ISiteErrorRepository, SiteErrorRepository>();
@@ -296,6 +297,7 @@ builder.Services.AddScoped<IHeatTreatmentCategoryService, HeatTreatmentCategoryS
 builder.Services.AddScoped<ICoolingMediumService, CoolingMediumService>();
 
 builder.Services.AddScoped<IProductFormService, ProductFormService>();
+builder.Services.AddScoped<IProductMasterService, ProductMasterService>();
 builder.Services.AddScoped<ISpecimenOrientationCategoryService, SpecimenOrientationCategoryService>();
 builder.Services.AddScoped<IProductConditionCategoryService, ProductConditionCategoryService>();
 builder.Services.AddScoped<IPropertyTypeService, PropertyTypeService>();

@@ -251,6 +251,47 @@ namespace LIMSApi.Repositories
                 .ToListAsync();
         }
 
+        public async Task<bool> ExistsByOrgAndStandard(long orgId, string testMethodStandard, string? part)
+        {
+            return await _context.TestMethodSpecifications
+                .AnyAsync(x => x.StandardOrganizationID == orgId
+                            && x.TestMethodStandard == testMethodStandard
+                            && x.Part == part
+                            && x.IsActive
+                            && x.CompanyCode == loggedInUser.CompanyCode);
+        }
+
+        public async Task<List<DropdwonSelector>> GetAllStandardOrganizations()
+        {
+            return await _context.StandardOrganizationMasters
+                .Where(x => x.IsActive && x.CompanyCode == loggedInUser.CompanyCode)
+                .OrderBy(x => x.Name)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = x.Name,
+                })
+                .ToListAsync();
+        }
+
+        public async Task AddRangeAsync(List<TestMethodSpecification> specs)
+        {
+            await _context.TestMethodSpecifications.AddRangeAsync(specs);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task UpdateVersionFileRef(long versionId, string filePath, string originalFileName, long uploadRefId)
+        {
+            var version = await _context.TestMethodSpecificationVersions.FindAsync(versionId);
+            if (version != null)
+            {
+                version.StandardFilePath = filePath;
+                version.StandardFile = originalFileName;
+                version.UploadReferenceID = uploadRefId;
+                await _context.SaveChangesAsync();
+            }
+        }
+
         public async Task<List<DropdwonSelector>> GetTestMethodSpecificationVersionDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
         {
             if (pageNo < 0) pageNo = 0;

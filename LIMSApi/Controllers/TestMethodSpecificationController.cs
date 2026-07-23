@@ -245,5 +245,26 @@ namespace LIMSApi.Controllers
             var data = await _testMethodService.GetTestMethodSpecificationVersionDropdown(searchTerm, pageNo, pageSize);
             return data == null ? NoContent() : Ok(data);
         }
+
+        [HttpPost("validate-import")]
+        public async Task<IActionResult> ValidateImport([FromBody] BulkImportRequestDto request)
+        {
+            var results = await _testMethodService.ValidateImport(request.Items);
+            return Ok(results);
+        }
+
+        [HttpPost("bulk-import")]
+        public async Task<IActionResult> BulkImport([FromBody] BulkImportRequestDto request)
+        {
+            var result = await _testMethodService.BulkImport(request.Items);
+            return Ok(result);
+        }
+
+        [HttpGet("standard-organizations")]
+        public async Task<IActionResult> GetAllStandardOrganizations()
+        {
+            var data = await _testMethodService.GetAllStandardOrganizations();
+            return Ok(data);
+        }
     }
 }

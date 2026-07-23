@@ -21,5 +21,8 @@ namespace LIMSApi.Services.Interface
         Task<int> GetVersionImpactCount(long versionId);
         Task<List<DropdwonSelector>> GetVersionsBySpecId(long specId, bool includeAll = false);
         Task<List<DropdwonSelector>> GetTestMethodSpecificationVersionDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<ImportValidationResultDto>> ValidateImport(List<ImportTestMethodSpecItemDto> items);
+        Task<BulkImportResultDto> BulkImport(List<ImportTestMethodSpecItemDto> items);
+        Task<List<DropdwonSelector>> GetAllStandardOrganizations();
     }
 }

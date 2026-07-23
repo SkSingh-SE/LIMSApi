@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20260721060234_AddProductMasterFeature")]
+    partial class AddProductMasterFeature
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -15165,10 +15168,6 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<string>("GradeValue")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -15194,6 +15193,113 @@ namespace LIMSApi.Migrations
                     b.HasIndex("ProductSizeMasterID");
 
                     b.ToTable("ProductMasters");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.ProductMasterGradeConditionPriority", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long?>("HeatTreatmentID")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("int");
+
+                    b.Property<long?>("ProductConditionID1")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("ProductConditionID2")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ProductMasterLinkedSpecID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("ProductSizeMasterID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("SpecificationGradeID")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("HeatTreatmentID");
+
+                    b.HasIndex("ProductConditionID1");
+
+                    b.HasIndex("ProductConditionID2");
+
+                    b.HasIndex("ProductMasterLinkedSpecID");
+
+                    b.HasIndex("ProductSizeMasterID");
+
+                    b.HasIndex("SpecificationGradeID");
+
+                    b.ToTable("ProductMasterGradeConditionPriorities");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.ProductMasterLinkedSpec", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("ProductMasterVersionID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("SpecificationHeaderID")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("ProductMasterVersionID");
+
+                    b.HasIndex("SpecificationHeaderID");
+
+                    b.ToTable("ProductMasterLinkedSpecs");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ProductMasterMetalClassification", b =>
@@ -15267,10 +15373,8 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
 
-                    b.Property<string>("VersionNumber")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                    b.Property<int>("VersionNumber")
+                        .HasColumnType("int");
 
                     b.Property<string>("Year")
                         .HasMaxLength(10)
@@ -15283,111 +15387,6 @@ namespace LIMSApi.Migrations
                     b.HasIndex("StandardOrganizationID");
 
                     b.ToTable("ProductMasterVersions");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.ProductMasterVersionGrade", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<string>("CompanyCode")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<long>("CreatedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<long?>("ModifiedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime?>("ModifiedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<long>("ProductMasterVersionID")
-                        .HasColumnType("bigint");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("int");
-
-                    b.Property<long>("SpecificationGradeID")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("ProductMasterVersionID");
-
-                    b.HasIndex("SpecificationGradeID");
-
-                    b.ToTable("ProductMasterVersionGrades");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.ProductMasterVersionGradeCondition", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<string>("CompanyCode")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<long>("CreatedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<long?>("HeatTreatmentID")
-                        .HasColumnType("bigint");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<long?>("ModifiedBy")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime?>("ModifiedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("Priority")
-                        .HasColumnType("int");
-
-                    b.Property<long?>("ProductConditionID1")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("ProductConditionID2")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("ProductMasterVersionGradeID")
-                        .HasColumnType("bigint");
-
-                    b.Property<long?>("ProductSizeMasterID")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("HeatTreatmentID");
-
-                    b.HasIndex("ProductConditionID1");
-
-                    b.HasIndex("ProductConditionID2");
-
-                    b.HasIndex("ProductMasterVersionGradeID");
-
-                    b.HasIndex("ProductSizeMasterID");
-
-                    b.ToTable("ProductMasterVersionGradeConditions");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ProductSizeMaster", b =>
@@ -21896,6 +21895,68 @@ namespace LIMSApi.Migrations
                     b.Navigation("ProductSizeMaster");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.ProductMasterGradeConditionPriority", b =>
+                {
+                    b.HasOne("LIMSApi.Models.HeatTreatmentMaster", "HeatTreatment")
+                        .WithMany()
+                        .HasForeignKey("HeatTreatmentID");
+
+                    b.HasOne("LIMSApi.Models.ProductConditionMaster", "ProductCondition1")
+                        .WithMany()
+                        .HasForeignKey("ProductConditionID1");
+
+                    b.HasOne("LIMSApi.Models.ProductConditionMaster", "ProductCondition2")
+                        .WithMany()
+                        .HasForeignKey("ProductConditionID2");
+
+                    b.HasOne("LIMSApi.Models.ProductMasterLinkedSpec", "ProductMasterLinkedSpec")
+                        .WithMany("GradeConditionPriorities")
+                        .HasForeignKey("ProductMasterLinkedSpecID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LIMSApi.Models.ProductSizeMaster", "ProductSizeMaster")
+                        .WithMany()
+                        .HasForeignKey("ProductSizeMasterID");
+
+                    b.HasOne("LIMSApi.Models.SpecificationGrade", "SpecificationGrade")
+                        .WithMany()
+                        .HasForeignKey("SpecificationGradeID")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("HeatTreatment");
+
+                    b.Navigation("ProductCondition1");
+
+                    b.Navigation("ProductCondition2");
+
+                    b.Navigation("ProductMasterLinkedSpec");
+
+                    b.Navigation("ProductSizeMaster");
+
+                    b.Navigation("SpecificationGrade");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.ProductMasterLinkedSpec", b =>
+                {
+                    b.HasOne("LIMSApi.Models.ProductMasterVersion", "ProductMasterVersion")
+                        .WithMany("LinkedSpecs")
+                        .HasForeignKey("ProductMasterVersionID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LIMSApi.Models.SpecificationHeader", "SpecificationHeader")
+                        .WithMany()
+                        .HasForeignKey("SpecificationHeaderID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ProductMasterVersion");
+
+                    b.Navigation("SpecificationHeader");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.ProductMasterMetalClassification", b =>
                 {
                     b.HasOne("LIMSApi.Models.MetalClassificationMaster", "MetalClassification")
@@ -21930,60 +21991,6 @@ namespace LIMSApi.Migrations
                     b.Navigation("ProductMaster");
 
                     b.Navigation("StandardOrganization");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.ProductMasterVersionGrade", b =>
-                {
-                    b.HasOne("LIMSApi.Models.ProductMasterVersion", "ProductMasterVersion")
-                        .WithMany("Grades")
-                        .HasForeignKey("ProductMasterVersionID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("LIMSApi.Models.SpecificationGrade", "SpecificationGrade")
-                        .WithMany()
-                        .HasForeignKey("SpecificationGradeID")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.Navigation("ProductMasterVersion");
-
-                    b.Navigation("SpecificationGrade");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.ProductMasterVersionGradeCondition", b =>
-                {
-                    b.HasOne("LIMSApi.Models.HeatTreatmentMaster", "HeatTreatment")
-                        .WithMany()
-                        .HasForeignKey("HeatTreatmentID");
-
-                    b.HasOne("LIMSApi.Models.ProductConditionMaster", "ProductCondition1")
-                        .WithMany()
-                        .HasForeignKey("ProductConditionID1");
-
-                    b.HasOne("LIMSApi.Models.ProductConditionMaster", "ProductCondition2")
-                        .WithMany()
-                        .HasForeignKey("ProductConditionID2");
-
-                    b.HasOne("LIMSApi.Models.ProductMasterVersionGrade", "ProductMasterVersionGrade")
-                        .WithMany("Conditions")
-                        .HasForeignKey("ProductMasterVersionGradeID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("LIMSApi.Models.ProductSizeMaster", "ProductSizeMaster")
-                        .WithMany()
-                        .HasForeignKey("ProductSizeMasterID");
-
-                    b.Navigation("HeatTreatment");
-
-                    b.Navigation("ProductCondition1");
-
-                    b.Navigation("ProductCondition2");
-
-                    b.Navigation("ProductMasterVersionGrade");
-
-                    b.Navigation("ProductSizeMaster");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ProductSizeMaster", b =>
@@ -23194,14 +23201,14 @@ namespace LIMSApi.Migrations
                     b.Navigation("Versions");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.ProductMasterVersion", b =>
+            modelBuilder.Entity("LIMSApi.Models.ProductMasterLinkedSpec", b =>
                 {
-                    b.Navigation("Grades");
+                    b.Navigation("GradeConditionPriorities");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.ProductMasterVersionGrade", b =>
+            modelBuilder.Entity("LIMSApi.Models.ProductMasterVersion", b =>
                 {
-                    b.Navigation("Conditions");
+                    b.Navigation("LinkedSpecs");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ProductSpecification", b =>
