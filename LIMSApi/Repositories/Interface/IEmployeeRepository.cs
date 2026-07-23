@@ -11,7 +11,10 @@ namespace LIMSApi.Repositories.Interface
         Task<EmployeeMaster> GetEmployeeById(long id);
         Task<PagedResponse<object>> GetAllEmployees(PageFilter filter);
 
-        Task<List<DropdwonSelector>> GetEmployeeDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<DropdwonSelector>> GetEmployeeDropdown(string? searchTerm, int pageNo, int pageSize, int departmentId);
+        Task<List<DropdwonSelector>> GetEquipmentDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<DropdwonSelector>> GetTestmethodsDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<DropdwonSelector>> GetLabtestDropdown(string? searchTerm, int pageNo, int pageSize, int departmentId);
         Task<bool> ExistsByEmail(string email);
         Task<bool> ExistsByEmailAndNotId(string email, long id);
 

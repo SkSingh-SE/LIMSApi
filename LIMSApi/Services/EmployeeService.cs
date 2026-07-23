@@ -244,9 +244,24 @@ namespace LIMSApi.Services
             return await _employeeRepository.GetAllEmployees(filter);
         }
 
-        public async Task<List<DropdwonSelector>> GetEmployeeDropdown(string? searchTerm, int pageNo, int pageSize)
+        public async Task<List<DropdwonSelector>> GetEmployeeDropdown(string? searchTerm, int pageNo, int pageSize, int departmentId)
         {
-            return await _employeeRepository.GetEmployeeDropdown(searchTerm, pageNo, pageSize);
+            return await _employeeRepository.GetEmployeeDropdown(searchTerm, pageNo, pageSize, departmentId); 
+        }
+
+        public async Task<List<DropdwonSelector>> GetEquipmentDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _employeeRepository.GetEquipmentDropdown(searchTerm, pageNo, pageSize);
+        }
+
+        public async Task<List<DropdwonSelector>> GetTestmethodsDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _employeeRepository.GetTestmethodsDropdown(searchTerm, pageNo, pageSize);
+        }
+
+        public async Task<List<DropdwonSelector>> GetLabtestDropdown(string? searchTerm, int pageNo, int pageSize,int departmentId)
+        {
+            return await _employeeRepository.GetLabtestDropdown(searchTerm, pageNo, pageSize, departmentId);
         }
 
         // Employee Qualification Management

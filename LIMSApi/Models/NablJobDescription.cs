@@ -52,12 +52,12 @@ namespace LIMSApi.Models
         // Section VI - Confidentiality Clause
         public string? ConfidentialityClause { get; set; }
 
-        // Section VII - Approval
-        [MaxLength(200)]
-        public string? PreparedByName { get; set; }
+        //// Section VII - Approval
+        //[MaxLength(200)]
+        //public string? PreparedByName { get; set; }
 
-        [MaxLength(200)]
-        public string? ApprovedByName { get; set; }
+        //[MaxLength(200)]
+        //public string? ApprovedByName { get; set; }
 
         public bool EmployeeAccepted { get; set; }
     }

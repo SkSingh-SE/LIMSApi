@@ -298,6 +298,19 @@ public partial class LIMSContext : DbContext
     public DbSet<ProductMasterVersionGrade> ProductMasterVersionGrades { get; set; }
     public DbSet<ProductMasterVersionGradeCondition> ProductMasterVersionGradeConditions { get; set; }
 
+    public DbSet<NablEmployeeEquipmentAuthrization> NablEmployeeEquipmentAuthrizations { get; set; }
+    public DbSet<NablEmployeeTestMethodAuthorization> NablEmployeeTestMethodAuthorizations { get; set; }
+    public DbSet<NablEmployeeLaborartyTestAuthorization> NablEmployeeLaborartyTestAuthorizations { get; set; }
+    public DbSet<InventoryManagement> InventoryManagements { get; set; }
+    public DbSet<InventoryQuantityLog> InventoryQuantityLogs { get; set; }
+    public DbSet<ReferenceMaterialConsumptionLog> ReferenceMaterialConsumptionLogs { get; set; }
+    public DbSet<NablQualityControlPlanActivity> NablQualityControlPlanActivities { get; set; }
+    public DbSet<RetestingInitialTestLog> RetestingInitialTestLogs { get; set; }
+    public DbSet<RetestingComparisonLog> RetestingComparisonLogs { get; set; }
+    public DbSet<NablNonConformingWorkInvestigation> NablNonConformingWorkInvestigations { get; set; }
+    public DbSet<NablNonConformingWorkCorrectiveAction> NablNonConformingWorkCorrectiveActions { get; set; }
+    public DbSet<NablNonConformingWorkVerification> NablNonConformingWorkVerifications { get; set; }
+    public DbSet<NablNonConformingWorkClosure> NablNonConformingWorkClosures { get; set; }
     //    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     //#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the BankName= syntax to read it from _configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
     //        => optionsBuilder.UseSqlServer("Data Source=localhost;Initial Catalog=LIMS_Backup;Integrated Security=True;Encrypt=False");
@@ -1142,6 +1155,16 @@ public partial class LIMSContext : DbContext
             .WithMany()
             .HasForeignKey(g => g.SampleID)
             .OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<InventoryQuantityLog>()
+            .HasOne(x => x.InventoryManagement)
+            .WithMany()
+            .HasForeignKey(x => x.InventoryId)
+            .OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<NablCrmConsumption>()
+            .HasOne(x => x.ReferenceMaterial)
+            .WithMany()
+            .HasForeignKey(x => x.ReferenceMaterialId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         // ── LaboratoryTestSubGroup (sections under a LabTest) ──
         modelBuilder.Entity<LaboratoryTestSubGroup>()
@@ -1364,6 +1387,33 @@ public partial class LIMSContext : DbContext
             .IsRequired(false)
             .OnDelete(DeleteBehavior.NoAction);
 
+        modelBuilder.Entity<ReferenceMaterialConsumptionLog>()
+            .HasOne(x => x.ReferenceMaterialConsumption)
+            .WithMany(x => x.Logs)
+            .HasForeignKey(x => x.ReferenceMaterialConsumptionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ReferenceMaterialConsumptionLog>()
+            .HasOne(x => x.ReferenceMaterial)
+            .WithMany()
+            .HasForeignKey(x => x.ReferenceMaterialId)
+            .OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<NablQualityControlPlan>()
+            .HasMany(x => x.Activities)
+            .WithOne(x => x.QualityControlPlan)
+            .HasForeignKey(x => x.QualityControlPlanId)
+            .OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<RetestingInitialTestLog>()
+              .HasOne(x => x.NablRetesting)
+              .WithMany(x => x.InitialTestingLogs)
+              .HasForeignKey(x => x.RetestingRetainedSampleId)
+              .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RetestingComparisonLog>()
+            .HasOne(x => x.NablRetesting)
+            .WithMany(x => x.RetestingLogs)
+            .HasForeignKey(x => x.RetestingRetainedSampleId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);

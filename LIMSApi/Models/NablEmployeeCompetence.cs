@@ -24,6 +24,8 @@ namespace LIMSApi.Models
 
         // Parameters stored as JSON array
         public string? ParametersJson { get; set; }
+        [NotMapped]
+        public List<CompetenceParameter>? Parameters { get; set; }
 
         // Overall
         public decimal OverallRating { get; set; }
@@ -35,5 +37,11 @@ namespace LIMSApi.Models
         public string? EvaluationDoneBy { get; set; }
 
         public DateTime? EvaluationDate { get; set; }
+    }
+    [NotMapped]
+    public class CompetenceParameter
+    {
+        public string Name { get; set; }
+        public string Rating { get; set; }
     }
 }

@@ -83,9 +83,33 @@ namespace LIMSApi.Models
 
         [MaxLength(200)]
         public string? VerifiedBy { get; set; }
+        public string? RegisterNo { get; set; }
+        [NotMapped]
+        public BankDetail? BankDetail { get; set; }
+        [NotMapped]
+        public DocumentsSubmitted? DocumentsSubmitted { get; set; }
+    }
+    [NotMapped]
+    public class BankDetail
+    {
+        public string BankName{ get; set; }
+        public string AccountNo { get; set; }
+        public string IfscCode { get; set; }
+        public string Branch { get; set; }
+    }
+    [NotMapped]
+    public class DocumentsSubmitted
+    {
+        public bool MonopolyCert { get; set; }
+        public bool PopularBrandCert { get; set; }
+        public bool IsoCertificate { get; set; }
+        public bool WorkmanshipCert { get; set; }
+        public bool DeliveryRecord { get; set; }
+        public bool SupplierConfidentiality { get; set; }
+        public bool SupplierApproved { get; set; }
+        public string ReasonNotApproved { get; set; }
+        public bool Price { get; set; }
+        public bool EvaluationRequired { get; set; }
 
-        // Legacy field kept for backward compatibility
-        [MaxLength(500)]
-        public string? BankDetails { get; set; }
     }
 }

@@ -21,7 +21,8 @@ namespace LIMSApi.Models
 
         public string? AttendeesJson { get; set; } // JSON array of {employeeId, name, designation, signature}
 
-        public string? MinutesJson { get; set; } // JSON array of {agendaItem, discussion, decision, actionRequired, responsiblePerson, targetDate}
+        public string? AgendaItemsJson { get; set; } // JSON array of {agendaItem, discussion, decision, actionRequired, responsiblePerson, targetDate}
+        public string? ActionPlanJson { get; set; } // JSON array of {agendaItem, discussion, decision, actionRequired, responsiblePerson, targetDate}
 
         public DateTime? NextMeetingDate { get; set; }
 
@@ -29,5 +30,40 @@ namespace LIMSApi.Models
 
         [MaxLength(200)]
         public string? ActionClosureStatus { get; set; }
+        public long? MeetingId { get; set; }
+        public string? MeetingNo { get; set; }
+        public string? MeetingVenue { get; set; }
+        public TimeOnly? MeetingTime { get; set; }
+        public string? OverallConclusion { get; set; }
+        [NotMapped]
+        public List<AgendaList> AgendaList { get; set; }
+        [NotMapped]
+        public List<ParticipantItems> ParticipantItems { get; set; }
+        [NotMapped]
+        public List<ActionItems> ActionItems { get; set; }
+    }
+    [NotMapped]
+    public class ActionItems
+    {
+        public string Action { get; set; }
+        public string Responsibility { get; set; }
+        public DateTime TargetDate { get; set; }
+        public string Priority { get; set; }
+        public string Status { get; set; }
+    }
+    [NotMapped]
+    public class AgendaList
+    {
+        public string AgendaItem { get; set; }
+        public string Discussion { get; set; }
+        public string Decisiontaken { get; set; }
+    }
+    [NotMapped]
+    public class ParticipantItems
+    {
+        public string Name { get; set; }
+        public string Designation { get; set; }
+        public string Department { get; set; }
+
     }
 }

@@ -48,5 +48,12 @@ namespace LIMSApi.Models
         public bool? CustomerSatisfied { get; set; }
 
         public string? Remarks { get; set; }
+        public DateTime? MonthYear { get; set; }
+        public DateTime? ReferenceNoDate { get; set; }
+        public string? ComplaintNo { get; set; }
+        public string? ComplainantName { get; set; }
+        public string? ValidationOfComplaint { get; set; }
+        public string? OutcomeOfInvestigation { get; set; }
+        public string? SignatureQM { get; set; }
     }
 }

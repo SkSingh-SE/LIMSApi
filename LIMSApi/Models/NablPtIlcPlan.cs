@@ -28,5 +28,29 @@ namespace LIMSApi.Models
         public string? ResponsiblePerson { get; set; }
 
         public string? OverallAssessment { get; set; }
+        public string? LaboratoryId { get; set; }
+        public string? LaboratoryName { get; set; }
+        public string? FieldOfAccreditation { get; set; }
+        public string? ActivitiesJson { get; set; }
+        public string? Note{ get; set; }
+        public DateTime? PeriodStartDate { get; set; }
+        public DateTime? PeriodEndDate { get; set; }
+        [NotMapped]
+        public List<PtilcActivity>? Activities { get; set; }
+    }
+    [NotMapped]
+    public class PtilcActivity
+    {
+        public string? AccreditedDiscipline { get; set; }
+        public string? GroupSubgroup { get; set; }
+
+        public List<PtilcYear> Years { get; set; } = new();
+    }
+    [NotMapped]
+    public class PtilcYear
+    {
+        public string? PtActivity { get; set; }
+        public string? Status { get; set; }
+        public string? Remarks { get; set; }
     }
 }

@@ -35,5 +35,13 @@ namespace LIMSApi.Models
 
         [MaxLength(500)]
         public string? TestAuthorization { get; set; }
+
+       
+        public List<NablEmployeeEquipmentAuthrization>? EmployeeEquipmentAuth { get; set; }
+
+        public List<NablEmployeeTestMethodAuthorization>? TestMethodAuth { get; set; }
+        
+        public List<NablEmployeeLaborartyTestAuthorization>? LabTestAuth { get; set; }
     }
+
 }

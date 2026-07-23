@@ -103,10 +103,33 @@ namespace LIMSApi.Controllers
         }
 
         [HttpGet("dropdown")]
-        public async Task<IActionResult> GetEmployeeDropdown(string? searchTerm, int pageNo, int pageSize)
+        public async Task<IActionResult> GetEmployeeDropdown(string? searchTerm, int pageNo, int pageSize,int departmentId)
         {
-            var data = await _employeeService.GetEmployeeDropdown(searchTerm, pageNo, pageSize);
+            var data = await _employeeService.GetEmployeeDropdown(searchTerm, pageNo, pageSize, departmentId);
             return data == null ? NoContent(): Ok(data);
+        }
+        [HttpGet("equipmentdropdown")]
+
+        public async Task<IActionResult> GetEquipmentDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            var data = await _employeeService.GetEquipmentDropdown(searchTerm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+
+        [HttpGet("testmethodsdropdown")]
+
+        public async Task<IActionResult> GetTestmethodsDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            var data = await _employeeService.GetTestmethodsDropdown(searchTerm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+
+        [HttpGet("labtestsdropdown")]
+
+        public async Task<IActionResult> GetLabtestDropdown(string? searchTerm, int pageNo, int pageSize, int departmentId)
+        {
+            var data = await _employeeService.GetLabtestDropdown(searchTerm, pageNo, pageSize, departmentId);
+            return data == null ? NoContent() : Ok(data);
         }
 
         // Full hierarchy (CEO / Root)

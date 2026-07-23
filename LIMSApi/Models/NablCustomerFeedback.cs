@@ -46,5 +46,20 @@ namespace LIMSApi.Models
 
         [MaxLength(200)]
         public string? CollectedBy { get; set; }
+        public string? CompanyName { get; set; }
+        public string? CompanyAddress { get; set; }
+        public string? MobileNo { get; set; }
+        public string? Designation { get; set; }
+        public string? Email { get; set; }
+        public string? Note { get; set; }
+        public string? ReportedBy { get; set; }
+        [NotMapped]
+        public List<Ratings>? Ratings { get; set; }
+    }
+    [NotMapped]
+    public class Ratings
+    {
+        public string? Parameter { get; set; }
+        public int? Rating { get; set; }
     }
 }
