@@ -67,5 +67,6 @@ namespace LIMSApi.Services.Interface
         Task<string> GetNextActionNo();
         Task<PagedResponse<object>> NcPrintList(PageFilter filter);
         Task<string> GetNextMUNo();
+        Task<string> GetNextRiskNo();
     }
 }

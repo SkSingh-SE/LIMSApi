@@ -376,7 +376,7 @@ namespace LIMSApi.Controllers
         {
             var ncNo = await _service.GetNextNCNo();
             return Ok(new { ncNo });
-        
+
         }
         [HttpGet("{formType}/next-action-no")]
         public async Task<IActionResult> GetNextActionNo()
@@ -394,6 +394,12 @@ namespace LIMSApi.Controllers
         {
             var muCode = await _service.GetNextMUNo();
             return Ok(new { muCode });
+        }
+        [HttpGet("{formType}/next-risk-no")]
+        public async Task<IActionResult> GetNextRiskNo()
+        {
+            var riskNo = await _service.GetNextRiskNo();
+            return Ok(new { riskNo });
         }
     }
 

@@ -327,6 +327,16 @@ namespace LIMSApi.Services
 
                         return result;
                     }
+                case "RiskAssessment":
+                    {
+                        var result = data as NablRiskAssessment;
+                        if (result != null && !string.IsNullOrEmpty(result.RisksJson))
+                        {
+                            result.ActionPlans = JsonSerializer.Deserialize<List<ActionPlans>>(result.RisksJson);
+                        }
+
+                        return result;
+                    }
 
 
                 default:
@@ -4017,7 +4027,7 @@ namespace LIMSApi.Services
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
-
+                model.RisksJson = JsonSerializer.Serialize(model.ActionPlans);
                 var id = await _repository.Add("RiskAssessment", model);
                 await LogAudit("RiskAssessment", id, "Created", null, body.GetRawText());
                 _logger.LogInformation("RiskAssessment created with ID {Id}.", id);
@@ -4035,13 +4045,40 @@ namespace LIMSApi.Services
 
                 existing.AssessmentDate = model.AssessmentDate;
                 existing.ProcessArea = model.ProcessArea;
-                existing.RisksJson = model.RisksJson;
+                existing.RisksJson = JsonSerializer.Serialize(model.ActionPlans);
                 existing.OverallRiskLevel = model.OverallRiskLevel;
                 existing.AssessedBy = model.AssessedBy;
-                existing.ReviewDate = model.ReviewDate;
+                existing.RiskDate= model.RiskDate;
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.PreparedBy = model.PreparedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.RiskNo = model.RiskNo;
+                existing.DepartmentName = model.DepartmentName;
+                existing.Impact = model.Impact;
+                existing.Type = model.Type;
+                existing.Likelihood = model.Likelihood;
+                existing.Category = model.Category;
+                existing.IdentifiedByName = model.IdentifiedByName;
+                existing.RiskLevel = model.RiskLevel;
+                existing.DepartmentId = model.DepartmentId;
+                existing.IdentifiedById = model.IdentifiedById;
+                existing.RiskScore = model.RiskScore;
+                existing.Opportunity = model.Opportunity;
+                existing.ExistingSituation = model.ExistingSituation;
+                existing.ExpectedBenefit = model.ExpectedBenefit;
+                existing.Title = model.Title;
+                existing.ExistingControls = model.ExistingControls;
+                existing.RiskOwner = model.RiskOwner;
+                existing.EffectivenessRemarks = model.EffectivenessRemarks;
+                existing.Effectiveness = model.Effectiveness;
+                existing.RiskRemarks = model.RiskRemarks;
+
 
                 await _repository.Update("RiskAssessment", existing);
                 await LogAudit("RiskAssessment", existing.ID, "Updated", null, body.GetRawText());
@@ -5138,6 +5175,34 @@ namespace LIMSApi.Services
             if (lastRecord != null)
             {
                 var lastPart = lastRecord.MUCode.Split('-').LastOrDefault();
+
+                if (int.TryParse(lastPart, out int lastNumber))
+                {
+                    nextNumber = lastNumber + 1;
+                }
+            }
+
+            return $"{prefix}-{year}-{nextNumber:D3}";
+        }
+        public async Task<string> GetNextRiskNo()
+        {
+            var year = DateTime.Now.Year;
+            const string prefix = "RSK";
+
+            // Format : CA-2026-001
+            var codePrefix = $"{prefix}-{year}-";
+
+            var lastRecord = await _context.NablRiskAssessments
+                .Where(x => !string.IsNullOrWhiteSpace(x.RiskNo)
+                         && x.RiskNo.StartsWith(codePrefix))
+                .OrderByDescending(x => x.ID)
+                .FirstOrDefaultAsync();
+
+            int nextNumber = 1;
+
+            if (lastRecord != null)
+            {
+                var lastPart = lastRecord.RiskNo.Split('-').LastOrDefault();
 
                 if (int.TryParse(lastPart, out int lastNumber))
                 {
