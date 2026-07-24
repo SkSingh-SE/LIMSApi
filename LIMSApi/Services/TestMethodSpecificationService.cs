@@ -18,13 +18,23 @@ namespace LIMSApi.Services
         private readonly IFileUploadService _uploadService;
         private readonly string _pdfFolderPath;
 
-        public TestMethodSpecificationService(ITestMethodSpecificationRepository TestMethodSpecificationRepo, ILogger<TestMethodSpecificationService> logger, IFileUploadService uploadService, IConfiguration configuration)
+        public TestMethodSpecificationService(ITestMethodSpecificationRepository TestMethodSpecificationRepo, ILogger<TestMethodSpecificationService> logger, IFileUploadService uploadService, IConfiguration configuration, IWebHostEnvironment env)
         {
             _TestMethodSpecificationRepository = TestMethodSpecificationRepo;
             _logger = logger;
             loggedInUser = LoggedInUserProvider.CurrentUser;
             _uploadService = uploadService;
-            _pdfFolderPath = configuration["ImportSettings:TestMethodSpecPdfFolder"] ?? string.Empty;
+
+            var configuredPath = configuration["ImportSettings:TestMethodSpecPdfFolder"] ?? string.Empty;
+            // Resolve relative paths against ContentRootPath (project directory)
+            if (!string.IsNullOrWhiteSpace(configuredPath) && !Path.IsPathRooted(configuredPath))
+            {
+                _pdfFolderPath = Path.Combine(env.ContentRootPath, configuredPath);
+            }
+            else
+            {
+                _pdfFolderPath = configuredPath;
+            }
         }
 
         public async Task CreateTestMethodSpecification(TestMethodSpecification model)
@@ -511,6 +521,8 @@ namespace LIMSApi.Services
 
         public async Task<List<ImportValidationResultDto>> ValidateImport(List<ImportTestMethodSpecItemDto> items)
         {
+            _logger.LogInformation("[ValidateImport] User={EmployeeId} | Rows={RowCount}", loggedInUser.EmployeeID, items.Count);
+
             var orgs = await _TestMethodSpecificationRepository.GetAllStandardOrganizations();
             var orgMap = orgs.ToDictionary(x => x.Name!.Trim().ToLower(), x => x.Id);
 
@@ -582,6 +594,10 @@ namespace LIMSApi.Services
 
         public async Task<BulkImportResultDto> BulkImport(List<ImportTestMethodSpecItemDto> items)
         {
+            _logger.LogInformation(
+                "[BulkImport-Start] User={EmployeeId} Company={CompanyCode} | Rows={RowCount} PdfFolder={PdfFolder}",
+                loggedInUser.EmployeeID, loggedInUser.CompanyCode, items.Count, _pdfFolderPath);
+
             var orgs = await _TestMethodSpecificationRepository.GetAllStandardOrganizations();
             var orgMap = orgs.ToDictionary(x => x.Name!.Trim().ToLower(), x => x.Id);
 
@@ -675,7 +691,10 @@ namespace LIMSApi.Services
             {
                 await _TestMethodSpecificationRepository.AddRangeAsync(specs);
                 importedCount = specs.Count;
-                _logger.LogInformation("Bulk import completed: {Count} specifications created.", importedCount);
+                _logger.LogInformation(
+                    "[BulkImport] User={EmployeeId} Company={CompanyCode} | TotalRows={Total} Imported={Imported} Skipped={Skipped} PdfMatched={PdfMatched} PdfUploaded={PdfUploaded} Errors={ErrorCount}",
+                    loggedInUser.EmployeeID, loggedInUser.CompanyCode,
+                    items.Count, importedCount, skipped, pdfMatched, 0, errors.Count);
 
                 // Second pass: match saved specs to pending PDF uploads by org+standard
                 foreach (var spec in specs)
@@ -730,7 +749,7 @@ namespace LIMSApi.Services
                 }
             }
 
-            return new BulkImportResultDto
+            var result = new BulkImportResultDto
             {
                 TotalRows = items.Count,
                 Imported = importedCount,
@@ -739,6 +758,12 @@ namespace LIMSApi.Services
                 PdfMatched = pdfMatched,
                 PdfUploaded = pdfUploaded,
             };
+
+            _logger.LogInformation(
+                "[BulkImport-Done] User={EmployeeId} | Total={Total} Imported={Imported} Skipped={Skipped} PdfMatched={PdfMatched} PdfUploaded={PdfUploaded}",
+                loggedInUser.EmployeeID, result.TotalRows, result.Imported, result.Skipped, result.PdfMatched, result.PdfUploaded);
+
+            return result;
         }
 
         public async Task<List<DropdwonSelector>> GetAllStandardOrganizations()

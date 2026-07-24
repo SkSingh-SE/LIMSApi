@@ -315,6 +315,7 @@ namespace LIMSApi.Helpers
             public const string Update = "CanUpdateTestMethodSpecification";
             public const string Delete = "CanDeleteTestMethodSpecification";
             public const string Manage = "CanManageTestMethodSpecification";
+            public const string Import = "CanImportTestMethodSpecification";
         }
 
         public static class TestMethodStandard

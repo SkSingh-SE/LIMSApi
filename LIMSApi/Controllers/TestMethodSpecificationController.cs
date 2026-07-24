@@ -247,6 +247,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("validate-import")]
+        [RequirePermission(Permissions.TestMethodSpecification.Import)]
         public async Task<IActionResult> ValidateImport([FromBody] BulkImportRequestDto request)
         {
             var results = await _testMethodService.ValidateImport(request.Items);
@@ -254,6 +255,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("bulk-import")]
+        [RequirePermission(Permissions.TestMethodSpecification.Import)]
         public async Task<IActionResult> BulkImport([FromBody] BulkImportRequestDto request)
         {
             var result = await _testMethodService.BulkImport(request.Items);

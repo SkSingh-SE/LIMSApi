@@ -537,6 +537,7 @@ public static class DataSeeder
             ('CanUpdateTestMethodSpecification','Update Test Method Spec','Test Method Specification',NULL,'Update'),
             ('CanDeleteTestMethodSpecification','Delete Test Method Spec','Test Method Specification',NULL,'Delete'),
             ('CanManageTestMethodSpecification','Manage Test Method Spec','Test Method Specification',NULL,'Manage'),
+            ('CanImportTestMethodSpecification','Import Test Method Spec','Test Method Specification',NULL,'Action'),
 
             -- 'Invoice Case' exists under ''Test'' (ID 37) AND under ''Invoice'' (ID 48).
             -- ParentTitle=''Test'' picks ID 37 (permissions side); ID 48 is a UI shortcut with same permissions.
@@ -1462,7 +1463,7 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 "CanReadMaterialSpecification", "CanCreateMaterialSpecification", "CanUpdateMaterialSpecification", "CanDeleteMaterialSpecification", "CanManageMaterialSpecification",
                 "CanReadProductSpecification", "CanCreateProductSpecification", "CanUpdateProductSpecification", "CanDeleteProductSpecification", "CanManageProductSpecification",
                 "CanReadLaboratoryTest", "CanCreateLaboratoryTest", "CanUpdateLaboratoryTest", "CanDeleteLaboratoryTest", "CanManageLaboratoryTest",
-                "CanReadTestMethodSpecification", "CanCreateTestMethodSpecification", "CanUpdateTestMethodSpecification", "CanDeleteTestMethodSpecification", "CanManageTestMethodSpecification",
+                "CanReadTestMethodSpecification", "CanCreateTestMethodSpecification", "CanUpdateTestMethodSpecification", "CanDeleteTestMethodSpecification", "CanManageTestMethodSpecification", "CanImportTestMethodSpecification",
                 "CanReadChemicalParameter", "CanReadMechanicalParameter", "CanCreateParameter", "CanUpdateParameter", "CanDeleteParameter", "CanManageParameter",
                 "CanReadParameterUnit",
                 "CanReadMetalClassification", "CanCreateMetalClassification", "CanUpdateMetalClassification", "CanDeleteMetalClassification", "CanManageMetalClassification",
