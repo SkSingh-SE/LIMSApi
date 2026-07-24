@@ -371,3 +371,4 @@ FodyWeavers.xsd
 /LIMSApi/wwwroot/Uploads
 *.rar
 LIMSApi/publish.rar
+/LIMSApi/ImportSources
