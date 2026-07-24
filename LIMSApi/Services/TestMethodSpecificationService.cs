@@ -2,6 +2,7 @@ using System;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Helpers.Enums;
+using Microsoft.AspNetCore.Http;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
@@ -436,17 +437,10 @@ namespace LIMSApi.Services
             return OrgFolderMap.TryGetValue(trimmed, out var mapped) ? mapped : trimmed;
         }
 
-        /// <summary>Construct the PDF filename prefix from row data.</summary>
-        private static string ConstructPdfPrefix(ImportTestMethodSpecItemDto item)
-        {
-            var orgAbbr = MapOrgToFolder(item.StandardOrganization);
-            var stdPart = item.TestMethodStandard.Replace("/", "-").Replace(" ", "-");
-            while (stdPart.Contains("--")) stdPart = stdPart.Replace("--", "-");
-            return $"{orgAbbr}-{stdPart}";
-        }
-
         /// <summary>
-        /// Search the configured PDF folder for a file matching the row data.
+        /// Resolve the PDF file for an import row.
+        /// Priority: 1) If client sent PdfFileName (Excel column G), look for that exact file.
+        ///           2) Fallback: auto-generate candidates from org + standard info.
         /// Returns (foundPdfFileName, fullFilePath) or (null, null).
         /// </summary>
         private (string? fileName, string? filePath) ResolvePdfFile(ImportTestMethodSpecItemDto item)
@@ -459,28 +453,45 @@ namespace LIMSApi.Services
             if (!Directory.Exists(searchDir))
                 return (null, null);
 
-            var prefix = ConstructPdfPrefix(item);
+            // 1) Use the exact filename from Excel column G if provided
+            if (!string.IsNullOrWhiteSpace(item.PdfFileName))
+            {
+                var exactPath = Path.Combine(searchDir, item.PdfFileName);
+                if (File.Exists(exactPath))
+                    return (item.PdfFileName, exactPath);
 
-            // Build candidate suffixes to try (longest match first)
+                // Not found with exact name — try a prefix-based search anyway
+                var prefixNoExt = Path.GetFileNameWithoutExtension(item.PdfFileName);
+                var fallbackFiles = Directory.GetFiles(searchDir, "*.pdf");
+                var match = fallbackFiles.FirstOrDefault(f =>
+                    Path.GetFileNameWithoutExtension(f).Equals(prefixNoExt, StringComparison.OrdinalIgnoreCase));
+                if (match != null)
+                    return (Path.GetFileName(match), match);
+
+                return (null, null); // file specified but not found
+            }
+
+            // 2) Fallback: auto-generate candidates from org + standard + version/year
+            var orgAbbr = MapOrgToFolder(item.StandardOrganization);
+            var stdPart = item.TestMethodStandard.Replace("/", "-").Replace(" ", "-");
+            while (stdPart.Contains("--")) stdPart = stdPart.Replace("--", "-");
+            var prefix = $"{orgAbbr}-{stdPart}";
+
             var candidates = new List<string>();
             if (!string.IsNullOrWhiteSpace(item.Version))
             {
-                // Try version digits only (e.g. "24a" → "24")
                 var verDigits = new string(item.Version.Where(char.IsDigit).ToArray());
                 if (verDigits.Length > 0)
                 {
                     candidates.Add($"{prefix}-{verDigits}.pdf");
-                    // Also try the short year suffix (last 2 chars of year)
                     if (!string.IsNullOrWhiteSpace(item.Year) && item.Year.Length >= 2)
                         candidates.Add($"{prefix}-{item.Year[^2..]}.pdf");
                 }
             }
             if (!string.IsNullOrWhiteSpace(item.Year))
                 candidates.Add($"{prefix}-{item.Year}.pdf");
+            candidates.Add($"{prefix}.pdf");
 
-            candidates.Add($"{prefix}.pdf"); // fallback: no year
-
-            // Try exact matches first
             foreach (var candidate in candidates.Distinct())
             {
                 var exactPath = Path.Combine(searchDir, candidate);
@@ -488,42 +499,14 @@ namespace LIMSApi.Services
                     return (candidate, exactPath);
             }
 
-            // Fallback: prefix-based search (handles suffixes like (R2021), (RA2024))
-            var files = Directory.GetFiles(searchDir, "*.pdf");
-            var match = files.FirstOrDefault(f =>
+            // Fallback: prefix-based wildcard search
+            var allFiles = Directory.GetFiles(searchDir, "*.pdf");
+            var wildMatch = allFiles.FirstOrDefault(f =>
                 Path.GetFileNameWithoutExtension(f).StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
-            if (match != null)
-                return (Path.GetFileName(match), match);
+            if (wildMatch != null)
+                return (Path.GetFileName(wildMatch), wildMatch);
 
             return (null, null);
-        }
-
-        /// <summary>
-        /// Upload a PDF from disk to the system via IFileUploadService.
-        /// Returns UploadReferenceID or null.
-        /// </summary>
-        private async Task<long?> UploadPdfFromDisk(string filePath, string fileName, long specId)
-        {
-            try
-            {
-                var fileBytes = await File.ReadAllBytesAsync(filePath);
-                var stream = new MemoryStream(fileBytes);
-                // ContentType = application/octet-stream is accepted by FileUploadValidator as fallback
-                var formFile = new FormFile(stream, 0, fileBytes.Length, "file", fileName)
-                {
-                    Headers = new HeaderDictionary(),
-                    ContentType = "application/octet-stream"
-                };
-
-                // Use FileType.Other — same as manual upload in the regular create/edit flow
-                var uploaded = await _uploadService.UploadFileAsync(formFile, FileType.Other, null, $"import-{specId}");
-                return uploaded?.ID;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to upload PDF '{FileName}' for spec {SpecId}.", fileName, specId);
-                return null;
-            }
         }
 
         public async Task<List<ImportValidationResultDto>> ValidateImport(List<ImportTestMethodSpecItemDto> items)
@@ -602,11 +585,13 @@ namespace LIMSApi.Services
             var orgs = await _TestMethodSpecificationRepository.GetAllStandardOrganizations();
             var orgMap = orgs.ToDictionary(x => x.Name!.Trim().ToLower(), x => x.Id);
 
+            // Track (item, pdfFileName, pdfFilePath) for PDF upload after save
+            var pendingPdfUploads = new List<(ImportTestMethodSpecItemDto item, string fileName, string filePath)>();
+
             var specs = new List<TestMethodSpecification>();
             var errors = new List<string>();
             int skipped = 0;
             int pdfMatched = 0;
-            int pdfUploaded = 0;
 
             foreach (var item in items)
             {
@@ -672,57 +657,66 @@ namespace LIMSApi.Services
                     }
                 };
 
-                // Try to match and upload PDF file (optional)
+                // Store PDF info in pending list (not on spec entity)
                 var (pdfFileName, pdfFilePath) = ResolvePdfFile(item);
                 if (pdfFilePath != null)
                 {
                     pdfMatched++;
-                    // We need to save the spec first to get its ID for file linking
-                    // Temporarily store PDF info for later processing
-                    spec.Versions.First().StandardFile = pdfFileName;
+                    pendingPdfUploads.Add((item, pdfFileName!, pdfFilePath));
                 }
 
                 specs.Add(spec);
             }
 
             int importedCount = 0;
+            int pdfUploaded = 0;
+
             if (specs.Any())
             {
                 await _TestMethodSpecificationRepository.AddRangeAsync(specs);
                 importedCount = specs.Count;
                 _logger.LogInformation("Bulk import completed: {Count} specifications created.", importedCount);
 
-                // Second pass: upload matched PDFs individually
+                // Second pass: match saved specs to pending PDF uploads by org+standard
                 foreach (var spec in specs)
                 {
-                    if (spec.ID == 0) continue; // safety: must have DB-generated ID
+                    if (spec.ID == 0) continue;
                     var version = spec.Versions.FirstOrDefault();
-                    if (version == null || string.IsNullOrWhiteSpace(version.StandardFile))
-                        continue;
+                    if (version == null) continue;
 
-                    // Re-find the matching item
-                    var item = items.FirstOrDefault(i =>
-                        i.TestMethodStandard.Trim() == spec.TestMethodStandard);
-                    if (item == null) continue;
+                    // Find matching pending PDF by org (StandardOrganizationID) + standard
+                    var pending = pendingPdfUploads.FirstOrDefault(p =>
+                    {
+                        var orgKey = p.item.StandardOrganization.Trim().ToLower();
+                        return orgMap.TryGetValue(orgKey, out var oid) && oid == spec.StandardOrganizationID
+                            && p.item.TestMethodStandard.Trim() == spec.TestMethodStandard;
+                    });
+                    if (pending == default) continue;
 
-                    var (pdfFileName, pdfFilePath) = ResolvePdfFile(item);
-                    if (pdfFilePath == null) continue;
+                    var (_, pdfFileName, pdfFilePath) = pending;
 
                     try
                     {
-                        var uploaded = await _uploadService.UploadFileAsync(
-                            new FormFile(
-                                new MemoryStream(await File.ReadAllBytesAsync(pdfFilePath)),
-                                0, new FileInfo(pdfFilePath).Length, "file", pdfFileName)
-                            {
-                                Headers = new HeaderDictionary(),
-                                ContentType = "application/octet-stream"
-                            },
-                            FileType.Other, null, $"import-{spec.ID}");
+                        var fileInfo = new FileInfo(pdfFilePath);
+                        // Skip files > 10 MB silently (log only)
+                        if (fileInfo.Length > FileUploadValidator.MaxFileSizeBytes)
+                        {
+                            _logger.LogInformation("Skipping PDF '{FileName}' ({Size:F1} MB) — exceeds 10 MB limit.", pdfFileName, fileInfo.Length / (1024.0 * 1024));
+                            continue;
+                        }
+
+                        var fileBytes = await File.ReadAllBytesAsync(pdfFilePath);
+                        using var stream = new MemoryStream(fileBytes);
+                        var formFile = new FormFile(stream, 0, fileBytes.Length, "file", pdfFileName)
+                        {
+                            Headers = new HeaderDictionary(),
+                            ContentType = "application/octet-stream"
+                        };
+
+                        var uploaded = await _uploadService.UploadFileAsync(formFile, FileType.Other, null, $"import-{spec.ID}");
 
                         if (uploaded != null)
                         {
-                            // Update the version record directly
                             await _TestMethodSpecificationRepository.UpdateVersionFileRef(
                                 version.ID, uploaded.FilePath, uploaded.OriginalFileName, uploaded.ID);
                             pdfUploaded++;
@@ -730,8 +724,8 @@ namespace LIMSApi.Services
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Failed to upload PDF for spec {SpecId}.", spec.ID);
-                        errors.Add($"Row for '{spec.TestMethodStandard}': PDF upload failed - {ex.Message}");
+                        _logger.LogWarning(ex, "Failed to upload PDF '{FileName}' for spec {SpecId}.", pdfFileName, spec.ID);
+                        errors.Add($"Row '{spec.DisplayTitle}': PDF upload failed - {ex.Message}");
                     }
                 }
             }

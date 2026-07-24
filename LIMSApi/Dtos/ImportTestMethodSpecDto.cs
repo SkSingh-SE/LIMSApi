@@ -9,6 +9,7 @@ namespace LIMSApi.Dtos
         public string OfficialTitle { get; set; } = string.Empty;
         public string Version { get; set; } = string.Empty;
         public string Year { get; set; } = string.Empty;
+        public string? PdfFileName { get; set; }  // Excel column G — exact PDF filename from client
     }
 
     public class ImportValidationResultDto
