@@ -844,6 +844,10 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 INSERT INTO Configurations (KeyName, GroupName, [Value], ValueType, [Description], CreatedBy, CreatedOn, CompanyCode, IsActive)
                 VALUES (N'Entity Type', N'dropdown', N'Request Review|Report Review|Report Amendment|Test Result Verification|Customer Field Change', N'string', N'Entity types used for workflow configuration. Values must match the exact strings used by the workflow engine.', 0, GETUTCDATE(), N'LIMS', 1);
 
+            IF NOT EXISTS (SELECT 1 FROM Configurations WHERE KeyName = N'ProductPrefix' AND CompanyCode = N'LIMS')
+                INSERT INTO Configurations (KeyName, GroupName, [Value], ValueType, [Description], CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'ProductPrefix', N'dropdown', N'Grade|Class|Designation|Type|Series', N'string', N'Product Master Grade Prefix Options', 0, GETUTCDATE(), N'LIMS', 1);
+
             -- Migrate existing installs: rename old short-form TestResult to canonical Test Result Verification
 
             UPDATE Configurations

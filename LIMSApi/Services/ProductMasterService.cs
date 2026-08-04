@@ -476,18 +476,49 @@ namespace LIMSApi.Services
 
         public async Task<List<string>> GetPrefixOptions()
         {
-            var options = await _context.Configurations
+            var list = new List<string>();
+
+            // 1. Fetch from standard dropdown Configuration (KeyName = "ProductPrefix", GroupName = "dropdown")
+            var dropdownConfig = await _context.Configurations
+                .FirstOrDefaultAsync(c => c.KeyName == "ProductPrefix" && c.IsActive);
+
+            if (dropdownConfig != null && !string.IsNullOrWhiteSpace(dropdownConfig.Value))
+            {
+                var items = dropdownConfig.Value.Split('|', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => s.Trim())
+                    .Where(s => !string.IsNullOrEmpty(s));
+                
+                foreach (var item in items)
+                {
+                    if (!list.Contains(item, StringComparer.OrdinalIgnoreCase))
+                    {
+                        list.Add(item);
+                    }
+                }
+            }
+
+            // 2. Also incorporate individual entries with GroupName = "ProductPrefix" if any exist
+            var groupConfigs = await _context.Configurations
                 .Where(c => c.GroupName == "ProductPrefix" && c.IsActive)
                 .Select(c => c.Value)
                 .Distinct()
                 .ToListAsync();
 
-            if (!options.Any())
+            foreach (var gc in groupConfigs)
             {
-                options = new List<string> { "Grade", "Class", "Designation", "Type", "Series" };
+                if (!string.IsNullOrWhiteSpace(gc) && !list.Contains(gc.Trim(), StringComparer.OrdinalIgnoreCase))
+                {
+                    list.Add(gc.Trim());
+                }
             }
 
-            return options;
+            // 3. Defaults fallback
+            if (!list.Any())
+            {
+                list = new List<string> { "Grade", "Class", "Designation", "Type", "Series" };
+            }
+
+            return list;
         }
 
         public async Task<bool> AddPrefixOption(string prefix)
@@ -495,21 +526,52 @@ namespace LIMSApi.Services
             if (string.IsNullOrWhiteSpace(prefix)) return false;
 
             var trimmed = prefix.Trim();
-            var exists = await _context.Configurations
+
+            // Find existing dropdown configuration
+            var dropdownConfig = await _context.Configurations
+                .FirstOrDefaultAsync(c => c.KeyName == "ProductPrefix" && c.IsActive);
+
+            if (dropdownConfig != null)
+            {
+                var currentItems = (dropdownConfig.Value ?? "")
+                    .Split('|', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => s.Trim())
+                    .ToList();
+
+                if (!currentItems.Contains(trimmed, StringComparer.OrdinalIgnoreCase))
+                {
+                    currentItems.Add(trimmed);
+                    dropdownConfig.Value = string.Join("|", currentItems);
+                    dropdownConfig.ModifiedBy = _loggedInUser?.EmployeeID ?? 0;
+                    dropdownConfig.ModifiedOn = DateTime.UtcNow;
+                    await _context.SaveChangesAsync();
+                    return true;
+                }
+                return false;
+            }
+
+            // Check if individual record exists
+            var existsInGroup = await _context.Configurations
                 .AnyAsync(c => c.GroupName == "ProductPrefix" && c.Value.ToLower() == trimmed.ToLower() && c.IsActive);
 
-            if (!exists)
+            if (!existsInGroup)
             {
+                var defaultItems = new List<string> { "Grade", "Class", "Designation", "Type", "Series" };
+                if (!defaultItems.Contains(trimmed, StringComparer.OrdinalIgnoreCase))
+                {
+                    defaultItems.Add(trimmed);
+                }
+
                 _context.Configurations.Add(new Configuration
                 {
-                    GroupName = "ProductPrefix",
-                    KeyName = "Prefix_" + trimmed.Replace(" ", "_"),
-                    Value = trimmed,
+                    KeyName = "ProductPrefix",
+                    GroupName = "dropdown",
+                    Value = string.Join("|", defaultItems),
                     ValueType = "string",
-                    Description = "Product Master Grade Prefix",
+                    Description = "Product Master Grade Prefix Options",
                     CreatedBy = _loggedInUser?.EmployeeID ?? 0,
                     CreatedOn = DateTime.UtcNow,
-                    CompanyCode = _loggedInUser?.CompanyCode,
+                    CompanyCode = _loggedInUser?.CompanyCode ?? "LIMS",
                     IsActive = true
                 });
                 await _context.SaveChangesAsync();
