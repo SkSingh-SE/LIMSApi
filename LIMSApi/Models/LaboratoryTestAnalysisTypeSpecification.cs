@@ -15,8 +15,6 @@ namespace LIMSApi.Models
 
         public long? SpecificationGradeID { get; set; }
 
-        public long? ProductSpecificationID { get; set; }
-
         [ForeignKey(nameof(LaboratoryTestAnalysisTypeID))]
         public virtual LaboratoryTestAnalysisType? AnalysisType { get; set; }
 
@@ -25,8 +23,6 @@ namespace LIMSApi.Models
 
         [ForeignKey(nameof(SpecificationGradeID))]
         public virtual SpecificationGrade? SpecificationGrade { get; set; }
-
-        [ForeignKey(nameof(ProductSpecificationID))]
-        public virtual ProductSpecification? ProductSpecification { get; set; }
     }
 }
+

@@ -281,22 +281,13 @@ namespace LIMSApi.Helpers
             public const string Manage = "CanManageMaterialSpecification";
         }
 
-        public static class ProductSpecification
+        public static class ProductMaster
         {
-            public const string Read   = "CanReadProductSpecification";
-            public const string Create = "CanCreateProductSpecification";
-            public const string Update = "CanUpdateProductSpecification";
-            public const string Delete = "CanDeleteProductSpecification";
-            public const string Manage = "CanManageProductSpecification";
-        }
-
-        public static class ProductSpecificationGrade
-        {
-            public const string Read   = "CanReadProductSpecificationGrade";
-            public const string Create = "CanCreateProductSpecificationGrade";
-            public const string Update = "CanUpdateProductSpecificationGrade";
-            public const string Delete = "CanDeleteProductSpecificationGrade";
-            public const string Manage = "CanManageProductSpecificationGrade";
+            public const string Read   = "CanReadProductMaster";
+            public const string Create = "CanCreateProductMaster";
+            public const string Update = "CanUpdateProductMaster";
+            public const string Delete = "CanDeleteProductMaster";
+            public const string Manage = "CanManageProductMaster";
         }
 
         public static class LaboratoryTest

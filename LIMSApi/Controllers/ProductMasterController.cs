@@ -22,7 +22,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("list")]
-        [RequirePermission("PRODUCT_MASTER_VIEW")]
+        [RequirePermission(Permissions.ProductMaster.Read)]
         public async Task<IActionResult> GetAll([FromBody] PageFilter filter)
         {
             var result = await _service.GetAllProductMasters(filter);
@@ -30,7 +30,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpGet("details/{id}")]
-        [RequirePermission("PRODUCT_MASTER_VIEW")]
+        [RequirePermission(Permissions.ProductMaster.Read)]
         public async Task<IActionResult> GetById(long id)
         {
             var result = await _service.GetProductMasterById(id);
@@ -42,7 +42,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPost("create")]
-        [RequirePermission("PRODUCT_MASTER_CREATE")]
+        [RequirePermission(Permissions.ProductMaster.Create)]
         public async Task<IActionResult> Create([FromBody] ProductMasterCreateDto dto)
         {
             var result = await _service.CreateProductMaster(dto);
@@ -50,7 +50,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPut("update")]
-        [RequirePermission("PRODUCT_MASTER_EDIT")]
+        [RequirePermission(Permissions.ProductMaster.Update)]
         public async Task<IActionResult> Update([FromBody] ProductMasterUpdateDto dto)
         {
             var result = await _service.UpdateProductMaster(dto);
@@ -58,7 +58,7 @@ namespace LIMSApi.Controllers
         }
 
         [HttpDelete("{id}")]
-        [RequirePermission("PRODUCT_MASTER_DELETE")]
+        [RequirePermission(Permissions.ProductMaster.Delete)]
         public async Task<IActionResult> Delete(long id)
         {
             await _service.DeleteProductMaster(id);

@@ -517,11 +517,11 @@ public static class DataSeeder
 
             -- 'Product Specification' title exists on BOTH folder (202) and leaf (33).
             -- ParentTitle='Product Specification' picks the leaf (33).
-            ('CanReadProductSpecification','View Product Specification','Product Specification','Product Specification','Read'),
-            ('CanCreateProductSpecification','Create Product Spec','Product Specification','Product Specification','Create'),
-            ('CanUpdateProductSpecification','Update Product Spec','Product Specification','Product Specification','Update'),
-            ('CanDeleteProductSpecification','Delete Product Spec','Product Specification','Product Specification','Delete'),
-            ('CanManageProductSpecification','Manage Product Spec','Product Specification','Product Specification','Manage'),
+            ('CanReadProductMaster','View Product Master','Product Master','Product Master','Read'),
+            ('CanCreateProductMaster','Create Product Master','Product Master','Product Master','Create'),
+            ('CanUpdateProductMaster','Update Product Master','Product Master','Product Master','Update'),
+            ('CanDeleteProductMaster','Delete Product Master','Product Master','Product Master','Delete'),
+            ('CanManageProductMaster','Manage Product Master','Product Master','Product Master','Manage'),
 
             ('CanReadCustomProductSpecification','View Custom Product Specification','Custom Product Specification',NULL,'Read'),
 
@@ -1383,7 +1383,7 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 "CanReadPlan", "CanReadReview",
                 // Masters typically needed at inward
                 "CanReadCourier", "CanReadTPI", "CanReadCompanyCategory",
-                "CanReadMaterialSpecification", "CanReadProductSpecification",
+                "CanReadMaterialSpecification", "CanReadProductMaster",
                 "CanReadMetalClassification", "CanReadHeatTreatment",
                 "CanReadProductCondition", "CanReadSpecimenOrientation",
                 "CanReadProductForm", "CanReadLaboratoryTest",
@@ -1404,7 +1404,7 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 // Reporting read
                 "CanReadReporting",
                 // Most masters read
-                "CanReadMaterialSpecification", "CanReadProductSpecification",
+                "CanReadMaterialSpecification", "CanReadProductMaster",
                 "CanReadLaboratoryTest", "CanReadTestMethodSpecification",
                 "CanReadChemicalParameter", "CanReadMechanicalParameter",
                 "CanReadParameterUnit", "CanReadMetalClassification",
@@ -1465,7 +1465,7 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 "CanReadEquipment", "CanCreateEquipment", "CanUpdateEquipment", "CanDeleteEquipment", "CanManageEquipment",
                 "CanReadCalibrationAgency", "CanCreateCalibrationAgency", "CanUpdateCalibrationAgency", "CanDeleteCalibrationAgency", "CanManageCalibrationAgency",
                 "CanReadMaterialSpecification", "CanCreateMaterialSpecification", "CanUpdateMaterialSpecification", "CanDeleteMaterialSpecification", "CanManageMaterialSpecification",
-                "CanReadProductSpecification", "CanCreateProductSpecification", "CanUpdateProductSpecification", "CanDeleteProductSpecification", "CanManageProductSpecification",
+                "CanReadProductMaster", "CanCreateProductMaster", "CanUpdateProductMaster", "CanDeleteProductMaster", "CanManageProductMaster",
                 "CanReadLaboratoryTest", "CanCreateLaboratoryTest", "CanUpdateLaboratoryTest", "CanDeleteLaboratoryTest", "CanManageLaboratoryTest",
                 "CanReadTestMethodSpecification", "CanCreateTestMethodSpecification", "CanUpdateTestMethodSpecification", "CanDeleteTestMethodSpecification", "CanManageTestMethodSpecification", "CanImportTestMethodSpecification",
                 "CanReadChemicalParameter", "CanReadMechanicalParameter", "CanCreateParameter", "CanUpdateParameter", "CanDeleteParameter", "CanManageParameter",

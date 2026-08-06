@@ -88,7 +88,6 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<HardnessEquivalence> HardnessEquivalences { get; set; }
     public virtual DbSet<ToleranceMaster> ToleranceMasters { get; set; }
     public virtual DbSet<ProductConditionMaster> ProductConditionMasters { get; set; }
-    public virtual DbSet<ProductSpecification> ProductSpecifications { get; set; }
     public virtual DbSet<RemarkMaster> RemarkMasters { get; set; }
     public virtual DbSet<RoleMaster> RoleMasters { get; set; }
     public virtual DbSet<RoleMenuMapping> RoleMenuMappings { get; set; }
@@ -152,8 +151,6 @@ public partial class LIMSContext : DbContext
     public DbSet<MachiningChargeVersion> MachiningChargeVersions { get; set; }
     public DbSet<SamplePreparationMaster> SamplePreparationMasters { get; set; }
     public DbSet<SamplePreparation> SamplePreparations { get; set; }
-    public DbSet<ProductTestGroup> ProductTestGroups { get; set; }
-    public DbSet<ProductSpecificationGrade> ProductSpecificationGrades { get; set; }
 
     public DbSet<ProformaInvoiceHeader> ProformaInvoiceHeader { get; set; }
     public DbSet<ProformaInvoiceDetail> ProformaInvoiceDetails { get; set; }
@@ -837,34 +834,6 @@ public partial class LIMSContext : DbContext
             .HasForeignKey(x => x.TestMethodSpecificationID)
             .OnDelete(DeleteBehavior.NoAction);
 
-        // ProductSpecificationGrade → SpecificationGrade (no cascade)
-        modelBuilder.Entity<ProductSpecificationGrade>()
-            .HasOne(x => x.SpecificationGrade)
-            .WithMany()
-            .HasForeignKey(x => x.SpecificationGradeID)
-            .OnDelete(DeleteBehavior.NoAction);
-
-        // ProductSpecificationGrade → ProductSpecification (no cascade)
-        modelBuilder.Entity<ProductSpecificationGrade>()
-            .HasOne(x => x.ProductSpecification)
-            .WithMany(p => p.ProductSpecificationGrades)
-            .HasForeignKey(x => x.ProductSpecificationID)
-            .OnDelete(DeleteBehavior.NoAction);
-
-        // ProductTestGroup → ProductSpecification (no cascade)
-        modelBuilder.Entity<ProductTestGroup>()
-            .HasOne(x => x.ProductSpecification)
-            .WithMany(p => p.ProductTestGroups)
-            .HasForeignKey(x => x.ProductSpecificationID)
-            .OnDelete(DeleteBehavior.NoAction);
-
-        // ProductSpecification → TestMethodSpecificationVersion (no cascade, nullable)
-        modelBuilder.Entity<ProductSpecification>()
-            .HasOne(x => x.TestMethodSpecificationVersion)
-            .WithMany()
-            .HasForeignKey(x => x.TestMethodSpecificationVersionID)
-            .OnDelete(DeleteBehavior.NoAction);
-
         // LabScopeSpecification → TestMethodSpecificationVersion (no cascade, nullable)
         modelBuilder.Entity<LabScopeSpecification>()
             .HasOne(x => x.TestMethodSpecificationVersion)
@@ -1241,13 +1210,6 @@ public partial class LIMSContext : DbContext
             .OnDelete(DeleteBehavior.NoAction);
 
         modelBuilder.Entity<LaboratoryTestSubGroupSpecification>()
-            .HasOne(x => x.ProductSpecification)
-            .WithMany()
-            .HasForeignKey(x => x.ProductSpecificationID)
-            .IsRequired(false)
-            .OnDelete(DeleteBehavior.NoAction);
-
-        modelBuilder.Entity<LaboratoryTestSubGroupSpecification>()
             .HasOne(x => x.SpecificationGrade)
             .WithMany()
             .HasForeignKey(x => x.SpecificationGradeID)
@@ -1319,13 +1281,6 @@ public partial class LIMSContext : DbContext
             .HasOne(x => x.MaterialSpecification)
             .WithMany()
             .HasForeignKey(x => x.SpecificationHeaderID)
-            .IsRequired(false)
-            .OnDelete(DeleteBehavior.NoAction);
-
-        modelBuilder.Entity<LaboratoryTestAnalysisTypeSpecification>()
-            .HasOne(x => x.ProductSpecification)
-            .WithMany()
-            .HasForeignKey(x => x.ProductSpecificationID)
             .IsRequired(false)
             .OnDelete(DeleteBehavior.NoAction);
 
