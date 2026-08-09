@@ -471,6 +471,13 @@ public partial class LIMSContext : DbContext
             .IsRequired(false)
             .OnDelete(DeleteBehavior.SetNull);
 
+        modelBuilder.Entity<ParameterMaster>()
+            .HasOne(x => x.ParameterUnitEquivalent)
+            .WithMany()
+            .HasForeignKey(x => x.ParameterUnitEquivalentID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
+
         // Phase 2: Junction table composite keys
         modelBuilder.Entity<SpecimenOrientationProductForm>().HasKey(x => new { x.SpecimenOrientationID, x.ProductFormID });
         modelBuilder.Entity<SpecimenOrientationMetalClassification>().HasKey(x => new { x.SpecimenOrientationID, x.MetalClassificationID });
@@ -841,21 +848,6 @@ public partial class LIMSContext : DbContext
             .HasForeignKey(x => x.TestMethodSpecificationVersionID)
             .OnDelete(DeleteBehavior.NoAction);
 
-        // ProductTestGroup → LaboratoryTest (no cascade)
-        modelBuilder.Entity<ProductTestGroup>()
-            .HasOne(x => x.LaboratoryTest)
-            .WithMany()
-            .HasForeignKey(x => x.LaboratoryTestID)
-            .OnDelete(DeleteBehavior.NoAction);
-
-        // ProductTestGroup → TestMethodSpecification (no cascade, nullable)
-        modelBuilder.Entity<ProductTestGroup>()
-            .HasOne(x => x.TestMethodSpecification)
-            .WithMany()
-            .HasForeignKey(x => x.TestMethodStandardID)
-            .IsRequired(false)
-            .OnDelete(DeleteBehavior.NoAction);
-
         // TpiInspection FKs (no cascade)
         modelBuilder.Entity<TpiInspection>()
             .HasOne(x => x.SampleInward)
@@ -1216,6 +1208,13 @@ public partial class LIMSContext : DbContext
             .IsRequired(false)
             .OnDelete(DeleteBehavior.NoAction);
 
+        modelBuilder.Entity<LaboratoryTestSubGroupSpecification>()
+            .HasOne(x => x.ProductMaster)
+            .WithMany()
+            .HasForeignKey(x => x.ProductMasterID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
+
         modelBuilder.Entity<LaboratoryTestSubGroupInvoiceCase>()
             .HasOne(x => x.SubGroup)
             .WithMany(g => g.InvoiceCases)
@@ -1288,6 +1287,13 @@ public partial class LIMSContext : DbContext
             .HasOne(x => x.SpecificationGrade)
             .WithMany()
             .HasForeignKey(x => x.SpecificationGradeID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<LaboratoryTestAnalysisTypeSpecification>()
+            .HasOne(x => x.ProductMaster)
+            .WithMany()
+            .HasForeignKey(x => x.ProductMasterID)
             .IsRequired(false)
             .OnDelete(DeleteBehavior.NoAction);
 

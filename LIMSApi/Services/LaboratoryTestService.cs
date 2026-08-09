@@ -90,10 +90,6 @@ namespace LIMSApi.Services
             if (hasLabScope)
                 throw new InvalidOperationException("Cannot delete: Laboratory Test is linked to Lab Scope.");
 
-            bool hasProductSpec = await _context.ProductSpecifications.AnyAsync(s => s.LaboratoryTestID == id && s.IsActive);
-            if (hasProductSpec)
-                throw new InvalidOperationException("Cannot delete: Laboratory Test is linked to Product Specifications.");
-
             bool hasTestResult = await _context.TestResultHeaders.AnyAsync(t => t.LaboratoryTestID == id && t.IsActive);
             if (hasTestResult)
                 throw new InvalidOperationException("Cannot delete: Laboratory Test is linked to Test Results.");
@@ -101,10 +97,6 @@ namespace LIMSApi.Services
             bool hasSamplePrep = await _context.SamplePreparationMasters.AnyAsync(s => s.LaboratoryTestID == id && s.IsActive);
             if (hasSamplePrep)
                 throw new InvalidOperationException("Cannot delete: Laboratory Test is linked to Sample Preparations.");
-
-            bool hasProductTestGroup = await _context.ProductTestGroups.AnyAsync(p => p.LaboratoryTestID == id && p.IsActive);
-            if (hasProductTestGroup)
-                throw new InvalidOperationException("Cannot delete: Laboratory Test is linked to Product Test Groups.");
 
             bool hasGeneralTestMethod = await _context.GeneralTestMethods.AnyAsync(g => g.LaboratoryTestID == id);
             if (hasGeneralTestMethod)
@@ -265,8 +257,7 @@ namespace LIMSApi.Services
                     sgCopy.Specifications.Add(new LaboratoryTestSubGroupSpecification
                     {
                         SpecificationHeaderID = s.SpecificationHeaderID,
-                        SpecificationGradeID = s.SpecificationGradeID,
-                        ProductSpecificationID = s.ProductSpecificationID
+                        SpecificationGradeID = s.SpecificationGradeID
                     });
                 }
 
@@ -341,8 +332,7 @@ namespace LIMSApi.Services
                         atCopy.Specifications.Add(new LaboratoryTestAnalysisTypeSpecification
                         {
                             SpecificationHeaderID = s.SpecificationHeaderID,
-                            SpecificationGradeID = s.SpecificationGradeID,
-                            ProductSpecificationID = s.ProductSpecificationID
+                            SpecificationGradeID = s.SpecificationGradeID
                         });
                     }
 

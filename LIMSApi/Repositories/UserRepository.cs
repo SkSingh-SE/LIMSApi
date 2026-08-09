@@ -127,6 +127,7 @@ namespace LIMSApi.Repositories
             if (user is null) throw new InvalidOperationException("User not found for the given employee ID.");
 
 
+            user.IsLoginEnabled = dto.IsLoginEnabled;
             user.SessionTimeout = dto.SessionTimeout;
             user.ForcePasswordChange = dto.ForcePasswordChange;
             user.UnlockMethod = dto.UnlockMethod;

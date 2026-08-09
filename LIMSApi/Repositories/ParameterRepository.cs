@@ -39,6 +39,7 @@ namespace LIMSApi.Repositories
         {
             return await _context.ParameterMasters
                 .Include(p => p.ParameterUnit)
+                .Include(p => p.ParameterUnitEquivalent)
                 .Include(p => p.DropdownOptions.Where(o => o.IsActive))
                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
         }
@@ -55,6 +56,8 @@ namespace LIMSApi.Repositories
             var _query = (from c in _context.ParameterMasters
                           join u in _context.ParameterUnitMasters on c.ParameterUnitID equals u.ID into unitGroup
                           from u in unitGroup.DefaultIfEmpty()
+                          join eq in _context.ParameterUnitEquivalents on c.ParameterUnitEquivalentID equals eq.ID into eqGroup
+                          from eq in eqGroup.DefaultIfEmpty()
                           where c.IsActive && c.ParameterType == "Chemical"
                           select new
                           {
@@ -65,8 +68,11 @@ namespace LIMSApi.Repositories
                               c.InputType,
                               c.IsCalculated,
                               c.FormulaDisplay,
-                              UnitName = u != null ? u.Name : "",
-                              Factor = u != null && u.ConversionFactor.HasValue ? u.ConversionFactor.Value.ToString() : "1",
+                              c.ParameterUnitID,
+                              c.ParameterUnitEquivalentID,
+                              c.UnitConversionFactor,
+                              UnitName = eq != null ? eq.Name : (u != null ? u.Name : ""),
+                              Factor = c.UnitConversionFactor.HasValue ? c.UnitConversionFactor.Value.ToString() : (eq != null && eq.ConversionFactor.HasValue ? eq.ConversionFactor.Value.ToString() : (u != null && u.ConversionFactor.HasValue ? u.ConversionFactor.Value.ToString() : "1")),
                               c.DecimalPrecision,
                               c.CreatedOn,
                               c.ModifiedOn
@@ -93,6 +99,8 @@ namespace LIMSApi.Repositories
             var _query = (from c in _context.ParameterMasters
                           join u in _context.ParameterUnitMasters on c.ParameterUnitID equals u.ID into unitGroup
                           from u in unitGroup.DefaultIfEmpty()
+                          join eq in _context.ParameterUnitEquivalents on c.ParameterUnitEquivalentID equals eq.ID into eqGroup
+                          from eq in eqGroup.DefaultIfEmpty()
                           where c.IsActive && (c.ParameterType == "Mechanical" || c.ParameterType == "Observation")
                           select new
                           {
@@ -104,8 +112,11 @@ namespace LIMSApi.Repositories
                               c.InputType,
                               c.IsCalculated,
                               c.FormulaDisplay,
-                              UnitName = u != null ? u.Name : "",
-                              Factor = u != null && u.ConversionFactor.HasValue ? u.ConversionFactor.Value.ToString() : "1",
+                              c.ParameterUnitID,
+                              c.ParameterUnitEquivalentID,
+                              c.UnitConversionFactor,
+                              UnitName = eq != null ? eq.Name : (u != null ? u.Name : ""),
+                              Factor = c.UnitConversionFactor.HasValue ? c.UnitConversionFactor.Value.ToString() : (eq != null && eq.ConversionFactor.HasValue ? eq.ConversionFactor.Value.ToString() : (u != null && u.ConversionFactor.HasValue ? u.ConversionFactor.Value.ToString() : "1")),
                               c.DecimalPrecision,
                               c.CreatedOn,
                               c.ModifiedOn

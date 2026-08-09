@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 
 namespace LIMSApi.Services.Interface
@@ -12,6 +12,7 @@ namespace LIMSApi.Services.Interface
         Task<PagedResponse<object>> FetchParameterUnitList(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetParameterUnitDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<GroupedUnitDropdownOption>> GetGroupedParameterUnitDropdown(string? searchTerm, int pageNo, int pageSize);
 
         // Selectable unit options for a parameter: base unit + its normalized child equivalents.
         Task<List<EquivalentUnitOption>> GetEquivalentUnits(long unitId);

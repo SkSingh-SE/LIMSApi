@@ -99,6 +99,91 @@ namespace LIMSApi.Repositories
             return data;
         }
 
+        public async Task<List<GroupedUnitDropdownOption>> GetGroupedParameterUnitDropdown(string? searchTerm, int pageNo = 0, int pageSize = 50)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var query = _context.ParameterUnitMasters
+                .AsNoTracking()
+                .Include(x => x.Equivalents)
+                .Where(x => x.IsActive);
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    query = query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    query = query.Where(x =>
+                        (x.Name != null && x.Name.Contains(search)) ||
+                        x.Equivalents.Any(e => e.IsActive && e.Name != null && e.Name.Contains(search))
+                    );
+                }
+            }
+
+            var baseUnits = await query
+                .OrderBy(x => x.Name)
+                .Skip(pageNo * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            var result = new List<GroupedUnitDropdownOption>();
+
+            foreach (var baseUnit in baseUnits)
+            {
+                var activeEquivalents = baseUnit.Equivalents
+                    .Where(e => e.IsActive)
+                    .OrderBy(e => e.DisplayOrder ?? int.MaxValue)
+                    .ThenBy(e => e.Name)
+                    .ToList();
+
+                // 1. Group Header Item (Id = 0 so it never matches Unit ID lookups)
+                result.Add(new GroupedUnitDropdownOption
+                {
+                    Id = 0,
+                    Name = baseUnit.Name.ToUpper(),
+                    GroupName = baseUnit.Name,
+                    IsHeader = true,
+                    IsChild = false,
+                    IsBase = false
+                });
+
+                // 2. Base Unit Option
+                result.Add(new GroupedUnitDropdownOption
+                {
+                    Id = baseUnit.ID,
+                    EquivalentId = null,
+                    Name = baseUnit.Name,
+                    GroupName = baseUnit.Name,
+                    IsHeader = false,
+                    IsChild = true,
+                    IsBase = true,
+                    ConversionFactor = baseUnit.ConversionFactor
+                });
+
+                // 3. Child Equivalent Options
+                foreach (var eq in activeEquivalents)
+                {
+                    result.Add(new GroupedUnitDropdownOption
+                    {
+                        Id = baseUnit.ID,
+                        EquivalentId = eq.ID,
+                        Name = eq.Name,
+                        GroupName = baseUnit.Name,
+                        IsHeader = false,
+                        IsChild = true,
+                        IsBase = false,
+                        ConversionFactor = eq.ConversionFactor
+                    });
+                }
+            }
+
+            return result;
+        }
+
         public async Task<bool> ExistsByName(string name)
         {
             return await _context.ParameterUnitMasters.AnyAsync(x => x.Name == name && x.IsActive);

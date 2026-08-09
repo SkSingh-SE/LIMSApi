@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20260806104130_CleanupLegacyProductSpecification")]
+    partial class CleanupLegacyProductSpecification
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -4610,9 +4613,6 @@ namespace LIMSApi.Migrations
                     b.Property<long>("LaboratoryTestAnalysisTypeID")
                         .HasColumnType("bigint");
 
-                    b.Property<long?>("ProductMasterID")
-                        .HasColumnType("bigint");
-
                     b.Property<long?>("SpecificationGradeID")
                         .HasColumnType("bigint");
 
@@ -4622,8 +4622,6 @@ namespace LIMSApi.Migrations
                     b.HasKey("ID");
 
                     b.HasIndex("LaboratoryTestAnalysisTypeID");
-
-                    b.HasIndex("ProductMasterID");
 
                     b.HasIndex("SpecificationGradeID");
 
@@ -4836,9 +4834,6 @@ namespace LIMSApi.Migrations
                     b.Property<long>("LaboratoryTestSubGroupID")
                         .HasColumnType("bigint");
 
-                    b.Property<long?>("ProductMasterID")
-                        .HasColumnType("bigint");
-
                     b.Property<long?>("SpecificationGradeID")
                         .HasColumnType("bigint");
 
@@ -4848,8 +4843,6 @@ namespace LIMSApi.Migrations
                     b.HasKey("ID");
 
                     b.HasIndex("LaboratoryTestSubGroupID");
-
-                    b.HasIndex("ProductMasterID");
 
                     b.HasIndex("SpecificationGradeID");
 
@@ -14557,9 +14550,6 @@ namespace LIMSApi.Migrations
                     b.Property<string>("ParameterType")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<long?>("ParameterUnitEquivalentID")
-                        .HasColumnType("bigint");
-
                     b.Property<long?>("ParameterUnitID")
                         .HasColumnType("bigint");
 
@@ -14567,12 +14557,7 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<decimal?>("UnitConversionFactor")
-                        .HasColumnType("decimal(18, 6)");
-
                     b.HasKey("ID");
-
-                    b.HasIndex("ParameterUnitEquivalentID");
 
                     b.HasIndex("ParameterUnitID");
 
@@ -20868,11 +20853,6 @@ namespace LIMSApi.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("LIMSApi.Models.ProductMaster", "ProductMaster")
-                        .WithMany()
-                        .HasForeignKey("ProductMasterID")
-                        .OnDelete(DeleteBehavior.NoAction);
-
                     b.HasOne("LIMSApi.Models.SpecificationGrade", "SpecificationGrade")
                         .WithMany()
                         .HasForeignKey("SpecificationGradeID")
@@ -20886,8 +20866,6 @@ namespace LIMSApi.Migrations
                     b.Navigation("AnalysisType");
 
                     b.Navigation("MaterialSpecification");
-
-                    b.Navigation("ProductMaster");
 
                     b.Navigation("SpecificationGrade");
                 });
@@ -21020,11 +20998,6 @@ namespace LIMSApi.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("LIMSApi.Models.ProductMaster", "ProductMaster")
-                        .WithMany()
-                        .HasForeignKey("ProductMasterID")
-                        .OnDelete(DeleteBehavior.NoAction);
-
                     b.HasOne("LIMSApi.Models.SpecificationGrade", "SpecificationGrade")
                         .WithMany()
                         .HasForeignKey("SpecificationGradeID")
@@ -21036,8 +21009,6 @@ namespace LIMSApi.Migrations
                         .OnDelete(DeleteBehavior.NoAction);
 
                     b.Navigation("MaterialSpecification");
-
-                    b.Navigation("ProductMaster");
 
                     b.Navigation("SpecificationGrade");
 
@@ -21586,19 +21557,12 @@ namespace LIMSApi.Migrations
 
             modelBuilder.Entity("LIMSApi.Models.ParameterMaster", b =>
                 {
-                    b.HasOne("LIMSApi.Models.ParameterUnitEquivalent", "ParameterUnitEquivalent")
-                        .WithMany()
-                        .HasForeignKey("ParameterUnitEquivalentID")
-                        .OnDelete(DeleteBehavior.NoAction);
-
                     b.HasOne("LIMSApi.Models.ParameterUnitMaster", "ParameterUnit")
                         .WithMany()
                         .HasForeignKey("ParameterUnitID")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("ParameterUnit");
-
-                    b.Navigation("ParameterUnitEquivalent");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ParameterSpecimenOrientation", b =>

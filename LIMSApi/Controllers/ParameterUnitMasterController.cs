@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
@@ -78,6 +78,13 @@ namespace LIMSApi.Controllers
         {
             var data = await _ParameterUnitService.GetParameterUnitDropdown(searchTerm, pageNo, pageSize);
             return data == null ? NoContent(): Ok(data);
+        }
+
+        [HttpGet("grouped-dropdown")]
+        public async Task<IActionResult> GetGroupedParameterUnitDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            var data = await _ParameterUnitService.GetGroupedParameterUnitDropdown(searchTerm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
         }
 
         // Equivalent units for a parameter's default unit (base unit + matching SimilarUnit1-7).

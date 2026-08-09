@@ -91,6 +91,8 @@ namespace LIMSApi.Services
             existingParameter.ParameterType = model.ParameterType;
             existingParameter.InputType    = model.InputType;
             existingParameter.ParameterUnitID = NumericInputTypes.Contains(model.InputType) ? model.ParameterUnitID : null;
+            existingParameter.ParameterUnitEquivalentID = NumericInputTypes.Contains(model.InputType) ? model.ParameterUnitEquivalentID : null;
+            existingParameter.UnitConversionFactor = NumericInputTypes.Contains(model.InputType) ? model.UnitConversionFactor : null;
             existingParameter.DecimalPrecision = model.DecimalPrecision;
             existingParameter.Note         = model.Note;
             existingParameter.ElementType  = !string.IsNullOrWhiteSpace(model.ElementType)

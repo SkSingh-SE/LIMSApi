@@ -139,6 +139,11 @@ namespace LIMSApi.Services
             return await _ParameterUnitRepository.GetParameterUnitDropdown(searchTerm, pageNo, pageSize);
         }
 
+        public async Task<List<GroupedUnitDropdownOption>> GetGroupedParameterUnitDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _ParameterUnitRepository.GetGroupedParameterUnitDropdown(searchTerm, pageNo, pageSize);
+        }
+
         public async Task<List<EquivalentUnitOption>> GetEquivalentUnits(long unitId)
         {
             var baseUnit = await _context.ParameterUnitMasters

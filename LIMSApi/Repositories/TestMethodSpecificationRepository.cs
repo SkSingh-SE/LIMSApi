@@ -210,11 +210,9 @@ namespace LIMSApi.Repositories
 
         public async Task<int> GetVersionImpactCount(long versionId)
         {
-            var productSpecCount = await _context.ProductSpecifications
-                .CountAsync(p => p.TestMethodSpecificationVersionID == versionId && p.IsActive);
             var labScopeCount = await _context.LabScopeSpecifications
                 .CountAsync(l => l.TestMethodSpecificationVersionID == versionId);
-            return productSpecCount + labScopeCount;
+            return labScopeCount;
         }
 
         public async Task<List<TestMethodSpecificationVersion>> GetVersionsDueForReview(DateTime cutoffDate)

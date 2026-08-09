@@ -54,7 +54,7 @@ namespace LIMSApi.Repositories
                 .Include(x => x.Specifications)
                     .ThenInclude(s => s.SpecificationGrade)
                 .Include(x => x.Specifications)
-                    .ThenInclude(s => s.ProductSpecification)
+                    .ThenInclude(s => s.ProductMaster)
                 .Include(x => x.InvoiceCases)
                     .ThenInclude(i => i.InvoiceCaseConfiguration)
                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
@@ -83,7 +83,7 @@ namespace LIMSApi.Repositories
                 .Include(x => x.Specifications)
                     .ThenInclude(s => s.SpecificationGrade)
                 .Include(x => x.Specifications)
-                    .ThenInclude(s => s.ProductSpecification)
+                    .ThenInclude(s => s.ProductMaster)
                 .Include(x => x.InvoiceCases)
                     .ThenInclude(i => i.InvoiceCaseConfiguration)
                 .Where(x => x.LaboratoryTestID == labTestId && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode)

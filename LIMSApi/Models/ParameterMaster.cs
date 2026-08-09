@@ -31,6 +31,13 @@ public partial class ParameterMaster : AuditProperty
     /// <summary>FK to ParameterUnitMaster. Applicable only for Decimal / Integer InputType.</summary>
     public long? ParameterUnitID { get; set; }
 
+    /// <summary>FK to ParameterUnitEquivalent. Set when a specific equivalent unit is selected.</summary>
+    public long? ParameterUnitEquivalentID { get; set; }
+
+    /// <summary>Conversion factor relative to base unit at the time of selection/save.</summary>
+    [Column(TypeName = "decimal(18, 6)")]
+    public decimal? UnitConversionFactor { get; set; }
+
     /// <summary>Number of decimal places. Applicable only for Decimal InputType.</summary>
     public int DecimalPrecision { get; set; } = 2;
 
@@ -57,6 +64,9 @@ public partial class ParameterMaster : AuditProperty
     // ─── Navigation ───────────────────────────────────
     [ForeignKey("ParameterUnitID")]
     public virtual ParameterUnitMaster? ParameterUnit { get; set; }
+
+    [ForeignKey("ParameterUnitEquivalentID")]
+    public virtual ParameterUnitEquivalent? ParameterUnitEquivalent { get; set; }
 
     /// <summary>Options for Dropdown / MultiSelect InputType.</summary>
     public virtual ICollection<ParameterDropdownOption> DropdownOptions { get; set; }

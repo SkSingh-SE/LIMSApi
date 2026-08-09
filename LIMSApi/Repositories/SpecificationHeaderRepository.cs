@@ -335,12 +335,10 @@ namespace LIMSApi.Repositories
                 gradeIds.Add(gradeId2);
             }
 
-            var query = from ps in _context.ProductSpecifications
-                        join test in _context.LaboratoryTests
-                            on ps.LaboratoryTestID equals test.ID
-                        where gradeIds.Contains(ps.GradeID)
-                              && ps.IsActive
-                              && ps.CompanyCode == loggedInUser.CompanyCode
+            var query = from sub in _context.Set<LaboratoryTestSubGroupSpecification>()
+                        join test in _context.LaboratoryTests on sub.SubGroup!.LaboratoryTestID equals test.ID
+                        where sub.SpecificationGradeID.HasValue && gradeIds.Contains(sub.SpecificationGradeID.Value)
+                              && test.IsActive
                         select new DropdwonSelector
                         {
                             Id = test.ID,
@@ -348,8 +346,7 @@ namespace LIMSApi.Repositories
                         };
 
             var data = await query.ToListAsync();
-            return data.DistinctBy(x => x.Id).ToList();
-
+            return data.GroupBy(x => x.Id).Select(g => g.First()).ToList();
         }
         public async Task<List<ChemicalElementDto>> GetChemicalElementsBySpecificationsAsync(long spec1Id = 0, long spec2Id = 0)
         {
