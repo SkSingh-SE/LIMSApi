@@ -235,5 +235,49 @@ namespace LIMSApi.Controllers
             return Ok(new { message = "Report stop has been removed." });
         }
 
+        [HttpPost("verify-and-lock-review/{inwardId}")]
+        [RequirePermission(Permissions.Inward.Update)]
+        public async Task<IActionResult> VerifyAndLockReview(long inwardId)
+        {
+            await _SampleInwardService.VerifyAndLockReviewOfRequestAsync(inwardId);
+            return Ok(new { message = "Review of Request verified and locked successfully." });
+        }
+
+        [HttpPost("request-replan")]
+        [RequirePermission(Permissions.Plan.Update)]
+        public async Task<IActionResult> RequestReplan([FromBody] ReplanRequestDto dto)
+        {
+            await _SampleInwardService.RequestReplanAsync(dto.InwardId, dto.Reason);
+            return Ok(new { message = "Re-Plan requested successfully." });
+        }
+
+        [HttpPost("approve-replan")]
+        [RequirePermission(Permissions.Plan.Approve)]
+        public async Task<IActionResult> ApproveReplan([FromBody] ReplanApprovalDto dto)
+        {
+            await _SampleInwardService.ApproveReplanAsync(dto.ReplanRequestId, dto.Remarks);
+            return Ok(new { message = "Re-Plan approved successfully." });
+        }
+
+        [HttpGet("{inwardId}/print-challan")]
+        [RequirePermission(Permissions.Inward.Read)]
+        public async Task<IActionResult> PrintInwardChallan(long inwardId)
+        {
+            try
+            {
+                var pdfBytes = await _SampleInwardService.GenerateInwardChallanPdfAsync(inwardId);
+                if (pdfBytes == null || pdfBytes.Length == 0)
+                    return NotFound("Challan PDF could not be generated.");
+
+                return File(pdfBytes, "application/pdf", $"Inward_Challan_{inwardId}.pdf");
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ex.Message);
+            }
+        }
     }
 }
+
+
+

@@ -12,6 +12,8 @@ using LIMSApi.ServiceWORepo;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.DotNet.Scaffolding.Shared.CodeModifier.CodeChange;
 using Microsoft.EntityFrameworkCore;
+using LIMSApi.Reporting;
+using QuestPDF.Fluent;
 using System.Text.Json;
 
 namespace LIMSApi.Services
@@ -1893,5 +1895,132 @@ namespace LIMSApi.Services
             await _context.SaveChangesAsync();
         }
 
+        public async Task<byte[]> GenerateInwardChallanPdfAsync(long inwardId)
+        {
+            var inwardDto = await GetSampleInwardDetails(inwardId);
+            if (inwardDto == null)
+                throw new KeyNotFoundException($"SampleInward with ID {inwardId} not found.");
+
+            var document = new SampleInwardChallanDocument(inwardDto);
+            return document.GeneratePdf();
+        }
+
+        public async Task VerifyAndLockReviewOfRequestAsync(long inwardId)
+        {
+            var inward = await _context.SampleInwards
+                .Include(i => i.SampleDetails)
+                    .ThenInclude(sd => sd.TestPlans)
+                .FirstOrDefaultAsync(i => i.ID == inwardId && i.IsActive);
+
+            if (inward == null)
+                throw new KeyNotFoundException($"SampleInward with ID {inwardId} not found.");
+
+            inward.ReviewStatus = "Verified & Approved";
+            inward.ReviewedBy = loggedInUser.EmployeeID;
+            inward.ReviewedOn = DateTime.UtcNow;
+            inward.ModifiedBy = loggedInUser.EmployeeID;
+            inward.ModifiedOn = DateTime.UtcNow;
+
+            foreach (var sample in inward.SampleDetails.Where(s => !s.IsCancelled))
+            {
+                foreach (var plan in sample.TestPlans)
+                {
+                    plan.PlanStatus = "Approved";
+                    plan.ApprovedById = loggedInUser.EmployeeID;
+                    plan.ApprovedByName = loggedInUser.Name;
+                    plan.ApprovedAt = DateTime.UtcNow;
+
+                    await _planService.CreatePlanHistoryEntry(
+                        plan.ID,
+                        "Approved",
+                        null,
+                        null,
+                        JsonSerializer.Serialize(new[]
+                        {
+                            new { field = "PlanStatus", oldValue = "Submitted", newValue = "Approved" }
+                        }),
+                        "Review of request verified and locked."
+                    );
+                }
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task RequestReplanAsync(long inwardId, string reason)
+        {
+            if (string.IsNullOrWhiteSpace(reason))
+                throw new ArgumentException("A valid reason must be provided to request a re-plan.");
+
+            var inward = await _context.SampleInwards
+                .Include(i => i.SampleDetails)
+                    .ThenInclude(sd => sd.TestPlans)
+                .FirstOrDefaultAsync(i => i.ID == inwardId && i.IsActive);
+
+            if (inward == null)
+                throw new KeyNotFoundException($"SampleInward with ID {inwardId} not found.");
+
+            foreach (var sample in inward.SampleDetails.Where(s => !s.IsCancelled))
+            {
+                foreach (var plan in sample.TestPlans)
+                {
+                    plan.PlanStatus = "ReplanRequested";
+                    var request = new ReplanRequest
+                    {
+                        PlanId = plan.ID,
+                        RequestedById = loggedInUser.EmployeeID,
+                        RequestedByName = loggedInUser.Name,
+                        RequestedAt = DateTime.UtcNow,
+                        Reason = reason,
+                        Status = "Pending"
+                    };
+                    _context.ReplanRequests.Add(request);
+                }
+            }
+
+            inward.ReviewStatus = "Re-Plan Requested";
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task ApproveReplanAsync(long replanRequestId, string remarks)
+        {
+            var request = await _context.ReplanRequests
+                .Include(r => r.SampleTestPlan)
+                .FirstOrDefaultAsync(r => r.Id == replanRequestId);
+
+            if (request == null)
+                throw new KeyNotFoundException($"ReplanRequest with ID {replanRequestId} not found.");
+
+            request.Status = "Approved";
+            request.ApprovedById = loggedInUser.EmployeeID;
+            request.ApprovedByName = loggedInUser.Name;
+            request.ApprovedAt = DateTime.UtcNow;
+            request.ApprovalRemarks = remarks;
+
+            if (request.SampleTestPlan != null)
+            {
+                request.SampleTestPlan.PlanStatus = "Draft";
+                request.SampleTestPlan.Version += 1;
+                request.SampleTestPlan.ReplanCount += 1;
+
+                await _planService.CreatePlanHistoryEntry(
+                    request.SampleTestPlan.ID,
+                    "ReplanApproved",
+                    null,
+                    null,
+                    JsonSerializer.Serialize(new[]
+                    {
+                        new { field = "PlanStatus", oldValue = "ReplanRequested", newValue = "Draft" },
+                        new { field = "Version", oldValue = (request.SampleTestPlan.Version - 1).ToString(), newValue = request.SampleTestPlan.Version.ToString() }
+                    }),
+                    $"Re-plan approved. Version incremented to {request.SampleTestPlan.Version}. Remarks: {remarks}"
+                );
+            }
+
+            await _context.SaveChangesAsync();
+
+        }
     }
 }
+
+

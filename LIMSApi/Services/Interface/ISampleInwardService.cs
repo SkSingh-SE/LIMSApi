@@ -21,6 +21,7 @@ namespace LIMSApi.Services.Interface
         Task<List<DropdwonSelector>> GetSamplePreparationInwardDropdown(string? searchTerm, int pageNo, int pageSize);
 
         Task<byte[]> GeneratePIPdfAsync(long piId);
+        Task<byte[]> GenerateInwardChallanPdfAsync(long inwardId);
         Task CancelSampleAsync(long sampleDetailId, string reason);
         Task DeleteSampleAsync(long sampleDetailId);
         Task<PaymentInfoDto> UpdatePaymentInfoAsync(long id, PaymentInfoDto dto);
@@ -29,5 +30,9 @@ namespace LIMSApi.Services.Interface
         Task StopReportAsync(long inwardId, string reason);
         Task UnstopReportAsync(long inwardId);
 
+        Task VerifyAndLockReviewOfRequestAsync(long inwardId);
+        Task RequestReplanAsync(long inwardId, string reason);
+        Task ApproveReplanAsync(long replanRequestId, string remarks);
     }
 }
+
