@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using Microsoft.AspNetCore.Mvc;
 
@@ -25,6 +25,9 @@ namespace LIMSApi.Services.Interface
         Task DeleteSampleAsync(long sampleDetailId);
         Task<PaymentInfoDto> UpdatePaymentInfoAsync(long id, PaymentInfoDto dto);
         Task UpdateSamplePrepAsync(long sampleId, SamplePrepReviewDto dto);
+
+        Task StopReportAsync(long inwardId, string reason);
+        Task UnstopReportAsync(long inwardId);
 
     }
 }

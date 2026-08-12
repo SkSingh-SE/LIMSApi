@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -79,6 +79,13 @@ namespace LIMSApi.Models
         public bool IsReportUnlocked { get; set; } = false;
         
         public bool IsAmendmentAllowed { get; set; } = true;
+
+        // Stop Report workflow fields
+        public bool IsReportStopped { get; set; } = false;
+        [StringLength(500)]
+        public string? StopReportReason { get; set; }
+        public DateTime? StopReportOn { get; set; }
+        public long? StopReportBy { get; set; }
         
         public decimal TotalTestCharges { get; set; } = 0;
 

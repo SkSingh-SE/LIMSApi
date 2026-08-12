@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Helpers;
 using LIMSApi.Middleware;
@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Mvc;
 using Twilio.TwiML.Voice;
 
 public record CancelSampleRequest(long SampleDetailId, string Reason);
+public record StopReportRequest(string Reason);
 
 namespace LIMSApi.Controllers
 {
@@ -210,12 +211,28 @@ namespace LIMSApi.Controllers
             return Ok(new { message = "Sample cancelled successfully." });
         }
 
-        [HttpDelete("delete-sample/{id}")]
+        [HttpPost("delete-sample/{id}")]
         [RequirePermission(Permissions.Inward.Update)]
         public async Task<IActionResult> DeleteSample(long id)
         {
             await _SampleInwardService.DeleteSampleAsync(id);
             return Ok(new { message = "Sample deleted successfully." });
+        }
+
+        [HttpPost("stop-report/{inwardId}")]
+        [RequirePermission(Permissions.Inward.Update)]
+        public async Task<IActionResult> StopReport(long inwardId, [FromBody] StopReportRequest request)
+        {
+            await _SampleInwardService.StopReportAsync(inwardId, request.Reason);
+            return Ok(new { message = "Report has been stopped." });
+        }
+
+        [HttpPost("unstop-report/{inwardId}")]
+        [RequirePermission(Permissions.Inward.Update)]
+        public async Task<IActionResult> UnstopReport(long inwardId)
+        {
+            await _SampleInwardService.UnstopReportAsync(inwardId);
+            return Ok(new { message = "Report stop has been removed." });
         }
 
     }

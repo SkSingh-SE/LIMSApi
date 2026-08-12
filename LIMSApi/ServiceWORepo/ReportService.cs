@@ -253,6 +253,16 @@ namespace LIMSApi.ServiceWORepo
 
             var sampleId = headers.First().SampleID;
 
+            var sampleInward = await (from s in _db.SampleDetails
+                                      join i in _db.SampleInwards on s.InwardID equals i.ID
+                                      where s.ID == sampleId
+                                      select i).FirstOrDefaultAsync();
+
+            if (sampleInward != null && sampleInward.IsReportStopped)
+            {
+                throw new InvalidOperationException($"Report generation is stopped for this case. Reason: {sampleInward.StopReportReason}");
+            }
+
             // -------------------------------------------------
             // 2. Report No + Certificate
             // -------------------------------------------------

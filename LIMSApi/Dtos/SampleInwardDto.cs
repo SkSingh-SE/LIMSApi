@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using LIMSApi.Models;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -42,6 +42,8 @@ namespace LIMSApi.Dtos
         public string? RequestFileName { get; set; }
         public long? UploadReferenceID { get; set; } = null;
         public string Status { get; set; } = "Sample Received";
+        public bool IsReportStopped { get; set; } = false;
+        public string? StopReportReason { get; set; }
         public DateTime CollectionTime { get; set; } = DateTime.Now;
         public string ReviewStatus { get; set; } = "Pending";
         public long? ReviewedBy { get; set; }
@@ -88,18 +90,18 @@ namespace LIMSApi.Dtos
     public class PartyAddressDto
     {
         public long ID { get; set; }
-        public long ContactPersonID { get; set; }
-        public string ContactPersonName { get; set; }
-        public string Address { get; set; }
-        public string PinCode { get; set; }
-        public string Area { get; set; }
-        public string City { get; set; }
-        public string State { get; set; }
-        public string Country { get; set; }
-        public string Type { get; set; }
+        public long? ContactPersonID { get; set; }
+        public string? ContactPersonName { get; set; } = string.Empty;
+        public string? Address { get; set; } = string.Empty;
+        public string? PinCode { get; set; } = string.Empty;
+        public string? Area { get; set; } = string.Empty;
+        public string? City { get; set; } = string.Empty;
+        public string? State { get; set; } = string.Empty;
+        public string? Country { get; set; } = string.Empty;
+        public string? Type { get; set; } = string.Empty;
         public long InwardID { get; set; }
-        public string EmailId { get; set; } = string.Empty;
-        public string MobileNo { get; set; } = string.Empty;
+        public string? EmailId { get; set; } = string.Empty;
+        public string? MobileNo { get; set; } = string.Empty;
         public long? CustomerID { get; set; }
     }
 

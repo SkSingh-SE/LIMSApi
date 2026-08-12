@@ -1,4 +1,4 @@
-﻿using System.Xml.Linq;
+using System.Xml.Linq;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -146,38 +146,38 @@ namespace LIMSApi.Services
                     }).ToList(),
 
                     Addresses = new List<SampleInwardAddressInfo>
-               {
-                   new SampleInwardAddressInfo
-                   {
-                       ContactPersonName = model.ReportingTo.ContactPersonName,
-                       ContactPersonID = model.ReportingTo.ContactPersonID,
-                       Address = model.ReportingTo.Address,
-                       PinCode = model.ReportingTo.PinCode,
-                       Area = model.ReportingTo.Area,
-                       City = model.ReportingTo.City,
-                       State = model.ReportingTo.State,
-                       Country = model.ReportingTo.Country,
-                       Type = model.ReportingTo.Type,
-                       MobileNo = model.ReportingTo.MobileNo,
-                          EmailId = model.ReportingTo.EmailId,
-                       CustomerID = model.ReportingTo.CustomerID
-                   },
-                   new SampleInwardAddressInfo
-                   {
-                       ContactPersonName = model.BillingTo.ContactPersonName,
-                       ContactPersonID = model.BillingTo.ContactPersonID,
-                       Address = model.BillingTo.Address,
-                       PinCode = model.BillingTo.PinCode,
-                       Area = model.BillingTo.Area,
-                       City = model.BillingTo.City,
-                       State = model.BillingTo.State,
-                       Country = model.BillingTo.Country,
-                       Type = model.BillingTo.Type,
-                          MobileNo = model.BillingTo.MobileNo,
-                              EmailId = model.BillingTo.EmailId,
-                       CustomerID = model.BillingTo.CustomerID
-                   }
-               },
+                    {
+                        new SampleInwardAddressInfo
+                        {
+                            ContactPersonName = model.ReportingTo?.ContactPersonName ?? string.Empty,
+                            ContactPersonID = model.ReportingTo?.ContactPersonID ?? 0,
+                            Address = model.ReportingTo?.Address ?? string.Empty,
+                            PinCode = model.ReportingTo?.PinCode ?? string.Empty,
+                            Area = model.ReportingTo?.Area ?? string.Empty,
+                            City = model.ReportingTo?.City ?? string.Empty,
+                            State = model.ReportingTo?.State ?? string.Empty,
+                            Country = model.ReportingTo?.Country ?? string.Empty,
+                            Type = model.ReportingTo?.Type ?? "reporting",
+                            MobileNo = model.ReportingTo?.MobileNo ?? string.Empty,
+                            EmailId = model.ReportingTo?.EmailId ?? string.Empty,
+                            CustomerID = model.ReportingTo?.CustomerID
+                        },
+                        new SampleInwardAddressInfo
+                        {
+                            ContactPersonName = model.BillingTo?.ContactPersonName ?? string.Empty,
+                            ContactPersonID = model.BillingTo?.ContactPersonID ?? 0,
+                            Address = model.BillingTo?.Address ?? string.Empty,
+                            PinCode = model.BillingTo?.PinCode ?? string.Empty,
+                            Area = model.BillingTo?.Area ?? string.Empty,
+                            City = model.BillingTo?.City ?? string.Empty,
+                            State = model.BillingTo?.State ?? string.Empty,
+                            Country = model.BillingTo?.Country ?? string.Empty,
+                            Type = model.BillingTo?.Type ?? "billing",
+                            MobileNo = model.BillingTo?.MobileNo ?? string.Empty,
+                            EmailId = model.BillingTo?.EmailId ?? string.Empty,
+                            CustomerID = model.BillingTo?.CustomerID
+                        }
+                    },
 
                     SampleDetails = model.SampleDetails.Select((s, index) => new SampleDetail
                     {
@@ -482,38 +482,44 @@ namespace LIMSApi.Services
 
                 // Sync Addresses
                 entity.Addresses.Clear();
-                entity.Addresses.Add(new SampleInwardAddressInfo
+                if (model.ReportingTo != null)
                 {
-                    InwardID = entity.ID,
-                    ContactPersonName = model.ReportingTo.ContactPersonName,
-                    ContactPersonID = model.ReportingTo.ContactPersonID,
-                    Address = model.ReportingTo.Address,
-                    PinCode = model.ReportingTo.PinCode,
-                    Area = model.ReportingTo.Area,
-                    City = model.ReportingTo.City,
-                    State = model.ReportingTo.State,
-                    Country = model.ReportingTo.Country,
-                    Type = model.ReportingTo.Type,
-                    MobileNo = model.ReportingTo.MobileNo,
-                    EmailId = model.ReportingTo.EmailId,
-                    CustomerID = model.ReportingTo.CustomerID
-                });
-                entity.Addresses.Add(new SampleInwardAddressInfo
+                    entity.Addresses.Add(new SampleInwardAddressInfo
+                    {
+                        InwardID = entity.ID,
+                        ContactPersonName = model.ReportingTo.ContactPersonName ?? string.Empty,
+                        ContactPersonID = model.ReportingTo.ContactPersonID ?? 0,
+                        Address = model.ReportingTo.Address ?? string.Empty,
+                        PinCode = model.ReportingTo.PinCode ?? string.Empty,
+                        Area = model.ReportingTo.Area ?? string.Empty,
+                        City = model.ReportingTo.City ?? string.Empty,
+                        State = model.ReportingTo.State ?? string.Empty,
+                        Country = model.ReportingTo.Country ?? string.Empty,
+                        Type = string.IsNullOrEmpty(model.ReportingTo.Type) ? "reporting" : model.ReportingTo.Type,
+                        MobileNo = model.ReportingTo.MobileNo ?? string.Empty,
+                        EmailId = model.ReportingTo.EmailId ?? string.Empty,
+                        CustomerID = model.ReportingTo.CustomerID
+                    });
+                }
+                if (model.BillingTo != null)
                 {
-                    InwardID = entity.ID,
-                    ContactPersonName = model.BillingTo.ContactPersonName,
-                    ContactPersonID = model.BillingTo.ContactPersonID,
-                    Address = model.BillingTo.Address,
-                    PinCode = model.BillingTo.PinCode,
-                    Area = model.BillingTo.Area,
-                    City = model.BillingTo.City,
-                    State = model.BillingTo.State,
-                    Country = model.BillingTo.Country,
-                    Type = model.BillingTo.Type,
-                    MobileNo = model.BillingTo.MobileNo,
-                    EmailId = model.BillingTo.EmailId,
-                    CustomerID = model.BillingTo.CustomerID
-                });
+                    entity.Addresses.Add(new SampleInwardAddressInfo
+                    {
+                        InwardID = entity.ID,
+                        ContactPersonName = model.BillingTo.ContactPersonName ?? string.Empty,
+                        ContactPersonID = model.BillingTo.ContactPersonID ?? 0,
+                        Address = model.BillingTo.Address ?? string.Empty,
+                        PinCode = model.BillingTo.PinCode ?? string.Empty,
+                        Area = model.BillingTo.Area ?? string.Empty,
+                        City = model.BillingTo.City ?? string.Empty,
+                        State = model.BillingTo.State ?? string.Empty,
+                        Country = model.BillingTo.Country ?? string.Empty,
+                        Type = string.IsNullOrEmpty(model.BillingTo.Type) ? "billing" : model.BillingTo.Type,
+                        MobileNo = model.BillingTo.MobileNo ?? string.Empty,
+                        EmailId = model.BillingTo.EmailId ?? string.Empty,
+                        CustomerID = model.BillingTo.CustomerID
+                    });
+                }
 
                 //  Only fetch next sample number if a new sample will be added
                 int nextSampleNumber = 0;
@@ -1209,6 +1215,8 @@ namespace LIMSApi.Services
                 CollectionTime = sampleInward.CollectionTime,
                 StatementOfConformity = sampleInward.StatementOfConformity,
                 DecisionRule = sampleInward.DecisionRule,
+                IsReportStopped = sampleInward.IsReportStopped,
+                StopReportReason = sampleInward.StopReportReason,
 
                 DispatchModes = sampleInward.DispatchModes
                     .Select(d => new DispatchModeDto
@@ -1421,6 +1429,8 @@ namespace LIMSApi.Services
                 ReviewStatus = sampleInward.ReviewStatus,
                 ReviewedBy = sampleInward.ReviewedBy,
                 ReviewedOn = sampleInward.ReviewedOn,
+                IsReportStopped = sampleInward.IsReportStopped,
+                StopReportReason = sampleInward.StopReportReason,
 
                 DispatchModes = sampleInward.DispatchModes
                     .Select(d => new DispatchModeDto
@@ -1850,6 +1860,35 @@ namespace LIMSApi.Services
             sample.TpiAgencyID = dto.TpiAgencyID;
             sample.ModifiedBy = loggedInUser.EmployeeID;
             sample.ModifiedOn = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task StopReportAsync(long inwardId, string reason)
+        {
+            var inward = await _context.SampleInwards.FindAsync(inwardId)
+                ?? throw new KeyNotFoundException($"SampleInward with ID {inwardId} not found.");
+
+            inward.IsReportStopped = true;
+            inward.StopReportReason = reason;
+            inward.StopReportOn = DateTime.UtcNow;
+            inward.StopReportBy = loggedInUser.EmployeeID;
+            inward.ModifiedBy = loggedInUser.EmployeeID;
+            inward.ModifiedOn = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task UnstopReportAsync(long inwardId)
+        {
+            var inward = await _context.SampleInwards.FindAsync(inwardId)
+                ?? throw new KeyNotFoundException($"SampleInward with ID {inwardId} not found.");
+
+            inward.IsReportStopped = false;
+            inward.StopReportReason = null;
+            inward.StopReportOn = null;
+            inward.ModifiedBy = loggedInUser.EmployeeID;
+            inward.ModifiedOn = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
         }
