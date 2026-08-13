@@ -66,9 +66,9 @@ namespace LIMSApi.Controllers
         }
 
         [HttpGet("dropdown")]
-        public async Task<IActionResult> GetDropdown([FromQuery] string? searchTerm, [FromQuery] int pageNo = 0, [FromQuery] int pageSize = 20)
+        public async Task<IActionResult> GetDropdown([FromQuery] string? searchTerm, [FromQuery] int pageNo = 0, [FromQuery] int pageSize = 20, [FromQuery] long metalId = 0)
         {
-            var result = await _service.GetProductMasterDropdown(searchTerm, pageNo, pageSize);
+            var result = await _service.GetProductMasterDropdown(searchTerm, pageNo, pageSize, metalId);
             return Ok(result);
         }
 

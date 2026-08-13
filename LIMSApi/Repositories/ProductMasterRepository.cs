@@ -125,12 +125,18 @@ namespace LIMSApi.Repositories
             return await projected.Cast<object>().ToPagedAsync(filter);
         }
 
-        public async Task<List<DropdwonSelector>> GetDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> GetDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20, long metalId = 0)
         {
             if (pageNo < 0) pageNo = 0;
 
             var query = _context.ProductMasters
                 .Where(x => x.IsActive && x.CompanyCode == _loggedInUser.CompanyCode);
+
+            if (metalId > 0)
+            {
+                query = query.Where(x => x.MetalClassifications.Any(m => m.MetalClassificationID == metalId)
+                    || !x.MetalClassifications.Any());
+            }
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {

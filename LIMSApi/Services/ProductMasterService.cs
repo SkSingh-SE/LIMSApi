@@ -333,9 +333,9 @@ namespace LIMSApi.Services
             return await _repository.GetAll(filter);
         }
 
-        public async Task<List<DropdwonSelector>> GetProductMasterDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> GetProductMasterDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20, long metalId = 0)
         {
-            return await _repository.GetDropdown(searchTerm, pageNo, pageSize);
+            return await _repository.GetDropdown(searchTerm, pageNo, pageSize, metalId);
         }
 
         public async Task<GradeParametersDto?> GetGradeParametersByGradeId(long gradeId)

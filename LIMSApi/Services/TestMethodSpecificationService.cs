@@ -427,9 +427,9 @@ namespace LIMSApi.Services
             return await _TestMethodSpecificationRepository.GetVersionsBySpecId(specId, includeAll);
         }
 
-        public async Task<List<DropdwonSelector>> GetTestMethodSpecificationVersionDropdown(string? searchTerm, int pageNo, int pageSize)
+        public async Task<List<DropdwonSelector>> GetTestMethodSpecificationVersionDropdown(string? searchTerm, int pageNo, int pageSize, long metalId = 0)
         {
-            return await _TestMethodSpecificationRepository.GetTestMethodSpecificationVersionDropdown(searchTerm, pageNo, pageSize);
+            return await _TestMethodSpecificationRepository.GetTestMethodSpecificationVersionDropdown(searchTerm, pageNo, pageSize, metalId);
         }
 
         // ── PDF Matching Helpers (optional folder scan) ─────────────────────

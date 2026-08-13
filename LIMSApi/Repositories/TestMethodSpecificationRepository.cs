@@ -290,7 +290,7 @@ namespace LIMSApi.Repositories
             }
         }
 
-        public async Task<List<DropdwonSelector>> GetTestMethodSpecificationVersionDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> GetTestMethodSpecificationVersionDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20, long metalId = 0)
         {
             if (pageNo < 0) pageNo = 0;
 
@@ -299,7 +299,14 @@ namespace LIMSApi.Repositories
                 .Where(v => v.Status == VersionStatus.Active 
                     && v.TestMethodSpecification != null 
                     && v.TestMethodSpecification.IsActive 
+                    && !v.TestMethodSpecification.IsDisabled
                     && v.TestMethodSpecification.CompanyCode == loggedInUser.CompanyCode);
+
+            if (metalId > 0)
+            {
+                query = query.Where(v => v.TestMethodSpecification!.MetalClassifications.Any(m => m.MetalClassificationID == metalId)
+                    || !v.TestMethodSpecification!.MetalClassifications.Any());
+            }
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {

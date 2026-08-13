@@ -40,6 +40,7 @@ namespace LIMSApi.Repositories
                     .ThenInclude(t => t.AnalysisTechnique)
                 .Include(x => x.Parameters)
                     .ThenInclude(p => p.Parameter)
+                        .ThenInclude(u => u != null ? u.ParameterUnit : null)
                 .Include(x => x.TestMethods)
                     .ThenInclude(m => m.TestMethodSpecification)
                 .Include(x => x.TestMethods)

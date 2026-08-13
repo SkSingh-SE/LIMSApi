@@ -240,9 +240,9 @@ namespace LIMSApi.Controllers
         }
 
         [HttpGet("versions/dropdown")]
-        public async Task<IActionResult> GetTestMethodSpecificationVersionDropdown(string? searchTerm, int pageNo, int pageSize)
+        public async Task<IActionResult> GetTestMethodSpecificationVersionDropdown(string? searchTerm, int pageNo, int pageSize, [FromQuery] long metalId = 0)
         {
-            var data = await _testMethodService.GetTestMethodSpecificationVersionDropdown(searchTerm, pageNo, pageSize);
+            var data = await _testMethodService.GetTestMethodSpecificationVersionDropdown(searchTerm, pageNo, pageSize, metalId);
             return data == null ? NoContent() : Ok(data);
         }
 

@@ -234,6 +234,7 @@ namespace LIMSApi.Repositories
                 Name = $"{x.Name} - ({x.ParameterType})",
                 AdditionalValues = new Dictionary<string, object>
                 {
+                    { "PureName", x.Name },
                     { "UnitID", x.unitID! },
                     { "Unit", x.unit ?? "" },
                     { "ParameterType", x.ParameterType ?? "" },
@@ -295,6 +296,7 @@ namespace LIMSApi.Repositories
                 Name = $"{x.Name}",
                 AdditionalValues = new Dictionary<string, object>
                 {
+                    { "PureName", x.Name },
                     { "UnitID", x.unitID! },
                     { "Unit", x.unit ?? "" },
                     { "ParameterType", x.ParameterType ?? "" },
@@ -356,6 +358,7 @@ namespace LIMSApi.Repositories
                 Name = $"{x.Name}",
                 AdditionalValues = new Dictionary<string, object>
                 {
+                    { "PureName", x.Name },
                     { "UnitID", x.unitID! },
                     { "Unit", x.unit ?? "" },
                     { "ParameterType", x.ParameterType ?? "" },

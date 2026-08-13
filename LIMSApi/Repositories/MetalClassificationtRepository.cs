@@ -100,12 +100,18 @@ namespace LIMSApi.Repositories
 
         public async Task<List<ParameterMaster>> GetParameterByMetalId(long Id)
         {
-            var metal = await _context.MetalClassificationMasters.Include(x => x.Parameters).ThenInclude(y => y.Parameter).FirstOrDefaultAsync(x => x.ID == Id && x.IsActive);
+            var metal = await _context.MetalClassificationMasters
+                .Include(x => x.Parameters)
+                    .ThenInclude(y => y.Parameter)
+                        .ThenInclude(z => z != null ? z.ParameterUnit : null)
+                .FirstOrDefaultAsync(x => x.ID == Id && x.IsActive);
 
-            var data = metal?.Parameters?.Select(x => x.Parameter).ToList();
+            var data = metal?.Parameters?
+                .Where(x => x.Parameter != null && x.Parameter.IsActive)
+                .Select(x => x.Parameter!)
+                .ToList();
 
-            return data;
-
+            return data ?? new List<ParameterMaster>();
         }
 
         public async Task<bool> ExistsByName(string name)
