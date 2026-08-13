@@ -118,8 +118,6 @@ namespace LIMSApi.Dtos
         public long? ProductFormID { get; set; }
         // UI hidden per client requirement — retained for data integrity
         public long? SpecimenOrientationID { get; set; }
-        public long? ChemicalSampleCategoryID { get; set; }
-        public string? ChemicalSampleCategoryName { get; set; }
         public string? Remarks { get; set; }
         public int Quantity { get; set; }
         public bool IsCancelled { get; set; }

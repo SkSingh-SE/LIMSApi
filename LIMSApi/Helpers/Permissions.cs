@@ -86,14 +86,6 @@ namespace LIMSApi.Helpers
             public const string Manage = "CanManageProductSizeMaster";
         }
 
-        public static class ChemicalSampleCategory
-        {
-            public const string Read   = "CanReadChemicalSampleCategory";
-            public const string Create = "CanCreateChemicalSampleCategory";
-            public const string Update = "CanUpdateChemicalSampleCategory";
-            public const string Delete = "CanDeleteChemicalSampleCategory";
-            public const string Manage = "CanManageChemicalSampleCategory";
-        }
 
         public static class AnalysisTechnique
         {

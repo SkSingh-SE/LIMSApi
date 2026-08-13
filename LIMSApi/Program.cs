@@ -194,7 +194,6 @@ builder.Services.AddScoped<ICompanyCategoryRepository, CompanyCategoryRepository
 builder.Services.AddScoped<ICountryRepository, CountryRepository>();
 builder.Services.AddScoped<ICourierRepository, CourierRepository>();
 builder.Services.AddScoped<IProductSizeMasterRepository, ProductSizeMasterRepository>();
-builder.Services.AddScoped<IChemicalSampleCategoryRepository, ChemicalSampleCategoryRepository>();
 builder.Services.AddScoped<IAnalysisTechniqueRepository, AnalysisTechniqueRepository>();
 builder.Services.AddScoped<ICurrencyRepository, CurrencyRepository>();
 builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
@@ -274,7 +273,6 @@ builder.Services.AddScoped<ICompanyCategoryService, CompanyCategoryService>();
 builder.Services.AddScoped<ICountryService, CountryService>();
 builder.Services.AddScoped<ICourierService, CourierService>();
 builder.Services.AddScoped<IProductSizeMasterService, ProductSizeMasterService>();
-builder.Services.AddScoped<IChemicalSampleCategoryService, ChemicalSampleCategoryService>();
 builder.Services.AddScoped<IAnalysisTechniqueService, AnalysisTechniqueService>();
 builder.Services.AddScoped<ICurrencyService, CurrencyService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();

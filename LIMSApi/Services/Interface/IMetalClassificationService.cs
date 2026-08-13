@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 
 namespace LIMSApi.Services.Interface
@@ -13,6 +13,5 @@ namespace LIMSApi.Services.Interface
 
         Task<List<DropdwonSelector>> GetMetalClassificationDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<List<ParameterMaster>> GetParameterByMetalId(long id);
-        Task<List<DropdwonSelector>> GetTechniquesForMetal(long metalId);
     }
 }

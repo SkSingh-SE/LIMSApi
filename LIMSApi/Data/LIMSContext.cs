@@ -20,7 +20,6 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<AreaMaster> AreaMasters { get; set; }
     public virtual DbSet<BankMaster> BankMasters { get; set; }
     public virtual DbSet<CalibrationAgencyMaster> CalibrationAgencyMasters { get; set; }
-    public virtual DbSet<ChemicalSampleCategory> ChemicalSampleCategories { get; set; }
     public virtual DbSet<CityMaster> CityMasters { get; set; }
     public virtual DbSet<ClassificationMaster> ClassificationMasters { get; set; }
     public virtual DbSet<CompanyCategoryMaster> CompanyCategoryMasters { get; set; }
@@ -427,7 +426,7 @@ public partial class LIMSContext : DbContext
         // MetalClassification ↔ AnalysisTechnique junction (both FKs NoAction; synced in service)
         modelBuilder.Entity<MetalClassificationAnalysisTechnique>()
             .HasOne(x => x.MetalClassification)
-            .WithMany(m => m.CompatibleTechniques)
+            .WithMany()
             .HasForeignKey(x => x.MetalClassificationID)
             .OnDelete(DeleteBehavior.NoAction);
 
@@ -577,15 +576,6 @@ public partial class LIMSContext : DbContext
             .HasForeignKey(l => l.StepID)
             .OnDelete(DeleteBehavior.NoAction);
 
-        // --------------------------------------------------
-        // SampleDetail → ChemicalSampleCategory
-        // ❌ NO CASCADE (master data)
-        // --------------------------------------------------
-        modelBuilder.Entity<SampleDetail>()
-            .HasOne(sd => sd.ChemicalSampleCategory)
-            .WithMany()
-            .HasForeignKey(sd => sd.ChemicalSampleCategoryID)
-            .OnDelete(DeleteBehavior.NoAction);
 
         // --------------------------------------------------
         // SampleDetail → TestResultHeader

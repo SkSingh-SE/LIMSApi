@@ -159,7 +159,6 @@ public static class DataSeeder
             (N'Bank Master',         NULL, N'/bank',               NULL, N'Administration'),
             (N'Courier Master',      NULL, N'/courier',            NULL, N'Administration'),
             (N'Product Size Master', NULL, N'/product-size-master',NULL, N'Administration'),
-            (N'Chemical Sample Category', NULL, N'/chemical-sample-category', NULL, N'Administration'),
             (N'Analysis Technique',  NULL, N'/analysis-technique', NULL, N'Administration'),
             (N'TPI Master',          NULL, N'/tpi',                NULL, N'Administration'),
             (N'Supplier Master',     NULL, N'/supplier',           NULL, N'Administration'),
@@ -438,11 +437,6 @@ public static class DataSeeder
             ('CanDeleteProductSizeMaster','Delete Product Size','Product Size Master',NULL,'Delete'),
             ('CanManageProductSizeMaster','Manage Product Size','Product Size Master',NULL,'Manage'),
 
-            ('CanReadChemicalSampleCategory','View Chemical Sample Category','Chemical Sample Category',NULL,'Read'),
-            ('CanCreateChemicalSampleCategory','Create Chemical Sample Category','Chemical Sample Category',NULL,'Create'),
-            ('CanUpdateChemicalSampleCategory','Update Chemical Sample Category','Chemical Sample Category',NULL,'Update'),
-            ('CanDeleteChemicalSampleCategory','Delete Chemical Sample Category','Chemical Sample Category',NULL,'Delete'),
-            ('CanManageChemicalSampleCategory','Manage Chemical Sample Category','Chemical Sample Category',NULL,'Manage'),
 
             ('CanReadAnalysisTechnique','View Analysis Technique','Analysis Technique Master',NULL,'Read'),
             ('CanCreateAnalysisTechnique','Create Analysis Technique','Analysis Technique Master',NULL,'Create'),
@@ -1387,7 +1381,7 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 "CanReadMetalClassification", "CanReadHeatTreatment",
                 "CanReadProductCondition", "CanReadSpecimenOrientation",
                 "CanReadProductForm", "CanReadLaboratoryTest",
-                "CanReadProductSizeMaster", "CanReadChemicalSampleCategory", "CanReadAnalysisTechnique",
+                "CanReadProductSizeMaster", "CanReadAnalysisTechnique",
             },
 
             ["Technical"] = new[]
@@ -1412,7 +1406,7 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 "CanReadSpecimenOrientation", "CanReadProductForm",
                 "CanReadDimensionalFactors", "CanReadStandardOrganization",
                 "CanReadEquipment", "CanReadCalibrationAgency",
-                "CanReadProductSizeMaster", "CanReadChemicalSampleCategory", "CanReadAnalysisTechnique",
+                "CanReadProductSizeMaster", "CanReadAnalysisTechnique",
             },
 
             ["Lab"] = new[]

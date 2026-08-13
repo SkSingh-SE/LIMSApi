@@ -1,4 +1,4 @@
-﻿using LIMSApi.Data;
+using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
@@ -36,7 +36,6 @@ namespace LIMSApi.Services
                     throw new InvalidOperationException("Metal Classification Code already exists!");
             }
 
-            NormalizeChemicalConfig(model);
             await _MetalClassificationRepository.AddMetalClassification(model);
             _logger.LogInformation("MetalClassification '{MetalClassificationName}' created successfully.", model.Name);
         }
@@ -61,8 +60,6 @@ namespace LIMSApi.Services
             if (existingMetalClassification == null)
                 throw new InvalidOperationException("MetalClassification not found!");
 
-            NormalizeChemicalConfig(model);
-
             existingMetalClassification.Name = model.Name;
             existingMetalClassification.Code = model.Code;
             existingMetalClassification.ParentID = model.ParentID;
@@ -70,10 +67,6 @@ namespace LIMSApi.Services
             existingMetalClassification.HasMechanicalParams = model.HasMechanicalParams;
             existingMetalClassification.SortOrder = model.SortOrder;
             existingMetalClassification.MetalType = model.MetalType;
-            existingMetalClassification.ChemicalBillingGroup = model.ChemicalBillingGroup;
-            existingMetalClassification.SpectroElementThreshold = model.SpectroElementThreshold;
-            existingMetalClassification.SurchargeAppliesFromElement = model.SurchargeAppliesFromElement;
-            existingMetalClassification.HasSpectroSpecialSurcharge = model.HasSpectroSpecialSurcharge;
             existingMetalClassification.ModifiedOn = DateTime.UtcNow;
 
             // Replace parameters via DbContext to avoid EF NoAction cascade issue.
@@ -89,24 +82,6 @@ namespace LIMSApi.Services
                 {
                     p.MetalClassificationID = model.ID;
                     _context.Set<MetalClassificationParameter>().Add(p);
-                }
-            }
-
-            // Sync compatible analysis techniques (delete/insert — mirrors the Parameters pattern).
-            var existingTechniques = await _context.Set<MetalClassificationAnalysisTechnique>()
-                .Where(t => t.MetalClassificationID == model.ID)
-                .ToListAsync();
-            _context.Set<MetalClassificationAnalysisTechnique>().RemoveRange(existingTechniques);
-
-            if (model.CompatibleTechniques != null)
-            {
-                foreach (var t in model.CompatibleTechniques)
-                {
-                    _context.Set<MetalClassificationAnalysisTechnique>().Add(new MetalClassificationAnalysisTechnique
-                    {
-                        MetalClassificationID = model.ID,
-                        AnalysisTechniqueID = t.AnalysisTechniqueID,
-                    });
                 }
             }
 
@@ -160,23 +135,6 @@ namespace LIMSApi.Services
         public async Task<List<ParameterMaster>> GetParameterByMetalId(long id)
         {
             return await _MetalClassificationRepository.GetParameterByMetalId(id);
-        }
-
-        public async Task<List<DropdwonSelector>> GetTechniquesForMetal(long metalId)
-        {
-            return await _MetalClassificationRepository.GetTechniquesForMetal(metalId);
-        }
-
-        private static void NormalizeChemicalConfig(MetalClassificationMaster model)
-        {
-            if (model.HasChemicalParams)
-                return;
-
-            model.ChemicalBillingGroup = null;
-            model.SpectroElementThreshold = null;
-            model.SurchargeAppliesFromElement = null;
-            model.HasSpectroSpecialSurcharge = false;
-            model.CompatibleTechniques?.Clear();
         }
     }
 }

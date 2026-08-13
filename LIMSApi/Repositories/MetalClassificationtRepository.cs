@@ -1,4 +1,4 @@
-﻿using System.Linq.Dynamic.Core;
+using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -40,44 +40,7 @@ namespace LIMSApi.Repositories
             return await _context.MetalClassificationMasters
                 .Include(p => p.Parameters)
                 .Include(p => p.Parent)
-                .Include(p => p.CompatibleTechniques)
-                .ThenInclude(t => t.AnalysisTechnique)
                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
-        }
-
-        /// <summary>
-        /// Returns the analysis techniques valid for a metal base. If the metal has none configured,
-        /// walks up the ParentID chain (base/parent → children inherit). Returns id + name.
-        /// </summary>
-        public async Task<List<DropdwonSelector>> GetTechniquesForMetal(long metalId)
-        {
-            long? currentId = metalId;
-            // Walk up at most a few levels to find configured techniques (guard against cycles).
-            for (int depth = 0; depth < 10 && currentId.HasValue; depth++)
-            {
-                var node = await _context.MetalClassificationMasters
-                    .AsNoTracking()
-                    .Where(m => m.ID == currentId.Value && m.IsActive)
-                    .Select(m => new { m.ID, m.ParentID })
-                    .FirstOrDefaultAsync();
-
-                if (node == null) break;
-
-                var techniques = await _context.MetalClassificationAnalysisTechniques
-                    .AsNoTracking()
-                    .Where(j => j.MetalClassificationID == node.ID && j.IsActive
-                                && j.AnalysisTechnique != null && j.AnalysisTechnique.IsActive)
-                    .OrderBy(j => j.AnalysisTechnique!.Name)
-                    .Select(j => new DropdwonSelector { Id = j.AnalysisTechniqueID, Name = j.AnalysisTechnique!.Name })
-                    .ToListAsync();
-
-                if (techniques.Any())
-                    return techniques;
-
-                currentId = node.ParentID; // inherit from parent
-            }
-
-            return new List<DropdwonSelector>();
         }
 
         public async Task UpdateMetalClassification(MetalClassificationMaster model)
