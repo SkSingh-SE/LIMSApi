@@ -150,14 +150,16 @@ namespace LIMSApi.Repositories
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.LaboratoryTests
+            var _query = from sg in _context.LaboratoryTestSubGroups
+                         join a in _context.LaboratoryTests on sg.LaboratoryTestID equals a.ID
                          join d in _context.DepartmentMasters on a.LabDepartmentID equals d.ID
-                         where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode
+                         where sg.IsActive && a.IsActive && a.CompanyCode == loggedInUser.CompanyCode
                                && !d.IsChemical
                          select new
                          {
-                             a.ID,
-                             a.Name,
+                             sg.ID,
+                             SubGroupName = sg.Name,
+                             TestName = a.Name,
                              Department = d.Name
                          };
 
@@ -170,7 +172,7 @@ namespace LIMSApi.Repositories
                 else
                 {
                     var search = searchTerm.Trim();
-                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
+                    _query = _query.Where(x => (x.SubGroupName != null && x.SubGroupName.Contains(search)) || (x.TestName != null && x.TestName.Contains(search)));
                 }
             }
 
@@ -179,8 +181,28 @@ namespace LIMSApi.Repositories
             var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
             {
                 Id = x.ID,
-                Name = $"{x.Name} ({x.Department}) ",
+                Name = $"{x.SubGroupName} ({x.TestName})"
             })).ToListAsync();
+
+            if (data.Count == 0)
+            {
+                // Fallback to LaboratoryTests if no SubGroup is created yet
+                var fallbackQuery = from a in _context.LaboratoryTests
+                                    join d in _context.DepartmentMasters on a.LabDepartmentID equals d.ID
+                                    where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode && !d.IsChemical
+                                    select new { a.ID, a.Name, Department = d.Name };
+
+                if (!string.IsNullOrWhiteSpace(searchTerm) && !FilterHelper.IsExactIdSearch(searchTerm, out _))
+                {
+                    fallbackQuery = fallbackQuery.Where(x => x.Name.Contains(searchTerm.Trim()));
+                }
+
+                data = await (fallbackQuery.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = $"{x.Name} ({x.Department})"
+                })).ToListAsync();
+            }
 
             return data;
         }

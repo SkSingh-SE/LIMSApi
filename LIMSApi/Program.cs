@@ -293,6 +293,7 @@ builder.Services.AddScoped<ICoolingMediumService, CoolingMediumService>();
 
 builder.Services.AddScoped<IProductFormService, ProductFormService>();
 builder.Services.AddScoped<IProductMasterService, ProductMasterService>();
+builder.Services.AddScoped<IPlanExplorerService, PlanExplorerService>();
 builder.Services.AddScoped<ISpecimenOrientationCategoryService, SpecimenOrientationCategoryService>();
 builder.Services.AddScoped<IProductConditionCategoryService, ProductConditionCategoryService>();
 builder.Services.AddScoped<IPropertyTypeService, PropertyTypeService>();

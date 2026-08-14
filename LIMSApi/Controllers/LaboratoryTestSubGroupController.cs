@@ -41,6 +41,14 @@ namespace LIMSApi.Controllers
             return list == null ? NoContent() : Ok(list);
         }
 
+        [RequirePermission(Permissions.LaboratoryTestSubType.Read)]
+        [HttpGet("standards/{subGroupId}")]
+        public async Task<IActionResult> GetStandardsBySubGroup(long subGroupId)
+        {
+            var list = await _service.GetStandardsBySubGroupId(subGroupId);
+            return Ok(list);
+        }
+
         [RequirePermission(Permissions.LaboratoryTestSubType.Create)]
         [HttpPost("create")]
         public async Task<ActionResult<LaboratoryTestSubGroup>> Create(LaboratoryTestSubGroup model)
