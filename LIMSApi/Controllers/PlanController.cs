@@ -63,6 +63,18 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [HttpPost("assign-grade")]
+        [RequirePermission(Permissions.Plan.Update)]
+        public async Task<IActionResult> AssignGrade([FromBody] AssignGradeDto dto)
+        {
+            await _planService.AssignGradeAsync(dto);
+            return Ok(new
+            {
+                status = "success",
+                message = "Grade assigned successfully and audit logged."
+            });
+        }
+
         // ────────────── 6-Tier Decision Engine Cascade Endpoints ──────────────
 
         [HttpGet("cascade/product-master/{id}")]

@@ -19,8 +19,22 @@ namespace LIMSApi.Dtos
         public string LaboratoryTestName { get; set; } = string.Empty;
         public string TestType { get; set; } = "General"; // General or Chemical
         public string SubGroup { get; set; } = string.Empty;
-        public long? TestMethodStandardID { get; set; }
-        public string TestMethodStandardName { get; set; } = string.Empty;
+        public string SourceTag { get; set; } = "PM Scope"; // "PM Scope", "Lab Scope", or "Both Sources"
+        public List<string> SourceTags { get; set; } = new List<string>();
+        public long? TestMethodSpecificationID { get; set; }
+        public string TestMethodSpecificationName { get; set; } = string.Empty;
+
+        // Backward compatibility aliases
+        public long? TestMethodStandardID
+        {
+            get => TestMethodSpecificationID;
+            set => TestMethodSpecificationID = value;
+        }
+        public string TestMethodStandardName
+        {
+            get => TestMethodSpecificationName;
+            set => TestMethodSpecificationName = value ?? string.Empty;
+        }
         public int Quantity { get; set; } = 1;
     }
 
@@ -31,6 +45,7 @@ namespace LIMSApi.Dtos
         public long? SpecificationID { get; set; }
         public string SpecificationName { get; set; } = string.Empty;
         public string MetalClassificationName { get; set; } = string.Empty;
+        public bool IsScopeConfigured { get; set; } = true;
         public List<ConfiguredTestDto> ConfiguredTests { get; set; } = new List<ConfiguredTestDto>();
         public List<ConfiguredParameterDto> ChemicalElements { get; set; } = new List<ConfiguredParameterDto>();
     }
@@ -59,6 +74,11 @@ namespace LIMSApi.Dtos
         public long LaboratoryTestID { get; set; }
         public string LaboratoryTestName { get; set; } = string.Empty;
         public string Category { get; set; } = "General";
-        public List<ConfiguredTestDto> Standards { get; set; } = new List<ConfiguredTestDto>();
+        public List<ConfiguredTestDto> TestMethodSpecifications { get; set; } = new List<ConfiguredTestDto>();
+        public List<ConfiguredTestDto> Standards
+        {
+            get => TestMethodSpecifications;
+            set => TestMethodSpecifications = value;
+        }
     }
 }

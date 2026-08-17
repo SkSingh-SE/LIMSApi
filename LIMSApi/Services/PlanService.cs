@@ -1,4 +1,5 @@
 using LIMSApi.Data;
+using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
@@ -172,6 +173,40 @@ namespace LIMSApi.Services
             };
 
             _context.PlanHistories.Add(history);
+        }
+
+        public async Task AssignGradeAsync(AssignGradeDto dto)
+        {
+            var specGrade = await _context.SpecificationGrades
+                .FirstOrDefaultAsync(g => g.ID == dto.SpecificationGradeID);
+
+            if (specGrade == null)
+                throw new ArgumentException($"Specification Grade with ID {dto.SpecificationGradeID} not found.");
+
+            var specHeader = await _context.SpecificationHeaders
+                .AsNoTracking()
+                .FirstOrDefaultAsync(h => h.ID == specGrade.SpecificationHeaderID);
+
+            var sample = await _context.SampleDetails
+                .Include(s => s.TestPlans)
+                .FirstOrDefaultAsync(s => s.ID == dto.SampleID);
+
+            if (sample != null)
+            {
+                foreach (var plan in sample.TestPlans)
+                {
+                    await CreatePlanHistoryEntry(
+                        plan.ID,
+                        "GradeAssigned",
+                        "Unknown Sample",
+                        $"{specGrade.Grade} (Spec: {specHeader?.DisplayTitle ?? specHeader?.AliasName ?? "Standard"})",
+                        JsonSerializer.Serialize(new { AssignedGradeID = dto.SpecificationGradeID, Grade = specGrade.Grade, Notes = dto.Notes }),
+                        dto.Notes ?? "Post-Testing Grade Assigned"
+                    );
+                }
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Assigned Grade {GradeID} to Sample {SampleID}", dto.SpecificationGradeID, dto.SampleID);
+            }
         }
 
         // ────────────── 6-Tier Decision Engine Cascade Implementation ──────────────

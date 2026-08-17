@@ -113,10 +113,13 @@ namespace LIMSApi.Services
         {
             var test = await _context.LaboratoryTests
                 .AsNoTracking()
+                .Include(t => t.LabDepartment)
                 .Include(t => t.SubGroups)
                 .FirstOrDefaultAsync(t => t.ID == labTestId);
 
             if (test == null) return null;
+
+            var isChem = test.IsChemicalTest || (test.LabDepartment != null && test.LabDepartment.IsChemical);
 
             var testMethodSpecs = await _context.TestMethodSpecifications
                 .AsNoTracking()
@@ -125,10 +128,12 @@ namespace LIMSApi.Services
                 {
                     LaboratoryTestID = test.ID,
                     LaboratoryTestName = test.Name,
-                    TestType = "General",
+                    TestType = isChem ? "Chemical" : "General",
                     SubGroup = test.SubGroups.FirstOrDefault() != null ? test.SubGroups.FirstOrDefault()!.Name : "",
-                    TestMethodStandardID = s.ID,
-                    TestMethodStandardName = s.DisplayTitle ?? s.Name,
+                    SourceTag = "Lab Scope",
+                    SourceTags = new List<string> { "Lab Scope" },
+                    TestMethodSpecificationID = s.ID,
+                    TestMethodSpecificationName = s.DisplayTitle ?? s.Name,
                     Quantity = 1
                 })
                 .Take(10)
@@ -138,9 +143,42 @@ namespace LIMSApi.Services
             {
                 LaboratoryTestID = test.ID,
                 LaboratoryTestName = test.Name,
-                Category = "General",
-                Standards = testMethodSpecs
+                Category = isChem ? "Chemical" : "General",
+                TestMethodSpecifications = testMethodSpecs
             };
+        }
+
+        public async Task<List<ConfiguredTestDto>> GetUniversalTestSearchAsync(string query)
+        {
+            if (string.IsNullOrWhiteSpace(query) || query.Trim().Length < 2)
+                return new List<ConfiguredTestDto>();
+
+            var term = query.Trim().ToLower();
+
+            var labTests = await _context.LaboratoryTests
+                .AsNoTracking()
+                .Include(t => t.LabDepartment)
+                .Include(t => t.SubGroups)
+                .Where(t => t.IsActive && (t.Name.ToLower().Contains(term) || t.SubGroups.Any(sg => sg.Name.ToLower().Contains(term) || (sg.ReportTestName != null && sg.ReportTestName.ToLower().Contains(term)))))
+                .Take(20)
+                .ToListAsync();
+
+            return labTests.Select(t =>
+            {
+                var isChem = t.IsChemicalTest || (t.LabDepartment != null && t.LabDepartment.IsChemical);
+                return new ConfiguredTestDto
+                {
+                    LaboratoryTestID = t.ID,
+                    LaboratoryTestName = t.Name,
+                    TestType = isChem ? "Chemical" : "General",
+                    SubGroup = t.SubGroups.FirstOrDefault() != null ? t.SubGroups.FirstOrDefault()!.Name : "",
+                    SourceTag = "Universal Master",
+                    SourceTags = new List<string> { "Universal Master" },
+                    TestMethodSpecificationID = null,
+                    TestMethodSpecificationName = "",
+                    Quantity = 1
+                };
+            }).ToList();
         }
 
         private async Task<ConfiguredGradeDto> BuildGradeDtoAsync(long gradeId, string gradeName, string specName)
@@ -151,7 +189,7 @@ namespace LIMSApi.Services
 
             long headerId = specGrade?.SpecificationHeaderID ?? 0;
 
-            // 1. Fetch SubGroup Specification Mappings with accurate Department IsChemical check
+            // 1. Fetch SubGroup Specification Mappings with accurate IsChemicalTest check
             var subgroupTests = await _context.Set<LaboratoryTestSubGroupSpecification>()
                 .AsNoTracking()
                 .Include(s => s.SubGroup)
@@ -163,13 +201,12 @@ namespace LIMSApi.Services
                 {
                     LaboratoryTestID = s.SubGroup!.LaboratoryTestID,
                     LaboratoryTestName = s.SubGroup.LaboratoryTest!.Name,
-                    TestType = (s.SubGroup.LaboratoryTest.LabDepartment != null && s.SubGroup.LaboratoryTest.LabDepartment.IsChemical) ||
-                               s.SubGroup.LaboratoryTest.Name.Contains("Spectro") || s.SubGroup.LaboratoryTest.Name.Contains("Chemical") ||
-                               s.SubGroup.Name.Contains("Spectro") || s.SubGroup.Name.Contains("Chemical")
+                    TestType = (s.SubGroup.LaboratoryTest.IsChemicalTest || (s.SubGroup.LaboratoryTest.LabDepartment != null && s.SubGroup.LaboratoryTest.LabDepartment.IsChemical))
                                ? "Chemical" : "General",
                     SubGroup = s.SubGroup.Name,
-                    TestMethodStandardID = null,
-                    TestMethodStandardName = "",
+                    SourceTag = "Lab Scope",
+                    TestMethodSpecificationID = null,
+                    TestMethodSpecificationName = "",
                     Quantity = 1
                 })
                 .ToListAsync();
@@ -189,13 +226,14 @@ namespace LIMSApi.Services
                     LaboratoryTestName = s.AnalysisType.SubGroup.LaboratoryTest!.Name,
                     TestType = "Chemical",
                     SubGroup = s.AnalysisType.Name,
-                    TestMethodStandardID = null,
-                    TestMethodStandardName = "",
+                    SourceTag = "Lab Scope",
+                    TestMethodSpecificationID = null,
+                    TestMethodSpecificationName = "",
                     Quantity = 1
                 })
                 .ToListAsync();
 
-            // 3. Fetch Specification Line Laboratory Tests
+            // 3. Fetch Specification Line Laboratory Tests (Configured via Product Master Grade / Spec)
             var specLineTests = await _context.SpecificationLines
                 .AsNoTracking()
                 .Include(l => l.LaboratoryTest)
@@ -205,22 +243,36 @@ namespace LIMSApi.Services
                 {
                     LaboratoryTestID = l.LaboratoryTestID!.Value,
                     LaboratoryTestName = l.LaboratoryTest!.Name,
-                    TestType = (l.LaboratoryTest.LabDepartment != null && l.LaboratoryTest.LabDepartment.IsChemical) ||
-                               (l.Type != null && l.Type.ToLower() == "chemical") ||
-                               l.LaboratoryTest.Name.Contains("Spectro") || l.LaboratoryTest.Name.Contains("Chemical")
+                    TestType = (l.LaboratoryTest.IsChemicalTest || (l.LaboratoryTest.LabDepartment != null && l.LaboratoryTest.LabDepartment.IsChemical))
                                ? "Chemical" : "General",
                     SubGroup = l.Type ?? "General",
-                    TestMethodStandardID = null,
-                    TestMethodStandardName = "",
+                    SourceTag = "PM Scope",
+                    TestMethodSpecificationID = null,
+                    TestMethodSpecificationName = "",
                     Quantity = 1
                 })
                 .ToListAsync();
 
-            var combinedTests = subgroupTests
-                .Concat(analysisTypeTests)
-                .Concat(specLineTests)
+            var allTests = subgroupTests.Concat(analysisTypeTests).Concat(specLineTests).ToList();
+
+            var combinedTests = allTests
                 .GroupBy(t => t.LaboratoryTestID)
-                .Select(g => g.First())
+                .Select(g =>
+                {
+                    var tags = g.Select(x => x.SourceTag).Where(t => !string.IsNullOrEmpty(t)).Distinct().ToList();
+                    // Prefer Lab Scope version if available, otherwise first
+                    var preferred = g.FirstOrDefault(x => x.SourceTag == "Lab Scope") ?? g.First();
+                    preferred.SourceTags = tags;
+                    if (tags.Count > 1)
+                    {
+                        preferred.SourceTag = "Both Sources";
+                    }
+                    else
+                    {
+                        preferred.SourceTag = tags.FirstOrDefault() ?? "PM Scope";
+                    }
+                    return preferred;
+                })
                 .ToList();
 
             var chemicalLines = await _context.SpecificationLines
@@ -245,6 +297,7 @@ namespace LIMSApi.Services
                 SpecificationGradeID = gradeId,
                 GradeName = gradeName,
                 SpecificationName = specName,
+                IsScopeConfigured = (combinedTests.Count > 0 || chemicalLines.Count > 0),
                 ConfiguredTests = combinedTests,
                 ChemicalElements = chemicalLines
             };

@@ -186,9 +186,9 @@ namespace LIMSApi.Services
             return await _repository.GetByLabTestId(labTestId);
         }
 
-        public async Task<List<DropdwonSelector>> GetStandardsBySubGroupId(long subGroupId)
+        public async Task<List<DropdwonSelector>> GetTestMethodSpecificationBySubGroupId(long subGroupId)
         {
-            var standards = await _context.LaboratoryTestSubGroupMethods
+            var testMethodSpecs = await _context.LaboratoryTestSubGroupMethods
                 .AsNoTracking()
                 .Include(m => m.TestMethodSpecification)
                 .Where(m => m.LaboratoryTestSubGroupID == subGroupId && m.TestMethodSpecification != null && !m.TestMethodSpecification.IsDisabled)
@@ -200,7 +200,7 @@ namespace LIMSApi.Services
                 .Distinct()
                 .ToListAsync();
 
-            return standards;
+            return testMethodSpecs;
         }
 
         private static void Validate(LaboratoryTestSubGroup model)

@@ -40,5 +40,12 @@ namespace LIMSApi.Controllers
             if (result == null) return NotFound(new { message = "Laboratory Test not found" });
             return Ok(result);
         }
+
+        [HttpGet("universal-search")]
+        public async Task<IActionResult> UniversalTestSearch([FromQuery] string query)
+        {
+            var results = await _explorerService.GetUniversalTestSearchAsync(query);
+            return Ok(results);
+        }
     }
 }

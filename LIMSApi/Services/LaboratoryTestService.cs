@@ -360,5 +360,53 @@ namespace LIMSApi.Services
         {
             return await _testMethodRepository.GetPricingTemplate(labTestId, analysisTypeId);
         }
+
+        public async Task<List<DropdwonSelector>> GetTestMethodSpecificationByLabTestId(long labTestId)
+        {
+            // 1. Test Method Specifications from SubGroup TestMethods
+            var fromSubGroups = await _context.LaboratoryTestSubGroupMethods
+                .AsNoTracking()
+                .Include(m => m.TestMethodSpecification)
+                .Include(m => m.SubGroup)
+                .Where(m => m.SubGroup != null && m.SubGroup.LaboratoryTestID == labTestId && m.TestMethodSpecification != null && !m.TestMethodSpecification.IsDisabled)
+                .Select(m => new DropdwonSelector
+                {
+                    Id = m.TestMethodSpecificationID,
+                    Name = m.TestMethodSpecification!.DisplayTitle ?? m.TestMethodSpecification.Name
+                })
+                .ToListAsync();
+
+            // 2. Test Method Specifications from AnalysisType TestMethods
+            var fromAnalysisTypes = await _context.LaboratoryTestAnalysisTypeMethods
+                .AsNoTracking()
+                .Include(m => m.TestMethodSpecification)
+                .Include(m => m.AnalysisType)
+                    .ThenInclude(at => at!.SubGroup)
+                .Where(m => m.AnalysisType != null && m.AnalysisType.SubGroup != null && m.AnalysisType.SubGroup.LaboratoryTestID == labTestId && m.TestMethodSpecification != null && !m.TestMethodSpecification.IsDisabled)
+                .Select(m => new DropdwonSelector
+                {
+                    Id = m.TestMethodSpecificationID,
+                    Name = m.TestMethodSpecification!.DisplayTitle ?? m.TestMethodSpecification.Name
+                })
+                .ToListAsync();
+
+            // 3. Test Method Specifications from LabScopeSpecifications
+            var fromLabScope = await _context.LabScopeSpecifications
+                .AsNoTracking()
+                .Include(s => s.TestMethodSpecification)
+                .Include(s => s.LabScope)
+                .Where(s => s.LabScope != null && s.LabScope.LaboratoryTestID == labTestId && s.TestMethodSpecification != null && !s.TestMethodSpecification.IsDisabled && s.IsActive)
+                .Select(s => new DropdwonSelector
+                {
+                    Id = s.TestMethodSpecificationID,
+                    Name = s.TestMethodSpecification!.DisplayTitle ?? s.TestMethodSpecification.Name
+                })
+                .ToListAsync();
+
+            return fromSubGroups.Concat(fromAnalysisTypes).Concat(fromLabScope)
+                .GroupBy(x => x.Id)
+                .Select(g => g.First())
+                .ToList();
+        }
     }
 }

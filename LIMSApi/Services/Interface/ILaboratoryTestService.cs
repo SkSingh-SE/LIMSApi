@@ -15,8 +15,9 @@ namespace LIMSApi.Services.Interface
         Task<List<DropdwonSelector>> GetGeneralTestMethodDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<List<DropdwonSelector>> GetChemicalTestMethodDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<List<object>> GetTestCases(long labTestId);
-        Task<List<PricingTemplateRowDto>> GetPricingTemplate(long labTestId, long? analysisTypeId);
         Task<List<string>> GetDistinctTestNames(string? searchTerm, int pageSize);
         Task<long> DuplicateLaboratoryTest(long id);
+        Task<List<DropdwonSelector>> GetTestMethodSpecificationByLabTestId(long labTestId);
+        Task<List<PricingTemplateRowDto>> GetPricingTemplate(long labTestId, long? analysisTypeId = null);
     }
 }

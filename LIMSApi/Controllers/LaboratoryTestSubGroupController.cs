@@ -42,10 +42,11 @@ namespace LIMSApi.Controllers
         }
 
         [RequirePermission(Permissions.LaboratoryTestSubType.Read)]
+        [HttpGet("test-method-specification/{subGroupId}")]
         [HttpGet("standards/{subGroupId}")]
-        public async Task<IActionResult> GetStandardsBySubGroup(long subGroupId)
+        public async Task<IActionResult> GetTestMethodSpecificationBySubGroup(long subGroupId)
         {
-            var list = await _service.GetStandardsBySubGroupId(subGroupId);
+            var list = await _service.GetTestMethodSpecificationBySubGroupId(subGroupId);
             return Ok(list);
         }
 

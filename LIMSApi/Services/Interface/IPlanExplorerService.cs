@@ -8,5 +8,6 @@ namespace LIMSApi.Services.Interface
         Task<ProductMasterExplorerDto?> GetProductMasterExplorerAsync(long productMasterId);
         Task<MetalExplorerDto?> GetMetalClassificationExplorerAsync(long metalClassificationId);
         Task<LabTestExplorerDto?> GetLabTestExplorerAsync(long labTestId);
+        Task<List<ConfiguredTestDto>> GetUniversalTestSearchAsync(string query);
     }
 }

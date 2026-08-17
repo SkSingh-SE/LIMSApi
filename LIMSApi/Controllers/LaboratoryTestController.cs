@@ -131,5 +131,12 @@ namespace LIMSApi.Controllers
             var data = await _testMethodService.GetPricingTemplate(labTestId, analysisTypeId);
             return Ok(data);
         }
+
+        [HttpGet("test-method-specification/{labTestId}")]
+        public async Task<IActionResult> GetTestMethodSpecificationByLabTest(long labTestId)
+        {
+            var data = await _testMethodService.GetTestMethodSpecificationByLabTestId(labTestId);
+            return Ok(data);
+        }
     }
 }

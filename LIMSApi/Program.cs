@@ -351,6 +351,8 @@ builder.Services.AddScoped<IPriceDimensionTypeService, PriceDimensionTypeService
 builder.Services.AddScoped<IPriceDimensionTypeRepository, PriceDimensionTypeRepository>();
 builder.Services.AddScoped<ICustomerPurchaseOrderService, CustomerPurchaseOrderService>();
 builder.Services.AddScoped<ICustomerPurchaseOrderRepository, CustomerPurchaseOrderRepository>();
+builder.Services.AddScoped<IPlanExplorerService, PlanExplorerService>();
+builder.Services.AddScoped<IPlanComplianceService, PlanComplianceService>();
 
 //Service without Repo
 
