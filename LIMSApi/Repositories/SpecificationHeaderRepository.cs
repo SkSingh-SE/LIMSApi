@@ -208,7 +208,7 @@ namespace LIMSApi.Repositories
                 select new
                 {
                     g.ID,
-                    AliasName = a.AliasName + "-" + g.Grade + (mc != null ? ("-" + mc.Name) : "")
+                    AliasName =  g.Grade + (mc != null ? ("-" + mc.Name) : "")
                 };
 
             if (!string.IsNullOrWhiteSpace(searchTerm))

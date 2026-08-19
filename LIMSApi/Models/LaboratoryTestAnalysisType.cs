@@ -17,7 +17,7 @@ namespace LIMSApi.Models
         [StringLength(150)]
         public string Name { get; set; } = string.Empty;
 
-        public int? TestDuration { get; set; }
+        public int? TestDuration { get; set; } = 1;
 
         [ForeignKey(nameof(LaboratoryTestSubGroupID))]
         public virtual LaboratoryTestSubGroup? SubGroup { get; set; }

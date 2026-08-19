@@ -43,7 +43,8 @@ namespace LIMSApi.Controllers
             return Ok(new
             {
                 status = "success",
-                message = $"TestMethod '{model.Name}' updated successfully."
+                message = $"TestMethod '{model.Name}' updated successfully.",
+                id = model.ID
             });
         }
 
@@ -55,7 +56,8 @@ namespace LIMSApi.Controllers
             return Ok(new
             {
                 status = "success",
-                message = $"TestMethod '{model.Name}' created successfully."
+                message = $"TestMethod '{model.Name}' created successfully.",
+                id = model.ID
             });
         }
 

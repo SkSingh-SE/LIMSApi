@@ -146,7 +146,7 @@ namespace LIMSApi.Repositories
             var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
             {
                 Id = x.ID,
-                Name = x.Name,
+                Name = x!.DisplayTitle ?? x.Name,
             })).ToListAsync();
 
             return data;

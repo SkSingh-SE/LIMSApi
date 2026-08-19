@@ -22,7 +22,7 @@ namespace LIMSApi.Models
         [StringLength(200)]
         public string ReportTestName { get; set; } = string.Empty;
 
-        public int? TestDuration { get; set; }
+        public int? TestDuration { get; set; } = 1;
 
         public long? MetalClassificationID { get; set; }
 

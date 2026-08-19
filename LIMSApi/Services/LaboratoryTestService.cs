@@ -403,7 +403,20 @@ namespace LIMSApi.Services
                 })
                 .ToListAsync();
 
-            return fromSubGroups.Concat(fromAnalysisTypes).Concat(fromLabScope)
+            // 4. Test Method Specifications from SpecificationLineTestMethods
+            var fromSpecLines = await _context.Set<SpecificationLineTestMethod>()
+                .AsNoTracking()
+                .Include(s => s.TestMethodSpecification)
+                .Where(s => s.LaboratoryTestID == labTestId && s.TestMethodSpecification != null && !s.TestMethodSpecification.IsDisabled)
+                .Select(s => new DropdwonSelector
+                {
+                    Id = s.TestMethodSpecificationID ?? 0,
+                    Name = s.TestMethodSpecification!.DisplayTitle ?? s.TestMethodSpecification.Name
+                })
+                .Where(s => s.Id > 0)
+                .ToListAsync();
+
+            return fromSubGroups.Concat(fromAnalysisTypes).Concat(fromLabScope).Concat(fromSpecLines)
                 .GroupBy(x => x.Id)
                 .Select(g => g.First())
                 .ToList();

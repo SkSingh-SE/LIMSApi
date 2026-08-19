@@ -59,13 +59,47 @@ namespace LIMSApi.ServiceWORepo
 
         public async Task<List<SuggestedTestDto>> GetSuggestedTestsByProductSpec(long productSpecificationId)
         {
+            // 1. Direct Product Master mappings in LaboratoryTestSubGroupSpecification
+            var directSubgroupTests = await _context.Set<LaboratoryTestSubGroupSpecification>()
+                .Where(s => s.ProductMasterID == productSpecificationId && s.SubGroup != null && s.SubGroup.LaboratoryTest != null && s.SubGroup.LaboratoryTest.IsActive)
+                .Select(s => new SuggestedTestDto
+                {
+                    LaboratoryTestID = s.SubGroup!.LaboratoryTestID,
+                    LaboratoryTestName = s.SubGroup!.LaboratoryTest!.Name,
+                    SubGroup = s.SubGroup!.Name,
+                    Source = "ProductMasterMapping",
+                    IsPerBatch = false,
+                    TestMethodStandardID = null,
+                    TestMethodStandardName = null
+                })
+                .ToListAsync();
+
+            // 2. Direct Product Master mappings in LaboratoryTestAnalysisTypeSpecification
+            var directAnalysisTests = await _context.Set<LaboratoryTestAnalysisTypeSpecification>()
+                .Where(s => s.ProductMasterID == productSpecificationId && s.AnalysisType != null && s.AnalysisType.SubGroup != null && s.AnalysisType.SubGroup.LaboratoryTest != null && s.AnalysisType.SubGroup.LaboratoryTest.IsActive)
+                .Select(s => new SuggestedTestDto
+                {
+                    LaboratoryTestID = s.AnalysisType!.SubGroup!.LaboratoryTestID,
+                    LaboratoryTestName = s.AnalysisType!.SubGroup!.LaboratoryTest!.Name,
+                    SubGroup = s.AnalysisType!.Name,
+                    Source = "ProductMasterMapping",
+                    IsPerBatch = false,
+                    TestMethodStandardID = null,
+                    TestMethodStandardName = null
+                })
+                .ToListAsync();
+
+            // 3. Traversal via Product Master Active Version Grades
             var gradeIds = await _context.Set<ProductMasterVersionGrade>()
-                .Where(g => (g.ProductMasterVersionID == productSpecificationId || g.ID == productSpecificationId) && g.IsActive)
+                .Where(g => (g.ProductMasterVersionID == productSpecificationId || g.ID == productSpecificationId || g.ProductMasterVersion.ProductMasterID == productSpecificationId) && g.IsActive)
                 .Select(g => g.SpecificationGradeID)
                 .Distinct()
                 .ToListAsync();
 
             var allTests = new List<SuggestedTestDto>();
+            allTests.AddRange(directSubgroupTests);
+            allTests.AddRange(directAnalysisTests);
+
             foreach (var gradeId in gradeIds)
             {
                 var gradeTests = await GetSuggestedTestsBySpecification(gradeId);

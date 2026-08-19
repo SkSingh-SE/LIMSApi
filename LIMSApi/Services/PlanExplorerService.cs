@@ -52,7 +52,8 @@ namespace LIMSApi.Services
                 var gradeDto = await BuildGradeDtoAsync(
                     g.SpecificationGradeID,
                     g.SpecificationGrade.Grade,
-                    specHeader?.DisplayTitle ?? specHeader?.AliasName ?? "Standard Spec"
+                    specHeader?.DisplayTitle ?? specHeader?.AliasName ?? "Standard Spec",
+                    productMasterId
                 );
                 configuredGrades.Add(gradeDto);
             }
@@ -181,7 +182,7 @@ namespace LIMSApi.Services
             }).ToList();
         }
 
-        private async Task<ConfiguredGradeDto> BuildGradeDtoAsync(long gradeId, string gradeName, string specName)
+        private async Task<ConfiguredGradeDto> BuildGradeDtoAsync(long gradeId, string gradeName, string specName, long productMasterId = 0)
         {
             var specGrade = await _context.SpecificationGrades
                 .AsNoTracking()
@@ -189,13 +190,16 @@ namespace LIMSApi.Services
 
             long headerId = specGrade?.SpecificationHeaderID ?? 0;
 
-            // 1. Fetch SubGroup Specification Mappings with accurate IsChemicalTest check
+            // 1. Fetch SubGroup Specification Mappings (searching ProductMasterID or GradeID or HeaderID)
             var subgroupTests = await _context.Set<LaboratoryTestSubGroupSpecification>()
                 .AsNoTracking()
                 .Include(s => s.SubGroup)
                     .ThenInclude(sg => sg!.LaboratoryTest)
                         .ThenInclude(lt => lt!.LabDepartment)
-                .Where(s => (s.SpecificationGradeID == gradeId || (headerId > 0 && s.SpecificationHeaderID == headerId))
+                .Include(s => s.SubGroup)
+                    .ThenInclude(sg => sg!.TestMethods)
+                        .ThenInclude(tm => tm.TestMethodSpecification)
+                .Where(s => ((productMasterId > 0 && s.ProductMasterID == productMasterId) || s.SpecificationGradeID == gradeId || (headerId > 0 && s.SpecificationHeaderID == headerId))
                             && s.SubGroup != null && s.SubGroup.LaboratoryTest != null && s.SubGroup.LaboratoryTest.IsActive)
                 .Select(s => new ConfiguredTestDto
                 {
@@ -204,9 +208,11 @@ namespace LIMSApi.Services
                     TestType = (s.SubGroup.LaboratoryTest.IsChemicalTest || (s.SubGroup.LaboratoryTest.LabDepartment != null && s.SubGroup.LaboratoryTest.LabDepartment.IsChemical))
                                ? "Chemical" : "General",
                     SubGroup = s.SubGroup.Name,
-                    SourceTag = "Lab Scope",
-                    TestMethodSpecificationID = null,
-                    TestMethodSpecificationName = "",
+                    SourceTag = (productMasterId > 0 && s.ProductMasterID == productMasterId) ? "Product Master" : "Lab Scope",
+                    TestMethodSpecificationID = (s.SubGroup.TestMethods.FirstOrDefault(m => m.IsDefault) ?? s.SubGroup.TestMethods.FirstOrDefault()) != null 
+                        ? (s.SubGroup.TestMethods.FirstOrDefault(m => m.IsDefault) ?? s.SubGroup.TestMethods.FirstOrDefault())!.TestMethodSpecificationID : null,
+                    TestMethodSpecificationName = (s.SubGroup.TestMethods.FirstOrDefault(m => m.IsDefault) ?? s.SubGroup.TestMethods.FirstOrDefault()) != null && (s.SubGroup.TestMethods.FirstOrDefault(m => m.IsDefault) ?? s.SubGroup.TestMethods.FirstOrDefault())!.TestMethodSpecification != null
+                        ? ((s.SubGroup.TestMethods.FirstOrDefault(m => m.IsDefault) ?? s.SubGroup.TestMethods.FirstOrDefault())!.TestMethodSpecification!.DisplayTitle ?? (s.SubGroup.TestMethods.FirstOrDefault(m => m.IsDefault) ?? s.SubGroup.TestMethods.FirstOrDefault())!.TestMethodSpecification!.Name) : "",
                     Quantity = 1
                 })
                 .ToListAsync();
@@ -218,7 +224,10 @@ namespace LIMSApi.Services
                     .ThenInclude(at => at!.SubGroup)
                         .ThenInclude(sg => sg!.LaboratoryTest)
                             .ThenInclude(lt => lt!.LabDepartment)
-                .Where(s => (s.SpecificationGradeID == gradeId || (headerId > 0 && s.SpecificationHeaderID == headerId))
+                .Include(s => s.AnalysisType)
+                    .ThenInclude(at => at!.TestMethods)
+                        .ThenInclude(tm => tm.TestMethodSpecification)
+                .Where(s => ((productMasterId > 0 && s.ProductMasterID == productMasterId) || s.SpecificationGradeID == gradeId || (headerId > 0 && s.SpecificationHeaderID == headerId))
                             && s.AnalysisType != null && s.AnalysisType.SubGroup != null && s.AnalysisType.SubGroup.LaboratoryTest != null && s.AnalysisType.SubGroup.LaboratoryTest.IsActive)
                 .Select(s => new ConfiguredTestDto
                 {
@@ -226,9 +235,11 @@ namespace LIMSApi.Services
                     LaboratoryTestName = s.AnalysisType.SubGroup.LaboratoryTest!.Name,
                     TestType = "Chemical",
                     SubGroup = s.AnalysisType.Name,
-                    SourceTag = "Lab Scope",
-                    TestMethodSpecificationID = null,
-                    TestMethodSpecificationName = "",
+                    SourceTag = (productMasterId > 0 && s.ProductMasterID == productMasterId) ? "Product Master" : "Lab Scope",
+                    TestMethodSpecificationID = (s.AnalysisType.TestMethods.FirstOrDefault(m => m.IsDefault) ?? s.AnalysisType.TestMethods.FirstOrDefault()) != null
+                        ? (s.AnalysisType.TestMethods.FirstOrDefault(m => m.IsDefault) ?? s.AnalysisType.TestMethods.FirstOrDefault())!.TestMethodSpecificationID : null,
+                    TestMethodSpecificationName = (s.AnalysisType.TestMethods.FirstOrDefault(m => m.IsDefault) ?? s.AnalysisType.TestMethods.FirstOrDefault()) != null && (s.AnalysisType.TestMethods.FirstOrDefault(m => m.IsDefault) ?? s.AnalysisType.TestMethods.FirstOrDefault())!.TestMethodSpecification != null
+                        ? ((s.AnalysisType.TestMethods.FirstOrDefault(m => m.IsDefault) ?? s.AnalysisType.TestMethods.FirstOrDefault())!.TestMethodSpecification!.DisplayTitle ?? (s.AnalysisType.TestMethods.FirstOrDefault(m => m.IsDefault) ?? s.AnalysisType.TestMethods.FirstOrDefault())!.TestMethodSpecification!.Name) : "",
                     Quantity = 1
                 })
                 .ToListAsync();
@@ -238,6 +249,8 @@ namespace LIMSApi.Services
                 .AsNoTracking()
                 .Include(l => l.LaboratoryTest)
                     .ThenInclude(lt => lt!.LabDepartment)
+                .Include(l => l.TestMethodMappings)
+                    .ThenInclude(tm => tm.TestMethodSpecification)
                 .Where(l => l.SpecificationGradeID == gradeId && l.LaboratoryTestID != null && l.LaboratoryTest != null && l.LaboratoryTest.IsActive)
                 .Select(l => new ConfiguredTestDto
                 {
@@ -247,8 +260,9 @@ namespace LIMSApi.Services
                                ? "Chemical" : "General",
                     SubGroup = l.Type ?? "General",
                     SourceTag = "PM Scope",
-                    TestMethodSpecificationID = null,
-                    TestMethodSpecificationName = "",
+                    TestMethodSpecificationID = l.TestMethodMappings.FirstOrDefault() != null ? l.TestMethodMappings.FirstOrDefault()!.TestMethodSpecificationID : null,
+                    TestMethodSpecificationName = l.TestMethodMappings.FirstOrDefault() != null && l.TestMethodMappings.FirstOrDefault()!.TestMethodSpecification != null
+                        ? (l.TestMethodMappings.FirstOrDefault()!.TestMethodSpecification!.DisplayTitle ?? l.TestMethodMappings.FirstOrDefault()!.TestMethodSpecification!.Name) : "",
                     Quantity = 1
                 })
                 .ToListAsync();
@@ -270,6 +284,12 @@ namespace LIMSApi.Services
                     else
                     {
                         preferred.SourceTag = tags.FirstOrDefault() ?? "PM Scope";
+                    }
+                    var withMethod = g.FirstOrDefault(x => x.TestMethodSpecificationID.HasValue && x.TestMethodSpecificationID.Value > 0);
+                    if (withMethod != null && (!preferred.TestMethodSpecificationID.HasValue || preferred.TestMethodSpecificationID.Value == 0))
+                    {
+                        preferred.TestMethodSpecificationID = withMethod.TestMethodSpecificationID;
+                        preferred.TestMethodSpecificationName = withMethod.TestMethodSpecificationName;
                     }
                     return preferred;
                 })
