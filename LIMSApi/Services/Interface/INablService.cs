@@ -1,5 +1,6 @@
 using System.Text.Json;
 using LIMSApi.Dtos;
+using LIMSApi.Migrations;
 using LIMSApi.Models;
 
 namespace LIMSApi.Services.Interface
@@ -67,5 +68,21 @@ namespace LIMSApi.Services.Interface
         Task<string> GetNextActionNo();
         Task<PagedResponse<object>> NcPrintList(PageFilter filter);
         Task<string> GetNextMUNo();
+        Task<long> SaveMasterDocument(JsonElement body, IFormFile? file);
+        Task<List<DropdwonSelector>> Documentlist(string? searchTerm, int pageNo, int pageSize);
+        Task<string> GetNextrequestNo();
+        Task<NablDocumentReview> GetDocumentReviewById(long id);
+        Task<NablDocumentChangeRequest> GetDocumentChangeRequestById(long id);
+        Task<string> GetNextreviewNo();
+        Task<List<DropdwonSelector>> GetAuditorsDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<string> GetNextAuditPlanNo();
+        Task<List<DropdwonSelector>> GetEligibleAuditors(long departmentId, string isoClauseIds, DateTime scheduleDate);
+        Task<AuditChecklistDto> GetScheduleSession(long scheduleItemId);
+        Task<NablAuditChecklist?> GetAuditChecklistById(long id);
+        Task<AuditChecklistNcrDto> GetAuditChecklistNcr(long checklistItemId);
+        Task<string> GetNextChecklistNo();
+        Task<AuditSummaryDto> GetAuditplan(long auditPlanId);
+        Task<List<DropdwonSelector>> GetDocumentsAvailableForReview(string? searchTerm, int pageNo, int pageSize);
+        Task<List<MasterDocumentPrintDto>> GetMasterDocumentPrintList();
     }
 }

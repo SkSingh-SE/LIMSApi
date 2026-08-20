@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace LIMSApi.Models
 {
@@ -37,5 +38,40 @@ namespace LIMSApi.Models
         public DateTime? ObsoleteDate { get; set; }
 
         public string? ObsoleteReason { get; set; }
+        [StringLength(500)]
+        public string? FileName { get; set; }
+        [StringLength(500)]
+        public string? FilePath { get; set; }
+        public long? DocumentOwnerId { get; set; }
+        public long DepartmentId { get; set; }
+        public string? DepartmentName { get; set; }
+        public DateTime? NextReviewDate { get; set; }
+        [NotMapped]
+        public List<ControlledCopies>? ControlledCopies { get; set; }
+        public long? UploadReferenceID { get; set; }
+        public DateTime? UploadedOn { get; set; }
+
+        [ForeignKey("UploadReferenceID")]
+        [JsonIgnore]
+        public UploadFile? UploadFile { get; set; }
+        [NotMapped]
+        public bool HasReview { get; set; }
+
+        [NotMapped]
+        public long? ReviewId { get; set; }
+
+        [NotMapped]
+        public string? ReviewStatus { get; set; }
     }
+
+    [NotMapped]
+    public class ControlledCopies
+    {
+        public string? HolderName { get; set; }
+        public long? DepartmentId { get; set; }
+        public string? DepartmentName { get; set; }
+        public string? Location { get; set; }
+        public DateTime? DateIssued { get; set; }
+    }
+
 }

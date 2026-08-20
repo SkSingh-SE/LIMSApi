@@ -311,6 +311,8 @@ public partial class LIMSContext : DbContext
     public DbSet<NablNonConformingWorkCorrectiveAction> NablNonConformingWorkCorrectiveActions { get; set; }
     public DbSet<NablNonConformingWorkVerification> NablNonConformingWorkVerifications { get; set; }
     public DbSet<NablNonConformingWorkClosure> NablNonConformingWorkClosures { get; set; }
+    public DbSet<ScheduleItems> ScheduleItems { get; set; }
+    public DbSet<AuditChecklistItem> AuditChecklistItems { get; set; }
     //    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     //#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the BankName= syntax to read it from _configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
     //        => optionsBuilder.UseSqlServer("Data Source=localhost;Initial Catalog=LIMS_Backup;Integrated Security=True;Encrypt=False");
@@ -1413,6 +1415,16 @@ public partial class LIMSContext : DbContext
             .HasOne(x => x.NablRetesting)
             .WithMany(x => x.RetestingLogs)
             .HasForeignKey(x => x.RetestingRetainedSampleId)
+            .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<ScheduleItems>()
+            .HasOne(x => x.AuditPlan)
+            .WithMany(x => x.ScheduleItems)
+            .HasForeignKey(x => x.AuditPlanId)
+            .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<NablAuditChecklist>()
+            .HasMany(x => x.Items)
+            .WithOne(x => x.Checklist)
+            .HasForeignKey(x => x.ChecklistId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 

@@ -327,6 +327,31 @@ namespace LIMSApi.Services
 
                         return result;
                     }
+                case "MasterDocument":
+                    {
+                        var result = data as NablMasterDocument;
+                        if (result != null && !string.IsNullOrEmpty(result.ControlledCopiesJson))
+                        {
+                            result.ControlledCopies = JsonSerializer.Deserialize<List<ControlledCopies>>(result.ControlledCopiesJson);
+                        }
+
+                        return result;
+                    }
+                case "InternalAuditor":
+                    {
+                        var result = data as NablInternalAuditor;
+                        if (result != null && !string.IsNullOrEmpty(result.ISOClausesJson))
+                        {
+                            result.IsoClauses = JsonSerializer.Deserialize<List<IsoClauses>>(result.ISOClausesJson);
+                        }
+                        if (result != null && !string.IsNullOrEmpty(result.DepartmentListJson))
+                        {
+                            result.DepartmentList = JsonSerializer.Deserialize<List<DepartmentList>>(result.DepartmentListJson);
+                        }
+
+
+                        return result;
+                    }
 
 
                 default:
@@ -412,7 +437,7 @@ namespace LIMSApi.Services
                 "RiskAssessment" => await SaveRiskAssessment(body),
                 "DocumentChangeRequest" => await SaveDocumentChangeRequest(body),
                 "DocumentReview" => await SaveDocumentReview(body),
-                "MasterDocument" => await SaveMasterDocument(body),
+                //"MasterDocument" => await SaveMasterDocument(body),
                 "MeasurementUncertainty" => await SaveMeasurementUncertainty(body),
                 "PtIlcPlan" => await SavePtIlcPlan(body),
                 "InventoryMaster" => await SaveInventoryMaster(body),
@@ -3290,108 +3315,497 @@ namespace LIMSApi.Services
 
         private async Task<long> SaveAuditPlan(JsonElement body)
         {
-            var model = JsonSerializer.Deserialize<NablAuditPlan>(body.GetRawText(), _jsonOptions)
+            var model = JsonSerializer.Deserialize<NablAuditPlan>(
+                body.GetRawText(),
+                _jsonOptions)
                 ?? throw new ArgumentException("Invalid AuditPlan data.");
 
             if (model.ID == 0)
             {
                 model.FormCode = FormCodeMap["AuditPlan"];
                 await AssignDocumentNumber(model, "AuditPlan");
+
                 model.Status = "Draft";
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
 
+                if (model.ScheduleItems != null)
+                {
+                    foreach (var schedule in model.ScheduleItems)
+                    {
+                        schedule.ID = 0;
+                        schedule.Status = "Scheduled";
+                        schedule.ChecklistId = null;
+
+                        schedule.ISOClausesJson =
+                            JsonSerializer.Serialize(
+                                schedule.IsoClauses ?? new List<AuditScheduleIsoClause>());
+                        schedule.IsActive = true;
+                    }
+                }
+
                 var id = await _repository.Add("AuditPlan", model);
-                await LogAudit("AuditPlan", id, "Created", null, body.GetRawText());
-                _logger.LogInformation("AuditPlan created with ID {Id}.", id);
+
+                await LogAudit(
+                    "AuditPlan",
+                    id,
+                    "Created",
+                    null,
+                    body.GetRawText());
+
+                _logger.LogInformation(
+                    "AuditPlan created with ID {Id}.",
+                    id);
+
                 return id;
             }
-            else
+
+            var existing = await _context.NablAuditPlans
+                .Include(x => x.ScheduleItems)
+                .FirstOrDefaultAsync(x =>
+                    x.ID == model.ID &&
+                    x.IsActive &&
+                    x.CompanyCode == loggedInUser.CompanyCode);
+
+            if (existing == null)
+                throw new InvalidOperationException("AuditPlan not found!");
+
+            await SaveRevisionSnapshot("AuditPlan", existing);
+
+            // Parent fields
+            existing.AuditYear = model.AuditYear;
+            existing.AuditScheduleJson = model.AuditScheduleJson;
+            existing.AuditObjective = model.AuditObjective;
+            existing.AuditCriteria = model.AuditCriteria;
+            existing.AuditScope = model.AuditScope;
+            existing.LeadAuditorId = model.LeadAuditorId;
+            existing.LeadAuditorName = model.LeadAuditorName;
+            existing.AuditType = model.AuditType;
+            existing.Period = model.Period;
+            existing.AreaDepartment = model.AreaDepartment;
+            existing.AuditorName = model.AuditorName;
+            existing.ScheduleDate = model.ScheduleDate;
+            existing.Date = model.Date;
+            existing.ModifiedOn = DateTime.UtcNow;
+            existing.ModifiedBy = loggedInUser.EmployeeID;
+            existing.PlanNo = model.PlanNo;
+            existing.ScheduleDateFrom = model.ScheduleDateFrom;
+            existing.ScheduleDateTo = model.ScheduleDateTo;
+            existing.Remarks = model.Remarks;
+            existing.PreparedBy = model.PreparedBy;
+            existing.PreparedDate = model.PreparedDate;
+            existing.ApprovedDate = model.ApprovedDate;
+            existing.ApprovedBy = model.ApprovedBy;
+            existing.ReviewedBy = model.ReviewedBy;
+            existing.ReviewedDate = model.ReviewedDate;
+
+            var incomingItems = model.ScheduleItems?.ToList()
+                ?? new List<ScheduleItems>();
+
+            var incomingExistingIds = incomingItems
+                .Where(x => x.ID > 0)
+                .Select(x => x.ID)
+                .ToHashSet();
+
+            // Removed rows
+            var removedItems = existing.ScheduleItems
+                .Where(x =>
+                    x.ID > 0 &&
+                    !incomingExistingIds.Contains(x.ID))
+                .ToList();
+
+            foreach (var removedItem in removedItems)
             {
-                var existing = await _context.NablAuditPlans
-                    .FirstOrDefaultAsync(x => x.ID == model.ID && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+                // Checklist linked ho to row deletion avoid karo
+                if (removedItem.ChecklistId.HasValue)
+                {
+                    throw new InvalidOperationException(
+                        $"Schedule item ID {removedItem.ID} cannot be removed because a checklist is already linked.");
+                }
 
-                if (existing == null)
-                    throw new InvalidOperationException("AuditPlan not found!");
-
-                await SaveRevisionSnapshot("AuditPlan", existing);
-
-                existing.AuditYear = model.AuditYear;
-                existing.AuditScheduleJson = model.AuditScheduleJson;
-                existing.AuditObjective = model.AuditObjective;
-                existing.AuditCriteria = model.AuditCriteria;
-                existing.AuditScope = model.AuditScope;
-                existing.LeadAuditorId = model.LeadAuditorId;
-                existing.LeadAuditorName = model.LeadAuditorName;
-                existing.AuditType = model.AuditType;
-                existing.Period = model.Period;
-                existing.AreaDepartment = model.AreaDepartment;
-                existing.AuditorName = model.AuditorName;
-                existing.ScheduleDate = model.ScheduleDate;
-                existing.Date = model.Date;
-                existing.ModifiedOn = DateTime.UtcNow;
-                existing.ModifiedBy = loggedInUser.EmployeeID;
-
-                await _repository.Update("AuditPlan", existing);
-                await LogAudit("AuditPlan", existing.ID, "Updated", null, body.GetRawText());
-                _logger.LogInformation("AuditPlan ID {Id} updated.", existing.ID);
-                return existing.ID;
+                _context.ScheduleItems.Remove(removedItem);
             }
-        }
 
+            foreach (var incoming in incomingItems)
+            {
+                incoming.ISOClausesJson =
+                    JsonSerializer.Serialize(
+                        incoming.IsoClauses ?? new List<AuditScheduleIsoClause>());
+
+                if (incoming.ID == 0)
+                {
+                    // New child row
+                    var newSchedule = new ScheduleItems
+                    {
+                        AuditPlanId = existing.ID,
+
+                        DepartmentId = incoming.DepartmentId,
+                        DepartmentName = incoming.DepartmentName,
+
+                        ISOClausesJson = incoming.ISOClausesJson,
+
+                        ScheduleDate = incoming.ScheduleDate,
+
+                        AuditorId = incoming.AuditorId,
+                        AuditorName = incoming.AuditorName,
+
+                        AuditeeId = incoming.AuditeeId,
+                        AuditeeName = incoming.AuditeeName,
+
+                        Status = "Scheduled",
+                        ChecklistId = null,
+                        IsActive = true
+                    };
+
+                    existing.ScheduleItems.Add(newSchedule);
+                }
+                else
+                {
+                    // Existing child row update by ID
+                    var existingSchedule = existing.ScheduleItems
+                        .FirstOrDefault(x => x.ID == incoming.ID);
+
+                    if (existingSchedule == null)
+                    {
+                        throw new InvalidOperationException(
+                            $"Schedule item ID {incoming.ID} not found.");
+                    }
+
+                    existingSchedule.DepartmentId = incoming.DepartmentId;
+                    existingSchedule.DepartmentName = incoming.DepartmentName;
+
+                    existingSchedule.ISOClausesJson =
+                        incoming.ISOClausesJson;
+
+                    existingSchedule.ScheduleDate =
+                        incoming.ScheduleDate;
+
+                    existingSchedule.AuditorId =
+                        incoming.AuditorId;
+
+                    existingSchedule.AuditorName =
+                        incoming.AuditorName;
+
+                    existingSchedule.AuditeeId =
+                        incoming.AuditeeId;
+
+                    existingSchedule.AuditeeName =
+                        incoming.AuditeeName;
+
+
+                    /*
+                     * Status aur ChecklistId frontend payload se overwrite
+                     * mat karo. Ye F-51 checklist workflow manage karega.
+                     */
+                }
+            }
+
+            await _repository.Update("AuditPlan", existing);
+
+            await LogAudit(
+                "AuditPlan",
+                existing.ID,
+                "Updated",
+                null,
+                body.GetRawText());
+
+            _logger.LogInformation(
+                "AuditPlan ID {Id} updated.",
+                existing.ID);
+
+            return existing.ID;
+        }
         private async Task<long> SaveAuditChecklist(JsonElement body)
         {
-            var model = JsonSerializer.Deserialize<NablAuditChecklist>(body.GetRawText(), _jsonOptions)
-                ?? throw new ArgumentException("Invalid AuditChecklist data.");
+            var model = JsonSerializer.Deserialize<NablAuditChecklist>(
+                body.GetRawText(),
+                _jsonOptions
+            ) ?? throw new ArgumentException("Invalid AuditChecklist data.");
 
             if (model.ID == 0)
             {
                 model.FormCode = FormCodeMap["AuditChecklist"];
+
                 await AssignDocumentNumber(model, "AuditChecklist");
+
                 model.Status = "Draft";
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
-                model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
+                model.CompanyCode =
+                    loggedInUser.CompanyCode ?? "LIMS";
+                model.IsActive = true;
 
-                var id = await _repository.Add("AuditChecklist", model);
-                await LogAudit("AuditChecklist", id, "Created", null, body.GetRawText());
-                _logger.LogInformation("AuditChecklist created with ID {Id}.", id);
+                foreach (var item in model.Items)
+                {
+                    item.ID = 0;
+                    item.Checklist = model;
+                    item.IsActive = true;
+                }
+
+                // Counts calculate
+                model.NCCount = model.Items.Count(x =>
+                    x.FindingType == "Minor NC" ||
+                    x.FindingType == "Major NC"
+                );
+
+                model.ObservationCount = model.Items.Count(x =>
+                    x.FindingType == "Observation"
+                );
+
+                // Pending NCR check
+                var hasPendingNcr =
+       await HasPendingChecklistNcrAsync(model.Items);
+
+                model.ChecklistStatus = hasPendingNcr
+                    ? "InProgress"
+                    : "Completed";
+
+                var id = await _repository.Add(
+                    "AuditChecklist",
+                    model
+                );
+
+                // Linked schedule item update
+                if (model.ScheduleItemId != 0)
+                {
+                    var scheduleItem = await _context.ScheduleItems
+                        .FirstOrDefaultAsync(x =>
+                            x.ID == model.ScheduleItemId &&
+                            x.IsActive == true
+                        );
+
+                    if (scheduleItem != null)
+                    {
+                        scheduleItem.ChecklistId = id;
+
+                        scheduleItem.Status = hasPendingNcr
+                            ? "InProgress"
+                            : "Completed";
+
+                        await _context.SaveChangesAsync();
+                    }
+                }
+
+                await LogAudit(
+                    "AuditChecklist",
+                    id,
+                    "Created",
+                    null,
+                    body.GetRawText()
+                );
+
+                _logger.LogInformation(
+                    "AuditChecklist created with ID {Id}.",
+                    id
+                );
+
                 return id;
             }
-            else
+
+            // ======================================================
+            // EDIT
+            // ======================================================
+
+            var existing = await _context.NablAuditChecklists
+                .Include(x => x.Items)
+                .FirstOrDefaultAsync(x =>
+                    x.ID == model.ID &&
+                    x.IsActive &&
+                    x.CompanyCode == loggedInUser.CompanyCode
+                );
+
+            if (existing == null)
             {
-                var existing = await _context.NablAuditChecklists
-                    .FirstOrDefaultAsync(x => x.ID == model.ID && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
-
-                if (existing == null)
-                    throw new InvalidOperationException("AuditChecklist not found!");
-
-                await SaveRevisionSnapshot("AuditChecklist", existing);
-
-                existing.AuditPlanId = model.AuditPlanId;
-                existing.AuditDate = model.AuditDate;
-                existing.DepartmentId = model.DepartmentId;
-                existing.DepartmentName = model.DepartmentName;
-                existing.AuditorId = model.AuditorId;
-                existing.AuditorName = model.AuditorName;
-                existing.AuditeeId = model.AuditeeId;
-                existing.AuiteeName = model.AuiteeName;
-                existing.ISOClause = model.ISOClause;
-                existing.ChecklistItemsJson = model.ChecklistItemsJson;
-                existing.NCCount = model.NCCount;
-                existing.ObservationCount = model.ObservationCount;
-                existing.Date = model.Date;
-                existing.ModifiedOn = DateTime.UtcNow;
-                existing.ModifiedBy = loggedInUser.EmployeeID;
-
-                await _repository.Update("AuditChecklist", existing);
-                await LogAudit("AuditChecklist", existing.ID, "Updated", null, body.GetRawText());
-                _logger.LogInformation("AuditChecklist ID {Id} updated.", existing.ID);
-                return existing.ID;
+                throw new InvalidOperationException(
+                    "AuditChecklist not found!"
+                );
             }
-        }
 
+            await SaveRevisionSnapshot(
+                "AuditChecklist",
+                existing
+            );
+
+            // Parent update
+            existing.AuditPlanId = model.AuditPlanId;
+            existing.ScheduleItemId = model.ScheduleItemId;
+            existing.AuditPlanNo = model.AuditPlanNo;
+            existing.AuditDate = model.AuditDate;
+
+            existing.DepartmentId = model.DepartmentId;
+            existing.DepartmentName = model.DepartmentName;
+
+            existing.AuditorId = model.AuditorId;
+            existing.AuditorName = model.AuditorName;
+
+            existing.AuditeeId = model.AuditeeId;
+            existing.AuditeeName = model.AuditeeName;
+
+            existing.ISOClause = model.ISOClause;
+            existing.Remarks = model.Remarks;
+
+            existing.Date = model.Date;
+            existing.ModifiedOn = DateTime.UtcNow;
+            existing.ModifiedBy = loggedInUser.EmployeeID;
+
+            existing.PreparedBy = model.PreparedBy;
+            existing.PreparedDate = model.PreparedDate;
+
+            existing.ApprovedDate = model.ApprovedDate;
+            existing.ApprovedBy = model.ApprovedBy;
+
+            existing.ReviewedBy = model.ReviewedBy;
+            existing.ReviewedDate = model.ReviewedDate;
+
+            var incomingItems =
+                model.Items ?? new List<AuditChecklistItem>();
+
+            // ======================================================
+            // EXISTING ITEM IDS JO FRONTEND SE AAYI HAIN
+            // ======================================================
+
+            var incomingExistingIds = incomingItems
+                .Where(x => x.ID > 0)
+                .Select(x => x.ID)
+                .ToHashSet();
+
+            // ======================================================
+            // EXISTING ITEMS
+            // Update OR Soft Delete
+            // ======================================================
+
+            foreach (var existingItem in existing.Items)
+            {
+                // Frontend payload me item nahi hai
+                // means user ne delete kiya hai
+                if (!incomingExistingIds.Contains(existingItem.ID))
+                {
+                    existingItem.IsActive = false;
+                    continue;
+                }
+
+                // Existing item update
+                var incomingItem = incomingItems
+                    .First(x => x.ID == existingItem.ID);
+
+                existingItem.IsoClauseId =
+                    incomingItem.IsoClauseId;
+
+                existingItem.IsoClauseName =
+                    incomingItem.IsoClauseName;
+
+                existingItem.AuditQuestion =
+                    incomingItem.AuditQuestion;
+
+                existingItem.ObjectiveEvidence =
+                    incomingItem.ObjectiveEvidence;
+
+                existingItem.FindingType =
+                    incomingItem.FindingType;
+
+                existingItem.Remarks =
+                    incomingItem.Remarks;
+
+                // Existing NCR accidentally clear mat karo
+                if (incomingItem.NcId.HasValue)
+                {
+                    existingItem.NcId =
+                        incomingItem.NcId;
+
+                    existingItem.NcNo =
+                        incomingItem.NcNo;
+                }
+
+                // Payload me present hai means active hai
+                existingItem.IsActive = true;
+                incomingItem.IsActive = true;
+            }
+
+            // ======================================================
+            // NEW ITEMS
+            // ======================================================
+
+            var newItems = incomingItems
+                .Where(x => x.ID == 0)
+                .ToList();
+
+            foreach (var newItem in newItems)
+            {
+                newItem.ID = 0;
+                newItem.ChecklistId = existing.ID;
+                newItem.Checklist = existing;
+                newItem.IsActive = true;
+
+                await _context.AuditChecklistItems
+                    .AddAsync(newItem);
+            }
+
+            // ======================================================
+            // COUNTS RECALCULATE
+            // Frontend payload = current active rows
+            // ======================================================
+
+            existing.NCCount = incomingItems.Count(x =>
+                x.FindingType == "Minor NC" ||
+                x.FindingType == "Major NC"
+            );
+
+            existing.ObservationCount = incomingItems.Count(x =>
+                x.FindingType == "Observation"
+            );
+
+            // Pending NCR check
+            var hasPendingNcr1 =
+       await HasPendingChecklistNcrAsync(incomingItems);
+
+            // Checklist status
+            existing.ChecklistStatus = hasPendingNcr1
+                ? "InProgress"
+                : "Completed";
+
+            // ======================================================
+            // LINKED SCHEDULE ITEM
+            // ======================================================
+
+            if (existing.ScheduleItemId != 0)
+            {
+                var scheduleItem = await _context.ScheduleItems
+                    .FirstOrDefaultAsync(x =>
+                        x.ID == existing.ScheduleItemId &&
+                        x.IsActive == true
+                    );
+
+                if (scheduleItem != null)
+                {
+                    scheduleItem.ChecklistId = existing.ID;
+
+                    scheduleItem.Status = hasPendingNcr1
+                        ? "InProgress"
+                        : "Completed";
+                }
+            }
+
+            await _repository.Update(
+                "AuditChecklist",
+                existing
+            );
+
+            await LogAudit(
+                "AuditChecklist",
+                existing.ID,
+                "Updated",
+                null,
+                body.GetRawText()
+            );
+
+            _logger.LogInformation(
+                "AuditChecklist ID {Id} updated.",
+                existing.ID
+            );
+
+            return existing.ID;
+        }
         private async Task<long> SaveAuditSummary(JsonElement body)
         {
             var model = JsonSerializer.Deserialize<NablAuditSummary>(body.GetRawText(), _jsonOptions)
@@ -3458,7 +3872,8 @@ namespace LIMSApi.Services
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
-
+                model.DepartmentListJson = JsonSerializer.Serialize(model.DepartmentList);
+                model.ISOClausesJson = JsonSerializer.Serialize(model.IsoClauses);
                 var id = await _repository.Add("InternalAuditor", model);
                 await LogAudit("InternalAuditor", id, "Created", null, body.GetRawText());
                 _logger.LogInformation("InternalAuditor created with ID {Id}.", id);
@@ -3481,7 +3896,7 @@ namespace LIMSApi.Services
                 existing.LeadAuditorCertDate = model.LeadAuditorCertDate;
                 existing.InternalAuditorCourse = model.InternalAuditorCourse;
                 existing.InternalAuditorCertDate = model.InternalAuditorCertDate;
-                existing.ISOClauses = model.ISOClauses;
+                existing.ISOClaus = model.ISOClaus;
                 existing.AuditExperience = model.AuditExperience;
                 existing.AuthorizedAreas = model.AuthorizedAreas;
                 existing.AuthorizationDate = model.AuthorizationDate;
@@ -3490,6 +3905,24 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
+                existing.DepartmentListJson = JsonSerializer.Serialize(model.DepartmentList);
+                existing.ISOClausesJson = JsonSerializer.Serialize(model.IsoClauses);
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.DepartmentId= model.DepartmentId;
+                existing.AuthorizedById= model.AuthorizedById;
+                existing.AuthorizedById= model.AuthorizedById;
+                existing.AuthorizedByName = model.AuthorizedByName;
+                existing.DepartmentName = model.DepartmentName;
+                existing.Designation = model.Designation;
+                existing.CertificateNo = model.CertificateNo;
+                existing.TrainingOrganization = model.TrainingOrganization;
+                existing.Remarks = model.Remarks;
+                existing.CertificateIssueDate  = model.CertificateIssueDate;
+                existing.CertificateExpiryDate = model.CertificateExpiryDate;
 
                 await _repository.Update("InternalAuditor", existing);
                 await LogAudit("InternalAuditor", existing.ID, "Updated", null, body.GetRawText());
@@ -3639,6 +4072,16 @@ namespace LIMSApi.Services
                 model.CurrentStep = model.RequestStep;
 
                 var id = await _repository.Add("NonConformingWork", model);
+                if (model.ChecklistId.HasValue && model.ChecklistId > 0 && model.ReferenceId.HasValue && model.ReferenceModule == "AuditChecklistItem")
+                {
+                    var checklistItem = await _context.AuditChecklistItems.FirstOrDefaultAsync(c => c.ID == model.ReferenceId.Value && c.IsActive);
+                    if (checklistItem != null)
+                    {
+                        checklistItem.NcId = id;
+                        checklistItem.NcNo = model.NcNo;
+                        await _context.SaveChangesAsync();
+                    }
+                }
 
                 await LogAudit("NonConformingWork", id, "Created", null, body.GetRawText());
 
@@ -3717,6 +4160,7 @@ namespace LIMSApi.Services
                     existing.ReferenceModule = model.ReferenceModule;
                     existing.ReferenceId = model.ReferenceId;
                     existing.ReferenceNo = model.ReferenceNo;
+                    existing.ChecklistId = model.ChecklistId;
 
                     existing.CustomerAffected = model.CustomerAffected;
 
@@ -4065,6 +4509,31 @@ namespace LIMSApi.Services
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
 
                 var id = await _repository.Add("DocumentChangeRequest", model);
+                if (model.SourceReviewId.HasValue)
+                {
+                    var review = await _context.NablDocumentReviews.FirstOrDefaultAsync(c => c.ID == model.SourceReviewId.Value && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
+                    if (review != null)
+                    {
+                        // 3. Link generated DCR with Review
+                        review.GeneratedDcrId = id;
+                        review.GeneratedDcrNo = model.RequestNo;
+                        review.GeneratedDcrChangeType = model.ChangeType;
+                        review.ModifiedOn = DateTime.UtcNow;
+                        review.ModifiedBy = loggedInUser.EmployeeID;
+                        review.Status = "InProgress";
+                        // 4. Update existing Review
+                        await _repository.Update("DocumentReview", review);
+                    }
+                }
+
+                var masterdoc = await _context.NablMasterDocuments.FirstOrDefaultAsync(c => c.ID == model.DocumentId && c.IsActive && c.CompanyCode == model.CompanyCode);
+                if (masterdoc != null)
+                {
+                    masterdoc.ReviewedBy = model.ReviewedByName;
+                    masterdoc.ReviewedDate = model.Date;
+                    await _repository.Update("MasterDocument", masterdoc);
+                }
+
                 await LogAudit("DocumentChangeRequest", id, "Created", null, body.GetRawText());
                 _logger.LogInformation("DocumentChangeRequest created with ID {Id}.", id);
                 return id;
@@ -4096,8 +4565,56 @@ namespace LIMSApi.Services
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
-
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ReviewedById = model.ReviewedById;
+                existing.ReviewedByName = model.ReviewedByName;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.EffectiveDate = model.EffectiveDate;
+                existing.NextReviewDate = model.NextReviewDate;
+                existing.DepartmentId = model.DepartmentId;
+                existing.CurrentIssue = model.CurrentIssue;
+                existing.CurrentRevision = model.CurrentRevision;
+                existing.RequestNo = model.RequestNo;
+                existing.ChangeType = model.ChangeType;
+                existing.DescriptionOfChange = model.DescriptionOfChange;
+                existing.ImpactOfChange = model.ImpactOfChange;
+                existing.Reference = model.Reference;
+                existing.DepartmentName = model.DepartmentName;
+                existing.DepartmentDoc = model.DepartmentDoc;
+                existing.Designation = model.Designation;
+                existing.DesignationId = model.DesignationId;
+                existing.DocumentOwner = model.DocumentOwner;
+                existing.Priority = model.Priority;
+                existing.DocumentName = model.DocumentName;
+                existing.DocumentId = model.DocumentId;
+                existing.SourceReviewId = model.SourceReviewId;
                 await _repository.Update("DocumentChangeRequest", existing);
+                if (model.SourceReviewId.HasValue)
+                {
+                    var review = await _context.NablDocumentReviews.FirstOrDefaultAsync(c => c.ID == model.SourceReviewId.Value && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
+                    if (review != null)
+                    {
+                        // 3. Link generated DCR with Review
+                        review.GeneratedDcrId = model.ID;
+                        review.GeneratedDcrNo = model.RequestNo;
+                        review.GeneratedDcrChangeType = model.ChangeType;
+                        review.ModifiedOn = DateTime.UtcNow;
+                        review.ModifiedBy = loggedInUser.EmployeeID;
+                        // 4. Update existing Review
+                        await _repository.Update("DocumentReview", review);
+                    }
+                }
+                var masterdoc = await _context.NablMasterDocuments.FirstOrDefaultAsync(c => c.ID == existing.DocumentId && c.IsActive && c.CompanyCode == existing.CompanyCode);
+                if (masterdoc != null)
+                {
+                    masterdoc.ReviewedBy = model.ReviewedByName;
+                    masterdoc.ReviewedDate = DateTime.UtcNow;
+                    await _repository.Update("MasterDocument", masterdoc);
+                }
+
                 await LogAudit("DocumentChangeRequest", existing.ID, "Updated", null, body.GetRawText());
                 _logger.LogInformation("DocumentChangeRequest ID {Id} updated.", existing.ID);
                 return existing.ID;
@@ -4106,69 +4623,237 @@ namespace LIMSApi.Services
 
         private async Task<long> SaveDocumentReview(JsonElement body)
         {
-            var model = JsonSerializer.Deserialize<NablDocumentReview>(body.GetRawText(), _jsonOptions)
-                ?? throw new ArgumentException("Invalid DocumentReview data.");
+            var model = JsonSerializer.Deserialize<NablDocumentReview>(
+                body.GetRawText(),
+                _jsonOptions
+            ) ?? throw new ArgumentException(
+                "Invalid DocumentReview data."
+            );
 
             if (model.ID == 0)
             {
                 model.FormCode = FormCodeMap["DocumentReview"];
+
                 await AssignDocumentNumber(model, "DocumentReview");
+
                 model.Status = "Draft";
+
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
-                model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
+                model.CompanyCode =
+                    loggedInUser.CompanyCode ?? "LIMS";
+
+                var masterdoc = await _context.NablMasterDocuments.FirstOrDefaultAsync(c => c.ID == model.DocumentId && c.IsActive && c.CompanyCode == model.CompanyCode);
+                if(masterdoc != null)
+                {
+                    masterdoc.ReviewedBy = model.PreparedBy;
+                    masterdoc.ReviewedDate = model.PreparedDate;
+                    masterdoc.Status = "InProgress";
+                    await _repository.Update("MasterDocument", masterdoc);
+                }
 
                 var id = await _repository.Add("DocumentReview", model);
+
                 await LogAudit("DocumentReview", id, "Created", null, body.GetRawText());
+
                 _logger.LogInformation("DocumentReview created with ID {Id}.", id);
+
                 return id;
             }
-            else
+
+
+            var existing = await _context.NablDocumentReviews
+                .FirstOrDefaultAsync(x =>
+                    x.ID == model.ID &&
+                    x.IsActive &&
+                    x.CompanyCode == loggedInUser.CompanyCode
+                );
+
+            if (existing == null)
             {
-                var existing = await _context.NablDocumentReviews
-                    .FirstOrDefaultAsync(x => x.ID == model.ID && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
-
-                if (existing == null)
-                    throw new InvalidOperationException("DocumentReview not found!");
-
-                await SaveRevisionSnapshot("DocumentReview", existing);
-
-                existing.DocumentRef = model.DocumentRef;
-                existing.DocumentTitle = model.DocumentTitle;
-                existing.DocumentType = model.DocumentType;
-                existing.CurrentRevision = model.CurrentRevision;
-                existing.ReviewDate = model.ReviewDate;
-                existing.ReviewedBy = model.ReviewedBy;
-                existing.ReviewFindings = model.ReviewFindings;
-                existing.ChangeRequired = model.ChangeRequired;
-                existing.ChangeDescription = model.ChangeDescription;
-                existing.NextReviewDate = model.NextReviewDate;
-                existing.ReviewConclusion = model.ReviewConclusion;
-                existing.Date = model.Date;
-                existing.ModifiedOn = DateTime.UtcNow;
-                existing.ModifiedBy = loggedInUser.EmployeeID;
-
-                await _repository.Update("DocumentReview", existing);
-                await LogAudit("DocumentReview", existing.ID, "Updated", null, body.GetRawText());
-                _logger.LogInformation("DocumentReview ID {Id} updated.", existing.ID);
-                return existing.ID;
+                throw new InvalidOperationException("DocumentReview not found!");
             }
-        }
 
-        private async Task<long> SaveMasterDocument(JsonElement body)
+
+            if (existing.Status == "Completed")
+            {
+                throw new InvalidOperationException("Completed document review cannot be modified.");
+            }
+
+
+            var isApproval =
+                model.Status == "Completed";
+
+
+            if (
+                isApproval &&
+                model.ChangeRequired == true &&
+                !existing.GeneratedDcrId.HasValue
+            )
+            {
+                throw new InvalidOperationException("Please raise the Change Request before approving this review.");
+            }
+
+
+            await SaveRevisionSnapshot("DocumentReview", existing);
+
+
+            // =====================================================
+            // EXISTING FIELD UPDATE
+            // =====================================================
+
+            existing.DocumentRef = model.DocumentRef;
+            existing.DocumentTitle = model.DocumentTitle;
+            existing.DocumentType = model.DocumentType;
+            existing.CurrentRevision = model.CurrentRevision;
+
+            existing.ReviewDate = model.ReviewDate;
+            existing.ReviewedBy = model.ReviewedBy;
+
+            existing.ReviewFindings = model.ReviewFindings;
+
+            existing.ChangeRequired = model.ChangeRequired;
+
+            existing.ChangeDescription = model.ChangeDescription;
+
+            existing.NextReviewDate = model.NextReviewDate;
+
+            existing.ReviewConclusion = model.ReviewConclusion;
+
+            existing.Date = model.Date;
+
+            existing.ModifiedOn = DateTime.UtcNow;
+            existing.ModifiedBy = loggedInUser.EmployeeID;
+
+            existing.ApprovedBy = model.ApprovedBy;
+            existing.PreparedDate = model.PreparedDate;
+            existing.ReviewedDate = model.ReviewedDate;
+            existing.ApprovedDate = model.ApprovedDate;
+
+            existing.DocumentOwner = model.DocumentOwner;
+            existing.ReviewType = model.ReviewType;
+            existing.DocumentName = model.DocumentName;
+
+            existing.DepartmentName = model.DepartmentName;
+            existing.DepartmentDoc = model.DepartmentDoc;
+
+            existing.CurrentIssue = model.CurrentIssue;
+
+            existing.ReasonForChange = model.ReasonForChange;
+            existing.ImpactOfChange = model.ImpactOfChange;
+
+            existing.NoChangeConclusion = model.NoChangeConclusion;
+            existing.AdditionalRemarks = model.AdditionalRemarks;
+
+            existing.DocumentId = model.DocumentId;
+            existing.DepartmentId = model.DepartmentId;
+
+
+            // =====================================================
+            // UPDATE & APPROVE
+            // =====================================================
+
+            if (isApproval)
+            {
+                // Change Required = YES
+                if (
+                    existing.ChangeRequired == true &&
+                    existing.GeneratedDcrId.HasValue
+                )
+                {
+                    var dcr = await _context.NablDocumentChangeRequests
+                        .FirstOrDefaultAsync(x =>
+                            x.ID == existing.GeneratedDcrId.Value &&
+                            x.IsActive &&
+                            x.CompanyCode == loggedInUser.CompanyCode
+                        );
+
+                    if (dcr == null)
+                    {
+                        throw new InvalidOperationException(
+                            "Linked Change Request not found."
+                        );
+                    }
+
+                    dcr.Status = "Completed";
+                    dcr.ModifiedOn = DateTime.UtcNow;
+                    dcr.ModifiedBy = loggedInUser.EmployeeID;
+                }
+
+                var masterdoc = await _context.NablMasterDocuments
+                    .FirstOrDefaultAsync(c =>
+                        c.ID == existing.DocumentId &&
+                        c.IsActive &&
+                        c.CompanyCode == existing.CompanyCode
+                    );
+
+                if (masterdoc != null)
+                {
+                    masterdoc.ApprovedBy = model.PreparedBy;
+                    masterdoc.ApprovedDate = model.PreparedDate;
+                    masterdoc.Status = "Complete";
+
+                    // IMPORTANT
+                    await _repository.Update(
+                        "MasterDocument",
+                        masterdoc
+                    );
+                }
+
+                existing.Status = "Completed";
+            }
+
+            await _repository.Update(
+                "DocumentReview",
+                existing
+            );
+
+
+            await _repository.Update("DocumentReview", existing);
+
+
+            await LogAudit("DocumentReview",existing.ID, isApproval ? "Approved" : "Updated", null, body.GetRawText());
+
+
+            _logger.LogInformation(isApproval? "DocumentReview ID {Id} approved.": "DocumentReview ID {Id} updated.",existing.ID);
+
+
+            return existing.ID;
+        }
+        public async Task<long> SaveMasterDocument(JsonElement body, IFormFile? file)
         {
             var model = JsonSerializer.Deserialize<NablMasterDocument>(body.GetRawText(), _jsonOptions)
                 ?? throw new ArgumentException("Invalid MasterDocument data.");
 
             if (model.ID == 0)
             {
+                if (file == null || file.Length == 0)
+                    throw new ArgumentException(
+                        "Master document attachment is required.");
+
+                // First upload the attachment
+                var fileUploadResponse =
+                    await _fileUploadService.UploadFileAsync(file, FileType.NablMasterDocument, null, model.DocumentType);
+
+                if (fileUploadResponse == null)
+                    throw new InvalidOperationException("File upload failed!");
+
+                // Set uploaded attachment details in the main model
+                model.FilePath = fileUploadResponse.FilePath;
+
+                model.FileName = fileUploadResponse.OriginalFileName;
+
+                model.UploadReferenceID = fileUploadResponse.ID;
+
+                model.UploadedOn = DateTime.UtcNow;
+
                 model.FormCode = FormCodeMap["MasterDocument"];
                 await AssignDocumentNumber(model, "MasterDocument");
                 model.Status = "Draft";
                 model.CreatedOn = DateTime.UtcNow;
                 model.CreatedBy = loggedInUser.EmployeeID;
                 model.CompanyCode = loggedInUser.CompanyCode ?? "LIMS";
-
+                model.ControlledCopiesJson = JsonSerializer.Serialize(model.ControlledCopies);
                 var id = await _repository.Add("MasterDocument", model);
                 await LogAudit("MasterDocument", id, "Created", null, body.GetRawText());
                 _logger.LogInformation("MasterDocument created with ID {Id}.", id);
@@ -4183,7 +4868,22 @@ namespace LIMSApi.Services
                     throw new InvalidOperationException("MasterDocument not found!");
 
                 await SaveRevisionSnapshot("MasterDocument", existing);
+                if (file != null && file.Length > 0)
+                {
+                    var fileUploadResponse =
+                        await _fileUploadService.UploadFileAsync(file, FileType.NablMasterDocument, null, model.DocumentType);
 
+                    if (fileUploadResponse == null)
+                        throw new InvalidOperationException("File upload failed!");
+
+                    existing.FilePath = fileUploadResponse.FilePath;
+
+                    existing.FileName = fileUploadResponse.OriginalFileName;
+
+                    existing.UploadReferenceID = fileUploadResponse.ID;
+
+                    existing.UploadedOn = DateTime.UtcNow;
+                }
                 existing.DocumentCode = model.DocumentCode;
                 existing.DocumentTitle = model.DocumentTitle;
                 existing.DocumentType = model.DocumentType;
@@ -4193,12 +4893,22 @@ namespace LIMSApi.Services
                 existing.ReviewFrequency = model.ReviewFrequency;
                 existing.DocumentOwner = model.DocumentOwner;
                 existing.StorageLocation = model.StorageLocation;
-                existing.ControlledCopiesJson = model.ControlledCopiesJson;
+                existing.ControlledCopiesJson = JsonSerializer.Serialize(model.ControlledCopies);
                 existing.ObsoleteDate = model.ObsoleteDate;
                 existing.ObsoleteReason = model.ObsoleteReason;
                 existing.Date = model.Date;
                 existing.ModifiedOn = DateTime.UtcNow;
                 existing.ModifiedBy = loggedInUser.EmployeeID;
+                existing.ApprovedBy = model.ApprovedBy;
+                existing.ApprovedDate = model.ApprovedDate;
+                existing.ReviewedBy = model.ReviewedBy;
+                existing.ReviewedDate = model.ReviewedDate;
+                existing.PreparedBy = model.PreparedBy;
+                existing.PreparedDate = model.PreparedDate;
+                existing.DocumentOwnerId = model.DocumentOwnerId;
+                existing.DepartmentId = model.DepartmentId;
+                existing.DepartmentName = model.DepartmentName;
+                existing.NextReviewDate = model.NextReviewDate;
 
                 await _repository.Update("MasterDocument", existing);
                 await LogAudit("MasterDocument", existing.ID, "Updated", null, body.GetRawText());
@@ -5018,6 +5728,7 @@ namespace LIMSApi.Services
 
             // Final Format: CFA-2026-001
             return $"{companyCode}-{year}-{nextNumber:D3}";
+
         }
         public async Task<string> GetNextMeetingNo()
         {
@@ -5147,5 +5858,215 @@ namespace LIMSApi.Services
 
             return $"{prefix}-{year}-{nextNumber:D3}";
         }
+        public async Task<List<DropdwonSelector>> Documentlist(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _repository.Documentlist(searchTerm, pageNo, pageSize);
+        }
+        public async Task<string> GetNextrequestNo()
+        {
+            var year = DateTime.Now.Year;
+            const string prefix = "DCR";
+
+            // Format : CA-2026-001
+            var codePrefix = $"{prefix}-{year}-";
+
+            var lastRecord = await _context.NablDocumentChangeRequests
+                .Where(x => !string.IsNullOrWhiteSpace(x.RequestNo)
+                         && x.RequestNo.StartsWith(codePrefix))
+                .OrderByDescending(x => x.ID)
+                .FirstOrDefaultAsync();
+
+            int nextNumber = 1;
+
+            if (lastRecord != null)
+            {
+                var lastPart = lastRecord.RequestNo.Split('-').LastOrDefault();
+
+                if (int.TryParse(lastPart, out int lastNumber))
+                {
+                    nextNumber = lastNumber + 1;
+                }
+            }
+
+            return $"{prefix}-{year}-{nextNumber:D3}";
+        }
+        public async Task<NablDocumentReview?> GetDocumentReviewById(long id)
+        {
+            return await _context.NablDocumentReviews
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.ID == id &&
+                    x.IsActive &&
+                    x.CompanyCode == loggedInUser.CompanyCode);
+        }
+        public async Task<NablDocumentChangeRequest?> GetDocumentChangeRequestById(long id)
+        {
+            return await _context.NablDocumentChangeRequests
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.ID == id &&
+                    x.IsActive &&
+                    x.CompanyCode == loggedInUser.CompanyCode);
+        }
+        public async Task<string> GetNextreviewNo()
+        {
+            var year = DateTime.Now.Year;
+            const string prefix = "DRR";
+
+            // Format : CA-2026-001
+            var codePrefix = $"{prefix}-{year}-";
+
+            var lastRecord = await _context.NablDocumentReviews
+                .Where(x => !string.IsNullOrWhiteSpace(x.ReviewNo)
+                         && x.ReviewNo.StartsWith(codePrefix))
+                .OrderByDescending(x => x.ID)
+                .FirstOrDefaultAsync();
+
+            int nextNumber = 1;
+
+            if (lastRecord != null)
+            {
+                var lastPart = lastRecord.ReviewNo.Split('-').LastOrDefault();
+
+                if (int.TryParse(lastPart, out int lastNumber))
+                {
+                    nextNumber = lastNumber + 1;
+                }
+            }
+
+            return $"{prefix}-{year}-{nextNumber:D3}";
+        }
+        public async Task<List<DropdwonSelector>> GetAuditorsDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _repository.GetAuditorsDropdown(searchTerm, pageNo, pageSize);
+        }
+        public async Task<string> GetNextAuditPlanNo()
+        {
+            var year = DateTime.Now.Year;
+            const string prefix = "AP";
+
+            // Format : CA-2026-001
+            var codePrefix = $"{prefix}-{year}-";
+
+            var lastRecord = await _context.NablAuditPlans
+                .Where(x => !string.IsNullOrWhiteSpace(x.PlanNo)
+                         && x.PlanNo.StartsWith(codePrefix))
+                .OrderByDescending(x => x.ID)
+                .FirstOrDefaultAsync();
+
+            int nextNumber = 1;
+
+            if (lastRecord != null)
+            {
+                var lastPart = lastRecord.PlanNo.Split('-').LastOrDefault();
+
+                if (int.TryParse(lastPart, out int lastNumber))
+                {
+                    nextNumber = lastNumber + 1;
+                }
+            }
+
+            return $"{prefix}-{year}-{nextNumber:D3}";
+        }
+        public async Task<List<DropdwonSelector>> GetEligibleAuditors(long departmentId, string isoClauseIds, DateTime scheduleDate)
+        {
+            return await _repository.GetEligibleAuditors(departmentId, isoClauseIds, scheduleDate);
+        }
+        public async Task<AuditChecklistDto> GetScheduleSession(long scheduleItemId)
+        {
+            return await _repository.GetScheduleSession(scheduleItemId);
+        }
+        public async Task<NablAuditChecklist?> GetAuditChecklistById(long id)
+        {
+            return await _context.NablAuditChecklists
+                .AsNoTracking().Include(c => c.Items.Where(i => i.IsActive))
+                .FirstOrDefaultAsync(x =>
+                    x.ID == id &&
+                    x.IsActive &&
+                    x.CompanyCode == loggedInUser.CompanyCode);
+        }
+        public async Task<AuditChecklistNcrDto> GetAuditChecklistNcr(long checklistItemId)
+        {
+            return await _repository.GetAuditChecklistNcr(checklistItemId);
+        }
+        public async Task<string> GetNextChecklistNo()
+        {
+            var year = DateTime.Now.Year;
+            const string prefix = "CHK";
+
+            // Format : CA-2026-001
+            var codePrefix = $"{prefix}-{year}-";
+
+            var lastRecord = await _context.NablAuditChecklists
+                .Where(x => !string.IsNullOrWhiteSpace(x.ChecklistNo)
+                         && x.ChecklistNo.StartsWith(codePrefix))
+                .OrderByDescending(x => x.ID)
+                .FirstOrDefaultAsync();
+
+            int nextNumber = 1;
+
+            if (lastRecord != null)
+            {
+                var lastPart = lastRecord.ChecklistNo.Split('-').LastOrDefault();
+
+                if (int.TryParse(lastPart, out int lastNumber))
+                {
+                    nextNumber = lastNumber + 1;
+                }
+            }
+
+            return $"{prefix}-{year}-{nextNumber:D3}";
+        }
+        private async Task<bool> HasPendingChecklistNcrAsync(
+    IEnumerable<AuditChecklistItem> items)
+        {
+            var ncItems = items
+                .Where(x =>
+                    x.FindingType == "Minor NC" ||
+                    x.FindingType == "Major NC"
+                )
+                .ToList();
+
+            // Major/Minor finding hi nahi hai
+            if (!ncItems.Any())
+                return false;
+
+            // NCR abhi raise hi nahi hua
+            if (ncItems.Any(x => !x.NcId.HasValue))
+                return true;
+
+            var ncIds = ncItems
+                .Where(x => x.NcId.HasValue)
+                .Select(x => x.NcId!.Value)
+                .Distinct()
+                .ToList();
+
+            var completedNcIds = await _context.NablNonConformingWorks
+                .Where(x =>
+                    ncIds.Contains(x.ID) &&
+                    x.IsActive &&
+                    x.Status == "Completed"
+                )
+                .Select(x => x.ID)
+                .ToListAsync();
+
+            // Ek bhi linked NCR Completed nahi hai to pending
+            return ncItems.Any(x =>
+                x.NcId.HasValue &&
+                !completedNcIds.Contains(x.NcId.Value)
+            );
+        }
+        public async Task<AuditSummaryDto> GetAuditplan(long auditPlanId)
+        {
+            return await _repository.GetAuditplan(auditPlanId);
+        }
+        public async Task<List<DropdwonSelector>> GetDocumentsAvailableForReview(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _repository.GetDocumentsAvailableForReview(searchTerm, pageNo, pageSize);
+        }
+        public async Task<List<MasterDocumentPrintDto>> GetMasterDocumentPrintList()
+        {
+            return await  _repository.GetMasterDocumentPrintList();
+        }
     }
-}
+    }

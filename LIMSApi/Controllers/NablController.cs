@@ -62,6 +62,66 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> Save(string formType, [FromBody] JsonElement body)
         {
             var id = await _service.Save(formType, body);
+            if (formType == "DocumentReview")
+            {
+                var review = await _service.GetDocumentReviewById(id);
+                return Ok(new
+                {
+                    id,
+                    reviewId = id,
+                    documentId = review?.DocumentId,
+                    changeRequired = review?.ChangeRequired,
+                    message = "Document review saved successfully"
+                });
+            }
+            if (formType == "DocumentChangeRequest")
+            {
+                var dcr = await _service.GetDocumentChangeRequestById(id);
+
+                return Ok(new
+                {
+                    id,
+                    reviewId = dcr?.SourceReviewId,
+                    message = "Document change request saved successfully"
+                });
+            }
+            if (formType == "AuditChecklist")
+            {
+                var checklist = await _service.GetAuditChecklistById(id);
+                if(checklist == null)
+                {
+                    return NotFound(new
+                    {
+                        message = "Audit checklist not found after save"
+                    });
+                }
+
+
+                var hasPendingNcr = checklist.Items.Any(x =>
+                    x.IsActive &&
+                    (
+                        string.Equals(
+                            x.FindingType,
+                            "Minor NC",
+                            StringComparison.OrdinalIgnoreCase
+                        ) ||
+                        string.Equals(
+                            x.FindingType,
+                            "Major NC",
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                    ) &&
+                    !x.NcId.HasValue
+                );
+                return Ok(new
+                {
+                    id,
+                    checklistId = checklist.ID,
+                    auditPlanId = checklist.AuditPlanId,
+                    hasPendingNcr,
+                    message = "Audit checklist saved successfully"
+                });
+            }
             return Ok(new { message = $"{formType} saved successfully", id });
         }
 
@@ -376,7 +436,7 @@ namespace LIMSApi.Controllers
         {
             var ncNo = await _service.GetNextNCNo();
             return Ok(new { ncNo });
-        
+
         }
         [HttpGet("{formType}/next-action-no")]
         public async Task<IActionResult> GetNextActionNo()
@@ -394,6 +454,106 @@ namespace LIMSApi.Controllers
         {
             var muCode = await _service.GetNextMUNo();
             return Ok(new { muCode });
+        }
+
+        [HttpPost("{formType}/saveDoc")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> SaveMasterDocument(string formType, [FromForm] SaveMasterDocumentRequest request)
+        {
+            using var jsonDocument =
+                JsonDocument.Parse(request.Body);
+
+            var id = await _service.SaveMasterDocument(
+                jsonDocument.RootElement,
+                request.File);
+
+            return Ok(new
+            {
+                message = "Master document saved successfully",
+                id
+            });
+        }
+        [HttpGet("{formType}/documentlist")]
+        public async Task<IActionResult> Documentlist(string? searchTearm, int pageNo, int pageSize)
+        {
+            var data = await _service.Documentlist(searchTearm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("{formType}/next-request-no")]
+        public async Task<IActionResult> GetNextrequestNo()
+        {
+            var requestNo = await _service.GetNextrequestNo();
+            return Ok(new { requestNo });
+        }
+        [HttpGet("{formType}/next-review-no")]
+        public async Task<IActionResult> GetNextreviewNo()
+        {
+            var reviewNo = await _service.GetNextreviewNo();
+            return Ok(new { reviewNo });
+        }
+        [HttpGet("{formType}/auditorsdropdown")]
+        public async Task<IActionResult> GetAuditorsDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            var data = await _service.GetAuditorsDropdown(searchTerm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("{formType}/next-auditplan-no")]
+        public async Task<IActionResult> GetNextAuditPlanNo()
+        {
+            var planNo = await _service.GetNextAuditPlanNo();
+            return Ok(new { planNo });
+        }
+        [HttpGet("{formType}/eligible-auditors")]
+        public async Task<IActionResult> GetEligibleAuditors(long departmentId, string isoClauseIds, DateTime scheduleDate)
+        {
+            var result = await _service.GetEligibleAuditors(departmentId,isoClauseIds,scheduleDate);
+
+            return Ok(result);
+        }
+        [HttpGet("{formType}/schedule-session/{scheduleItemId}")]
+        public async Task<IActionResult> GetScheduleSession(long scheduleItemId)
+        {
+            var data = await _service.GetScheduleSession(scheduleItemId);
+
+            return data == null
+                ? NoContent()
+                : Ok(data);
+        }
+        [HttpGet("{formType}/audit-checklist-ncr/{checklistItemId}")]
+        public async Task<IActionResult> GetAuditChecklistNcr(long checklistItemId)
+        {
+            var data = await _service.GetAuditChecklistNcr(checklistItemId);
+
+            return data == null
+                ? NoContent()
+                : Ok(data);
+        }
+        [HttpGet("{formType}/next-checklistNo-no")]
+        public async Task<IActionResult> GetNextChecklistNo()
+        {
+            var checklistNo = await _service.GetNextChecklistNo();
+            return Ok(new { checklistNo });
+        }
+        [HttpGet("{formType}/audit-plan/{auditPlanId}")]
+        public async Task<IActionResult> GetAuditplan(long auditPlanId)
+        {
+            var data = await _service.GetAuditplan(auditPlanId);
+
+            return data == null
+                ? NoContent()
+                : Ok(data);
+        }
+        [HttpGet("{formType}/available-documentlist")]
+        public async Task<IActionResult> GetDocumentsAvailableForReview(string? searchTearm, int pageNo, int pageSize)
+        {
+            var data = await _service.GetDocumentsAvailableForReview(searchTearm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+        [HttpGet("{formType}/master-print-list")]
+        public async Task<IActionResult> GetMasterDocumentPrintList()
+        {
+            var data = await _service.GetMasterDocumentPrintList();
+            return data == null ? NoContent() : Ok(data);
         }
     }
 

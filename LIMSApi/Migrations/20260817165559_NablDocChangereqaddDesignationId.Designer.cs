@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20260817165559_NablDocChangereqaddDesignationId")]
+    partial class NablDocChangereqaddDesignationId
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -7409,6 +7412,12 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<long?>("RequestById")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("RequestByName")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime?>("RequestDate")
                         .HasColumnType("datetime2");
 
@@ -7433,9 +7442,6 @@ namespace LIMSApi.Migrations
 
                     b.Property<long?>("ReviewedById")
                         .HasColumnType("bigint");
-
-                    b.Property<string>("ReviewedByName")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("ReviewedDate")
                         .HasColumnType("datetime2");

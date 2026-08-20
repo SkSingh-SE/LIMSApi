@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using System.Collections.Concurrent;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Linq;
 using System.Linq.Dynamic.Core;
 using System.Reflection;
 using System.Text.Json;
@@ -101,7 +102,7 @@ namespace LIMSApi.Repositories
                 "Retesting" => await GetAllTyped<NablRetesting>(filter),
                 "RiskAssessment" => await GetAllTyped<NablRiskAssessment>(filter),
                 "DocumentChangeRequest" => await GetAllTyped<NablDocumentChangeRequest>(filter),
-                "DocumentReview" => await GetAllTyped<NablDocumentReview>(filter),
+                "DocumentReview" => await GetDocumentReviewList(filter),
                 "MasterDocument" => await GetAllTyped<NablMasterDocument>(filter),
                 "MeasurementUncertainty" => await GetAllTyped<NablMeasurementUncertainty>(filter),
                 "PtIlcPlan" => await GetAllTyped<NablPtIlcPlan>(filter),
@@ -154,8 +155,8 @@ namespace LIMSApi.Repositories
                 "Complaint" => await GetByIdTyped<NablComplaint>(id),
                 "CustomerFeedback" => await GetByIdTyped<NablCustomerFeedback>(id),
                 "FeedbackAnalysis" => await GetByIdTyped<NablFeedbackAnalysis>(id),
-                "AuditPlan" => await GetByIdTyped<NablAuditPlan>(id),
-                "AuditChecklist" => await GetByIdTyped<NablAuditChecklist>(id),
+                "AuditPlan" => await GetByAuditPlanIdTyped(id),
+                "AuditChecklist" => await GetByAuditChecklistTyped(id),
                 "AuditSummary" => await GetByIdTyped<NablAuditSummary>(id),
                 "InternalAuditor" => await GetByIdTyped<NablInternalAuditor>(id),
                 "MeetingAgenda" => await GetByIdTyped<NablMeetingAgenda>(id),
@@ -165,8 +166,8 @@ namespace LIMSApi.Repositories
                 "Retesting" => await GetNablRetesting(id),
                 "RiskAssessment" => await GetByIdTyped<NablRiskAssessment>(id),
                 "DocumentChangeRequest" => await GetByIdTyped<NablDocumentChangeRequest>(id),
-                "DocumentReview" => await GetByIdTyped<NablDocumentReview>(id),
-                "MasterDocument" => await GetByIdTyped<NablMasterDocument>(id),
+                "DocumentReview" => await GetByDocumentReviewId(id),
+                "MasterDocument" => await GetMasterDocumentById(id),
                 "MeasurementUncertainty" => await GetByIdTyped<NablMeasurementUncertainty>(id),
                 "PtIlcPlan" => await GetByIdTyped<NablPtIlcPlan>(id),
                 "InventoryMaster" => await GetInventoryMaster(id),
@@ -2416,7 +2417,7 @@ namespace LIMSApi.Repositories
 
         private async Task<NablNonConformingWork> GetByIdNonConformingWork(long id)
         {
-            var data = await _context.NablNonConformingWorks.Include(c=>c.Investigation).Include(c=>c.CorrectiveAction).Include(c=>c.Verification).Include(c=>c.Closure).FirstOrDefaultAsync(c => c.ID == id && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
+            var data = await _context.NablNonConformingWorks.Include(c => c.Investigation).Include(c => c.CorrectiveAction).Include(c => c.Verification).Include(c => c.Closure).FirstOrDefaultAsync(c => c.ID == id && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
             return data;
         }
         public async Task<PagedResponse<object>> NcPrintList(PageFilter filter)
@@ -2479,6 +2480,779 @@ namespace LIMSApi.Repositories
             });
 
             return await result.Cast<object>().ToPagedAsync(filter);
+
+        }
+        public async Task<List<DropdwonSelector>> Documentlist(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0)
+                pageNo = 0;
+
+
+            var query = _context.NablMasterDocuments
+                .Where(x => x.IsActive && !string.IsNullOrWhiteSpace(x.DocumentCode));
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    query = query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    query = query.Where(x => x.DocumentCode.Contains(search));
+                }
+            }
+
+
+
+            var skip = pageNo * pageSize;
+
+            var data = query
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = (x.DocumentCode ?? "")  + "/" + (x.DocumentTitle ?? ""),
+                    AdditionalValues = new Dictionary<string, object>
+                    {
+                { "DocumentType", x.DocumentType ?? "" },
+                { "DepartmentName", x.DepartmentName ?? "" },
+                { "CurrentIssue", x.CurrentIssue ?? "" },
+                { "CurrentRevision", x.CurrentRevision ?? "" },
+                {"EffectiveDate",x.EffectiveDate},
+                {"NextReviewDate",x.NextReviewDate},
+                {"DocumentOwner",x.DocumentOwner},
+                {"DocumentName",(x.DocumentCode) + "/" + (x.DocumentTitle)}
+                    }
+                })
+                .ToList();
+            return data;
+        }
+        public async Task<List<DropdwonSelector>> GetAuditorsDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = from a in _context.NablInternalAuditors
+                         where a.IsActive
+                         select a;
+
+
+            _query = _query.Where(x => !string.IsNullOrWhiteSpace(x.EmployeeName));
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => x.EmployeeName.Contains(search));
+                }
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await _query
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = x.EmployeeName
+                })
+                .ToListAsync();
+
+            return data;
+        }
+        public async Task<List<DropdwonSelector>> GetEligibleAuditors(
+         long departmentId,
+         string isoClauseIds,
+         DateTime scheduleDate)
+        {
+            int pageNo = 0;
+            int pageSize = 20;
+
+            var selectedClauseIds = isoClauseIds
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => int.TryParse(x.Trim(), out var id) ? id : 0)
+                .Where(id => id > 0)
+                .Distinct()
+                .ToList();
+
+            if (selectedClauseIds.Count == 0)
+                return new List<DropdwonSelector>();
+
+            // First fetch only active and date-valid auditors.
+            // Department eligibility will be checked from DepartmentListJson.
+            var auditors = await _context.NablInternalAuditors
+                .Where(x =>
+                    x.IsActive &&
+                    x.EmployeeId.HasValue &&
+                    x.AuthorizationValidUpto.HasValue &&
+                    x.AuthorizationValidUpto.Value.Date >= scheduleDate.Date &&
+                    !string.IsNullOrWhiteSpace(x.EmployeeName) &&
+                    !string.IsNullOrWhiteSpace(x.ISOClausesJson) &&
+                    !string.IsNullOrWhiteSpace(x.DepartmentListJson))
+                .ToListAsync();
+
+            foreach (var auditor in auditors)
+            {
+                auditor.IsoClauses =
+                    !string.IsNullOrWhiteSpace(auditor.ISOClausesJson)
+                        ? JsonSerializer.Deserialize<List<IsoClauses>>(
+                            auditor.ISOClausesJson
+                          ) ?? new List<IsoClauses>()
+                        : new List<IsoClauses>();
+
+                auditor.DepartmentList =
+                    !string.IsNullOrWhiteSpace(auditor.DepartmentListJson)
+                        ? JsonSerializer.Deserialize<List<DepartmentList>>(
+                            auditor.DepartmentListJson
+                          ) ?? new List<DepartmentList>()
+                        : new List<DepartmentList>();
+            }
+
+            var eligibleAuditors = auditors.Where(a =>
+            {
+                if (a.DepartmentList == null || a.DepartmentList.Count == 0)
+                    return false;
+
+                if (a.IsoClauses == null || a.IsoClauses.Count == 0)
+                    return false;
+
+                // Selected department must exist in auditor's Authorized Areas list.
+                var departmentMatched = a.DepartmentList.Any(d =>
+                    d.DepartmentId.HasValue &&
+                    d.DepartmentId.Value == departmentId);
+
+                if (!departmentMatched)
+                    return false;
+
+                // Auditor must be authorized for all selected ISO clauses.
+                var auditorClauseIds = a.IsoClauses
+                    .Where(x => x.ClauseId.HasValue)
+                    .Select(x => x.ClauseId!.Value)
+                    .Distinct()
+                    .ToHashSet();
+
+                return selectedClauseIds.All(id =>
+                    auditorClauseIds.Contains(id));
+            });
+
+            return eligibleAuditors
+                .Skip(pageNo * pageSize)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.EmployeeId!.Value,
+                    Name = x.EmployeeName!
+                })
+                .ToList();
+        }
+        private async Task<NablAuditPlan> GetByAuditPlanIdTyped(long id)
+        {
+            var auditPlan = await _context.NablAuditPlans
+                .Include(x => x.ScheduleItems)
+                .FirstOrDefaultAsync(x =>
+                    x.ID == id &&
+                    x.IsActive &&
+                    x.CompanyCode == loggedInUser.CompanyCode
+                );
+
+            if (auditPlan == null)
+                throw new ArgumentException("Audit Plan not found.");
+
+            foreach (var scheduleItem in auditPlan.ScheduleItems)
+            {
+                scheduleItem.IsoClauses =
+                    !string.IsNullOrWhiteSpace(scheduleItem.ISOClausesJson)
+                        ? JsonSerializer.Deserialize<List<AuditScheduleIsoClause>>(
+                            scheduleItem.ISOClausesJson
+                          ) ?? new List<AuditScheduleIsoClause>()
+                        : new List<AuditScheduleIsoClause>();
+            }
+
+            return auditPlan;
+        }
+        public async Task<AuditChecklistDto?> GetScheduleSession(long scheduleItemId)
+        {
+            var schedule = await _context.ScheduleItems
+                .FirstOrDefaultAsync(x => x.ID == scheduleItemId && x.IsActive == true);
+            var scheduleplan = await _context.NablAuditPlans.FirstOrDefaultAsync(x => x.ID == schedule.AuditPlanId && x.IsActive == true);
+            if (schedule == null)
+                return null;
+
+            var dto = new AuditChecklistDto
+            {
+                AuditPlanId = schedule.AuditPlanId,
+                ScheduleItemId = schedule.ID,
+                AuditPlanNo = schedule.AuditPlan?.PlanNo,
+                DepartmentId = schedule.DepartmentId,
+                DepartmentName = schedule.DepartmentName,
+                AuditorId = schedule.AuditorId,
+                AuditorName = schedule.AuditorName,
+                AuditeeId = schedule.AuditeeId,
+                AuditeeName = schedule.AuditeeName,
+                ScheduleDate = schedule.ScheduleDate,
+                PlanNo= scheduleplan.PlanNo,
+            };
+
+            if (!string.IsNullOrWhiteSpace(schedule.ISOClausesJson))
+            {
+                dto.IsoClauses =
+                    JsonSerializer.Deserialize<List<AuditChecklistIsoClauseDto>>(
+                        schedule.ISOClausesJson
+                    ) ?? new List<AuditChecklistIsoClauseDto>();
+            }
+
+            return dto;
+        }
+        private async Task<NablAuditChecklist> GetByAuditChecklistTyped(long id)
+        {
+            var auditChecklist = await _context.NablAuditChecklists
+      .Include(x => x.Items.Where(item => item.IsActive)) // Filters the related Items collection
+      .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            if (auditChecklist == null)
+                throw new ArgumentException("Audit checklist not found.");
+
+            var ncIds = auditChecklist.Items
+      .Where(x =>
+          x.IsActive &&
+          x.NcId.HasValue
+      )
+      .Select(x => x.NcId!.Value)
+      .Distinct()
+      .ToList();
+
+            if (ncIds.Any())
+            {
+                var ncrData = await _context.NablNonConformingWorks
+                    .Where(x =>
+                        ncIds.Contains(x.ID) &&
+                        x.IsActive
+                    )
+                    .Select(x => new
+                    {
+                        x.ID,
+                        x.CurrentStep,
+                        x.Status
+                    })
+                    .ToListAsync();
+
+                foreach (var item in auditChecklist.Items)
+                {
+                    if (!item.NcId.HasValue)
+                        continue;
+
+                    var ncr = ncrData.FirstOrDefault(x =>
+                        x.ID == item.NcId.Value
+                    );
+
+                    if (ncr != null)
+                    {
+                        item.NcCurrentStep = ncr.CurrentStep;
+                        item.NcStatus = ncr.Status;
+                    }
+                }
+            }
+            return auditChecklist;
+        }
+        public async Task<AuditChecklistNcrDto?> GetAuditChecklistNcr(long checklistItemId)
+        {
+            var item = await _context.AuditChecklistItems
+                .Include(x => x.Checklist)
+                .FirstOrDefaultAsync(x =>
+                    x.ID == checklistItemId &&
+                    x.IsActive
+                );
+
+            if (item == null || item.Checklist == null)
+                return null;
+
+            var checklist = item.Checklist;
+
+            var dto = new AuditChecklistNcrDto
+            {
+                ChecklistId = checklist.ID,
+                ChecklistItemId = item.ID,
+                ChecklistNo = checklist.ChecklistNo,
+                AuditPlanId = checklist.AuditPlanId,
+                ScheduleItemId = checklist.ScheduleItemId,
+                DepartmentId = checklist.DepartmentId,
+                DepartmentName = checklist.DepartmentName,
+                AuditorId = checklist.AuditorId,
+                AuditorName = checklist.AuditorName,
+                FindingType = item.FindingType,
+                AuditQuestion = item.AuditQuestion,
+                ObjectiveEvidence = item.ObjectiveEvidence,
+            };
+
+            return dto;
+        }
+        public async Task<AuditSummaryDto?> GetAuditplan(long auditPlanId)
+        {
+            var auditPlan = await _context.NablAuditPlans
+                .Include(x => x.ScheduleItems)
+                .FirstOrDefaultAsync(x =>
+                    x.ID == auditPlanId &&
+                    x.IsActive
+                );
+
+            if (auditPlan == null)
+                return null;
+
+            var scheduleItems = auditPlan.ScheduleItems
+                .Where(x => x.IsActive == true)
+                .ToList();
+
+            // Schedule Item IDs
+            var scheduleItemIds = scheduleItems
+                .Select(x => x.ID)
+                .ToList();
+
+            // Linked Checklists
+            var checklists = await _context.NablAuditChecklists
+                .Where(x =>
+                    scheduleItemIds.Contains(x.ScheduleItemId) &&
+                    x.IsActive
+                )
+                .ToListAsync();
+
+            var checklistIds = checklists
+                .Select(x => x.ID)
+                .ToList();
+
+            // Checklist Items
+            var checklistItems = await _context.AuditChecklistItems
+                .Where(x =>
+                    checklistIds.Contains(x.ChecklistId) &&
+                    x.IsActive
+                )
+                .ToListAsync();
+
+            // NCR IDs
+            var ncIds = checklistItems
+                .Where(x => x.NcId.HasValue)
+                .Select(x => x.NcId!.Value)
+                .Distinct()
+                .ToList();
+
+            // NCR Records
+            var ncrs = await _context.NablNonConformingWorks
+                .Where(x =>
+                    ncIds.Contains(x.ID) &&
+                    x.IsActive
+                )
+                .ToListAsync();
+
+            // Counts
+            var totalAudits = scheduleItems.Count;
+
+            var completed = scheduleItems.Count(x =>
+                x.Status == "Completed"
+            );
+
+            var inProgress = scheduleItems.Count(x =>
+                x.Status == "InProgress"
+            );
+
+            var scheduled = scheduleItems.Count(x =>
+                x.Status == "Scheduled"
+            );
+
+            var majorNcrs = checklistItems.Count(x =>
+                x.FindingType == "Major NC"
+            );
+
+            var minorNcrs = checklistItems.Count(x =>
+                x.FindingType == "Minor NC"
+            );
+
+            var observations = checklistItems.Count(x =>
+                x.FindingType == "Observation"
+            );
+
+            var totalNcrs =
+                majorNcrs + minorNcrs;
+
+            var closedNcrs = ncrs.Count(x =>
+                x.Status == "Completed"
+            );
+
+            var pendingNcrs = ncrs.Count(x =>
+                x.Status != "Completed"
+            );
+
+            var departmentSummary = new List<AuditDepartmentSummaryDto>();
+
+            var departmentGroups = scheduleItems
+                .GroupBy(x => new
+                {
+                    x.DepartmentId,
+                    x.DepartmentName
+                });
+
+            foreach (var group in departmentGroups)
+            {
+                var departmentSchedules = group.ToList();
+
+                var departmentScheduleIds = departmentSchedules
+                    .Select(x => x.ID)
+                    .ToList();
+
+                // Department ke schedule items se linked checklists
+                var departmentChecklists = checklists
+                    .Where(x =>
+                        departmentScheduleIds.Contains(x.ScheduleItemId)
+                    )
+                    .ToList();
+
+                // Department ke checklist IDs
+                var departmentChecklistIds = departmentChecklists
+                    .Select(x => x.ID)
+                    .ToList();
+
+                // Department ke checklist items
+                var departmentItems = checklistItems
+                    .Where(x =>
+                        departmentChecklistIds.Contains(x.ChecklistId)
+                    )
+                    .ToList();
+
+                departmentSummary.Add(
+                    new AuditDepartmentSummaryDto
+                    {
+                        DepartmentId = group.Key.DepartmentId,
+                        DepartmentName = group.Key.DepartmentName,
+
+                        TotalAudits = departmentSchedules.Count,
+
+                        Completed = departmentSchedules.Count(x =>
+                            x.Status == "Completed"
+                        ),
+
+                        InProgress = departmentSchedules.Count(x =>
+                            x.Status == "InProgress"
+                        ),
+
+                        Scheduled = departmentSchedules.Count(x =>
+                            x.Status == "Scheduled"
+                        ),
+
+                        MajorNcrs = departmentItems.Count(x =>
+                            x.FindingType == "Major NC"
+                        ),
+
+                        MinorNcrs = departmentItems.Count(x =>
+                            x.FindingType == "Minor NC"
+                        ),
+
+                        Observations = departmentItems.Count(x =>
+                            x.FindingType == "Observation"
+                        )
+                    }
+                );
+            }
+            var dto = new AuditSummaryDto
+            {
+                AuditPlanId = auditPlan.ID,
+
+                AuditPlanNo = auditPlan.PlanNo,
+                AuditType = auditPlan.AuditType,
+                PlanningYear = auditPlan.AuditYear,
+
+                LeadAuditor = auditPlan.LeadAuditorName,
+
+                AuditFrom = auditPlan.ScheduleDateFrom,
+                AuditTo = auditPlan.ScheduleDateTo,
+
+                AuditCriteria = auditPlan.AuditCriteria,
+                ScopeOfAudit = auditPlan.AuditScope,
+                AuditObjective = auditPlan.AuditObjective,
+
+                TotalAudits = totalAudits,
+                Completed = completed,
+                InProgress = inProgress,
+                Scheduled = scheduled,
+
+                TotalNcrs = totalNcrs,
+                MajorNcrs = majorNcrs,
+                MinorNcrs = minorNcrs,
+                Observations = observations,
+
+                ClosedNcrs = closedNcrs,
+                PendingNcrs = pendingNcrs,
+                DepartmentSummary = departmentSummary
+            };
+
+            return dto;
+        }
+        private async Task<NablMasterDocument> GetMasterDocumentById(long id)
+        {
+            var data = await _context.NablMasterDocuments.FirstOrDefaultAsync(c => c.ID == id && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
+            if (data == null)
+                return null;
+
+            var review = await _context.NablDocumentReviews.Where(x => x.DocumentId == data.ID && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode).OrderByDescending(x => x.ID).FirstOrDefaultAsync();
+            if (review != null)
+            {
+                data.HasReview = true;
+                data.ReviewId = review.ID;
+                data.ReviewStatus = review.Status;
+            }
+            return data;
+        }
+        private async Task<NablDocumentReview?> GetByDocumentReviewId(long id)
+        {
+            var data = await _context.NablDocumentReviews
+                .FirstOrDefaultAsync(c =>
+                    c.ID == id &&
+                    c.IsActive &&
+                    c.CompanyCode == loggedInUser.CompanyCode
+                );
+
+            if (data == null)
+                return null;
+
+
+            // Change Required = No
+            // No reviewer restriction
+            if (data.ChangeRequired != true)
+            {
+                data.CanEditReview = true;
+                return data;
+            }
+
+
+            // Change Required = Yes
+            // Check linked DCR
+            var dcr = await _context.NablDocumentChangeRequests
+                .FirstOrDefaultAsync(x =>
+                    x.SourceReviewId == data.ID &&
+                    x.IsActive &&
+                    x.CompanyCode == loggedInUser.CompanyCode
+                );
+
+
+            // DCR abhi create nahi hua
+            // Review editable rahega
+            if (dcr == null)
+            {
+                data.CanEditReview = true;
+                return data;
+            }
+
+
+            // DCR created
+            // Selected reviewer must match logged-in user
+            data.CanEditReview =
+                dcr.ReviewedById == loggedInUser.EmployeeID;
+
+
+            return data;
+        }
+        public async Task<List<DropdwonSelector>> GetDocumentsAvailableForReview(
+    string? searchTerm,
+    int pageNo = 0,
+    int pageSize = 20)
+        {
+            if (pageNo < 0)
+                pageNo = 0;
+
+            var query = _context.NablMasterDocuments
+                .Where(x =>
+                    x.IsActive &&
+                    !string.IsNullOrWhiteSpace(x.DocumentCode) &&
+
+                    !_context.NablDocumentReviews.Any(r =>
+                        r.DocumentId == x.ID &&
+                        r.IsActive
+                    )
+                );
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    query = query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+
+                    query = query.Where(x =>
+                        x.DocumentCode.Contains(search)
+                    );
+                }
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = query
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+
+                    Name =
+                        (x.DocumentCode ?? "") +
+                        "/" +
+                        (x.DocumentTitle ?? ""),
+
+                    AdditionalValues =
+                        new Dictionary<string, object>
+                        {
+                    { "DocumentType", x.DocumentType ?? "" },
+                    { "DepartmentName", x.DepartmentName ?? "" },
+                    { "CurrentIssue", x.CurrentIssue ?? "" },
+                    { "CurrentRevision", x.CurrentRevision ?? "" },
+                    { "EffectiveDate", x.EffectiveDate },
+                    { "NextReviewDate", x.NextReviewDate },
+                    { "DocumentOwner", x.DocumentOwner ?? "" },
+                    {
+                        "DocumentName",
+                        (x.DocumentCode ?? "") +
+                        "/" +
+                        (x.DocumentTitle ?? "")
+                    }
+                        }
+                })
+                .ToList();
+
+            return data;
+        }
+        private async Task<PagedResponse<object>> GetDocumentReviewList(PageFilter filter)
+        {
+            var query = _context.NablDocumentReviews
+                .Where(c =>
+                    c.IsActive &&
+                    c.CompanyCode == loggedInUser.CompanyCode
+                );
+
+            if (filter.Filter != null)
+            {
+                query = query
+                    .AsQueryable()
+                    .ApplyFilters(filter.Filter);
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.searchTerm))
+            {
+                var search = filter.searchTerm.Trim();
+
+                query = query.Where(x =>
+                    (x.ReviewNo != null && x.ReviewNo.Contains(search)) ||
+                    (x.ReviewType != null && x.ReviewType.Contains(search)) ||
+                    (x.DocumentName != null && x.DocumentName.Contains(search)) ||
+                    (x.DepartmentName != null && x.DepartmentName.Contains(search)) ||
+                    (x.Status != null && x.Status.Contains(search))
+                );
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.SortByColumn))
+            {
+                string direction =
+                    filter.SortOrder?.ToLower() == "asc"
+                        ? "ascending"
+                        : "descending";
+
+                query = query.OrderBy(
+                    $"{filter.SortByColumn} {direction}"
+                );
+            }
+            else
+            {
+                query = query.OrderByDescending(x => x.ID);
+            }
+
+            var resultQuery = query.Select(x => new NablDocumentReview
+            {
+                ID = x.ID,
+                ReviewNo = x.ReviewNo,
+                ReviewType = x.ReviewType,
+                DocumentName = x.DocumentName,
+                DepartmentName = x.DepartmentName,
+                ChangeRequired = x.ChangeRequired,
+                NextReviewDate = x.NextReviewDate,
+                Status = x.Status,
+
+                CanEditReview =
+         // Case 1: Change Required = No
+         x.ChangeRequired != true
+
+         ||
+
+         // Case 2: Change Required = Yes,
+         // but DCR abhi create hi nahi hua
+         !_context.NablDocumentChangeRequests.Any(dcr =>
+             dcr.SourceReviewId == x.ID &&
+             dcr.IsActive &&
+             dcr.CompanyCode == loggedInUser.CompanyCode
+         )
+
+         ||
+
+         // Case 3: DCR created hai
+         // and selected reviewer = logged-in user
+         _context.NablDocumentChangeRequests.Any(dcr =>
+             dcr.SourceReviewId == x.ID &&
+             dcr.IsActive &&
+             dcr.CompanyCode == loggedInUser.CompanyCode &&
+             dcr.ReviewedById == loggedInUser.EmployeeID
+         )
+            });
+
+            return await resultQuery
+                .Cast<object>()
+                .ToPagedAsync(filter);
+        }
+        public async Task<List<MasterDocumentPrintDto>> GetMasterDocumentPrintList()
+        {
+            var documents = await _context.NablMasterDocuments
+                .Where(x => x.IsActive)
+                .OrderByDescending(x => x.CreatedOn)
+                .ToListAsync();
+
+            if (!documents.Any())
+                return new List<MasterDocumentPrintDto>();
+
+            var result = new List<MasterDocumentPrintDto>();
+
+            foreach (var document in documents)
+            {
+                var controlledCopies = string.IsNullOrWhiteSpace(document.ControlledCopiesJson)
+                    ? new List<ControlledCopyPrintDto>()
+                    : JsonSerializer.Deserialize<List<ControlledCopyPrintDto>>(
+                        document.ControlledCopiesJson
+                      ) ?? new List<ControlledCopyPrintDto>();
+
+                var copyHolders = string.Join(
+                    ", ",
+                    controlledCopies
+                        .Where(x => !string.IsNullOrWhiteSpace(x.HolderName))
+                        .Select(x => x.HolderName!.Trim())
+                );
+
+                result.Add(new MasterDocumentPrintDto
+                {
+                   
+                    DocumentCode = document.DocumentCode,
+                    DocumentTitle = document.DocumentTitle,
+                    DocumentNo = document.DocumentNo,
+                    DocumentType = document.DocumentType,
+                    DocumentOwner = document.DocumentOwner,
+                    IssueNo = document.IssueNo,
+                    RevNo = document.RevNo,
+                    CopyHolders = copyHolders
+                });
+            }
+
+            return result;
         }
     }
 

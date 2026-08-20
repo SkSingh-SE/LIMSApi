@@ -38,7 +38,14 @@ namespace LIMSApi.Repositories.Interface
         Task<List<DropdwonSelector>> GetMeetinglist(string? searchTerm, int pageNo, int pageSize);
         Task<MeetingAgendaDto> GetMeetingDetails(string meetingNo);
         Task<List<PurchaseMaterialVerificationPrintDto>> GetPurchaseMaterialVerificationPrintList();
+        Task<List<DropdwonSelector>> Documentlist(string? searchTerm, int pageNo, int pageSize);
         Task<PagedResponse<object>> NcPrintList(PageFilter filter);
-
+        Task<List<DropdwonSelector>> GetAuditorsDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<DropdwonSelector>> GetEligibleAuditors(long departmentId, string isoClauseIds, DateTime scheduleDate);
+        Task<AuditChecklistDto> GetScheduleSession(long scheduleItemId);
+        Task<AuditChecklistNcrDto> GetAuditChecklistNcr(long checklistItemId);
+        Task<AuditSummaryDto> GetAuditplan(long auditPlanId);
+        Task<List<DropdwonSelector>> GetDocumentsAvailableForReview(string? searchTerm, int pageNo, int pageSize);
+        Task<List<MasterDocumentPrintDto>> GetMasterDocumentPrintList();
     }
 }

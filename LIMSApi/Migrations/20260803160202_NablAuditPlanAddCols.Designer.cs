@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20260803160202_NablAuditPlanAddCols")]
+    partial class NablAuditPlanAddCols
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -260,55 +263,6 @@ namespace LIMSApi.Migrations
                     b.HasIndex("CityID");
 
                     b.ToTable("AreaMasters");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.AuditChecklistItem", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<string>("AuditQuestion")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<long>("ChecklistId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("FindingType")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<int?>("IsoClauseId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("IsoClauseName")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<long?>("NcId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("NcNo")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("ObjectiveEvidence")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Remarks")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("ChecklistId");
-
-                    b.ToTable("AuditChecklistItems");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.AuthorizedSignatory", b =>
@@ -5905,15 +5859,8 @@ namespace LIMSApi.Migrations
                     b.Property<long?>("AuditPlanId")
                         .HasColumnType("bigint");
 
-                    b.Property<string>("AuditPlanNo")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<long?>("AuditeeId")
                         .HasColumnType("bigint");
-
-                    b.Property<string>("AuditeeName")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
 
                     b.Property<long?>("AuditorId")
                         .HasColumnType("bigint");
@@ -5922,12 +5869,12 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
-                    b.Property<string>("ChecklistNo")
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<string>("AuiteeName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
-                    b.Property<string>("ChecklistStatus")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                    b.Property<string>("ChecklistItemsJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("CompanyCode")
                         .IsRequired()
@@ -6009,9 +5956,6 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<string>("Remarks")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("RevNo")
                         .IsRequired()
                         .HasMaxLength(10)
@@ -6029,9 +5973,6 @@ namespace LIMSApi.Migrations
 
                     b.Property<DateTime?>("ReviewedDate")
                         .HasColumnType("datetime2");
-
-                    b.Property<long>("ScheduleItemId")
-                        .HasColumnType("bigint");
 
                     b.Property<string>("Status")
                         .HasMaxLength(20)
@@ -6258,6 +6199,8 @@ namespace LIMSApi.Migrations
                         .HasColumnType("nvarchar(20)");
 
                     b.HasKey("ID");
+
+                    b.HasIndex("LeadAuditorId");
 
                     b.ToTable("NablAuditPlans");
                 });
@@ -7316,9 +7259,6 @@ namespace LIMSApi.Migrations
                     b.Property<string>("Designation")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<long?>("DesignationId")
-                        .HasColumnType("bigint");
-
                     b.Property<string>("Disposition")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
@@ -7409,6 +7349,12 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<long?>("RequestById")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("RequestByName")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime?>("RequestDate")
                         .HasColumnType("datetime2");
 
@@ -7433,9 +7379,6 @@ namespace LIMSApi.Migrations
 
                     b.Property<long?>("ReviewedById")
                         .HasColumnType("bigint");
-
-                    b.Property<string>("ReviewedByName")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("ReviewedDate")
                         .HasColumnType("datetime2");
@@ -11194,9 +11137,6 @@ namespace LIMSApi.Migrations
                     b.Property<string>("Category")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
-
-                    b.Property<long?>("ChecklistId")
-                        .HasColumnType("bigint");
 
                     b.Property<DateTime?>("CloserDate")
                         .HasColumnType("datetime2");
@@ -19425,9 +19365,6 @@ namespace LIMSApi.Migrations
                     b.Property<string>("ISOClausesJson")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<bool?>("IsActive")
-                        .HasColumnType("bit");
-
                     b.Property<DateTime>("ScheduleDate")
                         .HasColumnType("datetime2");
 
@@ -22061,17 +21998,6 @@ namespace LIMSApi.Migrations
                     b.Navigation("City");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.AuditChecklistItem", b =>
-                {
-                    b.HasOne("LIMSApi.Models.NablAuditChecklist", "Checklist")
-                        .WithMany("Items")
-                        .HasForeignKey("ChecklistId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Checklist");
-                });
-
             modelBuilder.Entity("LIMSApi.Models.ChargeEvent", b =>
                 {
                     b.HasOne("LIMSApi.Models.SampleInward", "Inward")
@@ -23365,6 +23291,15 @@ namespace LIMSApi.Migrations
                     b.Navigation("Auditor");
 
                     b.Navigation("Department");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.NablAuditPlan", b =>
+                {
+                    b.HasOne("LIMSApi.Models.EmployeeMaster", "LeadAuditor")
+                        .WithMany()
+                        .HasForeignKey("LeadAuditorId");
+
+                    b.Navigation("LeadAuditor");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablAuditSummary", b =>
@@ -25287,11 +25222,6 @@ namespace LIMSApi.Migrations
                     b.Navigation("CompatibleTechniques");
 
                     b.Navigation("Parameters");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.NablAuditChecklist", b =>
-                {
-                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablAuditPlan", b =>

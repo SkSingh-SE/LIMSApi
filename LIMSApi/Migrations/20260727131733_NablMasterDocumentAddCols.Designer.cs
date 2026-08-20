@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20260727131733_NablMasterDocumentAddCols")]
+    partial class NablMasterDocumentAddCols
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -260,55 +263,6 @@ namespace LIMSApi.Migrations
                     b.HasIndex("CityID");
 
                     b.ToTable("AreaMasters");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.AuditChecklistItem", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<string>("AuditQuestion")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<long>("ChecklistId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("FindingType")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<int?>("IsoClauseId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("IsoClauseName")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<long?>("NcId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("NcNo")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("ObjectiveEvidence")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Remarks")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("ChecklistId");
-
-                    b.ToTable("AuditChecklistItems");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.AuthorizedSignatory", b =>
@@ -5905,15 +5859,8 @@ namespace LIMSApi.Migrations
                     b.Property<long?>("AuditPlanId")
                         .HasColumnType("bigint");
 
-                    b.Property<string>("AuditPlanNo")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<long?>("AuditeeId")
                         .HasColumnType("bigint");
-
-                    b.Property<string>("AuditeeName")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
 
                     b.Property<long?>("AuditorId")
                         .HasColumnType("bigint");
@@ -5922,12 +5869,12 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
-                    b.Property<string>("ChecklistNo")
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<string>("AuiteeName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
-                    b.Property<string>("ChecklistStatus")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                    b.Property<string>("ChecklistItemsJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("CompanyCode")
                         .IsRequired()
@@ -6009,9 +5956,6 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<string>("Remarks")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("RevNo")
                         .IsRequired()
                         .HasMaxLength(10)
@@ -6029,9 +5973,6 @@ namespace LIMSApi.Migrations
 
                     b.Property<DateTime?>("ReviewedDate")
                         .HasColumnType("datetime2");
-
-                    b.Property<long>("ScheduleItemId")
-                        .HasColumnType("bigint");
 
                     b.Property<string>("Status")
                         .HasMaxLength(20)
@@ -6206,9 +6147,6 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
-                    b.Property<string>("PlanNo")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("PreparedBy")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -6222,9 +6160,6 @@ namespace LIMSApi.Migrations
                     b.Property<string>("RejectionRemarks")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("Remarks")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("RevNo")
                         .IsRequired()
@@ -6247,17 +6182,13 @@ namespace LIMSApi.Migrations
                     b.Property<DateTime?>("ScheduleDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<DateTime?>("ScheduleDateFrom")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("ScheduleDateTo")
-                        .HasColumnType("datetime2");
-
                     b.Property<string>("Status")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
                     b.HasKey("ID");
+
+                    b.HasIndex("LeadAuditorId");
 
                     b.ToTable("NablAuditPlans");
                 });
@@ -7275,9 +7206,6 @@ namespace LIMSApi.Migrations
                     b.Property<string>("ChangeDescription")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("ChangeType")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("CompanyCode")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -7288,12 +7216,6 @@ namespace LIMSApi.Migrations
                     b.Property<DateTime>("CreatedOn")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("CurrentIssue")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("CurrentRevision")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("CurrentVersion")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
@@ -7301,40 +7223,13 @@ namespace LIMSApi.Migrations
                     b.Property<DateTime>("Date")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("DepartmentDoc")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<long?>("DepartmentId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("DepartmentName")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("DescriptionOfChange")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Designation")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<long?>("DesignationId")
-                        .HasColumnType("bigint");
-
                     b.Property<string>("Disposition")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<int?>("DocumentId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("DocumentName")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("DocumentNo")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("DocumentOwner")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("DocumentRef")
                         .HasMaxLength(200)
@@ -7355,9 +7250,6 @@ namespace LIMSApi.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("ImpactOfChange")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("ImplementationDate")
                         .HasColumnType("datetime2");
@@ -7396,13 +7288,7 @@ namespace LIMSApi.Migrations
                     b.Property<DateTime?>("PreparedDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("Priority")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("ReasonForChange")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Reference")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("RejectionRemarks")
@@ -7411,9 +7297,6 @@ namespace LIMSApi.Migrations
 
                     b.Property<DateTime?>("RequestDate")
                         .HasColumnType("datetime2");
-
-                    b.Property<string>("RequestNo")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("RequestedBy")
                         .HasMaxLength(200)
@@ -7434,14 +7317,8 @@ namespace LIMSApi.Migrations
                     b.Property<long?>("ReviewedById")
                         .HasColumnType("bigint");
 
-                    b.Property<string>("ReviewedByName")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<DateTime?>("ReviewedDate")
                         .HasColumnType("datetime2");
-
-                    b.Property<long?>("SourceReviewId")
-                        .HasColumnType("bigint");
 
                     b.Property<string>("Status")
                         .HasMaxLength(20)
@@ -7463,9 +7340,6 @@ namespace LIMSApi.Migrations
                         .HasColumnType("bigint");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<string>("AdditionalRemarks")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ApprovedBy")
                         .HasMaxLength(200)
@@ -7493,9 +7367,6 @@ namespace LIMSApi.Migrations
                     b.Property<DateTime>("CreatedOn")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("CurrentIssue")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("CurrentRevision")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
@@ -7503,27 +7374,9 @@ namespace LIMSApi.Migrations
                     b.Property<DateTime>("Date")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("DepartmentDoc")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<long?>("DepartmentId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("DepartmentName")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int?>("DocumentId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("DocumentName")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("DocumentNo")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("DocumentOwner")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("DocumentRef")
                         .HasMaxLength(200)
@@ -7545,20 +7398,6 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
-                    b.Property<string>("GeneratedDcrChangeType")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<long?>("GeneratedDcrId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("GeneratedDcrNo")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("ImpactOfChange")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -7579,9 +7418,6 @@ namespace LIMSApi.Migrations
                     b.Property<DateTime?>("NextReviewDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("NoChangeConclusion")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("ObsoleteReason")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -7595,9 +7431,6 @@ namespace LIMSApi.Migrations
 
                     b.Property<DateTime?>("PreparedDate")
                         .HasColumnType("datetime2");
-
-                    b.Property<string>("ReasonForChange")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("RejectionRemarks")
                         .HasMaxLength(500)
@@ -7620,12 +7453,6 @@ namespace LIMSApi.Migrations
 
                     b.Property<int>("ReviewFrequencyMonths")
                         .HasColumnType("int");
-
-                    b.Property<string>("ReviewNo")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("ReviewType")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ReviewedBy")
                         .HasMaxLength(200)
@@ -9463,8 +9290,8 @@ namespace LIMSApi.Migrations
                     b.Property<DateTime?>("ApprovedDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<int?>("AuditExperience")
-                        .HasColumnType("int");
+                    b.Property<string>("AuditExperience")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("AuthorizationDate")
                         .HasColumnType("datetime2");
@@ -9479,21 +9306,6 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
-                    b.Property<long?>("AuthorizedById")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("AuthorizedByName")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("CertificateExpiryDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("CertificateIssueDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CertificateNo")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("CompanyCode")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -9506,18 +9318,6 @@ namespace LIMSApi.Migrations
 
                     b.Property<DateTime>("Date")
                         .HasColumnType("datetime2");
-
-                    b.Property<long?>("DepartmentId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("DepartmentListJson")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("DepartmentName")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Designation")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("DocumentNo")
                         .HasMaxLength(50)
@@ -9538,18 +9338,16 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
-                    b.Property<string>("ISOClaus")
+                    b.Property<string>("ISOClauses")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("ISOClausesJson")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("InternalAuditorCertDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<bool?>("InternalAuditorCourse")
-                        .HasColumnType("bit");
+                    b.Property<string>("InternalAuditorCourse")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -9565,8 +9363,9 @@ namespace LIMSApi.Migrations
                     b.Property<DateTime?>("LeadAuditorCertDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<bool?>("LeadAuditorCourse")
-                        .HasColumnType("bit");
+                    b.Property<string>("LeadAuditorCourse")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<long?>("ModifiedBy")
                         .HasColumnType("bigint");
@@ -9599,9 +9398,6 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
-                    b.Property<string>("Remarks")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("RevNo")
                         .IsRequired()
                         .HasMaxLength(10)
@@ -9623,9 +9419,6 @@ namespace LIMSApi.Migrations
                     b.Property<string>("Status")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
-
-                    b.Property<string>("TrainingOrganization")
-                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("ID");
 
@@ -11194,9 +10987,6 @@ namespace LIMSApi.Migrations
                     b.Property<string>("Category")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
-
-                    b.Property<long?>("ChecklistId")
-                        .HasColumnType("bigint");
 
                     b.Property<DateTime?>("CloserDate")
                         .HasColumnType("datetime2");
@@ -19387,62 +19177,6 @@ namespace LIMSApi.Migrations
                     b.ToTable("TestPlans");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.ScheduleItems", b =>
-                {
-                    b.Property<long>("ID")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
-
-                    b.Property<long>("AuditPlanId")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("AuditeeId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("AuditeeName")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<long>("AuditorId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("AuditorName")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<long?>("ChecklistId")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("DepartmentId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("DepartmentName")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("ISOClausesJson")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool?>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<DateTime>("ScheduleDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.HasKey("ID");
-
-                    b.HasIndex("AuditPlanId");
-
-                    b.ToTable("ScheduleItems");
-                });
-
             modelBuilder.Entity("LIMSApi.Models.SiteActivity", b =>
                 {
                     b.Property<long>("ID")
@@ -22061,17 +21795,6 @@ namespace LIMSApi.Migrations
                     b.Navigation("City");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.AuditChecklistItem", b =>
-                {
-                    b.HasOne("LIMSApi.Models.NablAuditChecklist", "Checklist")
-                        .WithMany("Items")
-                        .HasForeignKey("ChecklistId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Checklist");
-                });
-
             modelBuilder.Entity("LIMSApi.Models.ChargeEvent", b =>
                 {
                     b.HasOne("LIMSApi.Models.SampleInward", "Inward")
@@ -23367,6 +23090,15 @@ namespace LIMSApi.Migrations
                     b.Navigation("Department");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.NablAuditPlan", b =>
+                {
+                    b.HasOne("LIMSApi.Models.EmployeeMaster", "LeadAuditor")
+                        .WithMany()
+                        .HasForeignKey("LeadAuditorId");
+
+                    b.Navigation("LeadAuditor");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.NablAuditSummary", b =>
                 {
                     b.HasOne("LIMSApi.Models.NablAuditPlan", "AuditPlan")
@@ -24600,17 +24332,6 @@ namespace LIMSApi.Migrations
                     b.Navigation("SampleDetail");
                 });
 
-            modelBuilder.Entity("LIMSApi.Models.ScheduleItems", b =>
-                {
-                    b.HasOne("LIMSApi.Models.NablAuditPlan", "AuditPlan")
-                        .WithMany("ScheduleItems")
-                        .HasForeignKey("AuditPlanId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("AuditPlan");
-                });
-
             modelBuilder.Entity("LIMSApi.Models.SpecificationGrade", b =>
                 {
                     b.HasOne("LIMSApi.Models.MetalClassificationMaster", "MetalClassification")
@@ -25287,16 +25008,6 @@ namespace LIMSApi.Migrations
                     b.Navigation("CompatibleTechniques");
 
                     b.Navigation("Parameters");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.NablAuditChecklist", b =>
-                {
-                    b.Navigation("Items");
-                });
-
-            modelBuilder.Entity("LIMSApi.Models.NablAuditPlan", b =>
-                {
-                    b.Navigation("ScheduleItems");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.NablCrmConsumption", b =>
