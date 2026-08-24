@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20260820095607_UpdatePlanEntitiesForNewDesign")]
+    partial class UpdatePlanEntitiesForNewDesign
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -730,9 +733,6 @@ namespace LIMSApi.Migrations
                     b.Property<bool>("IsSelected")
                         .HasColumnType("bit");
 
-                    b.Property<long?>("LaboratoryTestAnalysisTypeID")
-                        .HasColumnType("bigint");
-
                     b.Property<long?>("LaboratoryTestID")
                         .HasColumnType("bigint");
 
@@ -743,8 +743,6 @@ namespace LIMSApi.Migrations
                     b.HasKey("ID");
 
                     b.HasIndex("ChemicalTestID");
-
-                    b.HasIndex("LaboratoryTestAnalysisTypeID");
 
                     b.HasIndex("LaboratoryTestID");
 
@@ -20093,11 +20091,6 @@ namespace LIMSApi.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("LIMSApi.Models.LaboratoryTestAnalysisType", "LaboratoryTestAnalysisType")
-                        .WithMany()
-                        .HasForeignKey("LaboratoryTestAnalysisTypeID")
-                        .OnDelete(DeleteBehavior.NoAction);
-
                     b.HasOne("LIMSApi.Models.LaboratoryTest", "LaboratoryTest")
                         .WithMany()
                         .HasForeignKey("LaboratoryTestID");
@@ -20105,8 +20098,6 @@ namespace LIMSApi.Migrations
                     b.Navigation("ChemicalTest");
 
                     b.Navigation("LaboratoryTest");
-
-                    b.Navigation("LaboratoryTestAnalysisType");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.CityMaster", b =>

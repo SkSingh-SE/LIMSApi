@@ -103,23 +103,51 @@ namespace LIMSApi.Repositories
             return await _query.Cast<object>().ToPagedAsync(filter);
         }
 
-        public async Task<List<DropdwonSelector>> GetEquipmentDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> GetEquipmentDropdown(string? searchTerm, int pageNo, int pageSize, long? labTestId = null, long? subGroupId = null, long? analysisTypeId = null)
         {
-            if (pageNo < 0) pageNo = 0;
+            var _query = _context.EquipmentMasters.Where(x => x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
 
-            var _query = from a in _context.EquipmentMasters where a.IsActive select a;
+            var targetEquipmentIds = new List<long>();
+            if (analysisTypeId.HasValue && analysisTypeId.Value > 0)
+            {
+                targetEquipmentIds = await _context.LaboratoryTestAnalysisTypeEquipments
+                    .Where(e => e.LaboratoryTestAnalysisTypeID == analysisTypeId.Value)
+                    .Select(e => e.EquipmentID)
+                    .ToListAsync();
+            }
+            else if (subGroupId.HasValue && subGroupId.Value > 0)
+            {
+                targetEquipmentIds = await _context.LaboratoryTestSubGroupEquipments
+                    .Where(e => e.LaboratoryTestSubGroupID == subGroupId.Value)
+                    .Select(e => e.EquipmentID)
+                    .ToListAsync();
+            }
+            else if (labTestId.HasValue && labTestId.Value > 0)
+            {
+                var subGroupIds = await _context.LaboratoryTestSubGroups
+                    .Where(sg => sg.LaboratoryTestID == labTestId.Value)
+                    .Select(sg => sg.ID)
+                    .ToListAsync();
+                if (subGroupIds.Any())
+                {
+                    targetEquipmentIds = await _context.LaboratoryTestSubGroupEquipments
+                        .Where(e => subGroupIds.Contains(e.LaboratoryTestSubGroupID))
+                        .Select(e => e.EquipmentID)
+                        .ToListAsync();
+                }
+            }
+
+            if (targetEquipmentIds.Any())
+            {
+                _query = _query.Where(x => targetEquipmentIds.Contains(x.ID));
+            }
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
-                {
-                    _query = _query.Where(x => x.ID == exactId);
-                }
-                else
-                {
-                    var search = searchTerm.Trim();
-                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
-                }
+                var search = searchTerm.Trim();
+                _query = _query.Where(x => (x.Name != null && x.Name.Contains(search))
+                || (x.EquipmentNo != null && x.EquipmentNo.Contains(search))
+                || (x.ModelNo != null && x.ModelNo.Contains(search)));
             }
 
             var skip = pageNo * pageSize;
@@ -131,7 +159,7 @@ namespace LIMSApi.Repositories
                 AdditionalValues = new Dictionary<string, object>
                 {
                     { "ModelNo", x.ModelNo ?? "" },
-                    { "Manufacturer", "TPTL Manufacturer" }
+                    { "EquipmentNo", x.EquipmentNo ?? "" }
                 }
             })).ToListAsync();
 

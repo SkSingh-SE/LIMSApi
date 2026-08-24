@@ -28,6 +28,9 @@ namespace LIMSApi.ServiceWORepo
                 .Select(s => new SuggestedTestDto
                 {
                     LaboratoryTestID = s.SubGroup!.LaboratoryTestID,
+                    LaboratoryTestSubGroupID = s.LaboratoryTestSubGroupID,
+                    LaboratoryTestAnalysisTypeID = null,
+                    TestType = (s.SubGroup.LaboratoryTest.IsChemicalTest || (s.SubGroup.LaboratoryTest.LabDepartment != null && s.SubGroup.LaboratoryTest.LabDepartment.IsChemical)) ? "Chemical" : "General",
                     LaboratoryTestName = s.SubGroup!.LaboratoryTest!.Name,
                     SubGroup = s.SubGroup!.Name,
                     Source = "Specification",
@@ -42,6 +45,9 @@ namespace LIMSApi.ServiceWORepo
                 .Select(s => new SuggestedTestDto
                 {
                     LaboratoryTestID = s.AnalysisType!.SubGroup!.LaboratoryTestID,
+                    LaboratoryTestSubGroupID = s.AnalysisType!.LaboratoryTestSubGroupID,
+                    LaboratoryTestAnalysisTypeID = s.LaboratoryTestAnalysisTypeID,
+                    TestType = "Chemical",
                     LaboratoryTestName = s.AnalysisType!.SubGroup!.LaboratoryTest!.Name,
                     SubGroup = s.AnalysisType!.Name,
                     Source = "Specification",
@@ -51,7 +57,26 @@ namespace LIMSApi.ServiceWORepo
                 })
                 .ToListAsync();
 
-            return subgroupTests.Concat(analysisTypeTests)
+            // Also check SpecificationLines if configured directly
+            var specLineTests = await _context.SpecificationLines
+                .Where(l => l.SpecificationGradeID == specificationGradeId && l.LaboratoryTestID != null && l.LaboratoryTest != null && l.LaboratoryTest.IsActive)
+                .Include(l => l.LaboratoryTest).ThenInclude(lt => lt!.SubGroups).ThenInclude(sg => sg.AnalysisTypes)
+                .Select(l => new SuggestedTestDto
+                {
+                    LaboratoryTestID = l.LaboratoryTestID!.Value,
+                    LaboratoryTestSubGroupID = l.LaboratoryTest!.SubGroups.FirstOrDefault(sg => sg.IsActive) != null ? l.LaboratoryTest.SubGroups.FirstOrDefault(sg => sg.IsActive)!.ID : (long?)null,
+                    LaboratoryTestAnalysisTypeID = (l.LaboratoryTest.IsChemicalTest || (l.LaboratoryTest.LabDepartment != null && l.LaboratoryTest.LabDepartment.IsChemical))
+                        ? (l.LaboratoryTest.SubGroups.FirstOrDefault(sg => sg.IsActive) != null && l.LaboratoryTest.SubGroups.FirstOrDefault(sg => sg.IsActive)!.AnalysisTypes.FirstOrDefault() != null
+                            ? l.LaboratoryTest.SubGroups.FirstOrDefault(sg => sg.IsActive)!.AnalysisTypes.FirstOrDefault()!.ID : (long?)null) : null,
+                    TestType = (l.LaboratoryTest.IsChemicalTest || (l.LaboratoryTest.LabDepartment != null && l.LaboratoryTest.LabDepartment.IsChemical)) ? "Chemical" : "General",
+                    LaboratoryTestName = l.LaboratoryTest!.Name,
+                    SubGroup = l.Type ?? "General",
+                    Source = "Specification",
+                    IsPerBatch = false
+                })
+                .ToListAsync();
+
+            return subgroupTests.Concat(analysisTypeTests).Concat(specLineTests)
                 .GroupBy(t => t.LaboratoryTestID)
                 .Select(g => g.First())
                 .ToList();
@@ -65,6 +90,9 @@ namespace LIMSApi.ServiceWORepo
                 .Select(s => new SuggestedTestDto
                 {
                     LaboratoryTestID = s.SubGroup!.LaboratoryTestID,
+                    LaboratoryTestSubGroupID = s.LaboratoryTestSubGroupID,
+                    LaboratoryTestAnalysisTypeID = null,
+                    TestType = (s.SubGroup.LaboratoryTest.IsChemicalTest || (s.SubGroup.LaboratoryTest.LabDepartment != null && s.SubGroup.LaboratoryTest.LabDepartment.IsChemical)) ? "Chemical" : "General",
                     LaboratoryTestName = s.SubGroup!.LaboratoryTest!.Name,
                     SubGroup = s.SubGroup!.Name,
                     Source = "ProductMasterMapping",
@@ -80,6 +108,9 @@ namespace LIMSApi.ServiceWORepo
                 .Select(s => new SuggestedTestDto
                 {
                     LaboratoryTestID = s.AnalysisType!.SubGroup!.LaboratoryTestID,
+                    LaboratoryTestSubGroupID = s.AnalysisType!.LaboratoryTestSubGroupID,
+                    LaboratoryTestAnalysisTypeID = s.LaboratoryTestAnalysisTypeID,
+                    TestType = "Chemical",
                     LaboratoryTestName = s.AnalysisType!.SubGroup!.LaboratoryTest!.Name,
                     SubGroup = s.AnalysisType!.Name,
                     Source = "ProductMasterMapping",
@@ -173,6 +204,9 @@ namespace LIMSApi.ServiceWORepo
                         merged[test.LaboratoryTestID] = new SuggestedTestDto
                         {
                             LaboratoryTestID = test.LaboratoryTestID,
+                            LaboratoryTestSubGroupID = test.LaboratoryTestSubGroupID,
+                            LaboratoryTestAnalysisTypeID = test.LaboratoryTestAnalysisTypeID,
+                            TestType = test.TestType,
                             LaboratoryTestName = test.LaboratoryTestName,
                             SubGroup = test.SubGroup,
                             Source = test.Source,

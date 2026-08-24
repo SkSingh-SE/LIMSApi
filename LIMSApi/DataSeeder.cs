@@ -1182,16 +1182,19 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 VALUES (N'EDXRF', N'EDXRF (Energy Dispersive XRF)', N'Energy Dispersive X-Ray Fluorescence', 0, GETUTCDATE(), N'LIMS', 1);
 
             -- Chemical Sample Category
-            IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Ferro Alloys' AND IsActive = 1)
-                INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Ferro Alloys', 1, 0, GETUTCDATE(), N'LIMS', 1);
-            IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Pharma' AND IsActive = 1)
-                INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Pharma', 2, 0, GETUTCDATE(), N'LIMS', 1);
-            IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Industrial' AND IsActive = 1)
-                INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Industrial', 3, 0, GETUTCDATE(), N'LIMS', 1);
-            IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'ROHS' AND IsActive = 1)
-                INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'ROHS', 4, 0, GETUTCDATE(), N'LIMS', 1);
-            IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Special Chemicals' AND IsActive = 1)
-                INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Special Chemicals', 5, 0, GETUTCDATE(), N'LIMS', 1);
+            IF OBJECT_ID(N'ChemicalSampleCategories', N'U') IS NOT NULL
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Ferro Alloys' AND IsActive = 1)
+                    INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Ferro Alloys', 1, 0, GETUTCDATE(), N'LIMS', 1);
+                IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Pharma' AND IsActive = 1)
+                    INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Pharma', 2, 0, GETUTCDATE(), N'LIMS', 1);
+                IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Industrial' AND IsActive = 1)
+                    INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Industrial', 3, 0, GETUTCDATE(), N'LIMS', 1);
+                IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'ROHS' AND IsActive = 1)
+                    INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'ROHS', 4, 0, GETUTCDATE(), N'LIMS', 1);
+                IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Special Chemicals' AND IsActive = 1)
+                    INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Special Chemicals', 5, 0, GETUTCDATE(), N'LIMS', 1);
+            END
         ");
     }
 

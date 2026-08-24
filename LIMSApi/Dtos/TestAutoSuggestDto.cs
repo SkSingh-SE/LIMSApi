@@ -3,6 +3,9 @@ namespace LIMSApi.Dtos
     public class SuggestedTestDto
     {
         public long LaboratoryTestID { get; set; }
+        public long? LaboratoryTestSubGroupID { get; set; }
+        public long? LaboratoryTestAnalysisTypeID { get; set; }
+        public string TestType { get; set; } = "General"; // "General" or "Chemical"
         public string LaboratoryTestName { get; set; } = string.Empty;
         public string SubGroup { get; set; } = string.Empty;
         public string Source { get; set; } = string.Empty; // "Specification", "ProductTestGroup"

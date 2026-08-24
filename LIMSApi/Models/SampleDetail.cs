@@ -15,6 +15,13 @@ namespace LIMSApi.Models
         public string Details { get; set; } = string.Empty;
         public long? MetalClassificationID { get; set; }
         public long? ProductConditionID { get; set; }
+        public long? ProductMasterID { get; set; }
+        public long? ProductSizeMasterID { get; set; }
+        public long? SpecificationGradeID { get; set; }
+        public bool IsUnknownSample { get; set; } = false;
+        public long? AssignedGradeID { get; set; }
+        [MaxLength(500)]
+        public string? AssignedGradeNote { get; set; }
         // UI hidden per client requirement — field retained for data integrity
         public long? SpecimenOrientationID { get; set; } = null;
         // UI hidden per client requirement — field retained for data integrity
@@ -57,6 +64,18 @@ namespace LIMSApi.Models
 
         [ForeignKey("ProductConditionID")]
         public virtual ProductConditionMaster? ProductCondition { get; set; }
+
+        [ForeignKey("ProductMasterID")]
+        public virtual ProductMaster? ProductMaster { get; set; }
+
+        [ForeignKey("ProductSizeMasterID")]
+        public virtual ProductSizeMaster? ProductSizeMaster { get; set; }
+
+        [ForeignKey("SpecificationGradeID")]
+        public virtual SpecificationGrade? SpecificationGrade { get; set; }
+
+        [ForeignKey("AssignedGradeID")]
+        public virtual SpecificationGrade? AssignedGrade { get; set; }
 
         // UI hidden per client requirement — navigation property retained for DB integrity
         [ForeignKey("SpecimenOrientationID")]

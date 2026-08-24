@@ -165,127 +165,308 @@ namespace LIMSApi.Repositories
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.SpecificationHeaders where a.IsActive select new
-                         {
-                             a.ID,
-                             a.AliasName
-                         };
-
-            if (!string.IsNullOrWhiteSpace(searchTerm))
+            // 1. Exact ID search lookup
+            if (!string.IsNullOrWhiteSpace(searchTerm) && FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
             {
-                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                var exactMatch = await (from a in _context.SpecificationHeaders
+                                        join so in _context.StandardOrganizationMasters on a.StandardOrganizationID equals so.ID into soGroup
+                                        from so in soGroup.DefaultIfEmpty()
+                                        where a.ID == exactId && a.IsActive
+                                        select new DropdwonSelector
+                                        {
+                                            Id = a.ID,
+                                            Name = a.DisplayTitle ?? (!string.IsNullOrEmpty(a.SpecificationNo) ? (a.AliasName + " " + a.SpecificationNo) : a.AliasName),
+                                            Level = 1,
+                                            Selectable = true,
+                                            NodeType = "SpecificationStandard",
+                                            ParentId = so != null ? so.ID : 0,
+                                            IsHeader = false,
+                                            IsChild = true,
+                                            AdditionalValues = new Dictionary<string, object>
+                                            {
+                                                { "materialSpecificationId", a.ID },
+                                                { "specificationNo", a.SpecificationNo ?? a.AliasName },
+                                                { "aliasName", a.AliasName },
+                                                { "standardOrgId", so != null ? so.ID : 0 },
+                                                { "standardOrgName", so != null ? so.Name : "" }
+                                            }
+                                        }).FirstOrDefaultAsync();
+
+                if (exactMatch != null)
                 {
-                    _query = _query.Where(x => x.ID == exactId);
-                }
-                else
-                {
-                    var search = searchTerm.Trim();
-                    _query = _query.Where(x => (x.AliasName != null && x.AliasName.Contains(search)));
+                    return new List<DropdwonSelector> { exactMatch };
                 }
             }
 
-            var skip = pageNo * pageSize;
-
-            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
-            {
-                Id = x.ID,
-                Name = x.AliasName,
-            })).ToListAsync();
-
-            return data;
-        }
-
-        public async Task<List<DropdwonSelector>> GetGradeDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
-        {
-            if (pageNo < 0) pageNo = 0;
-
-            var query =
-                from a in _context.SpecificationHeaders
-                join g in _context.SpecificationGrades on a.ID equals g.SpecificationHeaderID
-                join mc in _context.MetalClassificationMasters on g.MetalClassificationID equals mc.ID into mcGroup
-                from mc in mcGroup.DefaultIfEmpty()
-                where a.IsActive
-                select new
-                {
-                    g.ID,
-                    AliasName =  g.Grade + (mc != null ? ("-" + mc.Name) : "")
-                };
+            // 2. 2-Tier Hierarchy Query: StandardOrganization (Level 0) -> SpecificationHeader (Level 1 Leaf)
+            var query = from a in _context.SpecificationHeaders
+                        join so in _context.StandardOrganizationMasters on a.StandardOrganizationID equals so.ID into soGroup
+                        from so in soGroup.DefaultIfEmpty()
+                        where a.IsActive
+                        select new
+                        {
+                            SpecHeaderID = a.ID,
+                            SpecAliasName = a.AliasName,
+                            SpecNo = a.SpecificationNo,
+                            SpecDisplayTitle = a.DisplayTitle,
+                            StandardOrgID = so != null ? so.ID : 0,
+                            StandardOrgName = so != null ? so.Name : "Other Standards"
+                        };
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var search = searchTerm.Trim();
+                query = query.Where(x => (x.SpecAliasName != null && x.SpecAliasName.Contains(search))
+                                      || (x.SpecNo != null && x.SpecNo.Contains(search))
+                                      || (x.SpecDisplayTitle != null && x.SpecDisplayTitle.Contains(search))
+                                      || (x.StandardOrgName != null && x.StandardOrgName.Contains(search)));
+            }
 
-                if (int.TryParse(search, out int id))
+            var rawData = await query
+                .OrderBy(x => x.StandardOrgName)
+                .ThenBy(x => x.SpecAliasName)
+                .ToListAsync();
+
+            var result = new List<DropdwonSelector>();
+
+            if (rawData.Count > 0)
+            {
+                var orgGroups = rawData.GroupBy(x => new { x.StandardOrgID, x.StandardOrgName });
+
+                foreach (var orgGroup in orgGroups)
                 {
-                    query = query.Where(x => x.ID == id);
-                }
-                else
-                {
-                    query = query.Where(x => x.AliasName != null && x.AliasName.Contains(search));
+                    // Level 0: Standard Organization Header (Non-selectable)
+                    result.Add(new DropdwonSelector
+                    {
+                        Id = 0,
+                        Name = orgGroup.Key.StandardOrgName,
+                        Level = 0,
+                        Selectable = false,
+                        NodeType = "Organization",
+                        IsHeader = true,
+                        IsChild = false,
+                        AdditionalValues = new Dictionary<string, object>
+                        {
+                            { "standardOrgId", orgGroup.Key.StandardOrgID },
+                            { "standardOrgName", orgGroup.Key.StandardOrgName }
+                        }
+                    });
+
+                    // Level 1: Specification Header (Selectable Leaf)
+                    foreach (var spec in orgGroup)
+                    {
+                        var displayTitle = !string.IsNullOrEmpty(spec.SpecDisplayTitle)
+                            ? spec.SpecDisplayTitle
+                            : (!string.IsNullOrEmpty(spec.SpecNo) ? $"{spec.SpecAliasName} {spec.SpecNo}" : spec.SpecAliasName);
+
+                        result.Add(new DropdwonSelector
+                        {
+                            Id = spec.SpecHeaderID,
+                            Name = displayTitle,
+                            Level = 1,
+                            Selectable = true,
+                            NodeType = "SpecificationStandard",
+                            ParentId = orgGroup.Key.StandardOrgID,
+                            IsHeader = false,
+                            IsChild = true,
+                            AdditionalValues = new Dictionary<string, object>
+                            {
+                                { "materialSpecificationId", spec.SpecHeaderID },
+                                { "specificationNo", spec.SpecNo ?? spec.SpecAliasName },
+                                { "aliasName", spec.SpecAliasName },
+                                { "displayTitle", displayTitle },
+                                { "standardOrgId", orgGroup.Key.StandardOrgID },
+                                { "standardOrgName", orgGroup.Key.StandardOrgName }
+                            }
+                        });
+                    }
                 }
             }
 
-
-            var skip = pageNo * pageSize;
-
-            var data = await query
-                .Skip(skip)
-                .Take(pageSize)
-                .Select(x => new DropdwonSelector
-                {
-                    Id = x.ID,
-                    Name = x.AliasName
-                })
-                .ToListAsync();
-
-            return data;
+            return result;
         }
+
+        public async Task<List<DropdwonSelector>> GetGradeDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            return await GetGradeDropdownMetalWise(searchTerm, pageNo, pageSize, 0);
+        }
+
         public async Task<List<DropdwonSelector>> GetGradeDropdownMetalWise(string? searchTerm, int pageNo = 0, int pageSize = 20, long metalId = 0)
         {
             if (pageNo < 0) pageNo = 0;
 
+            // 1. Exact ID lookup for instantaneous single-item rebind
+            if (!string.IsNullOrWhiteSpace(searchTerm) && FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+            {
+                var exactMatch = await (from g in _context.SpecificationGrades
+                                        join h in _context.SpecificationHeaders on g.SpecificationHeaderID equals h.ID
+                                        join so in _context.StandardOrganizationMasters on h.StandardOrganizationID equals so.ID into soGroup
+                                        from so in soGroup.DefaultIfEmpty()
+                                        join mc in _context.MetalClassificationMasters on g.MetalClassificationID equals mc.ID into mcGroup
+                                        from mc in mcGroup.DefaultIfEmpty()
+                                        where g.ID == exactId && h.IsActive
+                                        select new DropdwonSelector
+                                        {
+                                            Id = g.ID,
+                                            Name = g.Grade,
+                                            Level = 2,
+                                            Selectable = true,
+                                            NodeType = "Grade",
+                                            ParentId = h.ID,
+                                            IsHeader = false,
+                                            IsChild = true,
+                                            AdditionalValues = new Dictionary<string, object>
+                                            {
+                                                { "materialSpecificationId", h.ID },
+                                                { "materialSpecificationName", h.AliasName },
+                                                { "specificationNo", h.SpecificationNo ?? h.AliasName },
+                                                { "displayTitle", h.DisplayTitle ?? h.AliasName },
+                                                { "standardOrgId", so != null ? so.ID : 0 },
+                                                { "standardOrgName", so != null ? so.Name : "" },
+                                                { "gradeId", g.ID },
+                                                { "gradeName", g.Grade },
+                                                { "metalClassificationId", g.MetalClassificationID ?? 0 },
+                                                { "metalClassificationName", mc != null ? mc.Name : "" }
+                                            }
+                                        }).FirstOrDefaultAsync();
+
+                if (exactMatch != null)
+                {
+                    return new List<DropdwonSelector> { exactMatch };
+                }
+            }
+
+            // 2. 3-Tier Hierarchy Query: StandardOrganization (Level 0) -> SpecificationHeader (Level 1) -> SpecificationGrade (Level 2 Leaf)
             var query = from g in _context.SpecificationGrades
                         join h in _context.SpecificationHeaders on g.SpecificationHeaderID equals h.ID
+                        join so in _context.StandardOrganizationMasters on h.StandardOrganizationID equals so.ID into soGroup
+                        from so in soGroup.DefaultIfEmpty()
                         join mc in _context.MetalClassificationMasters on g.MetalClassificationID equals mc.ID into mcGroup
                         from mc in mcGroup.DefaultIfEmpty()
                         where h.IsActive
                         select new
                         {
                             GradeID = g.ID,
-                            Grade = g.Grade,
-                            AliasName = h.AliasName + "-" + g.Grade + (mc != null ? ("-" + mc.Name) : ""),
-                            MetalClassificationID = g.MetalClassificationID
+                            GradeName = g.Grade,
+                            MetalClassificationID = g.MetalClassificationID,
+                            MetalClassificationName = mc != null ? mc.Name : null,
+                            SpecHeaderID = h.ID,
+                            SpecAliasName = h.AliasName,
+                            SpecNo = h.SpecificationNo,
+                            SpecDisplayTitle = h.DisplayTitle,
+                            StandardOrgID = so != null ? so.ID : 0,
+                            StandardOrgName = so != null ? so.Name : "Other Standards"
                         };
-
-            // Filter by MetalClassificationID (if provided)
-            if (metalId > 0)
-                query = query.Where(x => x.MetalClassificationID == metalId);
-
-
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var search = searchTerm.Trim();
-                // GradeID is a long — parse search for exact match instead of CAST LIKE.
-                long? searchId = long.TryParse(search, out var gid) ? gid : (long?)null;
-                query = query.Where(x =>
-                    (x.AliasName != null && x.AliasName.Contains(search))
-                    || (searchId != null && x.GradeID == searchId));
+                query = query.Where(x => (x.GradeName != null && x.GradeName.Contains(search))
+                                      || (x.SpecAliasName != null && x.SpecAliasName.Contains(search))
+                                      || (x.SpecNo != null && x.SpecNo.Contains(search))
+                                      || (x.SpecDisplayTitle != null && x.SpecDisplayTitle.Contains(search))
+                                      || (x.StandardOrgName != null && x.StandardOrgName.Contains(search)));
             }
 
-            var skip = pageNo * pageSize;
-
-            var data = await query
-                .Skip(skip)
-                .Take(pageSize)
-                .Select(x => new DropdwonSelector
-                {
-                    Id = (long)x.GradeID,
-                    Name = x.AliasName
-                })
+            var rawData = await query
+                .OrderBy(x => metalId > 0 ? (x.MetalClassificationID == metalId ? 0 : 1) : 0)
+                .ThenBy(x => x.StandardOrgName)
+                .ThenBy(x => x.SpecAliasName)
+                .ThenBy(x => x.GradeName)
                 .ToListAsync();
 
-            return data;
+            var result = new List<DropdwonSelector>();
+
+            if (rawData.Count > 0)
+            {
+                // Group by Standard Organization (Level 0)
+                var orgGroups = rawData.GroupBy(x => new { x.StandardOrgID, x.StandardOrgName });
+
+                foreach (var orgGroup in orgGroups)
+                {
+                    // 1. Level 0: Standard Organization Header (Non-selectable)
+                    result.Add(new DropdwonSelector
+                    {
+                        Id = 0,
+                        Name = orgGroup.Key.StandardOrgName,
+                        Level = 0,
+                        Selectable = false,
+                        NodeType = "Organization",
+                        IsHeader = true,
+                        IsChild = false,
+                        AdditionalValues = new Dictionary<string, object>
+                        {
+                            { "standardOrgId", orgGroup.Key.StandardOrgID },
+                            { "standardOrgName", orgGroup.Key.StandardOrgName }
+                        }
+                    });
+
+                    // 2. Level 1: Specification Standard Intermediate Header (Non-selectable)
+                    var specGroups = orgGroup.GroupBy(x => new
+                    {
+                        x.SpecHeaderID,
+                        x.SpecAliasName,
+                        x.SpecNo,
+                        DisplayTitle = !string.IsNullOrEmpty(x.SpecDisplayTitle)
+                            ? x.SpecDisplayTitle
+                            : (!string.IsNullOrEmpty(x.SpecNo) ? $"{x.SpecAliasName} {x.SpecNo}" : x.SpecAliasName)
+                    });
+
+                    foreach (var specGroup in specGroups)
+                    {
+                        result.Add(new DropdwonSelector
+                        {
+                            Id = 0,
+                            Name = specGroup.Key.DisplayTitle,
+                            Level = 1,
+                            Selectable = false,
+                            NodeType = "SpecificationStandard",
+                            ParentId = orgGroup.Key.StandardOrgID,
+                            IsHeader = true,
+                            IsChild = true,
+                            AdditionalValues = new Dictionary<string, object>
+                            {
+                                { "standardOrgId", orgGroup.Key.StandardOrgID },
+                                { "materialSpecificationId", specGroup.Key.SpecHeaderID },
+                                { "specificationNo", specGroup.Key.SpecNo ?? specGroup.Key.SpecAliasName },
+                                { "name", specGroup.Key.SpecAliasName },
+                                { "displayTitle", specGroup.Key.DisplayTitle }
+                            }
+                        });
+
+                        // 3. Level 2: Specification Grade Leaf (Selectable)
+                        foreach (var g in specGroup)
+                        {
+                            result.Add(new DropdwonSelector
+                            {
+                                Id = g.GradeID,
+                                Name = g.GradeName,
+                                Level = 2,
+                                Selectable = true,
+                                NodeType = "Grade",
+                                ParentId = specGroup.Key.SpecHeaderID,
+                                IsHeader = false,
+                                IsChild = true,
+                                AdditionalValues = new Dictionary<string, object>
+                                {
+                                    { "materialSpecificationId", specGroup.Key.SpecHeaderID },
+                                    { "materialSpecificationName", specGroup.Key.SpecAliasName },
+                                    { "specificationNo", specGroup.Key.SpecNo ?? specGroup.Key.SpecAliasName },
+                                    { "displayTitle", specGroup.Key.DisplayTitle },
+                                    { "standardOrgId", orgGroup.Key.StandardOrgID },
+                                    { "standardOrgName", orgGroup.Key.StandardOrgName },
+                                    { "gradeId", g.GradeID },
+                                    { "gradeName", g.GradeName },
+                                    { "metalClassificationId", g.MetalClassificationID ?? 0 },
+                                    { "metalClassificationName", g.MetalClassificationName ?? "" }
+                                }
+                            });
+                        }
+                    }
+                }
+            }
+
+            return result;
         }
 
         // Uniqueness is (AliasName + Version) so the same spec can exist across versions.

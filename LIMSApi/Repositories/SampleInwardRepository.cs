@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
@@ -46,6 +46,8 @@ namespace LIMSApi.Repositories
         public async Task<SampleInward?> GetSampleInwardById(long id)
         {
             var sampleInward = await _context.SampleInwards
+                                .AsNoTracking()
+                                .AsSplitQuery()
                                 .Include(x => x.DispatchModes)
                                 .Include(x => x.Contacts)
                                 .Include(x => x.Addresses)
@@ -66,6 +68,8 @@ namespace LIMSApi.Repositories
         public async Task<SampleInward?> GetSampleInwardWithPlans(long id)
         {
             var sampleInward = await _context.SampleInwards
+                .AsNoTracking()
+                .AsSplitQuery()
                 .Include(x => x.Customer)
                 .Include(x => x.DispatchModes)
                 .Include(x => x.Contacts)
@@ -77,9 +81,21 @@ namespace LIMSApi.Repositories
                 .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
                     .ThenInclude(sd => sd.ProductCondition)
                 .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
+                    .ThenInclude(sd => sd.ProductMaster)
+                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
+                    .ThenInclude(sd => sd.ProductSizeMaster)
+                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
+                    .ThenInclude(sd => sd.SpecificationGrade)
+                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
+                    .ThenInclude(sd => sd.AssignedGrade)
+                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
                     .ThenInclude(sd => sd.TestPlans)
                         .ThenInclude(tp => tp.GeneralTests)
                             .ThenInclude(gt => gt.Methods)
+                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
+                    .ThenInclude(sd => sd.TestPlans)
+                        .ThenInclude(tp => tp.ChemicalTests)
+                            .ThenInclude(ct => ct.Methods)
                 .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
                     .ThenInclude(sd => sd.TestPlans)
                         .ThenInclude(tp => tp.ChemicalTests)

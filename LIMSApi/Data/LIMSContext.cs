@@ -159,6 +159,7 @@ public partial class LIMSContext : DbContext
     public DbSet<GeneralTest> GeneralTests { get; set; }
     public DbSet<GeneralTestMethod> GeneralTestMethods { get; set; }
     public DbSet<ChemicalTest> ChemicalTests { get; set; }
+    public DbSet<ChemicalTestMethod> ChemicalTestMethods { get; set; }
     public DbSet<ChemicalTestElement> ChemicalTestElements { get; set; }
     public DbSet<ChemicalTestType> ChemicalTestTypes { get; set; }
     public DbSet<LongTermTest> LongTermTests { get; set; }
@@ -667,6 +668,66 @@ public partial class LIMSContext : DbContext
         .WithMany(c => c.TestTypes)
         .HasForeignKey(t => t.ChemicalTestID)
         .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ChemicalTestType>()
+        .HasOne(t => t.LaboratoryTestAnalysisType)
+        .WithMany()
+        .HasForeignKey(t => t.LaboratoryTestAnalysisTypeID)
+        .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<ChemicalTestMethod>()
+        .HasOne(m => m.ChemicalTest)
+        .WithMany(c => c.Methods)
+        .HasForeignKey(m => m.ChemicalTestID)
+        .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ChemicalTestMethod>()
+        .HasOne(m => m.AnalysisType)
+        .WithMany()
+        .HasForeignKey(m => m.LaboratoryTestAnalysisTypeID)
+        .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<ChemicalTestMethod>()
+        .HasOne(m => m.TestMethodSpecification)
+        .WithMany()
+        .HasForeignKey(m => m.TestMethodSpecificationID)
+        .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<ChemicalTestElement>()
+        .HasOne(e => e.AnalysisType)
+        .WithMany()
+        .HasForeignKey(e => e.LaboratoryTestAnalysisTypeID)
+        .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<ChemicalTestElement>()
+        .HasOne(e => e.SpecificationLine)
+        .WithMany()
+        .HasForeignKey(e => e.SpecificationLineID)
+        .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<SampleDetail>()
+        .HasOne(s => s.ProductMaster)
+        .WithMany()
+        .HasForeignKey(s => s.ProductMasterID)
+        .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<SampleDetail>()
+        .HasOne(s => s.ProductSizeMaster)
+        .WithMany()
+        .HasForeignKey(s => s.ProductSizeMasterID)
+        .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<SampleDetail>()
+        .HasOne(s => s.SpecificationGrade)
+        .WithMany()
+        .HasForeignKey(s => s.SpecificationGradeID)
+        .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<SampleDetail>()
+        .HasOne(s => s.AssignedGrade)
+        .WithMany()
+        .HasForeignKey(s => s.AssignedGradeID)
+        .OnDelete(DeleteBehavior.NoAction);
 
         modelBuilder.Entity<PlanHistory>()
         .HasOne(h => h.SampleTestPlan)

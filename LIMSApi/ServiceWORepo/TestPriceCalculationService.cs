@@ -35,12 +35,52 @@ namespace LIMSApi.ServiceWORepo
         /// </summary>
         private async Task<InvoiceCase?> GetInvoiceCaseForTestAsync(long laboratoryTestId, DateTime inwardDate)
         {
+            // 1. First check if laboratoryTestId matches AnalysisTypeID
             var versions = await _db.InvoiceCases
-                .Where(ic => ic.LaboratoryTestID == laboratoryTestId && ic.IsActive)
+                .Where(ic => ic.AnalysisTypeID == laboratoryTestId && ic.IsActive)
                 .Include(ic => ic.InvoiceCasePrices)
                     .ThenInclude(p => p.Configuration)
                 .Include(ic => ic.FinancialYearEntity)
                 .ToListAsync();
+
+            // 2. If not found, check direct LaboratoryTestID
+            if (!versions.Any())
+            {
+                versions = await _db.InvoiceCases
+                    .Where(ic => ic.LaboratoryTestID == laboratoryTestId && ic.IsActive)
+                    .Include(ic => ic.InvoiceCasePrices)
+                        .ThenInclude(p => p.Configuration)
+                    .Include(ic => ic.FinancialYearEntity)
+                    .ToListAsync();
+            }
+
+            // 3. If still not found, check if laboratoryTestId is a SubGroup or AnalysisType and find its parent LaboratoryTestID
+            if (!versions.Any())
+            {
+                var subGroup = await _db.LaboratoryTestSubGroups.FirstOrDefaultAsync(sg => sg.ID == laboratoryTestId);
+                if (subGroup != null)
+                {
+                    versions = await _db.InvoiceCases
+                        .Where(ic => ic.LaboratoryTestID == subGroup.LaboratoryTestID && ic.IsActive)
+                        .Include(ic => ic.InvoiceCasePrices)
+                            .ThenInclude(p => p.Configuration)
+                        .Include(ic => ic.FinancialYearEntity)
+                        .ToListAsync();
+                }
+                else
+                {
+                    var analysisType = await _db.LaboratoryTestAnalysisTypes.Include(at => at.SubGroup).FirstOrDefaultAsync(at => at.ID == laboratoryTestId);
+                    if (analysisType?.SubGroup != null)
+                    {
+                        versions = await _db.InvoiceCases
+                            .Where(ic => ic.LaboratoryTestID == analysisType.SubGroup.LaboratoryTestID && ic.IsActive)
+                            .Include(ic => ic.InvoiceCasePrices)
+                                .ThenInclude(p => p.Configuration)
+                            .Include(ic => ic.FinancialYearEntity)
+                            .ToListAsync();
+                    }
+                }
+            }
 
             var invoiceCase = PriceVersionResolver.Resolve(versions, v => v.EffectiveFrom, inwardDate);
 

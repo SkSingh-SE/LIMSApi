@@ -77,7 +77,15 @@ namespace LIMSApi.ServiceWORepo
                         .Where(h => h.SampleID == sample.ID && h.IsActive)
                         .Select(h => new
                         {
-                            TestName = _db.LaboratoryTests
+                            TestName = _db.LaboratoryTestSubGroups
+                                        .Where(sg => sg.ID == h.LaboratoryTestID)
+                                        .Select(sg => sg.ReportTestName ?? sg.Name)
+                                        .FirstOrDefault()
+                                        ?? _db.LaboratoryTestAnalysisTypes
+                                        .Where(at => at.ID == h.LaboratoryTestID)
+                                        .Select(at => at.Name)
+                                        .FirstOrDefault()
+                                        ?? _db.LaboratoryTests
                                         .Where(t => t.ID == h.LaboratoryTestID)
                                         .Select(t => t.Name)
                                         .FirstOrDefault(),
@@ -772,13 +780,21 @@ namespace LIMSApi.ServiceWORepo
                 var chemicalTests = new List<object>();
                 foreach (var ct in plan.ChemicalTests)
                 {
-                    // ct.TestTypes is a list (or collection) of ChemicalTestType items
-                    // We create header(si) for each selected LaboratoryTestID in ct.TestTypes where IsSelected=true
-                    var typeLabIds = ct.TestTypes?.Where(tt => tt.IsSelected && tt.LaboratoryTestID.HasValue)
-                                                  .Select(tt => tt.LaboratoryTestID!.Value)
+                    // ct.TestTypes or ct.Methods represents selected chemical analysis types / techniques
+                    var typeLabIds = ct.TestTypes?.Where(tt => tt.IsSelected && (tt.LaboratoryTestAnalysisTypeID.HasValue || tt.LaboratoryTestID.HasValue))
+                                                  .Select(tt => tt.LaboratoryTestAnalysisTypeID ?? tt.LaboratoryTestID!.Value)
+                                                  .Distinct()
                                                   .ToList();
 
-                    // If no explicit selected types found, fallback to ct.TestMethod (single)
+                    if ((typeLabIds == null || !typeLabIds.Any()) && ct.Methods?.Any() == true)
+                    {
+                        typeLabIds = ct.Methods.Where(m => !m.Cancel && m.LaboratoryTestAnalysisTypeID > 0)
+                                               .Select(m => m.LaboratoryTestAnalysisTypeID)
+                                               .Distinct()
+                                               .ToList();
+                    }
+
+                    // If no explicit selected types found, fallback to ct.LaboratoryTestAnalysisTypeID
                     if (typeLabIds != null && typeLabIds.Any())
                     {
                         // create header for each labTestId
@@ -802,7 +818,9 @@ namespace LIMSApi.ServiceWORepo
                                 headerId = header.ID,
                                 chemicalTestId = ct.ID,
                                 labTestId = labTestId,
-                                laboratoryTest = (await _db.LaboratoryTests.FindAsync(labTestId))?.Name ?? "Chemical Test",
+                                laboratoryTest = (await _db.LaboratoryTestAnalysisTypes.FindAsync(labTestId))?.Name 
+                                              ?? (await _db.LaboratoryTests.FindAsync(labTestId))?.Name 
+                                              ?? "Chemical Test",
                                 sequenceNo = 1,
                                 totalSpecimens = 1,
                                 standard = (long?)null,
@@ -1306,18 +1324,55 @@ namespace LIMSApi.ServiceWORepo
 
             var labTestName = labTest?.Name ?? $"LabTest#{labTestId}";
 
-            // Get specification lines (Type="mechanical") by grade — no join table needed
+            // Get specification lines (Type="mechanical") by grade
             var specLines = new List<SpecificationLine>();
             if (specIds.Any())
             {
-                specLines = await _db.SpecificationLines
+                var baseQuery = _db.SpecificationLines
                     .Include(sl => sl.Parameter)
                         .ThenInclude(p => p.ParameterUnit)
                     .Where(sl => sl.SpecificationGradeID.HasValue
                         && specIds.Contains(sl.SpecificationGradeID.Value)
                         && sl.Type == "mechanical"
-                        && sl.ParameterID.HasValue)
-                    .ToListAsync();
+                        && sl.ParameterID.HasValue);
+
+                if (labTestId > 0)
+                {
+                    var targetTestIds = new HashSet<long> { labTestId };
+
+                    // If labTestId is a SubGroup, include parent LaboratoryTestID
+                    var subGroup = await _db.LaboratoryTestSubGroups.FirstOrDefaultAsync(sg => sg.ID == labTestId);
+                    if (subGroup != null)
+                    {
+                        targetTestIds.Add(subGroup.LaboratoryTestID);
+                    }
+                    else
+                    {
+                        // If labTestId is a Master LaboratoryTest, include all its SubGroups
+                        var childSubGroupIds = await _db.LaboratoryTestSubGroups
+                            .Where(sg => sg.LaboratoryTestID == labTestId)
+                            .Select(sg => sg.ID)
+                            .ToListAsync();
+                        foreach (var id in childSubGroupIds) targetTestIds.Add(id);
+                    }
+
+                    var filteredLines = await baseQuery
+                        .Where(sl => sl.LaboratoryTestID.HasValue && targetTestIds.Contains(sl.LaboratoryTestID.Value))
+                        .ToListAsync();
+
+                    if (filteredLines.Any())
+                    {
+                        specLines = filteredLines;
+                    }
+                    else
+                    {
+                        specLines = await baseQuery.ToListAsync();
+                    }
+                }
+                else
+                {
+                    specLines = await baseQuery.ToListAsync();
+                }
             }
 
             // Create TestResultParameter from each specification line
@@ -2583,7 +2638,15 @@ namespace LIMSApi.ServiceWORepo
                             sample.SampleNo,
                             InwardId = inward.ID,
                             inward.CaseNo,
-                            TestName = _db.LaboratoryTests
+                            TestName = _db.LaboratoryTestSubGroups
+                                .Where(sg => sg.ID == h.LaboratoryTestID)
+                                .Select(sg => sg.ReportTestName ?? sg.Name)
+                                .FirstOrDefault()
+                                ?? _db.LaboratoryTestAnalysisTypes
+                                .Where(at => at.ID == h.LaboratoryTestID)
+                                .Select(at => at.Name)
+                                .FirstOrDefault()
+                                ?? _db.LaboratoryTests
                                 .Where(t => t.ID == h.LaboratoryTestID)
                                 .Select(t => t.Name)
                                 .FirstOrDefault(),

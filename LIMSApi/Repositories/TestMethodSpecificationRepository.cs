@@ -124,32 +124,258 @@ namespace LIMSApi.Repositories
 
         public async Task<List<DropdwonSelector>> GetTestMethodSpecificationDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
         {
+            return await GetTestMethodsByMetalClassification(0, searchTerm, pageNo, pageSize);
+        }
+
+        public async Task<List<DropdwonSelector>> GetTestMethodsByMetalClassification(long metalClassificationId, string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.TestMethodSpecifications where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode select a;
-
-            if (!string.IsNullOrWhiteSpace(searchTerm))
+            // 1. Exact ID lookup for instantaneous single-item rebind (matches VersionID or TestMethodSpecificationID)
+            if (!string.IsNullOrWhiteSpace(searchTerm) && FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
             {
-                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                var exactVersionMatch = await (from v in _context.TestMethodSpecificationVersions
+                                               join tms in _context.TestMethodSpecifications on v.TestMethodSpecificationID equals tms.ID
+                                               join so in _context.StandardOrganizationMasters on tms.StandardOrganizationID equals so.ID into soGroup
+                                               from so in soGroup.DefaultIfEmpty()
+                                               where (v.ID == exactId || tms.ID == exactId) && tms.IsActive && tms.CompanyCode == loggedInUser.CompanyCode
+                                               orderby (v.ID == exactId ? 0 : (v.IsDefault ? 1 : 2))
+                                               select new DropdwonSelector
+                                               {
+                                                   Id = v.ID,
+                                                   Name = (tms.DisplayTitle ?? tms.Name) + " (" + v.Version + (!string.IsNullOrEmpty(v.Year) ? $" - {v.Year}" : "") + ")",
+                                                   Level = 2,
+                                                   Selectable = true,
+                                                   NodeType = "Version",
+                                                   ParentId = tms.ID,
+                                                   IsHeader = false,
+                                                   IsChild = true,
+                                                   AdditionalValues = new Dictionary<string, object>
+                                                   {
+                                                       { "testMethodSpecificationId", tms.ID },
+                                                       { "testMethodSpecificationName", tms.Name },
+                                                       { "displayTitle", tms.DisplayTitle ?? tms.Name },
+                                                       { "testMethodStandard", tms.TestMethodStandard },
+                                                       { "versionId", v.ID },
+                                                       { "versionName", v.Version },
+                                                       { "year", v.Year ?? "" },
+                                                       { "isDefault", v.IsDefault },
+                                                       { "standardOrgId", so != null ? so.ID : 0 },
+                                                       { "standardOrgName", so != null ? so.Name : "" }
+                                                   }
+                                               }).FirstOrDefaultAsync();
+
+                if (exactVersionMatch != null)
                 {
-                    _query = _query.Where(x => x.ID == exactId);
+                    return new List<DropdwonSelector> { exactVersionMatch };
                 }
-                else
+
+                // Fallback for unversioned master test method spec matching exact ID
+                var unversionedMatch = await (from tms in _context.TestMethodSpecifications
+                                              join so in _context.StandardOrganizationMasters on tms.StandardOrganizationID equals so.ID into soGroup
+                                              from so in soGroup.DefaultIfEmpty()
+                                              where tms.ID == exactId && tms.IsActive && tms.CompanyCode == loggedInUser.CompanyCode
+                                              select new DropdwonSelector
+                                              {
+                                                  Id = tms.ID,
+                                                  Name = tms.DisplayTitle ?? tms.Name,
+                                                  Level = 1,
+                                                  Selectable = true,
+                                                  NodeType = "TestMethodStandard",
+                                                  IsHeader = false,
+                                                  IsChild = false,
+                                                  AdditionalValues = new Dictionary<string, object>
+                                                  {
+                                                      { "testMethodSpecificationId", tms.ID },
+                                                      { "testMethodSpecificationName", tms.Name },
+                                                      { "displayTitle", tms.DisplayTitle ?? tms.Name },
+                                                      { "versionId", 0 },
+                                                      { "standardOrgId", so != null ? so.ID : 0 },
+                                                      { "standardOrgName", so != null ? so.Name : "" }
+                                                  }
+                                              }).FirstOrDefaultAsync();
+
+                if (unversionedMatch != null)
                 {
-                    var search = searchTerm.Trim();
-                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
+                    return new List<DropdwonSelector> { unversionedMatch };
                 }
             }
 
-            var skip = pageNo * pageSize;
+            // 2. 3-Tier Hierarchy Query: StandardOrganization (Level 0) -> TestMethodStandard (Level 1) -> Version (Level 2 Leaf)
+            var query = from tms in _context.TestMethodSpecifications
+                        join so in _context.StandardOrganizationMasters on tms.StandardOrganizationID equals so.ID into soGroup
+                        from so in soGroup.DefaultIfEmpty()
+                        join v in _context.TestMethodSpecificationVersions on tms.ID equals v.TestMethodSpecificationID into vGroup
+                        from v in vGroup.DefaultIfEmpty()
+                        where tms.IsActive && !tms.IsDisabled && tms.CompanyCode == loggedInUser.CompanyCode
+                              && (v == null || v.Status == VersionStatus.Active || v.Status == VersionStatus.Superseded)
+                        select new
+                        {
+                            TMSID = tms.ID,
+                            TMSName = tms.Name,
+                            TMSStandard = tms.TestMethodStandard,
+                            TMSDisplayTitle = tms.DisplayTitle,
+                            StandardOrgID = so != null ? so.ID : 0,
+                            StandardOrgName = so != null ? so.Name : "Other Standards",
+                            VersionID = (long?)(v != null ? v.ID : (long?)null),
+                            VersionName = v != null ? v.Version : null,
+                            VersionYear = v != null ? v.Year : null,
+                            VersionStatus = (VersionStatus?)(v != null ? v.Status : (VersionStatus?)null),
+                            IsDefault = v != null && v.IsDefault,
+                            IsMetalMatch = metalClassificationId > 0 && (_context.TestMethodSpecificationMetalClassifications
+                                            .Any(m => m.TestMethodSpecificationID == tms.ID && m.MetalClassificationID == metalClassificationId)
+                                     || !_context.TestMethodSpecificationMetalClassifications
+                                            .Any(m => m.TestMethodSpecificationID == tms.ID))
+                        };
 
-            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                Id = x.ID,
-                Name = x!.DisplayTitle ?? x.Name,
-            })).ToListAsync();
+                var search = searchTerm.Trim();
+                query = query.Where(x => (x.TMSName != null && x.TMSName.Contains(search))
+                                      || (x.TMSStandard != null && x.TMSStandard.Contains(search))
+                                      || (x.TMSDisplayTitle != null && x.TMSDisplayTitle.Contains(search))
+                                      || (x.StandardOrgName != null && x.StandardOrgName.Contains(search))
+                                      || (x.VersionName != null && x.VersionName.Contains(search))
+                                      || (x.VersionYear != null && x.VersionYear.Contains(search)));
+            }
 
-            return data;
+            var rawData = await query
+                .OrderBy(x => metalClassificationId > 0 ? (x.IsMetalMatch ? 0 : 1) : 0)
+                .ThenBy(x => x.StandardOrgName)
+                .ThenBy(x => x.TMSStandard)
+                .ThenBy(x => x.TMSName)
+                .ThenBy(x => x.IsDefault ? 0 : (x.VersionStatus == VersionStatus.Active ? 1 : 2))
+                .ThenBy(x => x.VersionName)
+                .ToListAsync();
+
+            var result = new List<DropdwonSelector>();
+
+            if (rawData.Count > 0)
+            {
+                // Group by Standard Organization (Level 0)
+                var orgGroups = rawData.GroupBy(x => new { x.StandardOrgID, x.StandardOrgName });
+
+                foreach (var orgGroup in orgGroups)
+                {
+                    // 1. Level 0: Standard Organization Header (Non-selectable)
+                    result.Add(new DropdwonSelector
+                    {
+                        Id = 0,
+                        Name = orgGroup.Key.StandardOrgName,
+                        Level = 0,
+                        Selectable = false,
+                        NodeType = "Organization",
+                        IsHeader = true,
+                        IsChild = false,
+                        AdditionalValues = new Dictionary<string, object>
+                        {
+                            { "standardOrgId", orgGroup.Key.StandardOrgID },
+                            { "standardOrgName", orgGroup.Key.StandardOrgName }
+                        }
+                    });
+
+                    // 2. Level 1: Test Method Standard Intermediate Header (or Leaf if no versions)
+                    var specGroups = orgGroup.GroupBy(x => new
+                    {
+                        x.TMSID,
+                        x.TMSName,
+                        x.TMSStandard,
+                        DisplayTitle = !string.IsNullOrEmpty(x.TMSDisplayTitle)
+                            ? x.TMSDisplayTitle
+                            : (!string.IsNullOrEmpty(x.TMSStandard) ? (x.TMSName + " (" + x.TMSStandard + ")") : x.TMSName)
+                    });
+
+                    foreach (var specGroup in specGroups)
+                    {
+                        var versions = specGroup.Where(x => x.VersionID != null).ToList();
+
+                        if (versions.Count == 0)
+                        {
+                            // Unversioned specification: Selectable Level 1 Leaf
+                            result.Add(new DropdwonSelector
+                            {
+                                Id = specGroup.Key.TMSID,
+                                Name = specGroup.Key.DisplayTitle,
+                                Level = 1,
+                                Selectable = true,
+                                NodeType = "TestMethodStandard",
+                                ParentId = orgGroup.Key.StandardOrgID,
+                                IsHeader = false,
+                                IsChild = true,
+                                AdditionalValues = new Dictionary<string, object>
+                                {
+                                    { "testMethodSpecificationId", specGroup.Key.TMSID },
+                                    { "testMethodSpecificationName", specGroup.Key.TMSName },
+                                    { "displayTitle", specGroup.Key.DisplayTitle },
+                                    { "versionId", 0 },
+                                    { "standardOrgId", orgGroup.Key.StandardOrgID },
+                                    { "standardOrgName", orgGroup.Key.StandardOrgName }
+                                }
+                            });
+                        }
+                        else
+                        {
+                            // Versioned specification: Non-selectable Level 1 Header
+                            result.Add(new DropdwonSelector
+                            {
+                                Id = 0,
+                                Name = specGroup.Key.DisplayTitle,
+                                Level = 1,
+                                Selectable = false,
+                                NodeType = "TestMethodStandard",
+                                ParentId = orgGroup.Key.StandardOrgID,
+                                IsHeader = true,
+                                IsChild = true,
+                                AdditionalValues = new Dictionary<string, object>
+                                {
+                                    { "standardOrgId", orgGroup.Key.StandardOrgID },
+                                    { "testMethodSpecificationId", specGroup.Key.TMSID },
+                                    { "testMethodSpecificationName", specGroup.Key.TMSName },
+                                    { "displayTitle", specGroup.Key.DisplayTitle }
+                                }
+                            });
+
+                            // 3. Level 2: Versions (Selectable Leaf - Active and Superseded)
+                            foreach (var v in versions)
+                            {
+                                var versionLabel = v.VersionName 
+                                    + (!string.IsNullOrEmpty(v.VersionYear) ? $" - {v.VersionYear}" : "") 
+                                    + (v.IsDefault ? " ★" : "")
+                                    + (v.VersionStatus == VersionStatus.Superseded ? " [Superseded]" : "");
+
+                                result.Add(new DropdwonSelector
+                                {
+                                    Id = v.VersionID!.Value,
+                                    Name = versionLabel,
+                                    Level = 2,
+                                    Selectable = true,
+                                    NodeType = "Version",
+                                    ParentId = specGroup.Key.TMSID,
+                                    IsHeader = false,
+                                    IsChild = true,
+                                    AdditionalValues = new Dictionary<string, object>
+                                    {
+                                        { "testMethodSpecificationId", specGroup.Key.TMSID },
+                                        { "testMethodSpecificationName", specGroup.Key.TMSName },
+                                        { "displayTitle", specGroup.Key.DisplayTitle },
+                                        { "testMethodStandard", specGroup.Key.TMSStandard },
+                                        { "versionId", v.VersionID.Value },
+                                        { "versionName", v.VersionName ?? "" },
+                                        { "year", v.VersionYear ?? "" },
+                                        { "status", v.VersionStatus?.ToString() ?? "" },
+                                        { "isSuperseded", v.VersionStatus == VersionStatus.Superseded },
+                                        { "isDefault", v.IsDefault },
+                                        { "standardOrgId", orgGroup.Key.StandardOrgID },
+                                        { "standardOrgName", orgGroup.Key.StandardOrgName }
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            return result;
         }
 
         public async Task<bool> ExistsByName(string name)
@@ -172,40 +398,6 @@ namespace LIMSApi.Repositories
                              Name = a.Name,
                          };
             return _query.ToListAsync();
-        }
-
-        public async Task<List<DropdwonSelector>> GetTestMethodsByMetalClassification(long metalClassificationId, string? searchTerm, int pageNo = 0, int pageSize = 20)
-        {
-            if (pageNo < 0) pageNo = 0;
-
-            // Specs explicitly linked to this metal classification, plus specs with no metal-classification
-            // link at all (treated as universal — applicable to any classification).
-            var _query = from a in _context.TestMethodSpecifications
-                         where a.IsActive && !a.IsDisabled && a.CompanyCode == loggedInUser.CompanyCode
-                            && (a.MetalClassifications.Any(m => m.MetalClassificationID == metalClassificationId)
-                                || !a.MetalClassifications.Any())
-                         select a;
-
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
-                {
-                    _query = _query.Where(x => x.ID == exactId);
-                }
-                else
-                {
-                    var search = searchTerm.Trim();
-                    _query = _query.Where(x => x.Name != null && x.Name.Contains(search));
-                }
-            }
-
-            var skip = pageNo * pageSize;
-
-            return await _query.OrderBy(x => x.Name).Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
-            {
-                Id = x.ID,
-                Name = !string.IsNullOrEmpty(x.DisplayTitle) ? x.DisplayTitle : x.Name,
-            }).ToListAsync();
         }
 
         public async Task<int> GetVersionImpactCount(long versionId)
@@ -294,47 +486,230 @@ namespace LIMSApi.Repositories
         {
             if (pageNo < 0) pageNo = 0;
 
-            var query = _context.TestMethodSpecificationVersions
-                .Include(v => v.TestMethodSpecification)
-                .Where(v => v.Status == VersionStatus.Active 
-                    && v.TestMethodSpecification != null 
-                    && v.TestMethodSpecification.IsActive 
-                    && !v.TestMethodSpecification.IsDisabled
-                    && v.TestMethodSpecification.CompanyCode == loggedInUser.CompanyCode);
-
-            if (metalId > 0)
+            // 1. Exact ID lookup for instantaneous single-item rebind
+            if (!string.IsNullOrWhiteSpace(searchTerm) && FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
             {
-                query = query.Where(v => v.TestMethodSpecification!.MetalClassifications.Any(m => m.MetalClassificationID == metalId)
-                    || !v.TestMethodSpecification!.MetalClassifications.Any());
+                var exactRaw = await (from v in _context.TestMethodSpecificationVersions
+                                      join s in _context.TestMethodSpecifications on v.TestMethodSpecificationID equals s.ID
+                                      join so in _context.StandardOrganizationMasters on s.StandardOrganizationID equals so.ID into soGroup
+                                      from so in soGroup.DefaultIfEmpty()
+                                      where v.ID == exactId && (v.Status == VersionStatus.Active || v.Status == VersionStatus.Superseded) && s.IsActive && !s.IsDisabled
+                                      select new
+                                      {
+                                          v.ID,
+                                          v.Version,
+                                          v.Year,
+                                          v.Status,
+                                          v.IsDefault,
+                                          SpecID = s.ID,
+                                          SpecName = s.Name,
+                                          s.TestMethodStandard,
+                                          s.Part,
+                                          s.DisplayTitle,
+                                          StandardOrgID = so != null ? so.ID : 0,
+                                          StandardOrgName = so != null ? so.Name : ""
+                                      }).FirstOrDefaultAsync();
+
+                if (exactRaw != null)
+                {
+                    var dispTitle = !string.IsNullOrEmpty(exactRaw.DisplayTitle)
+                        ? exactRaw.DisplayTitle
+                        : (!string.IsNullOrEmpty(exactRaw.Part)
+                            ? $"{exactRaw.TestMethodStandard} ({exactRaw.Part}) : {exactRaw.SpecName}"
+                            : $"{exactRaw.TestMethodStandard} : {exactRaw.SpecName}");
+
+                    var versionLabel = exactRaw.Version 
+                        + (!string.IsNullOrEmpty(exactRaw.Year) ? $" ({exactRaw.Year})" : "")
+                        + (exactRaw.IsDefault ? " ★" : "")
+                        + (exactRaw.Status == VersionStatus.Superseded ? " [Superseded]" : "");
+
+                    var exactMatch = new DropdwonSelector
+                    {
+                        Id = exactRaw.ID,
+                        Name = versionLabel,
+                        Level = 2,
+                        Selectable = true,
+                        NodeType = "Version",
+                        ParentId = exactRaw.SpecID,
+                        IsHeader = false,
+                        IsChild = true,
+                        AdditionalValues = new Dictionary<string, object>
+                        {
+                            { "testMethodSpecificationId", exactRaw.SpecID },
+                            { "testMethodSpecificationName", exactRaw.SpecName },
+                            { "testMethodStandard", exactRaw.TestMethodStandard },
+                            { "displayTitle", dispTitle },
+                            { "versionId", exactRaw.ID },
+                            { "version", exactRaw.Version },
+                            { "year", exactRaw.Year ?? "" },
+                            { "status", exactRaw.Status.ToString() },
+                            { "isSuperseded", exactRaw.Status == VersionStatus.Superseded },
+                            { "isDefault", exactRaw.IsDefault },
+                            { "standardOrgId", exactRaw.StandardOrgID },
+                            { "standardOrgName", exactRaw.StandardOrgName },
+                            { "TestMethodSpecificationID", exactRaw.SpecID },
+                            { "TestMethodStandard", exactRaw.TestMethodStandard },
+                            { "Name", exactRaw.SpecName },
+                            { "Version", exactRaw.Version }
+                        }
+                    };
+
+                    return new List<DropdwonSelector> { exactMatch };
+                }
             }
+
+            // 2. 3-Tier Hierarchy Query: StandardOrganization (Level 0) -> TestMethodSpecification (Level 1) -> Version (Level 2 Leaf)
+            var query = from v in _context.TestMethodSpecificationVersions
+                        join s in _context.TestMethodSpecifications on v.TestMethodSpecificationID equals s.ID
+                        join so in _context.StandardOrganizationMasters on s.StandardOrganizationID equals so.ID into soGroup
+                        from so in soGroup.DefaultIfEmpty()
+                        where (v.Status == VersionStatus.Active || v.Status == VersionStatus.Superseded)
+                           && s.IsActive
+                           && !s.IsDisabled
+                           && s.CompanyCode == loggedInUser.CompanyCode
+                        select new
+                        {
+                            VersionID = v.ID,
+                            VersionName = v.Version,
+                            VersionYear = v.Year,
+                            VersionStatus = v.Status,
+                            IsDefault = v.IsDefault,
+                            CreatedOn = v.CreatedOn,
+                            SpecHeaderID = s.ID,
+                            SpecName = s.Name,
+                            TestMethodStandard = s.TestMethodStandard,
+                            SpecPart = s.Part,
+                            SpecDisplayTitle = s.DisplayTitle,
+                            StandardOrgID = so != null ? so.ID : 0,
+                            StandardOrgName = so != null ? so.Name : "Other Standards",
+                            IsMetalMatch = metalId > 0 && s.MetalClassifications.Any(m => m.MetalClassificationID == metalId)
+                        };
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                var search = searchTerm.Trim().ToLower();
-                query = query.Where(v => (v.TestMethodSpecification.Name != null && v.TestMethodSpecification.Name.Contains(search)) 
-                    || (v.Version != null && v.Version.Contains(search)));
+                var search = searchTerm.Trim();
+                query = query.Where(x => (x.VersionName != null && x.VersionName.Contains(search))
+                                      || (x.SpecName != null && x.SpecName.Contains(search))
+                                      || (x.TestMethodStandard != null && x.TestMethodStandard.Contains(search))
+                                      || (x.SpecPart != null && x.SpecPart.Contains(search))
+                                      || (x.SpecDisplayTitle != null && x.SpecDisplayTitle.Contains(search))
+                                      || (x.StandardOrgName != null && x.StandardOrgName.Contains(search)));
             }
 
-            var skip = pageNo * pageSize;
-
-            return await query
-                .OrderBy(v => v.TestMethodSpecification.Name)
-                .ThenByDescending(v => v.CreatedOn)
-                .Skip(skip)
-                .Take(pageSize)
-                .Select(v => new DropdwonSelector
-                {
-                    Id = v.ID,
-                    Name = v.TestMethodSpecification.Name + " (" + v.Version + ")",
-                    AdditionalValues = new Dictionary<string, object>
-                    {
-                        { "TestMethodStandard", v.TestMethodSpecification.TestMethodStandard },
-                        { "Name", v.TestMethodSpecification.Name },
-                        { "Version", v.Version },
-                        { "TestMethodSpecificationID", v.TestMethodSpecificationID }
-                    }
-                })
+            var rawData = await query
+                .OrderBy(x => metalId > 0 ? (x.IsMetalMatch ? 0 : 1) : 0)
+                .ThenBy(x => x.StandardOrgName)
+                .ThenBy(x => x.TestMethodStandard)
+                .ThenBy(x => x.SpecName)
+                .ThenBy(x => x.IsDefault ? 0 : (x.VersionStatus == VersionStatus.Active ? 1 : 2))
+                .ThenByDescending(x => x.CreatedOn)
                 .ToListAsync();
+
+            var result = new List<DropdwonSelector>();
+
+            if (rawData.Count > 0)
+            {
+                // Group by Standard Organization (Level 0)
+                var orgGroups = rawData.GroupBy(x => new { x.StandardOrgID, x.StandardOrgName });
+
+                foreach (var orgGroup in orgGroups)
+                {
+                    // 1. Level 0: Standard Organization Header (Non-selectable)
+                    result.Add(new DropdwonSelector
+                    {
+                        Id = 0,
+                        Name = orgGroup.Key.StandardOrgName,
+                        Level = 0,
+                        Selectable = false,
+                        NodeType = "Organization",
+                        IsHeader = true,
+                        IsChild = false,
+                        AdditionalValues = new Dictionary<string, object>
+                        {
+                            { "standardOrgId", orgGroup.Key.StandardOrgID },
+                            { "standardOrgName", orgGroup.Key.StandardOrgName }
+                        }
+                    });
+
+                    // 2. Level 1: Test Method Specification Intermediate Header (Non-selectable)
+                    var specGroups = orgGroup.GroupBy(x => new
+                    {
+                        x.SpecHeaderID,
+                        x.SpecName,
+                        x.TestMethodStandard,
+                        DisplayTitle = !string.IsNullOrEmpty(x.SpecDisplayTitle)
+                            ? x.SpecDisplayTitle
+                            : (!string.IsNullOrEmpty(x.SpecPart)
+                                ? $"{x.TestMethodStandard} ({x.SpecPart}) : {x.SpecName}"
+                                : $"{x.TestMethodStandard} : {x.SpecName}")
+                    });
+
+                    foreach (var specGroup in specGroups)
+                    {
+                        result.Add(new DropdwonSelector
+                        {
+                            Id = 0,
+                            Name = specGroup.Key.DisplayTitle,
+                            Level = 1,
+                            Selectable = false,
+                            NodeType = "TestMethodSpecification",
+                            ParentId = orgGroup.Key.StandardOrgID,
+                            IsHeader = true,
+                            IsChild = true,
+                            AdditionalValues = new Dictionary<string, object>
+                            {
+                                { "standardOrgId", orgGroup.Key.StandardOrgID },
+                                { "testMethodSpecificationId", specGroup.Key.SpecHeaderID },
+                                { "testMethodStandard", specGroup.Key.TestMethodStandard },
+                                { "name", specGroup.Key.SpecName },
+                                { "displayTitle", specGroup.Key.DisplayTitle }
+                            }
+                        });
+
+                        // 3. Level 2: Version Leaf (Selectable - Active and Superseded)
+                        foreach (var v in specGroup)
+                        {
+                            var versionLabel = v.VersionName 
+                                + (!string.IsNullOrEmpty(v.VersionYear) ? $" ({v.VersionYear})" : "")
+                                + (v.IsDefault ? " ★" : "")
+                                + (v.VersionStatus == VersionStatus.Superseded ? " [Superseded]" : "");
+
+                            result.Add(new DropdwonSelector
+                            {
+                                Id = v.VersionID,
+                                Name = versionLabel,
+                                Level = 2,
+                                Selectable = true,
+                                NodeType = "Version",
+                                ParentId = specGroup.Key.SpecHeaderID,
+                                IsHeader = false,
+                                IsChild = true,
+                                AdditionalValues = new Dictionary<string, object>
+                                {
+                                    { "testMethodSpecificationId", specGroup.Key.SpecHeaderID },
+                                    { "testMethodSpecificationName", specGroup.Key.SpecName },
+                                    { "testMethodStandard", specGroup.Key.TestMethodStandard },
+                                    { "displayTitle", specGroup.Key.DisplayTitle },
+                                    { "versionId", v.VersionID },
+                                    { "version", v.VersionName },
+                                    { "year", v.VersionYear ?? "" },
+                                    { "status", v.VersionStatus.ToString() },
+                                    { "isSuperseded", v.VersionStatus == VersionStatus.Superseded },
+                                    { "isDefault", v.IsDefault },
+                                    { "standardOrgId", orgGroup.Key.StandardOrgID },
+                                    { "standardOrgName", orgGroup.Key.StandardOrgName },
+                                    { "TestMethodSpecificationID", specGroup.Key.SpecHeaderID },
+                                    { "TestMethodStandard", specGroup.Key.TestMethodStandard },
+                                    { "Name", specGroup.Key.SpecName },
+                                    { "Version", v.VersionName }
+                                }
+                            });
+                        }
+                    }
+                }
+            }
+
+            return result;
         }
     }
 }

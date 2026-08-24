@@ -187,6 +187,12 @@ namespace LIMSApi.Services
                         Details = s.Details,
                         MetalClassificationID = s.MetalClassificationID,
                         ProductConditionID = s.ProductConditionID,
+                        ProductMasterID = s.ProductMasterID,
+                        ProductSizeMasterID = s.ProductSizeMasterID ?? s.ProductSizeID,
+                        SpecificationGradeID = s.SpecificationGradeID,
+                        IsUnknownSample = s.IsUnknownSample,
+                        AssignedGradeID = s.AssignedGradeID,
+                        AssignedGradeNote = s.AssignedGradeNote,
                         ProductFormID = s.ProductFormID,
                         SpecimenOrientationID = s.SpecimenOrientationID,
                         Remarks = s.Remarks,
@@ -548,6 +554,12 @@ namespace LIMSApi.Services
                         existingSample.Details = s.Details;
                         existingSample.MetalClassificationID = s.MetalClassificationID;
                         existingSample.ProductConditionID = s.ProductConditionID;
+                        existingSample.ProductMasterID = s.ProductMasterID;
+                        existingSample.ProductSizeMasterID = s.ProductSizeMasterID ?? s.ProductSizeID;
+                        existingSample.SpecificationGradeID = s.SpecificationGradeID;
+                        existingSample.IsUnknownSample = s.IsUnknownSample;
+                        existingSample.AssignedGradeID = s.AssignedGradeID;
+                        existingSample.AssignedGradeNote = s.AssignedGradeNote;
                         existingSample.ProductFormID = s.ProductFormID;
                         existingSample.SpecimenOrientationID = s.SpecimenOrientationID;
                         existingSample.TpiAgencyID = s.TpiAgencyID;
@@ -613,10 +625,19 @@ namespace LIMSApi.Services
                             Details = s.Details,
                             MetalClassificationID = s.MetalClassificationID,
                             ProductConditionID = s.ProductConditionID,
+                            ProductMasterID = s.ProductMasterID,
+                            ProductSizeMasterID = s.ProductSizeMasterID ?? s.ProductSizeID,
+                            SpecificationGradeID = s.SpecificationGradeID,
+                            IsUnknownSample = s.IsUnknownSample,
+                            AssignedGradeID = s.AssignedGradeID,
+                            AssignedGradeNote = s.AssignedGradeNote,
                             ProductFormID = s.ProductFormID,
                             SpecimenOrientationID = s.SpecimenOrientationID,
+                            TpiAgencyID = s.TpiAgencyID,
                             Remarks = s.Remarks,
                             Quantity = s.Quantity,
+                            Specimen = s.Specimen,
+                            TestInstructions = s.TestInstructions,
                             Thickness = s.Thickness,
                             Diameter = s.Diameter,
                             Width = s.Width,
@@ -731,6 +752,10 @@ namespace LIMSApi.Services
                     .Include(i => i.SampleDetails)
                         .ThenInclude(sd => sd.TestPlans)
                             .ThenInclude(tp => tp.ChemicalTests)
+                                .ThenInclude(ct => ct.Methods)
+                    .Include(i => i.SampleDetails)
+                        .ThenInclude(sd => sd.TestPlans)
+                            .ThenInclude(tp => tp.ChemicalTests)
                                 .ThenInclude(ct => ct.Elements)
                     .Include(i => i.SampleDetails)
                         .ThenInclude(sd => sd.TestPlans)
@@ -769,6 +794,9 @@ namespace LIMSApi.Services
 
                     _context.GeneralTests.RemoveRange(plan.GeneralTests);
 
+                    _context.ChemicalTestMethods.RemoveRange(
+                        plan.ChemicalTests.SelectMany(c => c.Methods));
+
                     _context.ChemicalTestElements.RemoveRange(
                         plan.ChemicalTests.SelectMany(c => c.Elements));
 
@@ -790,6 +818,12 @@ namespace LIMSApi.Services
 
                     sample.MetalClassificationID = sampleDto.MetalClassificationID;
                     sample.ProductConditionID = sampleDto.ProductConditionID;
+                    sample.ProductMasterID = sampleDto.ProductMasterID;
+                    sample.ProductSizeMasterID = sampleDto.ProductSizeMasterID ?? sampleDto.ProductSizeID;
+                    sample.SpecificationGradeID = sampleDto.SpecificationGradeID;
+                    sample.IsUnknownSample = sampleDto.IsUnknownSample;
+                    sample.AssignedGradeID = sampleDto.AssignedGradeID;
+                    sample.AssignedGradeNote = sampleDto.AssignedGradeNote;
                     sample.ProductFormID = sampleDto.ProductFormID;
                     sample.SpecimenOrientationID = sampleDto.SpecimenOrientationID;
                     sample.PreparationRequired = sampleDto.PreparationRequired;
@@ -807,7 +841,6 @@ namespace LIMSApi.Services
                             sample.ID,
                             SampleStatus.INWARD_COMPLETED,
                             loggedInUser.EmployeeID));
-
 
                     var planDto = sampleDto.TestPlans.FirstOrDefault();
                     if (planDto == null) continue;
@@ -835,6 +868,14 @@ namespace LIMSApi.Services
                         sample.TestPlans.Add(plan);
                     }
 
+                    // Plan version & status tracking
+                    plan.PlanStatus = string.IsNullOrWhiteSpace(planDto.PlanStatus) ? "Draft" : planDto.PlanStatus;
+                    plan.Version = planDto.Version > 0 ? planDto.Version : 1;
+                    plan.ReplanCount = planDto.ReplanCount;
+                    plan.ApprovedById = planDto.ApprovedById;
+                    plan.ApprovedByName = planDto.ApprovedByName;
+                    plan.ApprovedAt = planDto.ApprovedAt;
+
                     // Start counter from max existing ULR counter + 1 to avoid
                     // re-using numbers from any previously generated (and possibly removed) methods.
                     // Must be scanned BEFORE methods are cleared in the UPSERT blocks below.
@@ -849,6 +890,11 @@ namespace LIMSApi.Services
                     {
                         int c = ParseUlrCounter(existingCt.UlrNo, tcPrefix, year, labLocation, sample.SampleNo);
                         if (c > maxExistingCounter) maxExistingCounter = c;
+                        foreach (var m in existingCt.Methods)
+                        {
+                            int mc = ParseUlrCounter(m.UlrNo, tcPrefix, year, labLocation, sample.SampleNo);
+                            if (mc > maxExistingCounter) maxExistingCounter = mc;
+                        }
                     }
                     int ulrCounter = maxExistingCounter > 0 ? maxExistingCounter + 1 : 1;
 
@@ -870,6 +916,7 @@ namespace LIMSApi.Services
                         .Where(c => c.ID > 0 && !incomingChemicalIds.Contains(c.ID)).ToList();
                     foreach (var ct in chemTestsToDelete)
                     {
+                        _context.ChemicalTestMethods.RemoveRange(ct.Methods);
                         _context.ChemicalTestElements.RemoveRange(ct.Elements);
                         _context.ChemicalTestTypes.RemoveRange(ct.TestTypes);
                         _context.ChemicalTests.Remove(ct);
@@ -902,6 +949,7 @@ namespace LIMSApi.Services
 
                         general.Specification1 = gDto.Specification1;
                         general.Specification2 = gDto.Specification2;
+                        general.LaboratoryTestSubGroupID = gDto.LaboratoryTestSubGroupID;
 
                         foreach (var m in gDto.Methods)
                         {
@@ -938,6 +986,7 @@ namespace LIMSApi.Services
                             if (chem == null)
                                 throw new Exception($"ChemicalTest ID {cDto.ID} not found");
 
+                            chem.Methods.Clear();
                             chem.Elements.Clear();
                             chem.TestTypes.Clear();
                         }
@@ -946,6 +995,7 @@ namespace LIMSApi.Services
                             plan.ChemicalTests.Clear(); // for safe & single chemical test
                             chem = new ChemicalTest
                             {
+                                Methods = new List<ChemicalTestMethod>(),
                                 Elements = new List<ChemicalTestElement>(),
                                 TestTypes = new List<ChemicalTestType>()
                             };
@@ -954,6 +1004,8 @@ namespace LIMSApi.Services
 
                         chem.Specification1 = cDto.Specification1;
                         chem.Specification2 = cDto.Specification2;
+                        chem.LaboratoryTestAnalysisTypeID = cDto.LaboratoryTestAnalysisTypeID;
+                        chem.MetalClassificationID = cDto.MetalClassificationID ?? 0;
                         chem.ReportNo = string.IsNullOrWhiteSpace(cDto.ReportNo)
                             ? $"{sample.SampleNo}-C"
                             : cDto.ReportNo;
@@ -961,12 +1013,35 @@ namespace LIMSApi.Services
                             cDto.UlrNo, tcPrefix, year, labLocation,
                             sample.SampleNo, ref ulrCounter);
 
-                        foreach (var e in cDto.Elements)
+                        int chemMethodCounter = 1;
+                        foreach (var m in cDto.Methods ?? new())
+                        {
+                            var methodReportNo = string.IsNullOrWhiteSpace(m.ReportNo) || m.ReportNo == "Auto Generate"
+                                ? (chemMethodCounter == 1 ? $"{sample.SampleNo}-C" : $"{sample.SampleNo}-C{chemMethodCounter}")
+                                : m.ReportNo;
+
+                            chem.Methods.Add(new ChemicalTestMethod
+                            {
+                                LaboratoryTestAnalysisTypeID = m.LaboratoryTestAnalysisTypeID ?? m.TestMethodID ?? 0,
+                                TestMethodSpecificationID = m.TestMethodSpecificationID ?? m.StandardID,
+                                Quantity = m.Quantity > 0 ? m.Quantity : 1,
+                                ReportNo = methodReportNo,
+                                UlrNo = GenerateUlr(
+                                    m.UlrNo, tcPrefix, year, labLocation,
+                                    sample.SampleNo, ref ulrCounter),
+                                Cancel = m.Cancel
+                            });
+                            chemMethodCounter++;
+                        }
+
+                        foreach (var e in cDto.Elements ?? new())
                         {
                             chem.Elements.Add(new ChemicalTestElement
                             {
                                 ParameterID = e.ParameterID,
                                 SpecificationLineID = e.SpecificationLineID,
+                                LaboratoryTestAnalysisTypeID = e.LaboratoryTestAnalysisTypeID,
+                                SourceType = e.SourceType,
                                 ParameterUnitID = e.ParameterUnitID,
                                 ParameterUnit = e.ParameterUnit,
                                 MinValue = e.MinValue,
@@ -975,15 +1050,19 @@ namespace LIMSApi.Services
                             });
                         }
 
-                        foreach (var labTestId in cDto.TestTypeIds ?? new List<long>())
+                        var analysisTypeIds = cDto.AnalysisTypeIds?.Count > 0 ? cDto.AnalysisTypeIds : (cDto.TestTypeIds ?? new List<long>());
+                        foreach (var labTestId in analysisTypeIds)
                         {
                             var labTest = await _context.LaboratoryTests
+                                .FirstOrDefaultAsync(x => x.ID == labTestId);
+                            var analysisType = await _context.LaboratoryTestAnalysisTypes
                                 .FirstOrDefaultAsync(x => x.ID == labTestId);
 
                             chem.TestTypes.Add(new ChemicalTestType
                             {
-                                LaboratoryTestID = labTestId,
-                                Name = labTest?.Name ?? "",
+                                LaboratoryTestID = labTest != null ? labTestId : null,
+                                LaboratoryTestAnalysisTypeID = analysisType != null ? labTestId : null,
+                                Name = analysisType?.Name ?? labTest?.Name ?? "",
                                 IsSelected = true
                             });
                         }
@@ -1286,7 +1365,19 @@ namespace LIMSApi.Services
                         SampleNo = s.SampleNo,
                         Details = s.Details,
                         MetalClassificationID = s.MetalClassificationID,
+                        MetalClassificationName = s.MetalClassification?.Name,
                         ProductConditionID = s.ProductConditionID,
+                        ProductConditionName = s.ProductCondition?.Name,
+                        ProductMasterID = s.ProductMasterID,
+                        ProductMasterName = !string.IsNullOrEmpty(s.ProductMaster?.DisplayTitle) ? s.ProductMaster.DisplayTitle : (s.ProductMaster?.ProductName ?? s.ProductCondition?.Name),
+                        ProductSizeMasterID = s.ProductSizeMasterID,
+                        ProductSizeID = s.ProductSizeMasterID,
+                        ProductSizeName = s.ProductSizeMaster?.DisplayName,
+                        SpecificationGradeID = s.SpecificationGradeID,
+                        IsUnknownSample = s.IsUnknownSample,
+                        AssignedGradeID = s.AssignedGradeID,
+                        AssignedGradeName = s.AssignedGrade?.Grade,
+                        AssignedGradeNote = s.AssignedGradeNote,
                         ProductFormID = s.ProductFormID,
                         SpecimenOrientationID = s.SpecimenOrientationID,
                         Remarks = s.Remarks,
@@ -1386,12 +1477,75 @@ namespace LIMSApi.Services
                 .SelectMany(gt => gt.Methods)
                 .Where(m => m.StandardID != 0)
                 .Select(m => m.StandardID)
+                .Concat(
+                    sampleInward.SampleDetails
+                        .SelectMany(s => s.TestPlans)
+                        .SelectMany(tp => tp.ChemicalTests)
+                        .SelectMany(ct => ct.Methods)
+                        .Where(m => m.TestMethodSpecificationID.HasValue && m.TestMethodSpecificationID.Value > 0)
+                        .Select(m => m.TestMethodSpecificationID!.Value)
+                )
                 .Distinct()
                 .ToList();
             var standardMap = standardIds.Count > 0
                 ? await _context.TestMethodSpecifications
                     .Where(s => standardIds.Contains(s.ID))
                     .ToDictionaryAsync(s => s.ID, s => s.Name ?? string.Empty)
+                : new Dictionary<long, string>();
+
+            var subGroupIds = sampleInward.SampleDetails
+                .SelectMany(s => s.TestPlans)
+                .SelectMany(tp => tp.GeneralTests)
+                .Where(gt => gt.LaboratoryTestSubGroupID.HasValue && gt.LaboratoryTestSubGroupID.Value > 0)
+                .Select(gt => gt.LaboratoryTestSubGroupID!.Value)
+                .Distinct()
+                .ToList();
+            var subGroupMap = subGroupIds.Count > 0
+                ? await _context.LaboratoryTestSubGroups
+                    .Where(sg => subGroupIds.Contains(sg.ID))
+                    .ToDictionaryAsync(sg => sg.ID, sg => sg.ReportTestName ?? sg.Name)
+                : new Dictionary<long, string>();
+
+            var analysisTypeIds = sampleInward.SampleDetails
+                .SelectMany(s => s.TestPlans)
+                .SelectMany(tp => tp.ChemicalTests)
+                .Where(ct => ct.LaboratoryTestAnalysisTypeID.HasValue && ct.LaboratoryTestAnalysisTypeID.Value > 0)
+                .Select(ct => ct.LaboratoryTestAnalysisTypeID!.Value)
+                .Concat(
+                    sampleInward.SampleDetails
+                        .SelectMany(s => s.TestPlans)
+                        .SelectMany(tp => tp.ChemicalTests)
+                        .SelectMany(ct => ct.Methods)
+                        .Where(m => m.LaboratoryTestAnalysisTypeID > 0)
+                        .Select(m => m.LaboratoryTestAnalysisTypeID)
+                )
+                .Concat(
+                    sampleInward.SampleDetails
+                        .SelectMany(s => s.TestPlans)
+                        .SelectMany(tp => tp.ChemicalTests)
+                        .SelectMany(ct => ct.Elements)
+                        .Where(e => e.LaboratoryTestAnalysisTypeID.HasValue && e.LaboratoryTestAnalysisTypeID.Value > 0)
+                        .Select(e => e.LaboratoryTestAnalysisTypeID!.Value)
+                )
+                .Distinct()
+                .ToList();
+            var analysisTypeMap = analysisTypeIds.Count > 0
+                ? await _context.LaboratoryTestAnalysisTypes
+                    .Where(at => analysisTypeIds.Contains(at.ID))
+                    .ToDictionaryAsync(at => at.ID, at => at.Name)
+                : new Dictionary<long, string>();
+
+            var paramIds = sampleInward.SampleDetails
+                .SelectMany(s => s.TestPlans)
+                .SelectMany(tp => tp.ChemicalTests)
+                .SelectMany(ct => ct.Elements)
+                .Select(e => e.ParameterID)
+                .Distinct()
+                .ToList();
+            var parameterMap = paramIds.Count > 0
+                ? await _context.ParameterMasters
+                    .Where(p => paramIds.Contains(p.ID))
+                    .ToDictionaryAsync(p => p.ID, p => p.Name)
                 : new Dictionary<long, string>();
 
             var dto = new SampleInwardDto
@@ -1506,6 +1660,16 @@ namespace LIMSApi.Services
                         MetalClassificationName = s.MetalClassification?.Name,
                         ProductConditionID = s.ProductConditionID,
                         ProductConditionName = s.ProductCondition?.Name,
+                        ProductMasterID = s.ProductMasterID,
+                        ProductMasterName = !string.IsNullOrEmpty(s.ProductMaster?.DisplayTitle) ? s.ProductMaster.DisplayTitle : (s.ProductMaster?.ProductName ?? s.ProductCondition?.Name),
+                        ProductSizeMasterID = s.ProductSizeMasterID,
+                        ProductSizeID = s.ProductSizeMasterID,
+                        ProductSizeName = s.ProductSizeMaster?.DisplayName,
+                        SpecificationGradeID = s.SpecificationGradeID,
+                        IsUnknownSample = s.IsUnknownSample,
+                        AssignedGradeID = s.AssignedGradeID,
+                        AssignedGradeName = s.AssignedGrade?.Grade,
+                        AssignedGradeNote = s.AssignedGradeNote,
                         ProductFormID = s.ProductFormID,
                         SpecimenOrientationID = s.SpecimenOrientationID,
                         Remarks = s.Remarks,
@@ -1567,6 +1731,8 @@ namespace LIMSApi.Services
                             SampleTestPlanID = gt.SampleTestPlanID,
                             Specification1 = gt.Specification1,
                             Specification2 = gt.Specification2,
+                            LaboratoryTestSubGroupID = gt.LaboratoryTestSubGroupID,
+                            SubGroupName = gt.LaboratoryTestSubGroupID.HasValue && subGroupMap.ContainsKey(gt.LaboratoryTestSubGroupID.Value) ? subGroupMap[gt.LaboratoryTestSubGroupID.Value] : null,
                             Methods = gt.Methods.Select(m => new GeneralTestMethodDto
                             {
                                 ID = m.ID,
@@ -1587,20 +1753,47 @@ namespace LIMSApi.Services
                             SampleTestPlanID = ct.SampleTestPlanID,
                             ReportNo = ct.ReportNo,
                             UlrNo = ct.UlrNo,
+                            LaboratoryTestAnalysisTypeID = ct.LaboratoryTestAnalysisTypeID,
+                            AnalysisTypeName = ct.LaboratoryTestAnalysisTypeID.HasValue && analysisTypeMap.ContainsKey(ct.LaboratoryTestAnalysisTypeID.Value) ? analysisTypeMap[ct.LaboratoryTestAnalysisTypeID.Value] : null,
                             MetalClassificationID = ct.MetalClassificationID,
                             Specification1 = ct.Specification1,
                             Specification2 = ct.Specification2,
-                            TestTypeIds = ct.TestTypes
-                                .Select(tt => tt.LaboratoryTestID ?? 0)
+                            AnalysisTypeIds = ct.TestTypes
+                                .Select(tt => tt.LaboratoryTestAnalysisTypeID ?? tt.LaboratoryTestID ?? 0)
                                 .ToList(),
+                            TestTypeIds = ct.TestTypes
+                                .Select(tt => tt.LaboratoryTestAnalysisTypeID ?? tt.LaboratoryTestID ?? 0)
+                                .ToList(),
+                            Methods = ct.Methods.Select(m => new ChemicalTestMethodDto
+                            {
+                                ID = m.ID,
+                                ChemicalTestID = m.ChemicalTestID,
+                                TestMethodID = m.LaboratoryTestAnalysisTypeID,
+                                LaboratoryTestAnalysisTypeID = m.LaboratoryTestAnalysisTypeID,
+                                AnalysisTypeName = m.AnalysisType != null ? m.AnalysisType.Name : (analysisTypeMap.ContainsKey(m.LaboratoryTestAnalysisTypeID) ? analysisTypeMap[m.LaboratoryTestAnalysisTypeID] : null),
+                                TestMethodSpecificationID = m.TestMethodSpecificationID,
+                                StandardID = m.TestMethodSpecificationID,
+                                StandardName = m.TestMethodSpecification != null ? m.TestMethodSpecification.Name : (m.TestMethodSpecificationID.HasValue && standardMap.ContainsKey(m.TestMethodSpecificationID.Value) ? standardMap[m.TestMethodSpecificationID.Value] : null),
+                                Quantity = m.Quantity,
+                                ReportNo = m.ReportNo,
+                                UlrNo = m.UlrNo,
+                                Cancel = m.Cancel
+                            }).ToList(),
                             Elements = ct.Elements.Select(e => new ChemicalTestElementDto
                             {
                                 ID = e.ID,
-                                ParameterUnitID = e.ParameterUnitID,
                                 ChemicalTestID = e.ChemicalTestID,
                                 ParameterID = e.ParameterID,
-                                Selected = e.Selected,
-                                SpecificationLineID = e.SpecificationLineID
+                                ParameterName = e.Parameter != null ? e.Parameter.Name : (parameterMap.ContainsKey(e.ParameterID) ? parameterMap[e.ParameterID] : null),
+                                SpecificationLineID = e.SpecificationLineID,
+                                LaboratoryTestAnalysisTypeID = e.LaboratoryTestAnalysisTypeID,
+                                LaboratoryTestAnalysisTypeName = e.AnalysisType != null ? e.AnalysisType.Name : (e.LaboratoryTestAnalysisTypeID.HasValue && analysisTypeMap.ContainsKey(e.LaboratoryTestAnalysisTypeID.Value) ? analysisTypeMap[e.LaboratoryTestAnalysisTypeID.Value] : null),
+                                SourceType = e.SourceType,
+                                ParameterUnitID = e.ParameterUnitID,
+                                ParameterUnit = e.ParameterUnit ?? "",
+                                MinValue = e.MinValue,
+                                MaxValue = e.MaxValue,
+                                Selected = e.Selected
                             }).ToList()
                         }).ToList()
                     }))

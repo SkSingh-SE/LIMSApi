@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Helpers;
 using LIMSApi.Middleware;
@@ -128,9 +128,9 @@ namespace LIMSApi.Controllers
         }
 
         [HttpGet("dropdown")]
-        public async Task<IActionResult> GetEquipmentDropdown(string? searchTerm, int pageNo, int pageSize)
+        public async Task<IActionResult> GetEquipmentDropdown(string? searchTerm, int pageNo, int pageSize, [FromQuery] long? labTestId = null, [FromQuery] long? subGroupId = null, [FromQuery] long? analysisTypeId = null)
         {
-            var data = await _equipmentTypeService.GetEquipmentDropdown(searchTerm, pageNo, pageSize);
+            var data = await _equipmentTypeService.GetEquipmentDropdown(searchTerm, pageNo, pageSize, labTestId, subGroupId, analysisTypeId);
             return data == null ? NoContent(): Ok(data);
         }
 

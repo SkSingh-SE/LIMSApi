@@ -1519,7 +1519,17 @@ namespace LIMSApi.ServiceWORepo
             foreach (var header in testHeaders)
             {
                 var testType = DetermineTestType(header);
-                var baseName = header.LaboratoryTest?.Name ?? "Unknown Test";
+                var subGroupName = await _db.LaboratoryTestSubGroups
+                    .Where(sg => sg.ID == header.LaboratoryTestID)
+                    .Select(sg => sg.ReportTestName ?? sg.Name)
+                    .FirstOrDefaultAsync();
+
+                var analysisTypeName = await _db.LaboratoryTestAnalysisTypes
+                    .Where(at => at.ID == header.LaboratoryTestID)
+                    .Select(at => at.Name)
+                    .FirstOrDefaultAsync();
+
+                var baseName = subGroupName ?? analysisTypeName ?? header.LaboratoryTest?.Name ?? "Unknown Test";
 
                 // Add specimen label when multiple headers share same lab test
                 var hasMultipleSpecimens = labTestGroups.GetValueOrDefault(header.LaboratoryTestID, 1) > 1;
@@ -1560,9 +1570,9 @@ namespace LIMSApi.ServiceWORepo
                                     .Where(ct => ct.SampleTestPlanID == header.TestPlanID)
                                     .Include(ct => ct.AnalysisType)
                                         .ThenInclude(at => at.SubGroup)
-                                    .Select(ct => ct.AnalysisType != null && ct.AnalysisType.SubGroup != null ? ct.AnalysisType.SubGroup.ReportTestName : null)
-                                    .FirstOrDefault() ?? header.LaboratoryTest.Name)
-                                : null
+                                    .Select(ct => ct.AnalysisType != null && ct.AnalysisType.SubGroup != null ? (ct.AnalysisType.SubGroup.ReportTestName ?? ct.AnalysisType.SubGroup.Name) : null)
+                                    .FirstOrDefault() ?? header.LaboratoryTest?.Name)
+                                : subGroupName
                         })
                         .ToList(),
                     Images = header.Images

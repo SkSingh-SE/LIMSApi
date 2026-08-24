@@ -29,6 +29,8 @@ namespace LIMSApi.Models
         [ForeignKey(nameof(LaboratoryTestAnalysisTypeID))]
         public virtual LaboratoryTestAnalysisType? AnalysisType { get; set; }
 
+        public virtual ICollection<ChemicalTestMethod> Methods { get; set; } = new List<ChemicalTestMethod>();
+
         public virtual List<ChemicalTestType> TestTypes { get; set; } = new();
 
         public virtual ICollection<ChemicalTestElement> Elements { get; set; } = new List<ChemicalTestElement>();

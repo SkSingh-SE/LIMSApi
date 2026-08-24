@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 
 namespace LIMSApi.Services.Interface
@@ -17,6 +17,6 @@ namespace LIMSApi.Services.Interface
         Task<EquipmentMaster> GetEquipmentDetails(long id);
         Task<PagedResponse<object>> FetchEquipmentList(PageFilter filter);
 
-        Task<List<DropdwonSelector>> GetEquipmentDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<DropdwonSelector>> GetEquipmentDropdown(string? searchTerm, int pageNo, int pageSize, long? labTestId = null, long? subGroupId = null, long? analysisTypeId = null);
     }
 }

@@ -193,6 +193,11 @@ namespace LIMSApi.Services
 
             if (sample != null)
             {
+                sample.AssignedGradeID = dto.SpecificationGradeID;
+                sample.AssignedGradeNote = dto.Notes;
+                sample.IsUnknownSample = false;
+                sample.ModifiedOn = DateTime.UtcNow;
+
                 foreach (var plan in sample.TestPlans)
                 {
                     await CreatePlanHistoryEntry(

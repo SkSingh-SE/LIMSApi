@@ -192,6 +192,23 @@ namespace LIMSApi.Services
             return await _repository.GetBySubGroupId(subGroupId);
         }
 
+        public async Task<List<DropdwonSelector>> GetTestMethodSpecificationByAnalysisTypeId(long analysisTypeId)
+        {
+            var testMethodSpecs = await _context.LaboratoryTestAnalysisTypeMethods
+                .AsNoTracking()
+                .Include(m => m.TestMethodSpecification)
+                .Where(m => m.LaboratoryTestAnalysisTypeID == analysisTypeId && m.TestMethodSpecification != null && !m.TestMethodSpecification.IsDisabled)
+                .Select(m => new DropdwonSelector
+                {
+                    Id = m.TestMethodSpecificationID,
+                    Name = m.TestMethodSpecification!.DisplayTitle ?? m.TestMethodSpecification.Name
+                })
+                .Distinct()
+                .ToListAsync();
+
+            return testMethodSpecs;
+        }
+
         private static void Validate(LaboratoryTestAnalysisType model)
         {
             if (string.IsNullOrWhiteSpace(model.Name))

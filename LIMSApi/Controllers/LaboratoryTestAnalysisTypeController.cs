@@ -49,6 +49,15 @@ namespace LIMSApi.Controllers
             return data == null ? NoContent() : Ok(data);
         }
 
+        [RequirePermission(Permissions.LaboratoryTestSubType.Read)]
+        [HttpGet("test-method-specification/{analysisTypeId}")]
+        [HttpGet("standards/{analysisTypeId}")]
+        public async Task<IActionResult> GetTestMethodSpecificationByAnalysisType(long analysisTypeId)
+        {
+            var list = await _service.GetTestMethodSpecificationByAnalysisTypeId(analysisTypeId);
+            return Ok(list);
+        }
+
         [RequirePermission(Permissions.LaboratoryTestSubType.Create)]
         [HttpPost("create")]
         public async Task<ActionResult<LaboratoryTestAnalysisType>> Create(LaboratoryTestAnalysisType model)

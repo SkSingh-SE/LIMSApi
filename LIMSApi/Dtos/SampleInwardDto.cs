@@ -155,6 +155,18 @@ namespace LIMSApi.Dtos
         public decimal? Width { get; set; }
         public decimal? Length { get; set; }
 
+        // Product Master & Size Cascade linkage
+        public long? ProductMasterID { get; set; }
+        public string? ProductMasterName { get; set; }
+        public long? ProductSizeMasterID { get; set; }
+        public long? ProductSizeID { get; set; }
+        public string? ProductSizeName { get; set; }
+        public long? SpecificationGradeID { get; set; }
+        public bool IsUnknownSample { get; set; }
+        public long? AssignedGradeID { get; set; }
+        public string? AssignedGradeName { get; set; }
+        public string? AssignedGradeNote { get; set; }
+
         public ICollection<SampleAdditionalDetailDto> AdditionalDetails { get; set; } = new List<SampleAdditionalDetailDto>();
         public ICollection<SampleTestPlanDto> TestPlans { get; set; } = new List<SampleTestPlanDto>();
     }
@@ -190,6 +202,8 @@ namespace LIMSApi.Dtos
         public string? SampleNo { get; set; }
         public long? Specification1 { get; set; }
         public long? Specification2 { get; set; }
+        public long? LaboratoryTestSubGroupID { get; set; }
+        public string? SubGroupName { get; set; }
         public List<GeneralTestMethodDto> Methods { get; set; } = new();
     }
 
@@ -207,6 +221,22 @@ namespace LIMSApi.Dtos
         public string? StandardName { get; set; }
     }
 
+    public class ChemicalTestMethodDto
+    {
+        public long ID { get; set; }
+        public long ChemicalTestID { get; set; }
+        public long? TestMethodID { get; set; }
+        public long? LaboratoryTestAnalysisTypeID { get; set; }
+        public string? AnalysisTypeName { get; set; }
+        public long? TestMethodSpecificationID { get; set; }
+        public long? StandardID { get; set; }
+        public string? StandardName { get; set; }
+        public int Quantity { get; set; } = 1;
+        public string? ReportNo { get; set; }
+        public string? UlrNo { get; set; }
+        public bool Cancel { get; set; }
+    }
+
     public class ChemicalTestDto
     {
         public long ID { get; set; }
@@ -214,11 +244,19 @@ namespace LIMSApi.Dtos
         public string? SampleNo { get; set; }
         public string? ReportNo { get; set; } = "";
         public string? UlrNo { get; set; } = "";
-        public List<long> TestTypeIds { get; set; } = new();
+        public List<long> AnalysisTypeIds { get; set; } = new();
+        public List<long> TestTypeIds
+        {
+            get => AnalysisTypeIds;
+            set => AnalysisTypeIds = value ?? new();
+        }
+        public long? LaboratoryTestAnalysisTypeID { get; set; }
+        public string? AnalysisTypeName { get; set; }
         public long? MetalClassificationID { get; set; }
         public string? MetalClassificationName { get; set; }
         public long? Specification1 { get; set; }
         public long? Specification2 { get; set; }
+        public List<ChemicalTestMethodDto> Methods { get; set; } = new();
         public List<ChemicalTestElementDto> Elements { get; set; } = new();
     }
 
@@ -227,12 +265,21 @@ namespace LIMSApi.Dtos
         public long ID { get; set; }
         public long ChemicalTestID { get; set; }
         public long ParameterID { get; set; }
-        public long SpecificationLineID { get; set; }
+        public string? ParameterName { get; set; }
+        public long? SpecificationLineID { get; set; }
+        public long? LaboratoryTestAnalysisTypeID { get; set; }
+        public string? LaboratoryTestAnalysisTypeName { get; set; }
+        public string? AnalysisTypeName
+        {
+            get => LaboratoryTestAnalysisTypeName;
+            set => LaboratoryTestAnalysisTypeName = value;
+        }
+        public string? SourceType { get; set; } // "Specification", "AnalysisType", "MachineSpectro"
         public long ParameterUnitID { get; set; }
-        public string ParameterUnit { get; set; }
+        public string ParameterUnit { get; set; } = "";
         public decimal? MinValue { get; set; }
         public decimal? MaxValue { get; set; }
-        public bool Selected { get; set; }
+        public bool Selected { get; set; } = true;
     }
 
     public enum SampleWorkflowStatus

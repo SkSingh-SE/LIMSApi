@@ -19,6 +19,8 @@ namespace LIMSApi.Dtos
         public string LaboratoryTestName { get; set; } = string.Empty;
         public string TestType { get; set; } = "General"; // General or Chemical
         public string SubGroup { get; set; } = string.Empty;
+        public long? LaboratoryTestSubGroupID { get; set; }
+        public long? LaboratoryTestAnalysisTypeID { get; set; }
         public string SourceTag { get; set; } = "PM Scope"; // "PM Scope", "Lab Scope", or "Both Sources"
         public List<string> SourceTags { get; set; } = new List<string>();
         public long? TestMethodSpecificationID { get; set; }

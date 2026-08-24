@@ -112,137 +112,471 @@ namespace LIMSApi.Repositories
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.LaboratoryTests
-                         join d in _context.DepartmentMasters on a.LabDepartmentID equals d.ID
-                         where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode
-                         select new
-                         {
-                             a.ID,
-                             a.Name,
-                             Department = d.Name
-                         };
-
-            if (!string.IsNullOrWhiteSpace(searchTerm))
+            // 1. Exact ID lookup
+            if (!string.IsNullOrWhiteSpace(searchTerm) && FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
             {
-                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                var exactMatch = await (from a in _context.LaboratoryTests
+                                        join d in _context.DepartmentMasters on a.LabDepartmentID equals d.ID into dsGroup
+                                        from ds in dsGroup.DefaultIfEmpty()
+                                        where a.ID == exactId && a.IsActive && a.CompanyCode == loggedInUser.CompanyCode
+                                        select new DropdwonSelector
+                                        {
+                                            Id = a.ID,
+                                            Name = a.Name,
+                                            Level = 1,
+                                            Selectable = true,
+                                            NodeType = "TestGroup",
+                                            ParentId = ds != null ? ds.ID : 0,
+                                            IsHeader = false,
+                                            IsChild = true,
+                                            AdditionalValues = new Dictionary<string, object>
+                                            {
+                                                { "masterTestId", a.ID },
+                                                { "masterTestName", a.Name },
+                                                { "departmentId", ds != null ? ds.ID : 0 },
+                                                { "departmentName", ds != null ? ds.Name : "" },
+                                                { "isChemical", a.IsChemicalTest }
+                                            }
+                                        }).FirstOrDefaultAsync();
+
+                if (exactMatch != null)
                 {
-                    _query = _query.Where(x => x.ID == exactId);
-                }
-                else
-                {
-                    var search = searchTerm.Trim();
-                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
+                    return new List<DropdwonSelector> { exactMatch };
                 }
             }
 
-            var skip = pageNo * pageSize;
+            // 2. 2-Tier Hierarchy Query: Department (Level 0) -> LaboratoryTest (Level 1 Leaf)
+            var query = from a in _context.LaboratoryTests
+                        join d in _context.DepartmentMasters on a.LabDepartmentID equals d.ID into dsGroup
+                        from ds in dsGroup.DefaultIfEmpty()
+                        where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode
+                        select new
+                        {
+                            MasterTestID = a.ID,
+                            MasterTestName = a.Name,
+                            IsChemical = a.IsChemicalTest,
+                            DepartmentID = ds != null ? ds.ID : 0,
+                            DepartmentName = ds != null ? ds.Name : "General Laboratory Tests"
+                        };
 
-            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                Id = x.ID,
-                Name = $"{x.Name} ({x.Department}) ",
-            })).ToListAsync();
+                var search = searchTerm.Trim();
+                query = query.Where(x => (x.MasterTestName != null && x.MasterTestName.Contains(search))
+                                      || (x.DepartmentName != null && x.DepartmentName.Contains(search)));
+            }
 
-            return data;
+            var rawData = await query
+                .OrderBy(x => x.DepartmentName)
+                .ThenBy(x => x.MasterTestName)
+                .ToListAsync();
+
+            var result = new List<DropdwonSelector>();
+
+            if (rawData.Count > 0)
+            {
+                var deptGroups = rawData.GroupBy(x => new { x.DepartmentID, x.DepartmentName });
+
+                foreach (var deptGroup in deptGroups)
+                {
+                    // Level 0: Department Header (Non-selectable)
+                    result.Add(new DropdwonSelector
+                    {
+                        Id = 0,
+                        Name = deptGroup.Key.DepartmentName,
+                        Level = 0,
+                        Selectable = false,
+                        NodeType = "Department",
+                        IsHeader = true,
+                        IsChild = false,
+                        AdditionalValues = new Dictionary<string, object>
+                        {
+                            { "departmentId", deptGroup.Key.DepartmentID },
+                            { "departmentName", deptGroup.Key.DepartmentName }
+                        }
+                    });
+
+                    // Level 1: Laboratory Test (Selectable Leaf)
+                    foreach (var test in deptGroup)
+                    {
+                        result.Add(new DropdwonSelector
+                        {
+                            Id = test.MasterTestID,
+                            Name = test.MasterTestName,
+                            Level = 1,
+                            Selectable = true,
+                            NodeType = "TestGroup",
+                            ParentId = deptGroup.Key.DepartmentID,
+                            IsHeader = false,
+                            IsChild = true,
+                            AdditionalValues = new Dictionary<string, object>
+                            {
+                                { "masterTestId", test.MasterTestID },
+                                { "masterTestName", test.MasterTestName },
+                                { "departmentId", deptGroup.Key.DepartmentID },
+                                { "departmentName", deptGroup.Key.DepartmentName },
+                                { "isChemical", test.IsChemical }
+                            }
+                        });
+                    }
+                }
+            }
+
+            return result;
         }
 
         public async Task<List<DropdwonSelector>> GetGeneralTestMethodDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from sg in _context.LaboratoryTestSubGroups
-                         join a in _context.LaboratoryTests on sg.LaboratoryTestID equals a.ID
-                         join d in _context.DepartmentMasters on a.LabDepartmentID equals d.ID
-                         where sg.IsActive && a.IsActive && a.CompanyCode == loggedInUser.CompanyCode
-                               && !d.IsChemical
-                         select new
-                         {
-                             sg.ID,
-                             SubGroupName = sg.Name,
-                             TestName = a.Name,
-                             Department = d.Name
-                         };
-
-            if (!string.IsNullOrWhiteSpace(searchTerm))
+            // Handle Exact ID lookup (e.g. initial form binding by SubGroupID OR fallback by Master LaboratoryTestID)
+            if (!string.IsNullOrWhiteSpace(searchTerm) && FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
             {
-                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                var exactMatch = await (from sg in _context.LaboratoryTestSubGroups
+                                        join a in _context.LaboratoryTests on sg.LaboratoryTestID equals a.ID
+                                        join d in _context.DepartmentMasters on a.LabDepartmentID equals d.ID
+                                        where (sg.ID == exactId || a.ID == exactId) && sg.IsActive && a.IsActive && a.CompanyCode == loggedInUser.CompanyCode
+                                        orderby (sg.ID == exactId ? 0 : 1), sg.DisplayOrder, sg.ID
+                                        select new DropdwonSelector
+                                        {
+                                            Id = sg.ID,
+                                            Name = sg.Name,
+                                            Level = 1,
+                                            Selectable = true,
+                                            NodeType = "SubGroup",
+                                            ParentId = a.ID,
+                                            IsHeader = false,
+                                            IsChild = true,
+                                            AdditionalValues = new Dictionary<string, object>
+                                            {
+                                                { "masterTestId", a.ID },
+                                                { "masterTestName", a.Name },
+                                                { "reportTestName", sg.ReportTestName },
+                                                { "testDuration", sg.TestDuration ?? 1 },
+                                                { "metalClassificationId", sg.MetalClassificationID ?? 0 },
+                                                { "isChemical", false }
+                                            }
+                                        }).FirstOrDefaultAsync();
+
+                if (exactMatch != null)
                 {
-                    _query = _query.Where(x => x.ID == exactId);
-                }
-                else
-                {
-                    var search = searchTerm.Trim();
-                    _query = _query.Where(x => (x.SubGroupName != null && x.SubGroupName.Contains(search)) || (x.TestName != null && x.TestName.Contains(search)));
+                    return new List<DropdwonSelector> { exactMatch };
                 }
             }
 
-            var skip = pageNo * pageSize;
+            var query = from sg in _context.LaboratoryTestSubGroups
+                        join a in _context.LaboratoryTests on sg.LaboratoryTestID equals a.ID
+                        join d in _context.DepartmentMasters on a.LabDepartmentID equals d.ID
+                        where sg.IsActive && a.IsActive && a.CompanyCode == loggedInUser.CompanyCode
+                              && !d.IsChemical
+                        select new
+                        {
+                            SubGroupID = sg.ID,
+                            SubGroupName = sg.Name,
+                            ReportTestName = sg.ReportTestName,
+                            TestDuration = sg.TestDuration,
+                            MetalClassificationID = sg.MetalClassificationID,
+                            DisplayOrder = sg.DisplayOrder,
+                            MasterTestID = a.ID,
+                            MasterTestName = a.Name
+                        };
 
-            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                Id = x.ID,
-                Name = $"{x.SubGroupName} ({x.TestName})"
-            })).ToListAsync();
+                var search = searchTerm.Trim();
+                query = query.Where(x => (x.SubGroupName != null && x.SubGroupName.Contains(search))
+                                      || (x.MasterTestName != null && x.MasterTestName.Contains(search))
+                                      || (x.ReportTestName != null && x.ReportTestName.Contains(search)));
+            }
 
-            if (data.Count == 0)
+            var rawData = await query
+                .OrderBy(x => x.MasterTestName)
+                .ThenBy(x => x.DisplayOrder)
+                .ThenBy(x => x.SubGroupName)
+                .ToListAsync();
+
+            var result = new List<DropdwonSelector>();
+
+            if (rawData.Count > 0)
             {
-                // Fallback to LaboratoryTests if no SubGroup is created yet
+                // Group by Master Laboratory Test
+                var grouped = rawData.GroupBy(x => new { x.MasterTestID, x.MasterTestName });
+
+                foreach (var masterGroup in grouped)
+                {
+                    // 1. Level 0: Master Test Group Header (Non-selectable)
+                    result.Add(new DropdwonSelector
+                    {
+                        Id = 0,
+                        Name = masterGroup.Key.MasterTestName,
+                        Level = 0,
+                        Selectable = false,
+                        NodeType = "TestGroup",
+                        IsHeader = true,
+                        IsChild = false,
+                        AdditionalValues = new Dictionary<string, object>
+                        {
+                            { "masterTestId", masterGroup.Key.MasterTestID },
+                            { "isChemical", false }
+                        }
+                    });
+
+                    // 2. Level 1: Child SubGroups (Selectable Leaf)
+                    foreach (var sg in masterGroup)
+                    {
+                        result.Add(new DropdwonSelector
+                        {
+                            Id = sg.SubGroupID,
+                            Name = sg.SubGroupName,
+                            Level = 1,
+                            Selectable = true,
+                            NodeType = "SubGroup",
+                            ParentId = masterGroup.Key.MasterTestID,
+                            IsHeader = false,
+                            IsChild = true,
+                            AdditionalValues = new Dictionary<string, object>
+                            {
+                                { "masterTestId", masterGroup.Key.MasterTestID },
+                                { "masterTestName", masterGroup.Key.MasterTestName },
+                                { "reportTestName", sg.ReportTestName },
+                                { "testDuration", sg.TestDuration ?? 1 },
+                                { "metalClassificationId", sg.MetalClassificationID ?? 0 },
+                                { "isChemical", false }
+                            }
+                        });
+                    }
+                }
+            }
+            else
+            {
+                // Fallback: If no SubGroups exist yet, return active LaboratoryTests directly
                 var fallbackQuery = from a in _context.LaboratoryTests
                                     join d in _context.DepartmentMasters on a.LabDepartmentID equals d.ID
                                     where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode && !d.IsChemical
                                     select new { a.ID, a.Name, Department = d.Name };
 
-                if (!string.IsNullOrWhiteSpace(searchTerm) && !FilterHelper.IsExactIdSearch(searchTerm, out _))
+                if (!string.IsNullOrWhiteSpace(searchTerm))
                 {
                     fallbackQuery = fallbackQuery.Where(x => x.Name.Contains(searchTerm.Trim()));
                 }
 
-                data = await (fallbackQuery.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+                var fallbackData = await fallbackQuery.OrderBy(x => x.Name).ToListAsync();
+                foreach (var fb in fallbackData)
                 {
-                    Id = x.ID,
-                    Name = $"{x.Name} ({x.Department})"
-                })).ToListAsync();
+                    result.Add(new DropdwonSelector
+                    {
+                        Id = fb.ID,
+                        Name = fb.Name,
+                        Level = 1,
+                        Selectable = true,
+                        NodeType = "TestGroup",
+                        IsHeader = false,
+                        IsChild = false,
+                        AdditionalValues = new Dictionary<string, object>
+                        {
+                            { "masterTestId", fb.ID },
+                            { "masterTestName", fb.Name },
+                            { "isChemical", false }
+                        }
+                    });
+                }
             }
 
-            return data;
+            return result;
         }
 
         public async Task<List<DropdwonSelector>> GetChemicalTestMethodDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.LaboratoryTests
-                         join d in _context.DepartmentMasters on a.LabDepartmentID equals d.ID
-                         where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode
-                               && d.IsChemical
-                         select new
-                         {
-                             a.ID,
-                             a.Name,
-                             Department = d.Name
-                         };
-            if (!string.IsNullOrWhiteSpace(searchTerm))
+            // Handle Exact ID lookup (e.g. initial form binding by AnalysisTypeID OR fallback by SubGroupID OR Master LaboratoryTestID)
+            if (!string.IsNullOrWhiteSpace(searchTerm) && FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
             {
-                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                var exactMatch = await (from at in _context.LaboratoryTestAnalysisTypes
+                                        join sg in _context.LaboratoryTestSubGroups on at.LaboratoryTestSubGroupID equals sg.ID
+                                        join a in _context.LaboratoryTests on sg.LaboratoryTestID equals a.ID
+                                        where (at.ID == exactId || sg.ID == exactId || a.ID == exactId) && at.IsActive && sg.IsActive && a.IsActive && a.CompanyCode == loggedInUser.CompanyCode
+                                        orderby (at.ID == exactId ? 0 : (sg.ID == exactId ? 1 : 2)), at.ID
+                                        select new DropdwonSelector
+                                        {
+                                            Id = at.ID,
+                                            Name = at.Name,
+                                            Level = 2,
+                                            Selectable = true,
+                                            NodeType = "AnalysisType",
+                                            ParentId = sg.ID,
+                                            IsHeader = false,
+                                            IsChild = true,
+                                            AdditionalValues = new Dictionary<string, object>
+                                            {
+                                                { "masterTestId", a.ID },
+                                                { "masterTestName", a.Name },
+                                                { "subGroupId", sg.ID },
+                                                { "subGroupName", sg.Name },
+                                                { "analysisTypeId", at.ID },
+                                                { "reportTestName", sg.ReportTestName },
+                                                { "metalClassificationId", at.MetalClassificationID ?? 0 },
+                                                { "isChemical", true }
+                                            }
+                                        }).FirstOrDefaultAsync();
+
+                if (exactMatch != null)
                 {
-                    _query = _query.Where(x => x.ID == exactId);
-                }
-                else
-                {
-                    var search = searchTerm.Trim();
-                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
+                    return new List<DropdwonSelector> { exactMatch };
                 }
             }
 
-            var skip = pageNo * pageSize;
+            // 3-Tier Hierarchy Query: LaboratoryTest (Master) -> LaboratoryTestSubGroup -> LaboratoryTestAnalysisType (Leaf)
+            var query = from at in _context.LaboratoryTestAnalysisTypes
+                        join sg in _context.LaboratoryTestSubGroups on at.LaboratoryTestSubGroupID equals sg.ID
+                        join a in _context.LaboratoryTests on sg.LaboratoryTestID equals a.ID
+                        join d in _context.DepartmentMasters on a.LabDepartmentID equals d.ID
+                        where at.IsActive && sg.IsActive && a.IsActive && a.CompanyCode == loggedInUser.CompanyCode
+                              && d.IsChemical
+                        select new
+                        {
+                            AnalysisTypeID = at.ID,
+                            AnalysisTypeName = at.Name,
+                            SubGroupID = sg.ID,
+                            SubGroupName = sg.Name,
+                            ReportTestName = sg.ReportTestName,
+                            SubGroupDisplayOrder = sg.DisplayOrder,
+                            MetalClassificationID = at.MetalClassificationID,
+                            MasterTestID = a.ID,
+                            MasterTestName = a.Name
+                        };
 
-            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            if (!string.IsNullOrWhiteSpace(searchTerm))
             {
-                Id = x.ID,
-                Name = $"{x.Name} ({x.Department}) ",
-            })).ToListAsync();
+                var search = searchTerm.Trim();
+                query = query.Where(x => (x.AnalysisTypeName != null && x.AnalysisTypeName.Contains(search))
+                                      || (x.SubGroupName != null && x.SubGroupName.Contains(search))
+                                      || (x.MasterTestName != null && x.MasterTestName.Contains(search))
+                                      || (x.ReportTestName != null && x.ReportTestName.Contains(search)));
+            }
 
-            return data;
+            var rawData = await query
+                .OrderBy(x => x.MasterTestName)
+                .ThenBy(x => x.SubGroupDisplayOrder)
+                .ThenBy(x => x.SubGroupName)
+                .ThenBy(x => x.AnalysisTypeName)
+                .ToListAsync();
+
+            var result = new List<DropdwonSelector>();
+
+            if (rawData.Count > 0)
+            {
+                // Group by Master Laboratory Test (Level 0)
+                var masterGroups = rawData.GroupBy(x => new { x.MasterTestID, x.MasterTestName });
+
+                foreach (var masterGroup in masterGroups)
+                {
+                    // 1. Level 0: Master Test Group Header (Non-selectable)
+                    result.Add(new DropdwonSelector
+                    {
+                        Id = 0,
+                        Name = masterGroup.Key.MasterTestName,
+                        Level = 0,
+                        Selectable = false,
+                        NodeType = "TestGroup",
+                        IsHeader = true,
+                        IsChild = false,
+                        AdditionalValues = new Dictionary<string, object>
+                        {
+                            { "masterTestId", masterGroup.Key.MasterTestID },
+                            { "isChemical", true }
+                        }
+                    });
+
+                    // 2. Level 1: SubGroup Intermediate Header (Non-selectable)
+                    var subGroupGroups = masterGroup.GroupBy(x => new { x.SubGroupID, x.SubGroupName, x.ReportTestName });
+
+                    foreach (var sgGroup in subGroupGroups)
+                    {
+                        result.Add(new DropdwonSelector
+                        {
+                            Id = 0,
+                            Name = sgGroup.Key.SubGroupName,
+                            Level = 1,
+                            Selectable = false,
+                            NodeType = "SubGroup",
+                            ParentId = masterGroup.Key.MasterTestID,
+                            IsHeader = true,
+                            IsChild = true,
+                            AdditionalValues = new Dictionary<string, object>
+                            {
+                                { "masterTestId", masterGroup.Key.MasterTestID },
+                                { "subGroupId", sgGroup.Key.SubGroupID },
+                                { "reportTestName", sgGroup.Key.ReportTestName },
+                                { "isChemical", true }
+                            }
+                        });
+
+                        // 3. Level 2: Analysis Type (Selectable Leaf)
+                        foreach (var at in sgGroup)
+                        {
+                            result.Add(new DropdwonSelector
+                            {
+                                Id = at.AnalysisTypeID,
+                                Name = at.AnalysisTypeName,
+                                Level = 2,
+                                Selectable = true,
+                                NodeType = "AnalysisType",
+                                ParentId = sgGroup.Key.SubGroupID,
+                                IsHeader = false,
+                                IsChild = true,
+                                AdditionalValues = new Dictionary<string, object>
+                                {
+                                    { "masterTestId", masterGroup.Key.MasterTestID },
+                                    { "masterTestName", masterGroup.Key.MasterTestName },
+                                    { "subGroupId", sgGroup.Key.SubGroupID },
+                                    { "subGroupName", sgGroup.Key.SubGroupName },
+                                    { "analysisTypeId", at.AnalysisTypeID },
+                                    { "reportTestName", sgGroup.Key.ReportTestName },
+                                    { "metalClassificationId", at.MetalClassificationID ?? 0 },
+                                    { "isChemical", true }
+                                }
+                            });
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // Fallback: If no AnalysisTypes exist yet, return active Chemical LaboratoryTests directly
+                var fallbackQuery = from a in _context.LaboratoryTests
+                                    join d in _context.DepartmentMasters on a.LabDepartmentID equals d.ID
+                                    where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode && d.IsChemical
+                                    select new { a.ID, a.Name, Department = d.Name };
+
+                if (!string.IsNullOrWhiteSpace(searchTerm))
+                {
+                    fallbackQuery = fallbackQuery.Where(x => x.Name.Contains(searchTerm.Trim()));
+                }
+
+                var fallbackData = await fallbackQuery.OrderBy(x => x.Name).ToListAsync();
+                foreach (var fb in fallbackData)
+                {
+                    result.Add(new DropdwonSelector
+                    {
+                        Id = fb.ID,
+                        Name = fb.Name,
+                        Level = 1,
+                        Selectable = true,
+                        NodeType = "TestGroup",
+                        IsHeader = false,
+                        IsChild = false,
+                        AdditionalValues = new Dictionary<string, object>
+                        {
+                            { "masterTestId", fb.ID },
+                            { "masterTestName", fb.Name },
+                            { "isChemical", true }
+                        }
+                    });
+                }
+            }
+
+            return result;
         }
 
         public async Task<bool> ExistsByName(string name)

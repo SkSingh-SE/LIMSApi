@@ -204,6 +204,7 @@ namespace LIMSApi.Services
                 .Select(s => new ConfiguredTestDto
                 {
                     LaboratoryTestID = s.SubGroup!.LaboratoryTestID,
+                    LaboratoryTestSubGroupID = s.LaboratoryTestSubGroupID,
                     LaboratoryTestName = s.SubGroup.LaboratoryTest!.Name,
                     TestType = (s.SubGroup.LaboratoryTest.IsChemicalTest || (s.SubGroup.LaboratoryTest.LabDepartment != null && s.SubGroup.LaboratoryTest.LabDepartment.IsChemical))
                                ? "Chemical" : "General",
@@ -232,6 +233,8 @@ namespace LIMSApi.Services
                 .Select(s => new ConfiguredTestDto
                 {
                     LaboratoryTestID = s.AnalysisType!.SubGroup!.LaboratoryTestID,
+                    LaboratoryTestSubGroupID = s.AnalysisType!.LaboratoryTestSubGroupID,
+                    LaboratoryTestAnalysisTypeID = s.LaboratoryTestAnalysisTypeID,
                     LaboratoryTestName = s.AnalysisType.SubGroup.LaboratoryTest!.Name,
                     TestType = "Chemical",
                     SubGroup = s.AnalysisType.Name,
@@ -245,27 +248,46 @@ namespace LIMSApi.Services
                 .ToListAsync();
 
             // 3. Fetch Specification Line Laboratory Tests (Configured via Product Master Grade / Spec)
-            var specLineTests = await _context.SpecificationLines
+            var rawSpecLines = await _context.SpecificationLines
                 .AsNoTracking()
                 .Include(l => l.LaboratoryTest)
                     .ThenInclude(lt => lt!.LabDepartment)
+                .Include(l => l.LaboratoryTest)
+                    .ThenInclude(lt => lt!.SubGroups)
+                        .ThenInclude(sg => sg.AnalysisTypes)
+                .Include(l => l.LaboratoryTest)
+                    .ThenInclude(lt => lt!.SubGroups)
+                        .ThenInclude(sg => sg.TestMethods)
+                            .ThenInclude(tm => tm.TestMethodSpecification)
                 .Include(l => l.TestMethodMappings)
                     .ThenInclude(tm => tm.TestMethodSpecification)
                 .Where(l => l.SpecificationGradeID == gradeId && l.LaboratoryTestID != null && l.LaboratoryTest != null && l.LaboratoryTest.IsActive)
-                .Select(l => new ConfiguredTestDto
+                .ToListAsync();
+
+            var specLineTests = rawSpecLines.Select(l =>
+            {
+                var isChem = l.LaboratoryTest!.IsChemicalTest || (l.LaboratoryTest.LabDepartment != null && l.LaboratoryTest.LabDepartment.IsChemical);
+                var firstSg = l.LaboratoryTest.SubGroups.FirstOrDefault(sg => sg.IsActive) ?? l.LaboratoryTest.SubGroups.FirstOrDefault();
+                var firstAt = firstSg?.AnalysisTypes.FirstOrDefault(at => at.IsActive) ?? firstSg?.AnalysisTypes.FirstOrDefault();
+                var firstMethod = l.TestMethodMappings.FirstOrDefault()?.TestMethodSpecification 
+                                  ?? firstSg?.TestMethods.FirstOrDefault(tm => tm.IsDefault)?.TestMethodSpecification 
+                                  ?? firstSg?.TestMethods.FirstOrDefault()?.TestMethodSpecification;
+
+                return new ConfiguredTestDto
                 {
                     LaboratoryTestID = l.LaboratoryTestID!.Value,
-                    LaboratoryTestName = l.LaboratoryTest!.Name,
-                    TestType = (l.LaboratoryTest.IsChemicalTest || (l.LaboratoryTest.LabDepartment != null && l.LaboratoryTest.LabDepartment.IsChemical))
-                               ? "Chemical" : "General",
-                    SubGroup = l.Type ?? "General",
+                    LaboratoryTestSubGroupID = firstSg?.ID,
+                    LaboratoryTestAnalysisTypeID = isChem ? firstAt?.ID : null,
+                    LaboratoryTestName = l.LaboratoryTest.Name,
+                    TestType = isChem ? "Chemical" : "General",
+                    SubGroup = isChem ? (firstAt?.Name ?? firstSg?.Name ?? "Chemical") : (firstSg?.Name ?? l.Type ?? "General"),
                     SourceTag = "PM Scope",
-                    TestMethodSpecificationID = l.TestMethodMappings.FirstOrDefault() != null ? l.TestMethodMappings.FirstOrDefault()!.TestMethodSpecificationID : null,
-                    TestMethodSpecificationName = l.TestMethodMappings.FirstOrDefault() != null && l.TestMethodMappings.FirstOrDefault()!.TestMethodSpecification != null
-                        ? (l.TestMethodMappings.FirstOrDefault()!.TestMethodSpecification!.DisplayTitle ?? l.TestMethodMappings.FirstOrDefault()!.TestMethodSpecification!.Name) : "",
+                    TestMethodSpecificationID = l.TestMethodMappings.FirstOrDefault()?.TestMethodSpecificationID 
+                                                ?? (firstSg?.TestMethods.FirstOrDefault(m => m.IsDefault) ?? firstSg?.TestMethods.FirstOrDefault())?.TestMethodSpecificationID,
+                    TestMethodSpecificationName = firstMethod != null ? (firstMethod.DisplayTitle ?? firstMethod.Name) : "",
                     Quantity = 1
-                })
-                .ToListAsync();
+                };
+            }).ToList();
 
             var allTests = subgroupTests.Concat(analysisTypeTests).Concat(specLineTests).ToList();
 
@@ -284,6 +306,16 @@ namespace LIMSApi.Services
                     else
                     {
                         preferred.SourceTag = tags.FirstOrDefault() ?? "PM Scope";
+                    }
+                    var withSubGroup = g.FirstOrDefault(x => x.LaboratoryTestSubGroupID.HasValue && x.LaboratoryTestSubGroupID.Value > 0);
+                    if (withSubGroup != null && (!preferred.LaboratoryTestSubGroupID.HasValue || preferred.LaboratoryTestSubGroupID.Value == 0))
+                    {
+                        preferred.LaboratoryTestSubGroupID = withSubGroup.LaboratoryTestSubGroupID;
+                    }
+                    var withAnalysisType = g.FirstOrDefault(x => x.LaboratoryTestAnalysisTypeID.HasValue && x.LaboratoryTestAnalysisTypeID.Value > 0);
+                    if (withAnalysisType != null && (!preferred.LaboratoryTestAnalysisTypeID.HasValue || preferred.LaboratoryTestAnalysisTypeID.Value == 0))
+                    {
+                        preferred.LaboratoryTestAnalysisTypeID = withAnalysisType.LaboratoryTestAnalysisTypeID;
                     }
                     var withMethod = g.FirstOrDefault(x => x.TestMethodSpecificationID.HasValue && x.TestMethodSpecificationID.Value > 0);
                     if (withMethod != null && (!preferred.TestMethodSpecificationID.HasValue || preferred.TestMethodSpecificationID.Value == 0))

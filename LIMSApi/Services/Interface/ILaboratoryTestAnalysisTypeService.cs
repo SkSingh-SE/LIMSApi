@@ -12,5 +12,6 @@ namespace LIMSApi.Services.Interface
         Task<PagedResponse<object>> FetchList(PageFilter filter);
         Task<List<DropdwonSelector>> GetDropdown(long subGroupId);
         Task<List<LaboratoryTestAnalysisType>> GetBySubGroupId(long subGroupId);
+        Task<List<DropdwonSelector>> GetTestMethodSpecificationByAnalysisTypeId(long analysisTypeId);
     }
 }

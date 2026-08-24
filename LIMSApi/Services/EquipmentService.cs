@@ -1,4 +1,4 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using LIMSApi.Dtos;
@@ -287,9 +287,9 @@ namespace LIMSApi.Services
             return await _equipmentRepository.GetAllEquipments(filter);
         }
 
-        public async Task<List<DropdwonSelector>> GetEquipmentDropdown(string? searchTerm, int pageNo, int pageSize)
+        public async Task<List<DropdwonSelector>> GetEquipmentDropdown(string? searchTerm, int pageNo, int pageSize, long? labTestId = null, long? subGroupId = null, long? analysisTypeId = null)
         {
-            return await _equipmentRepository.GetEquipmentDropdown(searchTerm, pageNo, pageSize);
+            return await _equipmentRepository.GetEquipmentDropdown(searchTerm, pageNo, pageSize, labTestId, subGroupId, analysisTypeId);
         }
 
         private async Task SyncAnalysisTechniques(EquipmentMaster existing, ICollection<EquipmentAnalysisTechnique>? incoming)
