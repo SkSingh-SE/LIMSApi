@@ -26,6 +26,10 @@ namespace LIMSApi.Dtos
         public long? TestMethodSpecificationID { get; set; }
         public string TestMethodSpecificationName { get; set; } = string.Empty;
 
+        public List<long> TechniqueIDs { get; set; } = new List<long>();
+        public List<string> TechniqueCodes { get; set; } = new List<string>();
+        public List<string> TechniqueNames { get; set; } = new List<string>();
+
         // Backward compatibility aliases
         public long? TestMethodStandardID
         {

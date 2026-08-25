@@ -416,7 +416,10 @@ namespace LIMSApi.Repositories
                                                 { "analysisTypeId", at.ID },
                                                 { "reportTestName", sg.ReportTestName },
                                                 { "metalClassificationId", at.MetalClassificationID ?? 0 },
-                                                { "isChemical", true }
+                                                { "isChemical", true },
+                                                { "techniqueIds", at.AllowedTechniques.Select(t => t.AnalysisTechniqueID).ToList() },
+                                                { "techniqueCodes", at.AllowedTechniques.Select(t => t.AnalysisTechnique != null ? t.AnalysisTechnique.Code ?? "" : "").Where(c => c != "").ToList() },
+                                                { "techniqueNames", at.AllowedTechniques.Select(t => t.AnalysisTechnique != null ? t.AnalysisTechnique.Name ?? "" : "").Where(n => n != "").ToList() }
                                             }
                                         }).FirstOrDefaultAsync();
 
@@ -443,7 +446,10 @@ namespace LIMSApi.Repositories
                             SubGroupDisplayOrder = sg.DisplayOrder,
                             MetalClassificationID = at.MetalClassificationID,
                             MasterTestID = a.ID,
-                            MasterTestName = a.Name
+                            MasterTestName = a.Name,
+                            TechniqueIDs = at.AllowedTechniques.Select(t => t.AnalysisTechniqueID).ToList(),
+                            TechniqueCodes = at.AllowedTechniques.Select(t => t.AnalysisTechnique != null ? t.AnalysisTechnique.Code ?? "" : "").Where(c => c != "").ToList(),
+                            TechniqueNames = at.AllowedTechniques.Select(t => t.AnalysisTechnique != null ? t.AnalysisTechnique.Name ?? "" : "").Where(n => n != "").ToList()
                         };
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
@@ -534,7 +540,10 @@ namespace LIMSApi.Repositories
                                     { "analysisTypeId", at.AnalysisTypeID },
                                     { "reportTestName", sgGroup.Key.ReportTestName },
                                     { "metalClassificationId", at.MetalClassificationID ?? 0 },
-                                    { "isChemical", true }
+                                    { "isChemical", true },
+                                    { "techniqueIds", at.TechniqueIDs },
+                                    { "techniqueCodes", at.TechniqueCodes },
+                                    { "techniqueNames", at.TechniqueNames }
                                 }
                             });
                         }

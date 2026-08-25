@@ -228,6 +228,9 @@ namespace LIMSApi.Services
                 .Include(s => s.AnalysisType)
                     .ThenInclude(at => at!.TestMethods)
                         .ThenInclude(tm => tm.TestMethodSpecification)
+                .Include(s => s.AnalysisType)
+                    .ThenInclude(at => at!.AllowedTechniques)
+                        .ThenInclude(t => t.AnalysisTechnique)
                 .Where(s => ((productMasterId > 0 && s.ProductMasterID == productMasterId) || s.SpecificationGradeID == gradeId || (headerId > 0 && s.SpecificationHeaderID == headerId))
                             && s.AnalysisType != null && s.AnalysisType.SubGroup != null && s.AnalysisType.SubGroup.LaboratoryTest != null && s.AnalysisType.SubGroup.LaboratoryTest.IsActive)
                 .Select(s => new ConfiguredTestDto
@@ -243,6 +246,9 @@ namespace LIMSApi.Services
                         ? (s.AnalysisType.TestMethods.FirstOrDefault(m => m.IsDefault) ?? s.AnalysisType.TestMethods.FirstOrDefault())!.TestMethodSpecificationID : null,
                     TestMethodSpecificationName = (s.AnalysisType.TestMethods.FirstOrDefault(m => m.IsDefault) ?? s.AnalysisType.TestMethods.FirstOrDefault()) != null && (s.AnalysisType.TestMethods.FirstOrDefault(m => m.IsDefault) ?? s.AnalysisType.TestMethods.FirstOrDefault())!.TestMethodSpecification != null
                         ? ((s.AnalysisType.TestMethods.FirstOrDefault(m => m.IsDefault) ?? s.AnalysisType.TestMethods.FirstOrDefault())!.TestMethodSpecification!.DisplayTitle ?? (s.AnalysisType.TestMethods.FirstOrDefault(m => m.IsDefault) ?? s.AnalysisType.TestMethods.FirstOrDefault())!.TestMethodSpecification!.Name) : "",
+                    TechniqueIDs = s.AnalysisType.AllowedTechniques.Select(t => t.AnalysisTechniqueID).ToList(),
+                    TechniqueCodes = s.AnalysisType.AllowedTechniques.Select(t => t.AnalysisTechnique != null ? t.AnalysisTechnique.Code ?? "" : "").Where(c => c != "").ToList(),
+                    TechniqueNames = s.AnalysisType.AllowedTechniques.Select(t => t.AnalysisTechnique != null ? t.AnalysisTechnique.Name ?? "" : "").Where(n => n != "").ToList(),
                     Quantity = 1
                 })
                 .ToListAsync();

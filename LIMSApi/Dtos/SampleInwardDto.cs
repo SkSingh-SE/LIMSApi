@@ -228,6 +228,8 @@ namespace LIMSApi.Dtos
         public long? TestMethodID { get; set; }
         public long? LaboratoryTestAnalysisTypeID { get; set; }
         public string? AnalysisTypeName { get; set; }
+        public List<string> TechniqueCodes { get; set; } = new();
+        public List<string> TechniqueNames { get; set; } = new();
         public long? TestMethodSpecificationID { get; set; }
         public long? StandardID { get; set; }
         public string? StandardName { get; set; }
@@ -250,6 +252,8 @@ namespace LIMSApi.Dtos
             get => AnalysisTypeIds;
             set => AnalysisTypeIds = value ?? new();
         }
+        public List<string> TechniqueCodes { get; set; } = new();
+        public List<string> TechniqueNames { get; set; } = new();
         public long? LaboratoryTestAnalysisTypeID { get; set; }
         public string? AnalysisTypeName { get; set; }
         public long? MetalClassificationID { get; set; }

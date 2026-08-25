@@ -1066,6 +1066,21 @@ namespace LIMSApi.Services
                                 IsSelected = true
                             });
                         }
+
+                        if (cDto.TechniqueCodes?.Any() == true)
+                        {
+                            foreach (var code in cDto.TechniqueCodes.Where(c => !string.IsNullOrWhiteSpace(c)).Distinct())
+                            {
+                                if (!chem.TestTypes.Any(tt => string.Equals(tt.Name, code, StringComparison.OrdinalIgnoreCase)))
+                                {
+                                    chem.TestTypes.Add(new ChemicalTestType
+                                    {
+                                        Name = code.Trim().ToUpperInvariant(),
+                                        IsSelected = true
+                                    });
+                                }
+                            }
+                        }
                     }
 
                     #endregion
@@ -1506,6 +1521,26 @@ namespace LIMSApi.Services
                     .ToDictionaryAsync(sg => sg.ID, sg => sg.ReportTestName ?? sg.Name)
                 : new Dictionary<long, string>();
 
+            var stdIds = sampleInward.SampleDetails
+                .SelectMany(s => s.TestPlans)
+                .SelectMany(tp => tp.ChemicalTests)
+                .SelectMany(ct => ct.Methods)
+                .Where(m => m.TestMethodSpecificationID.HasValue && m.TestMethodSpecificationID.Value > 0)
+                .Select(m => m.TestMethodSpecificationID!.Value)
+                .Distinct()
+                .ToList();
+
+            var standardToAnalysisTypeMap = stdIds.Count > 0
+                ? (await _context.LaboratoryTestAnalysisTypeMethods
+                    .Where(m => stdIds.Contains(m.TestMethodSpecificationID))
+                    .Select(m => new { m.TestMethodSpecificationID, m.LaboratoryTestAnalysisTypeID })
+                    .ToListAsync())
+                    .GroupBy(m => m.TestMethodSpecificationID)
+                    .ToDictionary(g => g.Key, g => g.Select(x => x.LaboratoryTestAnalysisTypeID).Distinct().ToList())
+                : new Dictionary<long, List<long>>();
+
+            var stdMappedAnalysisTypeIds = standardToAnalysisTypeMap.Values.SelectMany(v => v).Distinct().ToList();
+
             var analysisTypeIds = sampleInward.SampleDetails
                 .SelectMany(s => s.TestPlans)
                 .SelectMany(tp => tp.ChemicalTests)
@@ -1527,13 +1562,43 @@ namespace LIMSApi.Services
                         .Where(e => e.LaboratoryTestAnalysisTypeID.HasValue && e.LaboratoryTestAnalysisTypeID.Value > 0)
                         .Select(e => e.LaboratoryTestAnalysisTypeID!.Value)
                 )
+                .Concat(
+                    sampleInward.SampleDetails
+                        .SelectMany(s => s.TestPlans)
+                        .SelectMany(tp => tp.ChemicalTests)
+                        .SelectMany(ct => ct.TestTypes)
+                        .Where(tt => tt.LaboratoryTestAnalysisTypeID.HasValue && tt.LaboratoryTestAnalysisTypeID.Value > 0)
+                        .Select(tt => tt.LaboratoryTestAnalysisTypeID!.Value)
+                )
+                .Concat(stdMappedAnalysisTypeIds)
                 .Distinct()
                 .ToList();
-            var analysisTypeMap = analysisTypeIds.Count > 0
+
+            var atData = analysisTypeIds.Count > 0
                 ? await _context.LaboratoryTestAnalysisTypes
                     .Where(at => analysisTypeIds.Contains(at.ID))
-                    .ToDictionaryAsync(at => at.ID, at => at.Name)
-                : new Dictionary<long, string>();
+                    .Select(at => new
+                    {
+                        at.ID,
+                        at.Name,
+                        TechniqueCodes = at.AllowedTechniques
+                            .Where(t => t.AnalysisTechnique != null && !string.IsNullOrEmpty(t.AnalysisTechnique.Code))
+                            .Select(t => t.AnalysisTechnique!.Code!)
+                            .ToList(),
+                        TechniqueNames = at.AllowedTechniques
+                            .Where(t => t.AnalysisTechnique != null && !string.IsNullOrEmpty(t.AnalysisTechnique.Name))
+                            .Select(t => t.AnalysisTechnique!.Name!)
+                            .ToList()
+                    })
+                    .ToListAsync()
+                : new();
+
+            var analysisTypeMap = atData.ToDictionary(at => at.ID, at => at.Name);
+            var analysisTypeTechniqueMap = atData.ToDictionary(at => at.ID, at => at);
+
+            var allTechniqueMasters = await _context.AnalysisTechniqueMasters
+                .Where(t => t.IsActive && t.CompanyCode == loggedInUser.CompanyCode)
+                .ToListAsync();
 
             var paramIds = sampleInward.SampleDetails
                 .SelectMany(s => s.TestPlans)
@@ -1747,55 +1812,142 @@ namespace LIMSApi.Services
                                 StandardName = m.StandardID != 0 && standardMap.ContainsKey(m.StandardID) ? standardMap[m.StandardID] : null
                             }).ToList()
                         }).ToList(),
-                        ChemicalTests = tp.ChemicalTests.Select(ct => new ChemicalTestDto
-                        {
-                            ID = ct.ID,
-                            SampleTestPlanID = ct.SampleTestPlanID,
-                            ReportNo = ct.ReportNo,
-                            UlrNo = ct.UlrNo,
-                            LaboratoryTestAnalysisTypeID = ct.LaboratoryTestAnalysisTypeID,
-                            AnalysisTypeName = ct.LaboratoryTestAnalysisTypeID.HasValue && analysisTypeMap.ContainsKey(ct.LaboratoryTestAnalysisTypeID.Value) ? analysisTypeMap[ct.LaboratoryTestAnalysisTypeID.Value] : null,
-                            MetalClassificationID = ct.MetalClassificationID,
-                            Specification1 = ct.Specification1,
-                            Specification2 = ct.Specification2,
-                            AnalysisTypeIds = ct.TestTypes
-                                .Select(tt => tt.LaboratoryTestAnalysisTypeID ?? tt.LaboratoryTestID ?? 0)
-                                .ToList(),
-                            TestTypeIds = ct.TestTypes
-                                .Select(tt => tt.LaboratoryTestAnalysisTypeID ?? tt.LaboratoryTestID ?? 0)
-                                .ToList(),
-                            Methods = ct.Methods.Select(m => new ChemicalTestMethodDto
-                            {
-                                ID = m.ID,
-                                ChemicalTestID = m.ChemicalTestID,
-                                TestMethodID = m.LaboratoryTestAnalysisTypeID,
-                                LaboratoryTestAnalysisTypeID = m.LaboratoryTestAnalysisTypeID,
-                                AnalysisTypeName = m.AnalysisType != null ? m.AnalysisType.Name : (analysisTypeMap.ContainsKey(m.LaboratoryTestAnalysisTypeID) ? analysisTypeMap[m.LaboratoryTestAnalysisTypeID] : null),
-                                TestMethodSpecificationID = m.TestMethodSpecificationID,
-                                StandardID = m.TestMethodSpecificationID,
-                                StandardName = m.TestMethodSpecification != null ? m.TestMethodSpecification.Name : (m.TestMethodSpecificationID.HasValue && standardMap.ContainsKey(m.TestMethodSpecificationID.Value) ? standardMap[m.TestMethodSpecificationID.Value] : null),
-                                Quantity = m.Quantity,
-                                ReportNo = m.ReportNo,
-                                UlrNo = m.UlrNo,
-                                Cancel = m.Cancel
-                            }).ToList(),
-                            Elements = ct.Elements.Select(e => new ChemicalTestElementDto
-                            {
-                                ID = e.ID,
-                                ChemicalTestID = e.ChemicalTestID,
-                                ParameterID = e.ParameterID,
-                                ParameterName = e.Parameter != null ? e.Parameter.Name : (parameterMap.ContainsKey(e.ParameterID) ? parameterMap[e.ParameterID] : null),
-                                SpecificationLineID = e.SpecificationLineID,
-                                LaboratoryTestAnalysisTypeID = e.LaboratoryTestAnalysisTypeID,
-                                LaboratoryTestAnalysisTypeName = e.AnalysisType != null ? e.AnalysisType.Name : (e.LaboratoryTestAnalysisTypeID.HasValue && analysisTypeMap.ContainsKey(e.LaboratoryTestAnalysisTypeID.Value) ? analysisTypeMap[e.LaboratoryTestAnalysisTypeID.Value] : null),
-                                SourceType = e.SourceType,
-                                ParameterUnitID = e.ParameterUnitID,
-                                ParameterUnit = e.ParameterUnit ?? "",
-                                MinValue = e.MinValue,
-                                MaxValue = e.MaxValue,
-                                Selected = e.Selected
+                        ChemicalTests = tp.ChemicalTests.Select(ct => {
+                                var directTechniqueCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                                var directTechniqueNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                                // 1. From ChemicalTestType (ct.TestTypes) - specifically the analytical technique records
+                                foreach (var tt in ct.TestTypes)
+                                {
+                                    if (string.IsNullOrWhiteSpace(tt.Name)) continue;
+                                    var trimmed = tt.Name.Trim();
+
+                                    // Direct technique checkbox record: match exact master code/name/alias
+                                    var matchMaster = allTechniqueMasters.FirstOrDefault(t =>
+                                        string.Equals(t.Code, trimmed, StringComparison.OrdinalIgnoreCase) ||
+                                        string.Equals(t.Name, trimmed, StringComparison.OrdinalIgnoreCase) ||
+                                        (!string.IsNullOrEmpty(t.AliasNames) && t.AliasNames.Split(',', StringSplitOptions.TrimEntries).Any(a => string.Equals(a, trimmed, StringComparison.OrdinalIgnoreCase)))
+                                    );
+
+                                    if (matchMaster != null && !string.IsNullOrEmpty(matchMaster.Code))
+                                    {
+                                        directTechniqueCodes.Add(matchMaster.Code.ToUpperInvariant());
+                                        directTechniqueNames.Add(matchMaster.Name);
+                                    }
+                                    else if (!tt.LaboratoryTestAnalysisTypeID.HasValue && !tt.LaboratoryTestID.HasValue)
+                                    {
+                                        directTechniqueCodes.Add(trimmed.ToUpperInvariant());
+                                    }
+                                }
+
+                                // 2. Fallback only if no direct technique records exist at all
+                                if (directTechniqueCodes.Count == 0)
+                                {
+                                    if (ct.LaboratoryTestAnalysisTypeID.HasValue && analysisTypeTechniqueMap.TryGetValue(ct.LaboratoryTestAnalysisTypeID.Value, out var mainAtTech))
+                                    {
+                                        foreach (var c in mainAtTech.TechniqueCodes) directTechniqueCodes.Add(c);
+                                        foreach (var n in mainAtTech.TechniqueNames) directTechniqueNames.Add(n);
+                                    }
+
+                                    foreach (var m in ct.Methods)
+                                    {
+                                        if (m.LaboratoryTestAnalysisTypeID > 0 && analysisTypeTechniqueMap.TryGetValue(m.LaboratoryTestAnalysisTypeID, out var mTech))
+                                        {
+                                            foreach (var c in mTech.TechniqueCodes) directTechniqueCodes.Add(c);
+                                            foreach (var n in mTech.TechniqueNames) directTechniqueNames.Add(n);
+                                        }
+                                        if (m.TestMethodSpecificationID.HasValue && standardToAnalysisTypeMap.TryGetValue(m.TestMethodSpecificationID.Value, out var stdAtIds))
+                                        {
+                                            foreach (var atId in stdAtIds)
+                                            {
+                                                if (analysisTypeTechniqueMap.TryGetValue(atId, out var stdTech))
+                                                {
+                                                    foreach (var c in stdTech.TechniqueCodes) directTechniqueCodes.Add(c);
+                                                    foreach (var n in stdTech.TechniqueNames) directTechniqueNames.Add(n);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                return new ChemicalTestDto
+                                {
+                                    ID = ct.ID,
+                                    SampleTestPlanID = ct.SampleTestPlanID,
+                                    ReportNo = ct.ReportNo,
+                                    UlrNo = ct.UlrNo,
+                                    LaboratoryTestAnalysisTypeID = ct.LaboratoryTestAnalysisTypeID,
+                                    AnalysisTypeName = ct.LaboratoryTestAnalysisTypeID.HasValue && analysisTypeMap.ContainsKey(ct.LaboratoryTestAnalysisTypeID.Value) ? analysisTypeMap[ct.LaboratoryTestAnalysisTypeID.Value] : null,
+                                    TechniqueCodes = directTechniqueCodes.ToList(),
+                                    TechniqueNames = directTechniqueNames.ToList(),
+                                    MetalClassificationID = ct.MetalClassificationID,
+                                    Specification1 = ct.Specification1,
+                                    Specification2 = ct.Specification2,
+                                    AnalysisTypeIds = ct.TestTypes
+                                        .Select(tt => tt.LaboratoryTestAnalysisTypeID ?? tt.LaboratoryTestID ?? 0)
+                                        .Where(id => id > 0)
+                                        .ToList(),
+                                    TestTypeIds = ct.TestTypes
+                                        .Select(tt => tt.LaboratoryTestAnalysisTypeID ?? tt.LaboratoryTestID ?? 0)
+                                        .Where(id => id > 0)
+                                        .ToList(),
+                                    Methods = ct.Methods.Select(m => {
+                                        var mTechCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                                        var mTechNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                                        if (m.LaboratoryTestAnalysisTypeID > 0 && analysisTypeTechniqueMap.TryGetValue(m.LaboratoryTestAnalysisTypeID, out var mTech))
+                                        {
+                                            foreach (var c in mTech.TechniqueCodes) mTechCodes.Add(c);
+                                            foreach (var n in mTech.TechniqueNames) mTechNames.Add(n);
+                                        }
+                                        if (m.TestMethodSpecificationID.HasValue && standardToAnalysisTypeMap.TryGetValue(m.TestMethodSpecificationID.Value, out var stdAtIds))
+                                        {
+                                            foreach (var atId in stdAtIds)
+                                            {
+                                                if (analysisTypeTechniqueMap.TryGetValue(atId, out var stdTech))
+                                                {
+                                                    foreach (var c in stdTech.TechniqueCodes) mTechCodes.Add(c);
+                                                    foreach (var n in stdTech.TechniqueNames) mTechNames.Add(n);
+                                                }
+                                            }
+                                        }
+
+                                        return new ChemicalTestMethodDto
+                                        {
+                                            ID = m.ID,
+                                            ChemicalTestID = m.ChemicalTestID,
+                                            TestMethodID = m.LaboratoryTestAnalysisTypeID,
+                                            LaboratoryTestAnalysisTypeID = m.LaboratoryTestAnalysisTypeID,
+                                            AnalysisTypeName = m.AnalysisType != null ? m.AnalysisType.Name : (analysisTypeMap.ContainsKey(m.LaboratoryTestAnalysisTypeID) ? analysisTypeMap[m.LaboratoryTestAnalysisTypeID] : null),
+                                            TechniqueCodes = mTechCodes.ToList(),
+                                            TechniqueNames = mTechNames.ToList(),
+                                            TestMethodSpecificationID = m.TestMethodSpecificationID,
+                                            StandardID = m.TestMethodSpecificationID,
+                                            StandardName = m.TestMethodSpecification != null ? m.TestMethodSpecification.Name : (m.TestMethodSpecificationID.HasValue && standardMap.ContainsKey(m.TestMethodSpecificationID.Value) ? standardMap[m.TestMethodSpecificationID.Value] : null),
+                                            Quantity = m.Quantity,
+                                            ReportNo = m.ReportNo,
+                                            UlrNo = m.UlrNo,
+                                            Cancel = m.Cancel
+                                        };
+                                    }).ToList(),
+                                    Elements = ct.Elements.Select(e => new ChemicalTestElementDto
+                                    {
+                                        ID = e.ID,
+                                        ChemicalTestID = e.ChemicalTestID,
+                                        ParameterID = e.ParameterID,
+                                        ParameterName = e.Parameter != null ? e.Parameter.Name : (parameterMap.ContainsKey(e.ParameterID) ? parameterMap[e.ParameterID] : null),
+                                        SpecificationLineID = e.SpecificationLineID,
+                                        LaboratoryTestAnalysisTypeID = e.LaboratoryTestAnalysisTypeID,
+                                        LaboratoryTestAnalysisTypeName = e.AnalysisType != null ? e.AnalysisType.Name : (e.LaboratoryTestAnalysisTypeID.HasValue && analysisTypeMap.ContainsKey(e.LaboratoryTestAnalysisTypeID.Value) ? analysisTypeMap[e.LaboratoryTestAnalysisTypeID.Value] : null),
+                                        SourceType = e.SourceType,
+                                        ParameterUnitID = e.ParameterUnitID,
+                                        ParameterUnit = e.ParameterUnit ?? "",
+                                        MinValue = e.MinValue,
+                                        MaxValue = e.MaxValue,
+                                        Selected = e.Selected
+                                    }).ToList()
+                                };
                             }).ToList()
-                        }).ToList()
                     }))
                     .ToList()
             };
