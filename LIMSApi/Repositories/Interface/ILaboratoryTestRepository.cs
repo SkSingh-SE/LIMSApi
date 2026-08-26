@@ -14,6 +14,7 @@ namespace LIMSApi.Repositories.Interface
         Task<List<DropdwonSelector>> GetTestMethodDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<List<DropdwonSelector>> GetGeneralTestMethodDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<List<DropdwonSelector>> GetChemicalTestMethodDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<DropdwonSelector>> GetUnifiedTestMethodDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<List<object>> GetTestCases(long labTestId);
         Task<List<PricingTemplateRowDto>> GetPricingTemplate(long labTestId, long? analysisTypeId);
         Task<bool> ExistsByName(string name);

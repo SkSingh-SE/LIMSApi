@@ -122,6 +122,32 @@ namespace LIMSApi.Repositories
             return await _query.Cast<object>().ToPagedAsync(filter);
         }
 
+        private static string BuildVersionCaption(string? org, string? standard, string? part, string? version, string? year, VersionStatus? status = null, bool isDefault = false)
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(org) && org != "Other Standards")
+                parts.Add(org.Trim());
+
+            var stdPart = !string.IsNullOrWhiteSpace(part) ? $"{standard?.Trim()} - {part.Trim()}" : (standard?.Trim() ?? "");
+            if (!string.IsNullOrWhiteSpace(stdPart))
+                parts.Add(stdPart);
+
+            var caption = string.Join(" ", parts);
+            if (!string.IsNullOrWhiteSpace(version))
+                caption += $" : {version.Trim()}";
+
+            if (!string.IsNullOrWhiteSpace(year))
+                caption += $" {year.Trim()}";
+
+            if (isDefault)
+                caption += " ★";
+
+            if (status == VersionStatus.Superseded)
+                caption += " [Superseded]";
+
+            return caption.Trim();
+        }
+
         public async Task<List<DropdwonSelector>> GetTestMethodSpecificationDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
         {
             return await GetTestMethodsByMetalClassification(0, searchTerm, pageNo, pageSize);
@@ -134,39 +160,70 @@ namespace LIMSApi.Repositories
             // 1. Exact ID lookup for instantaneous single-item rebind (matches VersionID or TestMethodSpecificationID)
             if (!string.IsNullOrWhiteSpace(searchTerm) && FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
             {
-                var exactVersionMatch = await (from v in _context.TestMethodSpecificationVersions
-                                               join tms in _context.TestMethodSpecifications on v.TestMethodSpecificationID equals tms.ID
-                                               join so in _context.StandardOrganizationMasters on tms.StandardOrganizationID equals so.ID into soGroup
-                                               from so in soGroup.DefaultIfEmpty()
-                                               where (v.ID == exactId || tms.ID == exactId) && tms.IsActive && tms.CompanyCode == loggedInUser.CompanyCode
-                                               orderby (v.ID == exactId ? 0 : (v.IsDefault ? 1 : 2))
-                                               select new DropdwonSelector
-                                               {
-                                                   Id = v.ID,
-                                                   Name = (tms.DisplayTitle ?? tms.Name) + " (" + v.Version + (!string.IsNullOrEmpty(v.Year) ? $" - {v.Year}" : "") + ")",
-                                                   Level = 2,
-                                                   Selectable = true,
-                                                   NodeType = "Version",
-                                                   ParentId = tms.ID,
-                                                   IsHeader = false,
-                                                   IsChild = true,
-                                                   AdditionalValues = new Dictionary<string, object>
-                                                   {
-                                                       { "testMethodSpecificationId", tms.ID },
-                                                       { "testMethodSpecificationName", tms.Name },
-                                                       { "displayTitle", tms.DisplayTitle ?? tms.Name },
-                                                       { "testMethodStandard", tms.TestMethodStandard },
-                                                       { "versionId", v.ID },
-                                                       { "versionName", v.Version },
-                                                       { "year", v.Year ?? "" },
-                                                       { "isDefault", v.IsDefault },
-                                                       { "standardOrgId", so != null ? so.ID : 0 },
-                                                       { "standardOrgName", so != null ? so.Name : "" }
-                                                   }
-                                               }).FirstOrDefaultAsync();
+                var exactVersionRaw = await (from v in _context.TestMethodSpecificationVersions
+                                             join tms in _context.TestMethodSpecifications on v.TestMethodSpecificationID equals tms.ID
+                                             join so in _context.StandardOrganizationMasters on tms.StandardOrganizationID equals so.ID into soGroup
+                                             from so in soGroup.DefaultIfEmpty()
+                                             where (v.ID == exactId || tms.ID == exactId) && tms.IsActive && tms.CompanyCode == loggedInUser.CompanyCode
+                                             orderby (v.ID == exactId ? 0 : (v.IsDefault ? 1 : 2))
+                                             select new
+                                             {
+                                                 v.ID,
+                                                 v.Version,
+                                                 v.Year,
+                                                 v.Status,
+                                                 v.IsDefault,
+                                                 SpecID = tms.ID,
+                                                 SpecName = tms.Name,
+                                                 tms.TestMethodStandard,
+                                                 tms.Part,
+                                                 tms.DisplayTitle,
+                                                 StandardOrgID = so != null ? so.ID : 0,
+                                                 StandardOrgName = so != null ? so.Name : ""
+                                             }).FirstOrDefaultAsync();
 
-                if (exactVersionMatch != null)
+                if (exactVersionRaw != null)
                 {
+                    var versionLabel = exactVersionRaw.Version 
+                        + (!string.IsNullOrEmpty(exactVersionRaw.Year) ? $" - {exactVersionRaw.Year}" : "") 
+                        + (exactVersionRaw.IsDefault ? " ★" : "")
+                        + (exactVersionRaw.Status == VersionStatus.Superseded ? " [Superseded]" : "");
+
+                    var fullDisplayName = BuildVersionCaption(
+                        exactVersionRaw.StandardOrgName,
+                        exactVersionRaw.TestMethodStandard,
+                        exactVersionRaw.Part,
+                        exactVersionRaw.Version,
+                        exactVersionRaw.Year,
+                        exactVersionRaw.Status,
+                        exactVersionRaw.IsDefault);
+
+                    var exactVersionMatch = new DropdwonSelector
+                    {
+                        Id = exactVersionRaw.ID,
+                        Name = versionLabel,
+                        Level = 2,
+                        Selectable = true,
+                        NodeType = "Version",
+                        ParentId = exactVersionRaw.SpecID,
+                        IsHeader = false,
+                        IsChild = true,
+                        AdditionalValues = new Dictionary<string, object>
+                        {
+                            { "testMethodSpecificationId", exactVersionRaw.SpecID },
+                            { "testMethodSpecificationName", exactVersionRaw.SpecName },
+                            { "displayTitle", exactVersionRaw.DisplayTitle ?? exactVersionRaw.SpecName },
+                            { "testMethodStandard", exactVersionRaw.TestMethodStandard },
+                            { "fullDisplayName", fullDisplayName },
+                            { "versionId", exactVersionRaw.ID },
+                            { "versionName", exactVersionRaw.Version },
+                            { "year", exactVersionRaw.Year ?? "" },
+                            { "isDefault", exactVersionRaw.IsDefault },
+                            { "standardOrgId", exactVersionRaw.StandardOrgID },
+                            { "standardOrgName", exactVersionRaw.StandardOrgName }
+                        }
+                    };
+
                     return new List<DropdwonSelector> { exactVersionMatch };
                 }
 
@@ -189,6 +246,7 @@ namespace LIMSApi.Repositories
                                                       { "testMethodSpecificationId", tms.ID },
                                                       { "testMethodSpecificationName", tms.Name },
                                                       { "displayTitle", tms.DisplayTitle ?? tms.Name },
+                                                      { "fullDisplayName", tms.DisplayTitle ?? tms.Name },
                                                       { "versionId", 0 },
                                                       { "standardOrgId", so != null ? so.ID : 0 },
                                                       { "standardOrgName", so != null ? so.Name : "" }
@@ -214,6 +272,7 @@ namespace LIMSApi.Repositories
                             TMSID = tms.ID,
                             TMSName = tms.Name,
                             TMSStandard = tms.TestMethodStandard,
+                            TMSPart = tms.Part,
                             TMSDisplayTitle = tms.DisplayTitle,
                             StandardOrgID = so != null ? so.ID : 0,
                             StandardOrgName = so != null ? so.Name : "Other Standards",
@@ -280,6 +339,7 @@ namespace LIMSApi.Repositories
                         x.TMSID,
                         x.TMSName,
                         x.TMSStandard,
+                        x.TMSPart,
                         DisplayTitle = !string.IsNullOrEmpty(x.TMSDisplayTitle)
                             ? x.TMSDisplayTitle
                             : (!string.IsNullOrEmpty(x.TMSStandard) ? (x.TMSName + " (" + x.TMSStandard + ")") : x.TMSName)
@@ -307,6 +367,7 @@ namespace LIMSApi.Repositories
                                     { "testMethodSpecificationId", specGroup.Key.TMSID },
                                     { "testMethodSpecificationName", specGroup.Key.TMSName },
                                     { "displayTitle", specGroup.Key.DisplayTitle },
+                                    { "fullDisplayName", specGroup.Key.DisplayTitle },
                                     { "versionId", 0 },
                                     { "standardOrgId", orgGroup.Key.StandardOrgID },
                                     { "standardOrgName", orgGroup.Key.StandardOrgName }
@@ -343,6 +404,15 @@ namespace LIMSApi.Repositories
                                     + (v.IsDefault ? " ★" : "")
                                     + (v.VersionStatus == VersionStatus.Superseded ? " [Superseded]" : "");
 
+                                var fullDisplayName = BuildVersionCaption(
+                                    orgGroup.Key.StandardOrgName,
+                                    specGroup.Key.TMSStandard,
+                                    specGroup.Key.TMSPart,
+                                    v.VersionName,
+                                    v.VersionYear,
+                                    v.VersionStatus,
+                                    v.IsDefault);
+
                                 result.Add(new DropdwonSelector
                                 {
                                     Id = v.VersionID!.Value,
@@ -359,6 +429,7 @@ namespace LIMSApi.Repositories
                                         { "testMethodSpecificationName", specGroup.Key.TMSName },
                                         { "displayTitle", specGroup.Key.DisplayTitle },
                                         { "testMethodStandard", specGroup.Key.TMSStandard },
+                                        { "fullDisplayName", fullDisplayName },
                                         { "versionId", v.VersionID.Value },
                                         { "versionName", v.VersionName ?? "" },
                                         { "year", v.VersionYear ?? "" },
@@ -377,6 +448,7 @@ namespace LIMSApi.Repositories
 
             return result;
         }
+
 
         public async Task<bool> ExistsByName(string name)
         {
@@ -523,6 +595,15 @@ namespace LIMSApi.Repositories
                         + (exactRaw.IsDefault ? " ★" : "")
                         + (exactRaw.Status == VersionStatus.Superseded ? " [Superseded]" : "");
 
+                    var fullDisplayName = BuildVersionCaption(
+                        exactRaw.StandardOrgName,
+                        exactRaw.TestMethodStandard,
+                        exactRaw.Part,
+                        exactRaw.Version,
+                        exactRaw.Year,
+                        exactRaw.Status,
+                        exactRaw.IsDefault);
+
                     var exactMatch = new DropdwonSelector
                     {
                         Id = exactRaw.ID,
@@ -539,6 +620,7 @@ namespace LIMSApi.Repositories
                             { "testMethodSpecificationName", exactRaw.SpecName },
                             { "testMethodStandard", exactRaw.TestMethodStandard },
                             { "displayTitle", dispTitle },
+                            { "fullDisplayName", fullDisplayName },
                             { "versionId", exactRaw.ID },
                             { "version", exactRaw.Version },
                             { "year", exactRaw.Year ?? "" },
@@ -637,6 +719,7 @@ namespace LIMSApi.Repositories
                         x.SpecHeaderID,
                         x.SpecName,
                         x.TestMethodStandard,
+                        x.SpecPart,
                         DisplayTitle = !string.IsNullOrEmpty(x.SpecDisplayTitle)
                             ? x.SpecDisplayTitle
                             : (!string.IsNullOrEmpty(x.SpecPart)
@@ -674,6 +757,15 @@ namespace LIMSApi.Repositories
                                 + (v.IsDefault ? " ★" : "")
                                 + (v.VersionStatus == VersionStatus.Superseded ? " [Superseded]" : "");
 
+                            var fullDisplayName = BuildVersionCaption(
+                                orgGroup.Key.StandardOrgName,
+                                specGroup.Key.TestMethodStandard,
+                                specGroup.Key.SpecPart,
+                                v.VersionName,
+                                v.VersionYear,
+                                v.VersionStatus,
+                                v.IsDefault);
+
                             result.Add(new DropdwonSelector
                             {
                                 Id = v.VersionID,
@@ -690,6 +782,7 @@ namespace LIMSApi.Repositories
                                     { "testMethodSpecificationName", specGroup.Key.SpecName },
                                     { "testMethodStandard", specGroup.Key.TestMethodStandard },
                                     { "displayTitle", specGroup.Key.DisplayTitle },
+                                    { "fullDisplayName", fullDisplayName },
                                     { "versionId", v.VersionID },
                                     { "version", v.VersionName },
                                     { "year", v.VersionYear ?? "" },
@@ -711,5 +804,6 @@ namespace LIMSApi.Repositories
 
             return result;
         }
+
     }
 }

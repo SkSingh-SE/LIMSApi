@@ -57,16 +57,24 @@ namespace LIMSApi.Repositories
             var _query = from m in _context.MachiningChargeMasters
                          join lt in _context.LaboratoryTests on m.LaboratoryTestID equals lt.ID into ltJoin
                          from lt in ltJoin.DefaultIfEmpty()
+                         join sg in _context.LaboratoryTestSubGroups on m.LaboratoryTestID equals sg.ID into sgJoin
+                         from sg in sgJoin.DefaultIfEmpty()
+                         join at in _context.LaboratoryTestAnalysisTypes on m.LaboratoryTestID equals at.ID into atJoin
+                         from at in atJoin.DefaultIfEmpty()
                          join tms in _context.TestMethodSpecifications on m.TestMethodStandardID equals tms.ID into tmsJoin
                          from tms in tmsJoin.DefaultIfEmpty()
+                         join tmv in _context.TestMethodSpecificationVersions on m.TestMethodStandardID equals tmv.ID into tmvJoin
+                         from tmv in tmvJoin.DefaultIfEmpty()
+                         join tmvs in _context.TestMethodSpecifications on tmv.TestMethodSpecificationID equals tmvs.ID into tmvsJoin
+                         from tmvs in tmvsJoin.DefaultIfEmpty()
                          where m.IsActive && m.CompanyCode == loggedInUser.CompanyCode
                          select new
                          {
                              m.ID,
                              m.LaboratoryTestID,
-                             LaboratoryTestName = lt != null ? lt.Name : "",
+                             LaboratoryTestName = sg != null ? sg.Name : (at != null ? at.Name : (lt != null ? lt.Name : "")),
                              m.TestMethodStandardID,
-                             TestMethodSpecificationName = tms != null ? tms.TestMethodStandard + " - " + tms.Name : "",
+                             TestMethodSpecificationName = tms != null ? (tms.TestMethodStandard + " - " + tms.Name) : (tmvs != null ? (tmvs.TestMethodStandard + " - " + tmvs.Name) : ""),
                              m.SpecimenRawMaterialSize,
                              m.SpecimenSize,
                              m.DrawingFilePath,
@@ -165,12 +173,16 @@ namespace LIMSApi.Repositories
                 .Include(x => x.TestMethodSpecification)
                 .Include(x => x.Versions.Where(v => v.IsActive))
                     .ThenInclude(v => v.FinancialYear)
-                .Where(x => x.LaboratoryTestID == labTestId
-                    && x.TestMethodStandardID == standardId
+                .Where(x => (x.LaboratoryTestID == labTestId
+                             || _context.LaboratoryTestSubGroups.Any(sg => sg.ID == labTestId && sg.LaboratoryTestID == x.LaboratoryTestID)
+                             || _context.LaboratoryTestAnalysisTypes.Any(at => at.ID == labTestId && at.SubGroup != null && at.SubGroup.LaboratoryTestID == x.LaboratoryTestID))
+                    && (x.TestMethodStandardID == standardId
+                        || _context.TestMethodSpecificationVersions.Any(v => v.ID == standardId && v.TestMethodSpecificationID == x.TestMethodStandardID))
                     && x.IsActive
                     && x.CompanyCode == loggedInUser.CompanyCode)
                 .OrderBy(x => x.SpecimenSize)
                 .ToListAsync();
         }
+
     }
 }

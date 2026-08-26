@@ -99,6 +99,13 @@ namespace LIMSApi.Controllers
             return data == null ? NoContent(): Ok(data);
         }
 
+        [HttpGet("unified-dropdown")]
+        public async Task<IActionResult> GetUnifiedTestMethodDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            var data = await _testMethodService.GetUnifiedTestMethodDropdown(searchTerm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+
         [HttpGet("distinct-names")]
         public async Task<IActionResult> GetDistinctTestNames(string? searchTerm, int pageSize = 20)
         {
