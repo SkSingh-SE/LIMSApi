@@ -1490,8 +1490,20 @@ namespace LIMSApi.ServiceWORepo
             var response = new StartTestResponse { Success = true };
 
             // Check preparation status — warn but don't block
-            var sample = await _db.SampleDetails.FindAsync(header.SampleID);
-            if (sample != null && sample.PreparationRequired)
+            var sample = await _db.SampleDetails
+                .Include(s => s.TestPlans)
+                    .ThenInclude(tp => tp.GeneralTests)
+                        .ThenInclude(gt => gt.Methods)
+                .Include(s => s.TestPlans)
+                    .ThenInclude(tp => tp.ChemicalTests)
+                        .ThenInclude(ct => ct.Methods)
+                .FirstOrDefaultAsync(s => s.ID == header.SampleID);
+
+            var isPrepRequired = sample != null && sample.TestPlans.Any(tp =>
+                tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) ||
+                tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired)));
+
+            if (isPrepRequired)
             {
                 var cuttingSample = await _db.CuttingChargeSamples
                     .FirstOrDefaultAsync(cs => cs.SampleID == header.SampleID);
@@ -1615,8 +1627,20 @@ namespace LIMSApi.ServiceWORepo
                     throw new InvalidOperationException($"Cannot complete test in '{header.Status}' status. Only 'Started' or 'In-Progress' tests can be completed.");
 
                 // --- Preparation Validation (Phase 5) ---
-                var sampleForPrep = await _db.SampleDetails.FindAsync(header.SampleID);
-                if (sampleForPrep != null && sampleForPrep.PreparationRequired)
+                var sampleForPrep = await _db.SampleDetails
+                    .Include(s => s.TestPlans)
+                        .ThenInclude(tp => tp.GeneralTests)
+                            .ThenInclude(gt => gt.Methods)
+                    .Include(s => s.TestPlans)
+                        .ThenInclude(tp => tp.ChemicalTests)
+                            .ThenInclude(ct => ct.Methods)
+                    .FirstOrDefaultAsync(s => s.ID == header.SampleID);
+
+                var isPrepNeeded = sampleForPrep != null && sampleForPrep.TestPlans.Any(tp =>
+                    tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) ||
+                    tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired)));
+
+                if (isPrepNeeded)
                 {
                     var prepExists = await _db.CuttingChargeSamples
                         .AnyAsync(cs => cs.SampleID == header.SampleID);
@@ -2842,21 +2866,28 @@ namespace LIMSApi.ServiceWORepo
 
         public async Task<PreparationStatusDto> GetPreparationStatus(long sampleId)
         {
-            var sample = await _db.SampleDetails.FindAsync(sampleId);
+            var sample = await _db.SampleDetails
+                .Include(s => s.TestPlans)
+                    .ThenInclude(tp => tp.GeneralTests)
+                        .ThenInclude(gt => gt.Methods)
+                .Include(s => s.TestPlans)
+                    .ThenInclude(tp => tp.ChemicalTests)
+                        .ThenInclude(ct => ct.Methods)
+                .FirstOrDefaultAsync(s => s.ID == sampleId);
             if (sample == null) throw new Exception("Sample not found.");
 
             var result = new PreparationStatusDto
             {
-                PreparationRequired = sample.PreparationRequired,
+                PreparationRequired = sample.TestPlans.Any(tp =>
+                    tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) ||
+                    tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired))),
             };
 
-            // Machining charges from MachiningChargeItems (fallback to SampleDetail.MachiningAmount)
+            // Machining charges from MachiningChargeItems
             var machiningItems = await _db.MachiningChargeItems
                 .Where(m => m.SampleID == sampleId && m.IsActive)
                 .ToListAsync();
-            result.MachiningCharges = machiningItems.Any()
-                ? machiningItems.Sum(m => m.Amount)
-                : sample.MachiningAmount;
+            result.MachiningCharges = machiningItems.Sum(m => m.Amount);
             result.MachiningBreakdown = machiningItems.Select(m => new MachiningChargeLineDto
             {
                 Id = m.ID, Description = m.Description, Amount = m.Amount, Remark = m.Remark
@@ -2915,10 +2946,8 @@ namespace LIMSApi.ServiceWORepo
             {
                 SampleId = sampleId,
                 InwardId = sample.InwardID,
-                MachiningCharges = machiningItems.Any()
-                    ? machiningItems.Sum(m => m.Amount)
-                    : sample.MachiningAmount,
-                OtherPreparationCharges = sample.OtherPreparationCharge,
+                MachiningCharges = machiningItems.Sum(m => m.Amount),
+                OtherPreparationCharges = 0,
                 BillingStatus = sample.SampleInward?.BillingStatus,
                 MachiningBreakdown = machiningItems.Select(m => new MachiningChargeLineDto
                 {

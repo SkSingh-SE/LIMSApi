@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
 
@@ -17,6 +17,7 @@ namespace LIMSApi.Models
         public string? ReportNo { get; set; }
         public string UlrNo { get; set; } = string.Empty;
         public bool Cancel { get; set; }
+        public bool PreparationRequired { get; set; } = false;
         [ForeignKey("GeneralTestID"),JsonIgnore]
         public virtual GeneralTest? GeneralTest { get; set; }
     }

@@ -826,12 +826,7 @@ namespace LIMSApi.Services
                     sample.AssignedGradeNote = sampleDto.AssignedGradeNote;
                     sample.ProductFormID = sampleDto.ProductFormID;
                     sample.SpecimenOrientationID = sampleDto.SpecimenOrientationID;
-                    sample.PreparationRequired = sampleDto.PreparationRequired;
-                    sample.MachiningRequired = sampleDto.MachiningRequired;
-                    sample.MachiningAmount = sampleDto.MachiningAmount ?? 0;
                     sample.Specimen = sampleDto.Specimen ?? sample.Specimen;
-                    sample.OtherPreparation = sampleDto.OtherPreparation;
-                    sample.OtherPreparationCharge = sampleDto.OtherPreparationCharge ?? 0;
                     sample.TpiRequired = sampleDto.TpiRequired;
                     sample.TpiAgencyID = sampleDto.TpiAgencyID;
                     sample.TestInstructions = sampleDto.TestInstructions;
@@ -965,6 +960,7 @@ namespace LIMSApi.Services
                                     m.UlrNo, tcPrefix, year, labLocation,
                                     sample.SampleNo, ref ulrCounter),
                                 Cancel = m.Cancel,
+                                PreparationRequired = m.PreparationRequired,
                                 StandardID = m.StandardID ?? 0
                             });
                         }
@@ -1029,7 +1025,8 @@ namespace LIMSApi.Services
                                 UlrNo = GenerateUlr(
                                     m.UlrNo, tcPrefix, year, labLocation,
                                     sample.SampleNo, ref ulrCounter),
-                                Cancel = m.Cancel
+                                Cancel = m.Cancel,
+                                PreparationRequired = m.PreparationRequired
                             });
                             chemMethodCounter++;
                         }
@@ -1405,13 +1402,14 @@ namespace LIMSApi.Services
                         UploadReferenceID = s.UploadReferenceID,
                         SampleFilePath = s.SampleFilePath,
                         FileName = s.FileName,
-                        PreparationRequired = s.PreparationRequired,
-                        MachiningRequired = s.MachiningRequired,
-                        MachiningAmount = s.MachiningAmount,
-                        OtherPreparation = s.OtherPreparation,
-                        OtherPreparationCharge = s.OtherPreparationCharge,
+                        PreparationRequired = s.TestPlans.Any(tp => tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) || tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired))),
+                        MachiningRequired = false,
+                        MachiningAmount = 0,
+                        OtherPreparation = false,
+                        OtherPreparationCharge = 0,
                         TpiRequired = s.TpiRequired,
                         TpiAgencyID = s.TpiAgencyID,
+                        TpiInspectorsJson = s.TpiInspectorsJson,
                         Specimen = s.Specimen,
                         TestInstructions = s.TestInstructions,
                         Thickness = s.Thickness,
@@ -1747,13 +1745,14 @@ namespace LIMSApi.Services
                         UploadReferenceID = s.UploadReferenceID,
                         SampleFilePath = s.SampleFilePath,
                         FileName = s.FileName,
-                        PreparationRequired = s.PreparationRequired,
-                        MachiningRequired = s.MachiningRequired,
-                        MachiningAmount = s.MachiningAmount,
-                        OtherPreparation = s.OtherPreparation,
-                        OtherPreparationCharge = s.OtherPreparationCharge,
+                        PreparationRequired = s.TestPlans.Any(tp => tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) || tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired))),
+                        MachiningRequired = false,
+                        MachiningAmount = 0,
+                        OtherPreparation = false,
+                        OtherPreparationCharge = 0,
                         TpiRequired = s.TpiRequired,
                         TpiAgencyID = s.TpiAgencyID,
+                        TpiInspectorsJson = s.TpiInspectorsJson,
                         TpiAgencyName = s.TpiAgencyID.HasValue && tpiMap.ContainsKey(s.TpiAgencyID.Value) ? tpiMap[s.TpiAgencyID.Value].AgencyName : null,
                         TpiEmailId = s.TpiAgencyID.HasValue && tpiMap.ContainsKey(s.TpiAgencyID.Value) ? tpiMap[s.TpiAgencyID.Value].EmailId : null,
                         TpiContactNo = s.TpiAgencyID.HasValue && tpiMap.ContainsKey(s.TpiAgencyID.Value) ? tpiMap[s.TpiAgencyID.Value].ContactNo : null,
@@ -1790,6 +1789,19 @@ namespace LIMSApi.Services
                         ApprovedById = tp.ApprovedById,
                         ApprovedByName = tp.ApprovedByName,
                         ApprovedAt = tp.ApprovedAt,
+                        PlanHistories = tp.Histories.OrderByDescending(h => h.ChangedAt).Select(h => new PlanHistoryDto
+                        {
+                            Id = h.Id,
+                            PlanId = h.PlanId,
+                            Version = h.Version,
+                            Action = h.ChangeType,
+                            ChangeType = h.ChangeType,
+                            CreatedBy = h.ChangedById,
+                            CreatedByName = h.ChangedByName,
+                            CreatedOn = h.ChangedAt,
+                            Remarks = h.Remarks,
+                            ChangedFieldsJson = h.FieldChangesJson
+                        }).ToList(),
                         GeneralTests = tp.GeneralTests.Select(gt => new GeneralTestDto
                         {
                             ID = gt.ID,
@@ -1808,6 +1820,7 @@ namespace LIMSApi.Services
                                 ReportNo = m.ReportNo,
                                 UlrNo = m.UlrNo,
                                 Cancel = m.Cancel,
+                                PreparationRequired = m.PreparationRequired,
                                 StandardID = m.StandardID != 0 ? m.StandardID : null,
                                 StandardName = m.StandardID != 0 && standardMap.ContainsKey(m.StandardID) ? standardMap[m.StandardID] : null
                             }).ToList()
@@ -1927,7 +1940,8 @@ namespace LIMSApi.Services
                                             Quantity = m.Quantity,
                                             ReportNo = m.ReportNo,
                                             UlrNo = m.UlrNo,
-                                            Cancel = m.Cancel
+                                            Cancel = m.Cancel,
+                                            PreparationRequired = m.PreparationRequired
                                         };
                                     }).ToList(),
                                     Elements = ct.Elements.Select(e => new ChemicalTestElementDto
@@ -2190,15 +2204,11 @@ namespace LIMSApi.Services
             var sample = await _context.SampleDetails.FindAsync(sampleId)
                 ?? throw new KeyNotFoundException($"Sample with ID {sampleId} not found.");
 
-            sample.PreparationRequired = dto.PreparationRequired;
-            sample.MachiningRequired = dto.MachiningRequired;
-            sample.MachiningAmount = dto.MachiningAmount;
             sample.Specimen = dto.Specimen;
-            sample.OtherPreparation = dto.OtherPreparation;
-            sample.OtherPreparationCharge = dto.OtherPreparationCharge;
             sample.TestInstructions = dto.TestInstructions;
             sample.TpiRequired = dto.TpiRequired;
             sample.TpiAgencyID = dto.TpiAgencyID;
+            sample.TpiInspectorsJson = dto.TpiInspectorsJson;
             sample.ModifiedBy = loggedInUser.EmployeeID;
             sample.ModifiedOn = DateTime.UtcNow;
 
@@ -2244,16 +2254,32 @@ namespace LIMSApi.Services
             return document.GeneratePdf();
         }
 
-        public async Task VerifyAndLockReviewOfRequestAsync(long inwardId)
+        public async Task<string> VerifyAndLockReviewOfRequestAsync(long inwardId, string? remarks = null)
         {
             var inward = await _context.SampleInwards
                 .Include(i => i.SampleDetails)
                     .ThenInclude(sd => sd.TestPlans)
+                        .ThenInclude(tp => tp.GeneralTests)
+                            .ThenInclude(gt => gt.Methods)
+                .Include(i => i.SampleDetails)
+                    .ThenInclude(sd => sd.TestPlans)
+                        .ThenInclude(tp => tp.ChemicalTests)
+                            .ThenInclude(ct => ct.Methods)
                 .FirstOrDefaultAsync(i => i.ID == inwardId && i.IsActive);
 
             if (inward == null)
                 throw new KeyNotFoundException($"SampleInward with ID {inwardId} not found.");
 
+            // Check if any active test method requires cutting or machining preparation
+            bool isPrepRequired = inward.SampleDetails
+                .Where(s => !s.IsCancelled)
+                .Any(s => s.TestPlans.Any(tp =>
+                    tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) ||
+                    tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired))
+                ));
+
+            // Direct-to-Testing if no preparation is needed
+            inward.InwardStatus = isPrepRequired ? "SAMPLE_UNDER_PREPARATION" : "UNDER_TESTING";
             inward.ReviewStatus = "Verified & Approved";
             inward.ReviewedBy = loggedInUser.EmployeeID;
             inward.ReviewedOn = DateTime.UtcNow;
@@ -2262,6 +2288,10 @@ namespace LIMSApi.Services
 
             foreach (var sample in inward.SampleDetails.Where(s => !s.IsCancelled))
             {
+                sample.SampleStatus = inward.InwardStatus;
+                sample.ModifiedBy = loggedInUser.EmployeeID;
+                sample.ModifiedOn = DateTime.UtcNow;
+
                 foreach (var plan in sample.TestPlans)
                 {
                     plan.PlanStatus = "Approved";
@@ -2276,14 +2306,16 @@ namespace LIMSApi.Services
                         null,
                         JsonSerializer.Serialize(new[]
                         {
-                            new { field = "PlanStatus", oldValue = "Submitted", newValue = "Approved" }
+                            new { field = "PlanStatus", oldValue = "Submitted", newValue = "Approved" },
+                            new { field = "InwardStatus", oldValue = "UNDER_PLANNING", newValue = inward.InwardStatus }
                         }),
-                        "Review of request verified and locked."
+                        !string.IsNullOrWhiteSpace(remarks) ? remarks : $"Review of request verified and locked. Routing: {(isPrepRequired ? "Sample Preparation Required" : "Direct to Testing")}."
                     );
                 }
             }
 
             await _context.SaveChangesAsync();
+            return inward.InwardStatus;
         }
 
         public async Task RequestReplanAsync(long inwardId, string reason)
@@ -2357,7 +2389,143 @@ namespace LIMSApi.Services
             }
 
             await _context.SaveChangesAsync();
+        }
 
+        public async Task<LifecycleSummaryDto?> GetLifecycleSummaryAsync(long id)
+        {
+            var inward = await _context.SampleInwards
+                .AsNoTracking()
+                .Include(i => i.Customer)
+                .Include(i => i.SampleDetails.Where(s => s.IsActive))
+                    .ThenInclude(s => s.ProductMaster)
+                .Include(i => i.SampleDetails.Where(s => s.IsActive))
+                    .ThenInclude(s => s.SpecificationGrade)
+                .Include(i => i.SampleDetails.Where(s => s.IsActive))
+                    .ThenInclude(s => s.MetalClassification)
+                .Include(i => i.SampleDetails.Where(s => s.IsActive))
+                    .ThenInclude(s => s.TestPlans)
+                        .ThenInclude(tp => tp.GeneralTests)
+                            .ThenInclude(gt => gt.Methods)
+                .Include(i => i.SampleDetails.Where(s => s.IsActive))
+                    .ThenInclude(s => s.TestPlans)
+                        .ThenInclude(tp => tp.ChemicalTests)
+                            .ThenInclude(ct => ct.Methods)
+                .FirstOrDefaultAsync(i => i.ID == id && i.IsActive);
+
+            if (inward == null)
+                return null;
+
+            var sampleIds = inward.SampleDetails.Select(s => s.ID).ToList();
+
+            var testResults = await _context.TestResultHeaders
+                .AsNoTracking()
+                .Where(tr => sampleIds.Contains(tr.SampleID) && tr.IsActive)
+                .Select(tr => new { tr.SampleID, tr.Status })
+                .ToListAsync();
+
+            var reports = await _context.ReportHeaders
+                .AsNoTracking()
+                .Where(r => sampleIds.Contains(r.SampleID) && r.IsActive)
+                .Select(r => new { r.SampleID, r.ID, r.ReportNo, r.Status })
+                .ToListAsync();
+
+            var proforma = await _context.ProformaInvoiceHeader
+                .AsNoTracking()
+                .Where(pi => pi.InwardID == id && pi.IsActive)
+                .OrderByDescending(pi => pi.ID)
+                .Select(pi => new { pi.ID, pi.IsGenerated })
+                .FirstOrDefaultAsync();
+
+            var taxInvoice = await _context.TaxInvoices
+                .AsNoTracking()
+                .Where(ti => ti.InwardID == id && ti.IsActive)
+                .OrderByDescending(ti => ti.ID)
+                .Select(ti => new { ti.ID, ti.Status, ti.GrandTotal })
+                .FirstOrDefaultAsync();
+
+            decimal totalReceived = 0;
+            if (taxInvoice != null)
+            {
+                totalReceived = await _context.CustomerLedgers
+                    .AsNoTracking()
+                    .Where(cl => cl.InvoiceId == taxInvoice.ID && cl.IsActive)
+                    .SumAsync(cl => cl.CreditAmount);
+            }
+
+            var daysSince = (int)(DateTime.UtcNow.Date - inward.CreatedOn.Date).TotalDays;
+
+            var sampleDtos = new List<LifecycleSampleSummaryDto>();
+            int totalGenTests = 0;
+            int totalChemTests = 0;
+
+            foreach (var s in inward.SampleDetails)
+            {
+                var sTestResult = testResults.FirstOrDefault(tr => tr.SampleID == s.ID);
+                var sReport = reports.FirstOrDefault(r => r.SampleID == s.ID);
+
+                int genCount = s.TestPlans.Sum(tp => tp.GeneralTests.Count);
+                int chemCount = s.TestPlans.Sum(tp => tp.ChemicalTests.Count);
+                totalGenTests += genCount;
+                totalChemTests += chemCount;
+
+                sampleDtos.Add(new LifecycleSampleSummaryDto
+                {
+                    SampleId = s.ID,
+                    SampleNo = s.SampleNo,
+                    SampleStatus = s.SampleStatus ?? string.Empty,
+                    ProductName = s.ProductMaster?.ProductName ?? s.Details ?? "Sample",
+                    GradeName = s.SpecificationGrade?.Grade,
+                    MetalClassification = s.MetalClassification?.Name,
+                    PreparationRequired = s.TestPlans.Any(tp => tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) || tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired))),
+                    MachiningRequired = false,
+                    PreparationStatus = s.TestPlans.Any(tp => tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) || tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired))) ? (s.IsTestingCompleted ? "Completed" : "Pending") : "Not Required",
+                    GeneralTestCount = genCount,
+                    ChemicalTestCount = chemCount,
+                    TestResultStatus = sTestResult?.Status,
+                    IsTestingCompleted = s.IsTestingCompleted,
+                    ReportStatus = sReport?.Status,
+                    ReportHeaderId = sReport?.ID,
+                    ReportNo = sReport?.ReportNo,
+                    IsCancelled = s.IsCancelled,
+                    CancellationReason = s.CancellationReason
+                });
+            }
+
+            decimal grandTotal = taxInvoice?.GrandTotal ?? 0;
+            decimal balanceDue = Math.Max(0, grandTotal - totalReceived);
+            bool isClosed = string.Equals(inward.InwardStatus, "CASE_CLOSED", StringComparison.OrdinalIgnoreCase);
+
+            return new LifecycleSummaryDto
+            {
+                InwardId = inward.ID,
+                CaseNo = inward.CaseNo ?? string.Empty,
+                CustomerId = inward.CustomerID,
+                CustomerName = inward.Customer?.Name ?? string.Empty,
+                InwardStatus = inward.InwardStatus ?? string.Empty,
+                ReviewStatus = inward.ReviewStatus,
+                CollectionDate = inward.CollectionTime,
+                CreatedOn = inward.CreatedOn,
+                DaysSinceInward = Math.Max(0, daysSince),
+                SampleCount = inward.SampleDetails.Count,
+                ActiveSampleCount = inward.SampleDetails.Count(s => !s.IsCancelled),
+                CancelledSampleCount = inward.SampleDetails.Count(s => s.IsCancelled),
+                TotalGeneralTests = totalGenTests,
+                TotalChemicalTests = totalChemTests,
+                TotalTests = totalGenTests + totalChemTests,
+                IsReportStopped = inward.IsReportStopped,
+                StopReportReason = inward.StopReportReason,
+                IsClosed = isClosed,
+                HasProformaInvoice = proforma != null,
+                ProformaInvoiceStatus = proforma != null ? (proforma.IsGenerated ? "Generated" : "Pending") : null,
+                ProformaInvoiceId = proforma?.ID,
+                HasTaxInvoice = taxInvoice != null,
+                TaxInvoiceStatus = taxInvoice?.Status,
+                TaxInvoiceId = taxInvoice?.ID,
+                TotalBilledAmount = grandTotal,
+                TotalReceivedAmount = totalReceived,
+                BalanceDueAmount = balanceDue,
+                Samples = sampleDtos
+            };
         }
     }
 }

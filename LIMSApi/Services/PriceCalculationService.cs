@@ -158,42 +158,7 @@ namespace LIMSApi.Services
                 pricingResult.SuccessCount++;
             }
 
-            // 2. MACHINING / PREPARATION CHARGES
-            var machiningCharges = await _db.SampleDetails
-                .Where(x => x.InwardID == inwardId && (x.MachiningRequired || x.OtherPreparation))
-                .ToListAsync();
-
-            foreach (var sample in machiningCharges)
-            {
-                var totalPrep = sample.MachiningAmount + sample.OtherPreparationCharge;
-                if (totalPrep > 0)
-                {
-                    chargeEvents.Add(new ChargeEvent
-                    {
-                        InwardID = inwardId,
-                        SampleID = sample.ID,
-                        ChargeType = "Preparation",
-                        Description = $"Sample Preparation - {sample.SampleNo}",
-                        Quantity = 1,
-                        Rate = totalPrep,
-                        Amount = totalPrep,
-                        Status = ChargeEventStatus.DRAFT.ToString(),
-                        CreatedOn = DateTime.UtcNow
-                    });
-                    pricingResult.TestResults.Add(new PriceLineResultDto
-                    {
-                        SampleId = sample.ID,
-                        SampleNo = sample.SampleNo ?? "",
-                        ChargeType = "Preparation",
-                        TestName = $"Sample Preparation - {sample.SampleNo}",
-                        Success = true,
-                        Amount = totalPrep
-                    });
-                    pricingResult.SuccessCount++;
-                }
-            }
-
-            // 2b. CUSTOM PREPARATION CHARGES (MachiningChargeItems — free-text manual entries per sample)
+            // 2. CUSTOM PREPARATION CHARGES (MachiningChargeItems — manual/configured entries per sample)
             var customPrepCharges = await _db.MachiningChargeItems
                 .Where(x => _db.SampleDetails.Any(s => s.ID == x.SampleID && s.InwardID == inwardId) && x.IsActive)
                 .ToListAsync();

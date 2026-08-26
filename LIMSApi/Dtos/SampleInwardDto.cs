@@ -134,6 +134,7 @@ namespace LIMSApi.Dtos
         public decimal? OtherPreparationCharge { get; set; }
         public bool TpiRequired { get; set; }
         public long? TpiAgencyID { get; set; }
+        public string? TpiInspectorsJson { get; set; }
         public string? Specimen { get; set; }
         public string? TestInstructions { get; set; }
 
@@ -191,8 +192,23 @@ namespace LIMSApi.Dtos
         public long? ApprovedById { get; set; }
         public string? ApprovedByName { get; set; }
         public DateTime? ApprovedAt { get; set; }
+        public List<PlanHistoryDto> PlanHistories { get; set; } = new();
         public List<GeneralTestDto> GeneralTests { get; set; } = new();
         public List<ChemicalTestDto> ChemicalTests { get; set; } = new();
+    }
+
+    public class PlanHistoryDto
+    {
+        public long Id { get; set; }
+        public long PlanId { get; set; }
+        public int Version { get; set; }
+        public string Action { get; set; } = string.Empty;
+        public string ChangeType { get; set; } = string.Empty;
+        public long? CreatedBy { get; set; }
+        public string? CreatedByName { get; set; }
+        public DateTime CreatedOn { get; set; }
+        public string? Remarks { get; set; }
+        public string? ChangedFieldsJson { get; set; }
     }
 
     public class GeneralTestDto
@@ -217,6 +233,7 @@ namespace LIMSApi.Dtos
         public string? ReportNo { get; set; }
         public string? UlrNo { get; set; }
         public bool Cancel { get; set; }
+        public bool PreparationRequired { get; set; }
         public long? StandardID { get; set; }
         public string? StandardName { get; set; }
     }
@@ -237,6 +254,7 @@ namespace LIMSApi.Dtos
         public string? ReportNo { get; set; }
         public string? UlrNo { get; set; }
         public bool Cancel { get; set; }
+        public bool PreparationRequired { get; set; }
     }
 
     public class ChemicalTestDto
@@ -336,6 +354,12 @@ namespace LIMSApi.Dtos
         public string? TestInstructions { get; set; }
         public bool TpiRequired { get; set; }
         public long? TpiAgencyID { get; set; }
+        public string? TpiInspectorsJson { get; set; }
+    }
+
+    public class VerifyReviewRequestDto
+    {
+        public string? Remarks { get; set; }
     }
 }
 

@@ -28,7 +28,8 @@ namespace LIMSApi.Services
                 from sd in _db.SampleDetails
                 join si in _db.SampleInwards on sd.InwardID equals si.ID
                 join c in _db.Customers on si.CustomerID equals c.ID
-                where sd.IsActive && si.IsActive && sd.PreparationRequired
+                where sd.IsActive && si.IsActive
+                      && (sd.TestPlans.Any(tp => tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) || tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired))) || _db.SamplePreparations.Any(sp => sp.SampleID == sd.ID))
                       && si.CompanyCode == _loggedInUser.CompanyCode
 
                 // Left join to SamplePreparation
@@ -63,7 +64,7 @@ namespace LIMSApi.Services
                     MachiningChargesTotal = sp != null ? sp.MachiningChargesTotal : 0,
                     OtherChargesTotal = sp != null ? sp.OtherChargesTotal : 0,
                     IsInvoiced = si.IsInvoiceGenerated,
-                    PreparationRequired = sd.PreparationRequired
+                    PreparationRequired = sd.TestPlans.Any(tp => tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) || tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired)))
                 };
 
             // Search
@@ -308,8 +309,7 @@ namespace LIMSApi.Services
                 .SumAsync(m => m.Amount);
 
             // Other preparation charges
-            var sample = await _db.SampleDetails.FindAsync(sp.SampleID);
-            sp.OtherChargesTotal = (sample?.OtherPreparation == true ? sample.OtherPreparationCharge : 0);
+            sp.OtherChargesTotal = 0;
         }
 
         private SamplePreparationDetailDto MapToDetailDto(SamplePreparation sp)
@@ -356,11 +356,11 @@ namespace LIMSApi.Services
                 IsInvoiced = inward?.IsInvoiceGenerated ?? false,
 
                 // Plan-level fields
-                PreparationRequired = sample?.PreparationRequired ?? false,
-                MachiningRequired = sample?.MachiningRequired ?? false,
-                MachiningAmountFromPlan = sample?.MachiningAmount ?? 0,
-                OtherPreparation = sample?.OtherPreparation ?? false,
-                OtherPreparationCharge = sample?.OtherPreparationCharge ?? 0,
+                PreparationRequired = sample?.TestPlans.Any(tp => tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) || tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired))) ?? false,
+                MachiningRequired = false,
+                MachiningAmountFromPlan = 0,
+                OtherPreparation = false,
+                OtherPreparationCharge = 0,
                 Specimen = sample?.Specimen,
                 TestInstructions = sample?.TestInstructions
             };

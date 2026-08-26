@@ -25,6 +25,7 @@ namespace LIMSApi.Models
         public string UlrNo { get; set; } = string.Empty;
 
         public bool Cancel { get; set; }
+        public bool PreparationRequired { get; set; } = false;
 
         [ForeignKey("ChemicalTestID"), JsonIgnore]
         public virtual ChemicalTest? ChemicalTest { get; set; }

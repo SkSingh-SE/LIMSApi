@@ -66,6 +66,14 @@ namespace LIMSApi.Controllers
             return entity == null ? NoContent() : Ok(entity);
         }
 
+        [RequirePermission(Permissions.Inward.Read)]
+        [HttpGet("{id}/lifecycle-summary")]
+        public async Task<IActionResult> GetLifecycleSummary(long id)
+        {
+            var summary = await _SampleInwardService.GetLifecycleSummaryAsync(id);
+            return summary == null ? NotFound(new { message = $"Sample Inward with ID {id} not found." }) : Ok(summary);
+        }
+
 
         [RequirePermission(Permissions.Inward.Update)]
         [HttpPut("update")]
@@ -237,10 +245,15 @@ namespace LIMSApi.Controllers
 
         [HttpPost("verify-and-lock-review/{inwardId}")]
         [RequirePermission(Permissions.Inward.Update)]
-        public async Task<IActionResult> VerifyAndLockReview(long inwardId)
+        public async Task<IActionResult> VerifyAndLockReview(long inwardId, [FromBody] VerifyReviewRequestDto? dto = null)
         {
-            await _SampleInwardService.VerifyAndLockReviewOfRequestAsync(inwardId);
-            return Ok(new { message = "Review of Request verified and locked successfully." });
+            var updatedStatus = await _SampleInwardService.VerifyAndLockReviewOfRequestAsync(inwardId, dto?.Remarks);
+            return Ok(new 
+            { 
+                message = "Review of Request verified and locked successfully.",
+                inwardStatus = updatedStatus,
+                status = updatedStatus
+            });
         }
 
         [HttpPost("request-replan")]

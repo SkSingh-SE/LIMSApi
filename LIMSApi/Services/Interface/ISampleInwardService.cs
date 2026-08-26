@@ -30,9 +30,10 @@ namespace LIMSApi.Services.Interface
         Task StopReportAsync(long inwardId, string reason);
         Task UnstopReportAsync(long inwardId);
 
-        Task VerifyAndLockReviewOfRequestAsync(long inwardId);
+        Task<string> VerifyAndLockReviewOfRequestAsync(long inwardId, string? remarks = null);
         Task RequestReplanAsync(long inwardId, string reason);
         Task ApproveReplanAsync(long replanRequestId, string remarks);
+        Task<LifecycleSummaryDto?> GetLifecycleSummaryAsync(long id);
     }
 }
 

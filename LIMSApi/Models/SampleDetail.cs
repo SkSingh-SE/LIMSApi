@@ -36,13 +36,11 @@ namespace LIMSApi.Models
         [MaxLength(500)]
         public string? CancellationReason { get; set; }
 
-        public bool PreparationRequired { get; set; }
-        public bool MachiningRequired { get; set; }
-        public decimal MachiningAmount { get; set; }
-        public bool OtherPreparation { get; set; }
-        public decimal OtherPreparationCharge { get; set; }
+      
         public bool TpiRequired { get; set; }
         public long? TpiAgencyID { get; set; }
+        [MaxLength(2000)]
+        public string? TpiInspectorsJson { get; set; }
         public string? Specimen { get; set; }
         public string? TestInstructions { get; set; }
         public string SampleStatus { get; set; } = string.Empty;

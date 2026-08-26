@@ -96,9 +96,9 @@ namespace LIMSApi.Repositories
 
                 var cuttingAmount = cuttingHeader?.GrandTotal ?? 0;
 
-                var machiningAmount = await _context.SampleDetails
-                    .Where(x => x.InwardID == inwardId && x.MachiningRequired)
-                    .SumAsync(x => x.MachiningAmount + x.OtherPreparationCharge);
+                var machiningAmount = await _context.MachiningChargeItems
+                    .Where(x => _context.SampleDetails.Any(s => s.ID == x.SampleID && s.InwardID == inwardId) && x.IsActive)
+                    .SumAsync(x => (decimal?)x.Amount) ?? 0;
 
                 // ===========================
                 //  4. LAB TEST CHARGES (FULLY IMPLEMENTED)

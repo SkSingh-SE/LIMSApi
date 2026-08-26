@@ -180,7 +180,7 @@ namespace LIMSApi.Reporting
                         }
 
                         table.Cell().Background(bg).Padding(3).Text(testNames.Count > 0 ? string.Join(", ", testNames.Distinct()) : "Pending Plan").Style(ValueStyle);
-                        table.Cell().Background(bg).Padding(3).Text(s.PreparationRequired || s.MachiningRequired ? "YES" : "NO").Style(ValueStyle);
+                        table.Cell().Background(bg).Padding(3).Text(s.PreparationRequired ? "YES" : "NO").Style(ValueStyle);
 
                         index++;
                     }
