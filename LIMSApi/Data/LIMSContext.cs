@@ -1016,19 +1016,6 @@ public partial class LIMSContext : DbContext
             .IsRequired(false)
             .OnDelete(DeleteBehavior.NoAction);
 
-        // MachiningChargeMaster FKs (no cascade)
-        modelBuilder.Entity<MachiningChargeMaster>()
-            .HasOne(x => x.LaboratoryTest)
-            .WithMany()
-            .HasForeignKey(x => x.LaboratoryTestID)
-            .OnDelete(DeleteBehavior.NoAction);
-
-        modelBuilder.Entity<MachiningChargeMaster>()
-            .HasOne(x => x.TestMethodSpecification)
-            .WithMany()
-            .HasForeignKey(x => x.TestMethodStandardID)
-            .OnDelete(DeleteBehavior.NoAction);
-
         // MachiningChargeItem → MachiningChargeMaster (optional FK, no cascade)
         modelBuilder.Entity<MachiningChargeItem>()
             .HasOne(x => x.MachiningChargeMaster)

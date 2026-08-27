@@ -355,6 +355,31 @@ namespace LIMSApi.Dtos
         public bool TpiRequired { get; set; }
         public long? TpiAgencyID { get; set; }
         public string? TpiInspectorsJson { get; set; }
+
+        // Cutting & Stage 3 parameters
+        public int? NumberOfCuts { get; set; }
+        public decimal? CutThickness { get; set; }
+        public decimal? WaterJetCuttingMins { get; set; }
+        public string? EdmCutting { get; set; }
+        public string? GasCutting { get; set; }
+        public string? SpecialCutting { get; set; }
+        public decimal? MachiningChargesTotal { get; set; }
+        public decimal? CuttingChargesTotal { get; set; }
+        public decimal? OtherChargesTotal { get; set; }
+        public List<SampleTestPrepItemDto>? Tests { get; set; } = new();
+    }
+
+    public class SampleTestPrepItemDto
+    {
+        public long TestId { get; set; }
+        public string? TestName { get; set; }
+        public long? SpecimenPreparationMasterID { get; set; }
+        public string? SpecimenSize { get; set; }
+        public string? SpecimenRawMaterialSize { get; set; }
+        public decimal? MachiningRate { get; set; }
+        public decimal? CuttingRate { get; set; }
+        public bool RequiresCutting { get; set; }
+        public bool NoTesting { get; set; }
     }
 
     public class VerifyReviewRequestDto

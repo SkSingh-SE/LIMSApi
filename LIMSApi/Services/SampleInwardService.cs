@@ -2212,7 +2212,53 @@ namespace LIMSApi.Services
             sample.ModifiedBy = loggedInUser.EmployeeID;
             sample.ModifiedOn = DateTime.UtcNow;
 
+            // Also update or create SamplePreparation record if exists
+            var prepRecord = await _context.SamplePreparations
+                .FirstOrDefaultAsync(sp => sp.SampleID == sampleId && sp.IsActive);
+            if (prepRecord != null)
+            {
+                if (dto.MachiningChargesTotal.HasValue) prepRecord.MachiningChargesTotal = dto.MachiningChargesTotal.Value;
+                if (dto.CuttingChargesTotal.HasValue) prepRecord.CuttingChargesTotal = dto.CuttingChargesTotal.Value;
+                if (dto.OtherChargesTotal.HasValue) prepRecord.OtherChargesTotal = dto.OtherChargesTotal.Value;
+                prepRecord.ModifiedBy = loggedInUser.EmployeeID;
+                prepRecord.ModifiedOn = DateTime.UtcNow;
+            }
+
             await _context.SaveChangesAsync();
+        }
+
+        public async Task<string> CompleteSamplePreparationAsync(long inwardId)
+        {
+            var inward = await _context.SampleInwards
+                .Include(i => i.SampleDetails)
+                .FirstOrDefaultAsync(i => i.ID == inwardId && i.IsActive)
+                ?? throw new KeyNotFoundException($"SampleInward with ID {inwardId} not found.");
+
+            const string targetStatus = "UNDER_TESTING";
+            inward.InwardStatus = targetStatus;
+            inward.ModifiedBy = loggedInUser.EmployeeID;
+            inward.ModifiedOn = DateTime.UtcNow;
+
+            foreach (var sample in inward.SampleDetails.Where(s => s.IsActive && !s.IsCancelled))
+            {
+                sample.SampleStatus = targetStatus;
+                sample.ModifiedBy = loggedInUser.EmployeeID;
+                sample.ModifiedOn = DateTime.UtcNow;
+
+                var prepRecord = await _context.SamplePreparations
+                    .FirstOrDefaultAsync(sp => sp.SampleID == sample.ID && sp.IsActive);
+                if (prepRecord != null)
+                {
+                    prepRecord.Status = "Completed";
+                    prepRecord.CompletedOn ??= DateTime.UtcNow;
+                    prepRecord.PreparedByEmployeeID ??= loggedInUser.EmployeeID;
+                    prepRecord.ModifiedBy = loggedInUser.EmployeeID;
+                    prepRecord.ModifiedOn = DateTime.UtcNow;
+                }
+            }
+
+            await _context.SaveChangesAsync();
+            return targetStatus;
         }
 
         public async Task StopReportAsync(long inwardId, string reason)

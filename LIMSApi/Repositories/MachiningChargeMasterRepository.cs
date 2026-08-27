@@ -43,8 +43,6 @@ namespace LIMSApi.Repositories
         public async Task<MachiningChargeMaster?> GetMachiningChargeMasterById(long id)
         {
             return await _context.MachiningChargeMasters
-                .Include(x => x.LaboratoryTest)
-                .Include(x => x.TestMethodSpecification)
                 .Include(x => x.Versions.Where(v => v.IsActive))
                     .ThenInclude(v => v.FinancialYear)
                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
@@ -169,8 +167,6 @@ namespace LIMSApi.Repositories
         public async Task<List<MachiningChargeMaster>> GetByLabTestAndStandard(long labTestId, long standardId)
         {
             return await _context.MachiningChargeMasters
-                .Include(x => x.LaboratoryTest)
-                .Include(x => x.TestMethodSpecification)
                 .Include(x => x.Versions.Where(v => v.IsActive))
                     .ThenInclude(v => v.FinancialYear)
                 .Where(x => (x.LaboratoryTestID == labTestId

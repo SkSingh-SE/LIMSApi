@@ -96,10 +96,24 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPatch("update-prep/{sampleId}")]
+        [RequirePermission(Permissions.Inward.Update)]
         public async Task<IActionResult> UpdateSamplePrep(long sampleId, [FromBody] SamplePrepReviewDto dto)
         {
             await _SampleInwardService.UpdateSamplePrepAsync(sampleId, dto);
             return Ok(new { message = "Preparation details updated." });
+        }
+
+        [HttpPost("complete-sample-preparation/{inwardId}")]
+        [RequirePermission(Permissions.Inward.Update)]
+        public async Task<IActionResult> CompleteSamplePreparation(long inwardId)
+        {
+            var updatedStatus = await _SampleInwardService.CompleteSamplePreparationAsync(inwardId);
+            return Ok(new
+            {
+                message = "Sample preparation completed successfully. Case is now Under Testing.",
+                inwardStatus = updatedStatus,
+                status = updatedStatus
+            });
         }
 
         [HttpPut("plan")]

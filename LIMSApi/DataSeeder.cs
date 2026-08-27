@@ -62,6 +62,7 @@ public static class DataSeeder
             await SeedPriceDimensionTypesAsync(db);
             await SeedFinancialYearsAsync(db);
             await BackfillFinancialYearIdsAsync(db, logger);
+            await FixMachiningChargeMasterConstraintsAsync(db, logger);
 
             // Role-Permission defaults — idempotent, runs every startup to pick up new permissions
             await SeedRolePermissionDefaultsAsync(db, logger);
@@ -1664,5 +1665,28 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
                 VALUES (N'Algorithm', NULL, 0, N'UserInput', NULL, N'Custom price formula evaluated at runtime (P3 feature)', 21, 0, GETUTCDATE(), N'LIMS', 1);
         ");
+    }
+
+    private static async Task FixMachiningChargeMasterConstraintsAsync(LIMSContext db, ILogger logger)
+    {
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(@"
+                IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_MachiningChargeMasters_LaboratoryTests_LaboratoryTestID')
+                BEGIN
+                    ALTER TABLE [dbo].[MachiningChargeMasters] DROP CONSTRAINT [FK_MachiningChargeMasters_LaboratoryTests_LaboratoryTestID];
+                END
+
+                IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_MachiningChargeMasters_TestMethodSpecifications_TestMethodStandardID')
+                BEGIN
+                    ALTER TABLE [dbo].[MachiningChargeMasters] DROP CONSTRAINT [FK_MachiningChargeMasters_TestMethodSpecifications_TestMethodStandardID];
+                END
+            ");
+            logger.LogInformation("DataSeeder: MachiningChargeMasters foreign key constraints updated to polymorphic references.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "DataSeeder: Exception checking/dropping MachiningChargeMasters constraints (safe to proceed).");
+        }
     }
 }

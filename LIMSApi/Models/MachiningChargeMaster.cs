@@ -30,12 +30,6 @@ namespace LIMSApi.Models
         [MaxLength(500)]
         public string? Remark { get; set; }
 
-        [ForeignKey("LaboratoryTestID")]
-        public virtual LaboratoryTest? LaboratoryTest { get; set; }
-
-        [ForeignKey("TestMethodStandardID")]
-        public virtual TestMethodSpecification? TestMethodSpecification { get; set; }
-
         // Year-wise prices (General/Hard metal). One row per financial year that has its own price.
         public virtual ICollection<MachiningChargeVersion> Versions { get; set; } = new List<MachiningChargeVersion>();
 

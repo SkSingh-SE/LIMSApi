@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Linq.Dynamic.Core;
 using LIMSApi.Dtos;
 
@@ -145,7 +145,13 @@ namespace LIMSApi.Helpers
         {
             exactId = 0;
             if (string.IsNullOrWhiteSpace(searchTerm)) return false;
-            return long.TryParse(searchTerm.Trim(), out exactId);
+            var term = searchTerm.Trim();
+            if (term.Equals("undefined", StringComparison.OrdinalIgnoreCase) ||
+                term.Equals("null", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+            return long.TryParse(term, out exactId) && exactId > 0;
         }
 
         public static bool IsUserApprover(string assignedToValue, long userId)
