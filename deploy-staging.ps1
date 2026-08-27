@@ -7,7 +7,7 @@ Write-Host " Building .NET Backend API (Staging/Dev)..." -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 
 Set-Location $PSScriptRoot
-dotnet publish LIMSApi/LIMSApi.csproj -c Release -o LIMSApi/bin/Release/net8.0/publish
+dotnet publish LIMSApi/LIMSApi.csproj -c Release --no-restore -o LIMSApi/bin/Release/net8.0/publish
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Build failed! Deployment cancelled." -ForegroundColor Red
@@ -49,6 +49,8 @@ $SourcePath = Join-Path $PSScriptRoot "LIMSApi\bin\Release\net8.0\publish"
     -source:contentPath="$SourcePath" `
     -dest:contentPath="dmspl91-001-site1",wmsvc="https://win6046.site4now.net:8172/MsDeploy.axd?site=dmspl91-001-site1",userName="dmspl91-001",password="$Password",authtype="Basic" `
     -enableRule:AppOffline `
+    -skip:objectName=dirPath,absolutePath=".*\\logs" `
+    -skip:objectName=filePath,absolutePath=".*\\logs\\.*" `
     -allowUntrusted
 
 if ($LASTEXITCODE -eq 0) {

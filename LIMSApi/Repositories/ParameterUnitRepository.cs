@@ -38,7 +38,7 @@ namespace LIMSApi.Repositories
         public async Task<ParameterUnitMaster?> GetParameterUnitById(long id)
         {
             return await _context.ParameterUnitMasters
-                .Include(x => x.Equivalents)
+                .Include(x => x.Equivalents.Where(e => e.IsActive).OrderBy(e => e.DisplayOrder))
                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
         }
 
@@ -50,8 +50,7 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllParameterUnits(PageFilter filter)
         {
-            var _query = (from c in _context.ParameterUnitMasters where c.IsActive select c).AsQueryable().ApplyFilters(filter.Filter);
-
+            var _query = (from c in _context.ParameterUnitMasters.AsNoTracking() where c.IsActive select c).AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
@@ -59,6 +58,7 @@ namespace LIMSApi.Repositories
                 _query = _query.Where(x =>
                     (x.Name != null && x.Name.Contains(search))
                     || (x.ConversionFactor != null && x.ConversionFactor.ToString().Contains(search))
+                    || x.Equivalents.Any(e => e.IsActive && e.Name.Contains(search))
                 );
             }
             if (filter.SortByColumn != null)
@@ -66,7 +66,30 @@ namespace LIMSApi.Repositories
                 _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
             }
 
-            return await _query.Cast<object>().ToPagedAsync(filter);
+            var projected = _query.Select(x => new
+            {
+                x.ID,
+                x.Name,
+                x.ConversionFactor,
+                x.CreatedBy,
+                x.CreatedOn,
+                x.ModifiedBy,
+                x.ModifiedOn,
+                x.IsActive,
+                Equivalents = x.Equivalents
+                    .Where(e => e.IsActive)
+                    .OrderBy(e => e.DisplayOrder)
+                    .Select(e => new
+                    {
+                        e.ID,
+                        e.Name,
+                        e.ConversionFactor,
+                        e.DisplayOrder,
+                        e.IsActive
+                    }).ToList()
+            });
+
+            return await projected.Cast<object>().ToPagedAsync(filter);
         }
 
         public async Task<List<DropdwonSelector>> GetParameterUnitDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
