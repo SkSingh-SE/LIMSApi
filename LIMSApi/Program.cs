@@ -412,7 +412,15 @@ var app = builder.Build();
 // --------------------
 // Seed essential data on first deployment
 // --------------------
-await LIMSApi.DataSeeder.SeedAsync(app);
+try
+{
+    await LIMSApi.DataSeeder.SeedAsync(app);
+}
+catch (Exception ex)
+{
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    logger.LogError(ex, "DataSeeder failed during startup. Continuing application boot...");
+}
 
 // --------------------
 // Infrastructure (no auth needed)
