@@ -1,5 +1,6 @@
-﻿using LIMSApi.Data;
+using LIMSApi.Data;
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
@@ -90,13 +91,7 @@ namespace LIMSApi.Services
             if (existingHeatTreatment == null)
                 throw new InvalidOperationException("HeatTreatment not found!");
 
-            bool hasProductConditions = await _context.ProductConditionMasters.AnyAsync(p => p.LinkedHeatTreatmentID == id && p.IsActive);
-            if (hasProductConditions)
-                throw new InvalidOperationException("Cannot delete: Heat Treatment is linked to Product Conditions.");
-
-            bool hasSpecLines = await _context.SpecificationLines.AnyAsync(s => s.HeatTreatmentID == id);
-            if (hasSpecLines)
-                throw new InvalidOperationException("Cannot delete: Heat Treatment is linked to Material Specifications.");
+            await DeleteValidationHelper.ValidateDeleteAsync<HeatTreatmentMaster>(_context, id, "Heat Treatment", existingHeatTreatment.Name);
 
             existingHeatTreatment.IsActive = false;
             existingHeatTreatment.ModifiedOn = DateTime.UtcNow;

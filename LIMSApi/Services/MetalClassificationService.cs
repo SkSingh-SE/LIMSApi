@@ -1,5 +1,6 @@
 using LIMSApi.Data;
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
@@ -95,17 +96,13 @@ namespace LIMSApi.Services
             if (existingMetalClassification == null)
                 throw new InvalidOperationException("MetalClassification not found!");
 
-            bool hasSpecifications = await _context.SpecificationGrades.AnyAsync(s => s.MetalClassificationID == id);
-            if (hasSpecifications)
-                throw new InvalidOperationException("Cannot delete: Metal Classification is linked to Material Specifications.");
-
-            bool hasSamples = await _context.SampleDetails.AnyAsync(s => s.MetalClassificationID == id);
-            if (hasSamples)
-                throw new InvalidOperationException("Cannot delete: Metal Classification is linked to Sample Details.");
-
+            // Check self-referencing hierarchy
             bool hasChildren = await _context.MetalClassificationMasters.AnyAsync(m => m.ParentID == id && m.IsActive);
             if (hasChildren)
                 throw new InvalidOperationException("Cannot delete: Metal Classification has child classifications.");
+
+            // Generic dependency validation across all referencing tables
+            await DeleteValidationHelper.ValidateDeleteAsync<MetalClassificationMaster>(_context, id, "Metal Classification", existingMetalClassification.Name);
 
             existingMetalClassification.IsActive = false;
             existingMetalClassification.ModifiedOn = DateTime.UtcNow;

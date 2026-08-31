@@ -65,6 +65,7 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<MakerMaster> MakerMasters { get; set; }
     public virtual DbSet<MenuMaster> MenuMasters { get; set; }
     public virtual DbSet<MetalClassificationMaster> MetalClassificationMasters { get; set; }
+    public virtual DbSet<MetalClassificationParameter> MetalClassificationParameters { get; set; }
     // ParameterCategoryMasters — table dropped (see migration Parameter-InputType-DropdownOptions-Cleanup)
     public virtual DbSet<HeatTreatmentCategoryMaster> HeatTreatmentCategoryMasters { get; set; }
     public virtual DbSet<CoolingMediumMaster> CoolingMediumMasters { get; set; }
