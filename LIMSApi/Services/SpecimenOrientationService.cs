@@ -1,5 +1,6 @@
-﻿using LIMSApi.Data;
+using LIMSApi.Data;
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
@@ -89,9 +90,7 @@ namespace LIMSApi.Services
             if (existingSpecimenOrientation == null)
                 throw new InvalidOperationException("SpecimenOrientation not found!");
 
-            bool hasSamples = await _context.SampleDetails.AnyAsync(s => s.SpecimenOrientationID == id);
-            if (hasSamples)
-                throw new InvalidOperationException("Cannot delete: Specimen Orientation is linked to Sample Details.");
+            await DeleteValidationHelper.ValidateDeleteAsync<SpecimenOrientationMaster>(_context, id, "Specimen Orientation", existingSpecimenOrientation.Name);
 
             existingSpecimenOrientation.IsActive = false;
             existingSpecimenOrientation.ModifiedOn = DateTime.UtcNow;

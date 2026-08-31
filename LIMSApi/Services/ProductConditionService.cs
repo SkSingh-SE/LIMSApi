@@ -1,5 +1,6 @@
-﻿using LIMSApi.Data;
+using LIMSApi.Data;
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
@@ -85,9 +86,7 @@ namespace LIMSApi.Services
             if (existingProductCondition == null)
                 throw new InvalidOperationException("ProductCondition not found!");
 
-            bool hasSamples = await _context.SampleDetails.AnyAsync(s => s.ProductConditionID == id);
-            if (hasSamples)
-                throw new InvalidOperationException("Cannot delete: Product Condition is linked to Sample Details.");
+            await DeleteValidationHelper.ValidateDeleteAsync<ProductConditionMaster>(_context, id, "Product Condition", existingProductCondition.Name);
 
             existingProductCondition.IsActive = false;
             existingProductCondition.ModifiedOn = DateTime.UtcNow;

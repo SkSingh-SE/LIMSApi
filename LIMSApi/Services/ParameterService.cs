@@ -137,19 +137,22 @@ namespace LIMSApi.Services
             if (existingParameter == null)
                 throw new InvalidOperationException("Parameter not found!");
 
-            bool hasSpecLines = await _context.SpecificationLines.AnyAsync(s => s.ParameterID == id);
-            if (hasSpecLines)
-                throw new InvalidOperationException("Cannot delete: Parameter is linked to Material Specifications.");
-
-            bool hasLabScope = await _context.LabScopeSpecificationParameters.AnyAsync(s => s.ParameterID == id);
-            if (hasLabScope)
-                throw new InvalidOperationException("Cannot delete: Parameter is linked to Lab Scope.");
+            await DeleteValidationHelper.ValidateDeleteAsync<ParameterMaster>(_context, id, "Parameter", existingParameter.Name);
 
             existingParameter.IsActive = false;
             existingParameter.ModifiedOn = DateTime.UtcNow;
 
+            // Also deactivate child dropdown options
+            if (existingParameter.DropdownOptions != null)
+            {
+                foreach (var opt in existingParameter.DropdownOptions)
+                {
+                    opt.IsActive = false;
+                }
+            }
+
             await _parameterRepository.UpdateParameter(existingParameter);
-            _logger.LogInformation("Parameter with ID '{ParameterId}' deleted successfully.", id);
+            _logger.LogInformation("Parameter '{ParameterName}' (ID: {ParameterId}) deleted successfully.", existingParameter.Name, id);
         }
 
         public async Task<ParameterMaster> GetParameterDetails(long id)

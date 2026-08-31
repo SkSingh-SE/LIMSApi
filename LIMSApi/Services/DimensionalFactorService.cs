@@ -1,5 +1,6 @@
-﻿using LIMSApi.Data;
+using LIMSApi.Data;
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
@@ -85,9 +86,7 @@ namespace LIMSApi.Services
             if (existingDimensionalFactor == null)
                 throw new InvalidOperationException("DimensionalFactor not found!");
 
-            bool hasSpecLines = await _context.SpecificationLines.AnyAsync(s => s.DimensionalFactorID == id);
-            if (hasSpecLines)
-                throw new InvalidOperationException("Cannot delete: Dimensional Factor is linked to Material Specifications.");
+            await DeleteValidationHelper.ValidateDeleteAsync<DimensionalFactorMaster>(_context, id, "Dimensional Factor", existingDimensionalFactor.Name);
 
             existingDimensionalFactor.IsActive = false;
             existingDimensionalFactor.ModifiedOn = DateTime.UtcNow;

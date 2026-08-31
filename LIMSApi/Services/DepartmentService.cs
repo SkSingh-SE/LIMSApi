@@ -1,4 +1,4 @@
-﻿using LIMSApi.Data;
+using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
@@ -65,9 +65,7 @@ namespace LIMSApi.Services
             if (existingDepartment == null)
                 throw new InvalidOperationException("Department not found!");
 
-            bool hasEmployees = await _context.EmployeeMasters.AnyAsync(e => e.DepartmentID == id && e.IsActive);
-            if (hasEmployees)
-                throw new InvalidOperationException("Cannot delete: Department is linked to active employees.");
+            await DeleteValidationHelper.ValidateDeleteAsync<DepartmentMaster>(_context, id, "Department", existingDepartment.Name);
 
             existingDepartment.IsActive = false;
             existingDepartment.ModifiedOn = DateTime.UtcNow;
