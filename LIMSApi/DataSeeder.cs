@@ -1196,6 +1196,13 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Special Chemicals' AND IsActive = 1)
                     INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Special Chemicals', 5, 0, GETUTCDATE(), N'LIMS', 1);
             END
+
+            -- Normalize Parameter Types (Mechanical -> Reported, Observation -> Observed)
+            IF OBJECT_ID(N'ParameterMasters', N'U') IS NOT NULL
+            BEGIN
+                UPDATE ParameterMasters SET ParameterType = N'Observed' WHERE ParameterType = N'Observation';
+                UPDATE ParameterMasters SET ParameterType = N'Reported' WHERE ParameterType = N'Mechanical';
+            END
         ");
     }
 

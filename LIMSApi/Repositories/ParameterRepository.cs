@@ -101,7 +101,7 @@ namespace LIMSApi.Repositories
                           from u in unitGroup.DefaultIfEmpty()
                           join eq in _context.ParameterUnitEquivalents on c.ParameterUnitEquivalentID equals eq.ID into eqGroup
                           from eq in eqGroup.DefaultIfEmpty()
-                          where c.IsActive && (c.ParameterType == "Mechanical" || c.ParameterType == "Observation")
+                          where c.IsActive && (c.ParameterType == null || c.ParameterType != "Chemical")
                           select new
                           {
                               c.ID,
@@ -322,7 +322,7 @@ namespace LIMSApi.Repositories
             var _query = from a in _context.ParameterMasters
                          join u in _context.ParameterUnitMasters on a.ParameterUnitID equals u.ID into uGroup
                          from u in uGroup.DefaultIfEmpty()
-                         where a.IsActive && (a.ParameterType == "Mechanical" || a.ParameterType == "Observation")
+                         where a.IsActive && (a.ParameterType == null || a.ParameterType != "Chemical")
                          select new
                          {
                              a.ID,

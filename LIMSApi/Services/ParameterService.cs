@@ -23,7 +23,7 @@ namespace LIMSApi.Services
         private static readonly HashSet<string> AllInputTypes = new(StringComparer.OrdinalIgnoreCase)
             { "Decimal", "Integer", "Boolean", "Dropdown", "MultiSelect", "Text" };
         private static readonly HashSet<string> ValidParameterTypes = new(StringComparer.OrdinalIgnoreCase)
-            { "Chemical", "Mechanical", "Observation" };
+            { "Chemical", "Reported", "Observed", "Mechanical", "Observation" };
 
         public ParameterService(IParameterRepository parameterRepo, ILogger<ParameterService> logger,
             LIMSContext context, FormulaEvaluator formulaEvaluator)
@@ -211,16 +211,29 @@ namespace LIMSApi.Services
         // Private helpers
         // ──────────────────────────────────────────────────
 
+        private static string NormalizeParameterType(string? pType)
+        {
+            if (string.IsNullOrWhiteSpace(pType)) return "Reported";
+            if (pType.Equals("Mechanical", StringComparison.OrdinalIgnoreCase)) return "Reported";
+            if (pType.Equals("Observation", StringComparison.OrdinalIgnoreCase)) return "Observed";
+            if (pType.Equals("Chemical", StringComparison.OrdinalIgnoreCase)) return "Chemical";
+            if (pType.Equals("Reported", StringComparison.OrdinalIgnoreCase)) return "Reported";
+            if (pType.Equals("Observed", StringComparison.OrdinalIgnoreCase)) return "Observed";
+            return pType;
+        }
+
         private static void ValidateModel(ParameterMaster model)
         {
             if (string.IsNullOrWhiteSpace(model.Name))
                 throw new ArgumentException("Parameter name should not be empty!");
 
+            model.ParameterType = NormalizeParameterType(model.ParameterType);
+
             if (!string.IsNullOrWhiteSpace(model.InputType) && !AllInputTypes.Contains(model.InputType))
                 throw new ArgumentException($"Invalid InputType '{model.InputType}'. Must be one of: Decimal, Integer, Boolean, Dropdown, MultiSelect, Text.");
 
             if (!string.IsNullOrWhiteSpace(model.ParameterType) && !ValidParameterTypes.Contains(model.ParameterType))
-                throw new ArgumentException($"Invalid ParameterType '{model.ParameterType}'. Must be: Chemical, Mechanical, or Observation.");
+                throw new ArgumentException($"Invalid ParameterType '{model.ParameterType}'. Must be: Chemical, Reported, or Observed.");
         }
 
         private async Task ValidateFormulaExpression(string? formula)
