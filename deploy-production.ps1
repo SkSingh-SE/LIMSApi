@@ -46,19 +46,52 @@ if (-not (Test-Path $MSDeployPath)) {
 
 $SourcePath = Join-Path $PSScriptRoot "LIMSApi\bin\Release\net8.0\publish"
 
-& $MSDeployPath -verb:sync `
-    -source:contentPath="$SourcePath" `
-    -dest:contentPath="dmspl91-001-site3",wmsvc="https://win6046.site4now.net:8172/MsDeploy.axd?site=dmspl91-001-site3",userName="dmspl91-001",password="$Password",authtype="Basic" `
-    -enableRule:AppOffline `
-    -skip:objectName=dirPath,absolutePath=".*\\logs" `
-    -skip:objectName=filePath,absolutePath=".*\\logs\\.*" `
-    -allowUntrusted
+# Create app_offline.htm to safely release DLL locks
+$AppOfflineFile = Join-Path $SourcePath "app_offline.htm"
+Set-Content -Path $AppOfflineFile -Value "<html><body><h2>Deploying update, please wait...</h2></body></html>" -Encoding UTF8
 
-if ($LASTEXITCODE -eq 0) {
+$deploySuccess = $false
+$maxAttempts = 3
+
+for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+    Write-Host "Deployment Attempt $attempt of $maxAttempts..." -ForegroundColor Cyan
+
+    & $MSDeployPath -verb:sync `
+        -source:contentPath="$SourcePath" `
+        -dest:contentPath="dmspl91-001-site3",wmsvc="https://win6046.site4now.net:8172/MsDeploy.axd?site=dmspl91-001-site3",userName="dmspl91-001",password="$Password",authtype="Basic" `
+        -enableRule:AppOffline `
+        -skip:objectName=dirPath,absolutePath=".*\\logs" `
+        -skip:objectName=filePath,absolutePath=".*\\logs\\.*" `
+        -skip:objectName=dirPath,absolutePath=".*\\Uploads" `
+        -skip:objectName=filePath,absolutePath=".*\\Uploads\\.*" `
+        -skip:objectName=dirPath,absolutePath=".*\\wwwroot\\Uploads" `
+        -skip:objectName=filePath,absolutePath=".*\\wwwroot\\Uploads\\.*" `
+        -allowUntrusted
+
+    if ($LASTEXITCODE -eq 0) {
+        $deploySuccess = $true
+        break
+    } else {
+        Write-Host "Attempt $attempt encountered lock, waiting 5 seconds for IIS process to release..." -ForegroundColor Yellow
+        Start-Sleep -Seconds 5
+    }
+}
+
+# Remove app_offline.htm so the site comes back online immediately
+if (Test-Path $AppOfflineFile) {
+    Remove-Item $AppOfflineFile -Force
+}
+
+# Sync removal of app_offline.htm to bring site online
+& $MSDeployPath -verb:delete `
+    -dest:contentPath="dmspl91-001-site3/app_offline.htm",wmsvc="https://win6046.site4now.net:8172/MsDeploy.axd?site=dmspl91-001-site3",userName="dmspl91-001",password="$Password",authtype="Basic" `
+    -allowUntrusted 2>$null
+
+if ($deploySuccess) {
     Write-Host "==========================================" -ForegroundColor Green
     Write-Host " SUCCESS! Backend API deployed to Production (Site-3)!" -ForegroundColor Green
     Write-Host " Live URL: http://dmspl91-001-site3.ntempurl.com/" -ForegroundColor Green
     Write-Host "==========================================" -ForegroundColor Green
 } else {
-    Write-Host "Deployment failed with error code $LASTEXITCODE" -ForegroundColor Red
+    Write-Host "Deployment failed after $maxAttempts attempts." -ForegroundColor Red
 }
