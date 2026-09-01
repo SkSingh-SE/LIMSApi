@@ -1,4 +1,4 @@
-﻿using LIMSApi.Data;
+using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
@@ -30,7 +30,7 @@ namespace LIMSApi.Services
             if (exists)
                 throw new InvalidOperationException("OEM already exists!");
 
-            if (model.file != null)
+            if (model.file != null && model.file.Length > 0)
             {
                 var fileUploadResponse = await _uploadService.UploadFileAsync(model.file, FileType.Other, null, model.FileName);
                 if (fileUploadResponse == null)
@@ -69,7 +69,7 @@ namespace LIMSApi.Services
             existingOEM.EmailId3 = model.EmailId3;
             existingOEM.Address = model.Address;
             existingOEM.ModifiedOn = DateTime.UtcNow;
-            if (model.file != null)
+            if (model.file != null && model.file.Length > 0)
             {
                 var fileUploadResponse = await _uploadService.UploadFileAsync(model.file, FileType.Other, null, model.FileName);
                 if (fileUploadResponse == null)

@@ -39,12 +39,20 @@ namespace LIMSApi.Services
 
         public async Task CreateTestMethodSpecification(TestMethodSpecification model)
         {
+            if (model.StandardOrganizationID <= 0)
+                throw new ArgumentException("Standard Organization is required!");
+
+            if (string.IsNullOrWhiteSpace(model.TestMethodStandard))
+                throw new ArgumentException("Test Method Standard is required!");
+
             if (string.IsNullOrWhiteSpace(model.Name))
                 throw new ArgumentException("TestMethodSpecification name should not be empty!");
 
-            bool exists = await _TestMethodSpecificationRepository.ExistsByName(model.Name);
+            bool exists = await _TestMethodSpecificationRepository.ExistsByOrgAndStandard(model.StandardOrganizationID, model.TestMethodStandard);
             if (exists)
-                throw new InvalidOperationException("TestMethodSpecification already exists!");
+            {
+                throw new InvalidOperationException($"Test Method Specification for Standard '{model.TestMethodStandard}' under the selected Organization already exists!");
+            }
 
             model.CreatedOn = DateTime.UtcNow;
             model.CreatedBy = loggedInUser.EmployeeID;
@@ -96,9 +104,17 @@ namespace LIMSApi.Services
             if (model.ID == 0)
                 throw new ArgumentException("TestMethodSpecification ID should not be empty!");
 
-            bool exists = await _TestMethodSpecificationRepository.ExistsByNameAndNotId(model.Name, model.ID);
+            if (model.StandardOrganizationID <= 0)
+                throw new ArgumentException("Standard Organization is required!");
+
+            if (string.IsNullOrWhiteSpace(model.TestMethodStandard))
+                throw new ArgumentException("Test Method Standard is required!");
+
+            bool exists = await _TestMethodSpecificationRepository.ExistsByOrgAndStandardAndNotId(model.StandardOrganizationID, model.TestMethodStandard, model.ID);
             if (exists)
-                throw new InvalidOperationException("Same TestMethodSpecification already exists!");
+            {
+                throw new InvalidOperationException($"Test Method Specification for Standard '{model.TestMethodStandard}' under the selected Organization already exists!");
+            }
 
             var existingTestMethodSpecification = await _TestMethodSpecificationRepository.GetTestMethodSpecificationById(model.ID);
             if (existingTestMethodSpecification == null)
@@ -561,12 +577,12 @@ namespace LIMSApi.Services
                 if (r.StandardOrganizationID > 0 && !string.IsNullOrWhiteSpace(item.TestMethodStandard))
                 {
                     var exists = await _TestMethodSpecificationRepository.ExistsByOrgAndStandard(
-                        r.StandardOrganizationID.Value, item.TestMethodStandard.Trim(), item.Part?.Trim());
+                        r.StandardOrganizationID.Value, item.TestMethodStandard.Trim());
                     r.Exists = exists;
                     if (exists)
                     {
                         r.Status = "error";
-                        r.Messages.Add($"Already exists: '{item.StandardOrganization} {item.TestMethodStandard}{(string.IsNullOrEmpty(item.Part) ? "" : " " + item.Part)}'.");
+                        r.Messages.Add($"Already exists: '{item.StandardOrganization} {item.TestMethodStandard}'.");
                     }
                 }
 
@@ -627,7 +643,7 @@ namespace LIMSApi.Services
                 }
 
                 var exists = await _TestMethodSpecificationRepository.ExistsByOrgAndStandard(
-                    orgId, item.TestMethodStandard.Trim(), item.Part?.Trim());
+                    orgId, item.TestMethodStandard.Trim());
                 if (exists)
                 {
                     skipped++;
