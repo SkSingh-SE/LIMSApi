@@ -5,125 +5,150 @@ namespace LIMSApi.Helpers
 {
     public class FormulaEvaluator
     {
-        // Regex to match aggregate functions: MEAN(...), MAX(...), MIN(...), STDEV(...), SUM(...), COUNT(...)
+        // Matches {P12}, {P999} — stored formula token format
+        private static readonly Regex ParamTokenRegex = new Regex(
+            @"\{P(\d+)\}",
+            RegexOptions.Compiled
+        );
+
+        // Matches MEAN/AVG/MAX/MIN/STDEV/SUM/COUNT aggregate functions
         private static readonly Regex AggregateRegex = new Regex(
-            @"(MEAN|MAX|MIN|STDEV|SUM|COUNT)\(([^)]+)\)",
+            @"(MEAN|AVG|MAX|MIN|STDEV|SUM|COUNT)\(([^)]+)\)",
             RegexOptions.IgnoreCase | RegexOptions.Compiled
         );
 
-        public double? Evaluate(string expression, IDictionary<string, double> variables)
-        {
-            if (string.IsNullOrWhiteSpace(expression))
-                return null;
+        // ──────────────────────────────────────────────────
+        // Public: Evaluate
+        // ──────────────────────────────────────────────────
 
+        /// <summary>
+        /// Primary overload: evaluates formula like "{P12}+({P15}/6)" using paramId→value map.
+        /// </summary>
+        public double? Evaluate(string expression, IDictionary<long, double> paramValues)
+        {
+            if (string.IsNullOrWhiteSpace(expression)) return null;
             try
             {
-                // Pre-process aggregate functions before NCalc evaluation
-                string processed = PreProcessAggregates(expression, variables);
+                var namedValues = paramValues.ToDictionary(kv => $"P{kv.Key}", kv => kv.Value);
+                string ncalcExpr = ConvertToNCalcExpression(expression);
+                ncalcExpr = PreProcessAggregates(ncalcExpr, namedValues);
 
-                var exp = new Expression(processed);
+                var exp = new Expression(ncalcExpr);
+                foreach (var kv in namedValues)
+                    exp.Parameters[kv.Key] = kv.Value;
 
-                // Assign variables
+                var result = exp.Evaluate();
+                return ToDouble(result);
+            }
+            catch { return null; }
+        }
+
+        /// <summary>
+        /// Backward-compatible overload: accepts IDictionary&lt;string, double&gt; where keys are "P12", "P15" etc.
+        /// </summary>
+        public double? Evaluate(string expression, IDictionary<string, double> variables)
+        {
+            if (string.IsNullOrWhiteSpace(expression)) return null;
+            try
+            {
+                string ncalcExpr = ConvertToNCalcExpression(expression);
+                ncalcExpr = PreProcessAggregates(ncalcExpr, variables);
+
+                var exp = new Expression(ncalcExpr);
                 foreach (var kv in variables)
                     exp.Parameters[kv.Key] = kv.Value;
 
                 var result = exp.Evaluate();
-
-                if (result is double d) return d;
-                if (result is int i) return i;
-
-                return Convert.ToDouble(result);
+                return ToDouble(result);
             }
-            catch (Exception)
+            catch { return null; }
+        }
+
+        // ──────────────────────────────────────────────────
+        // Public: ValidateFormula
+        // ──────────────────────────────────────────────────
+
+        /// <summary>
+        /// Validates formula expression using the set of valid parameter IDs from the database.
+        /// Returns null if valid; returns an error message string if invalid.
+        /// </summary>
+        public string? ValidateFormula(string expression, IEnumerable<long> validParamIds)
+        {
+            if (string.IsNullOrWhiteSpace(expression))
+                return "Formula expression cannot be empty.";
+
+            var validSet = new HashSet<long>(validParamIds);
+            var tokenMatches = ParamTokenRegex.Matches(expression);
+
+            if (!tokenMatches.Any())
+                return "Formula must contain at least one parameter reference (e.g. {P12}).";
+
+            // Validate each referenced param ID exists
+            foreach (Match m in tokenMatches)
             {
-                return null; // return null on failure to prevent crash
+                long paramId = long.Parse(m.Groups[1].Value);
+                if (!validSet.Contains(paramId))
+                    return $"Invalid parameter reference: P{paramId} does not exist.";
+            }
+
+            // Dry-run with dummy values to catch syntax errors
+            var dummyValues = tokenMatches
+                .Select(m => long.Parse(m.Groups[1].Value))
+                .Distinct()
+                .ToDictionary(id => $"P{id}", _ => 1.0);
+
+            try
+            {
+                string ncalcExpr = ConvertToNCalcExpression(expression);
+                ncalcExpr = PreProcessAggregates(ncalcExpr, dummyValues);
+
+                var exp = new Expression(ncalcExpr);
+                foreach (var kv in dummyValues)
+                    exp.Parameters[kv.Key] = kv.Value;
+
+                exp.Evaluate();
+                return null; // valid
+            }
+            catch (Exception ex)
+            {
+                return $"Formula syntax error: {ex.Message}";
             }
         }
 
         /// <summary>
-        /// Pre-processes aggregate functions (MEAN, MAX, MIN, STDEV, SUM, COUNT)
-        /// by resolving them to numeric values before NCalc evaluation.
-        /// Example: "MEAN(P1,P2,P3)" with P1=10, P2=20, P3=30 => "20"
+        /// Extracts all unique parameter IDs referenced in a formula.
+        /// e.g. "{P12}+({P15}/6)" → [12, 15]
         /// </summary>
-        private string PreProcessAggregates(string expression, IDictionary<string, double> variables)
+        public IEnumerable<long> ExtractParamIds(string expression)
         {
-            return AggregateRegex.Replace(expression, match =>
-            {
-                string funcName = match.Groups[1].Value.ToUpper();
-                string argsStr = match.Groups[2].Value;
+            if (string.IsNullOrWhiteSpace(expression))
+                return Enumerable.Empty<long>();
 
-                // Parse argument list (param names separated by commas)
-                var argNames = argsStr.Split(',')
-                    .Select(a => a.Trim())
-                    .ToList();
-
-                // Resolve values from variables dictionary
-                var values = new List<double>();
-                foreach (var argName in argNames)
-                {
-                    if (variables.TryGetValue(argName, out double val))
-                    {
-                        values.Add(val);
-                    }
-                    else if (double.TryParse(argName, out double literal))
-                    {
-                        values.Add(literal);
-                    }
-                    // Skip unresolved variables — aggregate will use available values
-                }
-
-                if (!values.Any())
-                    return "0"; // No values available — return 0
-
-                double result = funcName switch
-                {
-                    "MEAN" => values.Average(),
-                    "MAX" => values.Max(),
-                    "MIN" => values.Min(),
-                    "SUM" => values.Sum(),
-                    "COUNT" => values.Count,
-                    "STDEV" => CalculateStdDev(values),
-                    _ => 0
-                };
-
-                return result.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            });
+            return ParamTokenRegex.Matches(expression)
+                .Select(m => long.Parse(m.Groups[1].Value))
+                .Distinct()
+                .ToList();
         }
 
-        /// <summary>
-        /// Calculates population standard deviation for a list of values.
-        /// </summary>
-        private static double CalculateStdDev(List<double> values)
-        {
-            if (values.Count <= 1) return 0;
-
-            double mean = values.Average();
-            double sumOfSquares = values.Sum(v => (v - mean) * (v - mean));
-            return Math.Sqrt(sumOfSquares / values.Count);
-        }
+        // ──────────────────────────────────────────────────
+        // Public: DetermineResultStatus
+        // ──────────────────────────────────────────────────
 
         /// <summary>
-        /// Determines Pass/Fail/Marginal status based on spec limits.
-        /// Marginal = value is within 5% of the boundary.
+        /// Pass / Fail / Marginal — Marginal = within 5% of spec boundary.
         /// </summary>
-        public string DetermineResultStatus(decimal? value, decimal? specMin, decimal? specMax)
+        public string? DetermineResultStatus(decimal? value, decimal? specMin, decimal? specMax)
         {
-            if (!value.HasValue)
-                return null;
+            if (!value.HasValue) return null;
 
             bool hasMin = specMin.HasValue;
             bool hasMax = specMax.HasValue;
-
-            if (!hasMin && !hasMax)
-                return null; // No spec limits defined
+            if (!hasMin && !hasMax) return null;
 
             bool withinMin = !hasMin || value >= specMin;
             bool withinMax = !hasMax || value <= specMax;
+            if (!withinMin || !withinMax) return "Fail";
 
-            if (!withinMin || !withinMax)
-                return "Fail";
-
-            // Check for marginal (within 5% of boundary)
             if (hasMin && hasMax)
             {
                 decimal range = specMax.Value - specMin.Value;
@@ -132,13 +157,82 @@ namespace LIMSApi.Helpers
                     decimal marginThreshold = range * 0.05m;
                     bool nearMin = (value.Value - specMin.Value) <= marginThreshold;
                     bool nearMax = (specMax.Value - value.Value) <= marginThreshold;
-
-                    if (nearMin || nearMax)
-                        return "Marginal";
+                    if (nearMin || nearMax) return "Marginal";
                 }
             }
 
             return "Pass";
+        }
+
+        // ──────────────────────────────────────────────────
+        // Private helpers
+        // ──────────────────────────────────────────────────
+
+        /// <summary>
+        /// Converts "{P12}+({P15}/6)" → "P12+(P15/6)" for NCalc.
+        /// </summary>
+        private static string ConvertToNCalcExpression(string formula)
+            => ParamTokenRegex.Replace(formula, m => $"P{m.Groups[1].Value}");
+
+        /// <summary>
+        /// Pre-processes MEAN/AVG/MAX/MIN/SUM/COUNT/STDEV aggregate functions
+        /// by resolving them to numeric literals before NCalc evaluates.
+        /// </summary>
+        private static string PreProcessAggregates(string expression, IDictionary<string, double> variables)
+        {
+            return AggregateRegex.Replace(expression, match =>
+            {
+                string funcName = match.Groups[1].Value.ToUpper();
+                string argsStr = match.Groups[2].Value;
+
+                var argNames = argsStr.Split(',').Select(a => a.Trim()).ToList();
+                var values = new List<double>();
+
+                foreach (var argName in argNames)
+                {
+                    if (variables.TryGetValue(argName, out double val))
+                        values.Add(val);
+                    else if (double.TryParse(argName,
+                             System.Globalization.NumberStyles.Any,
+                             System.Globalization.CultureInfo.InvariantCulture,
+                             out double literal))
+                        values.Add(literal);
+                }
+
+                if (!values.Any()) return "0";
+
+                double result = funcName switch
+                {
+                    "MEAN" or "AVG" => values.Average(),
+                    "MAX"           => values.Max(),
+                    "MIN"           => values.Min(),
+                    "SUM"           => values.Sum(),
+                    "COUNT"         => values.Count,
+                    "STDEV"         => CalculateStdDev(values),
+                    _               => 0
+                };
+
+                return result.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            });
+        }
+
+        private static double CalculateStdDev(List<double> values)
+        {
+            if (values.Count <= 1) return 0;
+            double mean = values.Average();
+            double sumOfSquares = values.Sum(v => (v - mean) * (v - mean));
+            return Math.Sqrt(sumOfSquares / values.Count);
+        }
+
+        private static double? ToDouble(object? result)
+        {
+            if (result is double d) return d;
+            if (result is int i)    return (double)i;
+            if (result is decimal dec) return (double)dec;
+            if (result is float f)  return (double)f;
+            if (result is long l)   return (double)l;
+            try { return Convert.ToDouble(result); }
+            catch { return null; }
         }
     }
 }

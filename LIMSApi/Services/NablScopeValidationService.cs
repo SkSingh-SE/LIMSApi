@@ -31,6 +31,36 @@ namespace LIMSApi.Services
 
             if (labScope == null)
             {
+                // Hierarchical fallback: if laboratoryTestId is a SubGroup or AnalysisType, check parent Master LaboratoryTestID
+                var subGroup = await _db.LaboratoryTestSubGroups.FirstOrDefaultAsync(sg => sg.ID == laboratoryTestId);
+                if (subGroup != null)
+                {
+                    labScope = await _db.LabScopeMasters
+                        .Include(ls => ls.Specifications)
+                            .ThenInclude(s => s.Parameters)
+                        .Where(ls => ls.LaboratoryTestID == subGroup.LaboratoryTestID && ls.IsActive
+                            && ls.CompanyCode == _loggedInUser.CompanyCode)
+                        .OrderByDescending(ls => ls.Specifications.SelectMany(s => s.Parameters).Count())
+                        .FirstOrDefaultAsync();
+                }
+                else
+                {
+                    var analysisType = await _db.LaboratoryTestAnalysisTypes.Include(at => at.SubGroup).FirstOrDefaultAsync(at => at.ID == laboratoryTestId);
+                    if (analysisType?.SubGroup != null)
+                    {
+                        labScope = await _db.LabScopeMasters
+                            .Include(ls => ls.Specifications)
+                                .ThenInclude(s => s.Parameters)
+                            .Where(ls => ls.LaboratoryTestID == analysisType.SubGroup.LaboratoryTestID && ls.IsActive
+                                && ls.CompanyCode == _loggedInUser.CompanyCode)
+                            .OrderByDescending(ls => ls.Specifications.SelectMany(s => s.Parameters).Count())
+                            .FirstOrDefaultAsync();
+                    }
+                }
+            }
+
+            if (labScope == null)
+            {
                 return new NablScopeCheckResult
                 {
                     ParameterId = parameterId,
@@ -225,12 +255,41 @@ namespace LIMSApi.Services
         /// </summary>
         public async Task<bool> CheckParameterScopeExists(long laboratoryTestId, long parameterId)
         {
-            return await _db.LabScopeMasters
+            var exists = await _db.LabScopeMasters
                 .Where(ls => ls.LaboratoryTestID == laboratoryTestId && ls.IsActive
                     && ls.CompanyCode == _loggedInUser.CompanyCode)
                 .SelectMany(ls => ls.Specifications)
                 .SelectMany(s => s.Parameters)
                 .AnyAsync(p => p.ParameterID == parameterId);
+
+            if (!exists)
+            {
+                var subGroup = await _db.LaboratoryTestSubGroups.FirstOrDefaultAsync(sg => sg.ID == laboratoryTestId);
+                if (subGroup != null)
+                {
+                    exists = await _db.LabScopeMasters
+                        .Where(ls => ls.LaboratoryTestID == subGroup.LaboratoryTestID && ls.IsActive
+                            && ls.CompanyCode == _loggedInUser.CompanyCode)
+                        .SelectMany(ls => ls.Specifications)
+                        .SelectMany(s => s.Parameters)
+                        .AnyAsync(p => p.ParameterID == parameterId);
+                }
+                else
+                {
+                    var analysisType = await _db.LaboratoryTestAnalysisTypes.Include(at => at.SubGroup).FirstOrDefaultAsync(at => at.ID == laboratoryTestId);
+                    if (analysisType?.SubGroup != null)
+                    {
+                        exists = await _db.LabScopeMasters
+                            .Where(ls => ls.LaboratoryTestID == analysisType.SubGroup.LaboratoryTestID && ls.IsActive
+                                && ls.CompanyCode == _loggedInUser.CompanyCode)
+                            .SelectMany(ls => ls.Specifications)
+                            .SelectMany(s => s.Parameters)
+                            .AnyAsync(p => p.ParameterID == parameterId);
+                    }
+                }
+            }
+
+            return exists;
         }
 
         private static decimal? ParseDecimal(string? value)

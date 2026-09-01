@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -16,6 +16,7 @@ public partial class MetalClassificationMaster : AuditProperty
     [StringLength(20)]
     public string? Code { get; set; }
 
+    // [NOT IMPLEMENTED FOR NOW - Reserved for future parent-child hierarchy]
     public long? ParentID { get; set; }
 
     public bool HasChemicalParams { get; set; } = false;
@@ -25,6 +26,7 @@ public partial class MetalClassificationMaster : AuditProperty
     [StringLength(20)]
     public string? MetalType { get; set; }
 
+    // [NOT IMPLEMENTED FOR NOW - Reserved for future parent-child hierarchy]
     [ForeignKey("ParentID")]
     public virtual MetalClassificationMaster? Parent { get; set; }
     public virtual ICollection<MetalClassificationMaster> Children { get; set; } = new List<MetalClassificationMaster>();

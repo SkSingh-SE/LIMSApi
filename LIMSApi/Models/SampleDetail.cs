@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
@@ -15,6 +15,13 @@ namespace LIMSApi.Models
         public string Details { get; set; } = string.Empty;
         public long? MetalClassificationID { get; set; }
         public long? ProductConditionID { get; set; }
+        public long? ProductMasterID { get; set; }
+        public long? ProductSizeMasterID { get; set; }
+        public long? SpecificationGradeID { get; set; }
+        public bool IsUnknownSample { get; set; } = false;
+        public long? AssignedGradeID { get; set; }
+        [MaxLength(500)]
+        public string? AssignedGradeNote { get; set; }
         // UI hidden per client requirement — field retained for data integrity
         public long? SpecimenOrientationID { get; set; } = null;
         // UI hidden per client requirement — field retained for data integrity
@@ -29,13 +36,11 @@ namespace LIMSApi.Models
         [MaxLength(500)]
         public string? CancellationReason { get; set; }
 
-        public bool PreparationRequired { get; set; }
-        public bool MachiningRequired { get; set; }
-        public decimal MachiningAmount { get; set; }
-        public bool OtherPreparation { get; set; }
-        public decimal OtherPreparationCharge { get; set; }
+      
         public bool TpiRequired { get; set; }
         public long? TpiAgencyID { get; set; }
+        [MaxLength(2000)]
+        public string? TpiInspectorsJson { get; set; }
         public string? Specimen { get; set; }
         public string? TestInstructions { get; set; }
         public string SampleStatus { get; set; } = string.Empty;
@@ -58,11 +63,22 @@ namespace LIMSApi.Models
         [ForeignKey("ProductConditionID")]
         public virtual ProductConditionMaster? ProductCondition { get; set; }
 
+        [ForeignKey("ProductMasterID")]
+        public virtual ProductMaster? ProductMaster { get; set; }
+
+        [ForeignKey("ProductSizeMasterID")]
+        public virtual ProductSizeMaster? ProductSizeMaster { get; set; }
+
+        [ForeignKey("SpecificationGradeID")]
+        public virtual SpecificationGrade? SpecificationGrade { get; set; }
+
+        [ForeignKey("AssignedGradeID")]
+        public virtual SpecificationGrade? AssignedGrade { get; set; }
+
         // UI hidden per client requirement — navigation property retained for DB integrity
         [ForeignKey("SpecimenOrientationID")]
         public virtual SpecimenOrientationMaster? SpecimenOrientation { get; set; }
 
-        // UI hidden per client requirement — navigation property retained for DB integrity
         [ForeignKey("ProductFormID")]
         public virtual ProductFormMaster? ProductForm { get; set; }
 

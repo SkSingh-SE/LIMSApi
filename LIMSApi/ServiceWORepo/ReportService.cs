@@ -1,4 +1,4 @@
-﻿// LIMSApi/ServiceWORepo/ReportingService.cs
+// LIMSApi/ServiceWORepo/ReportingService.cs
 using System.Linq.Dynamic.Core;
 using System.Text.Json;
 using LIMSApi.Data;
@@ -252,6 +252,16 @@ namespace LIMSApi.ServiceWORepo
                 throw new Exception("No TestResultHeaders found");
 
             var sampleId = headers.First().SampleID;
+
+            var sampleInward = await (from s in _db.SampleDetails
+                                      join i in _db.SampleInwards on s.InwardID equals i.ID
+                                      where s.ID == sampleId
+                                      select i).FirstOrDefaultAsync();
+
+            if (sampleInward != null && sampleInward.IsReportStopped)
+            {
+                throw new InvalidOperationException($"Report generation is stopped for this case. Reason: {sampleInward.StopReportReason}");
+            }
 
             // -------------------------------------------------
             // 2. Report No + Certificate
@@ -606,7 +616,7 @@ namespace LIMSApi.ServiceWORepo
                 LongTermTestId = ltt.ID,
 
                 TestName =
-                    ltt.TestResultHeader?.LaboratoryTest?.SubGroup
+                    ltt.TestResultHeader?.LaboratoryTest?.Name
                     ?? "Long Term Test",
 
                 DurationHours = ltt.DurationHours,
@@ -1509,7 +1519,17 @@ namespace LIMSApi.ServiceWORepo
             foreach (var header in testHeaders)
             {
                 var testType = DetermineTestType(header);
-                var baseName = header.LaboratoryTest?.Name ?? "Unknown Test";
+                var subGroupName = await _db.LaboratoryTestSubGroups
+                    .Where(sg => sg.ID == header.LaboratoryTestID)
+                    .Select(sg => sg.ReportTestName ?? sg.Name)
+                    .FirstOrDefaultAsync();
+
+                var analysisTypeName = await _db.LaboratoryTestAnalysisTypes
+                    .Where(at => at.ID == header.LaboratoryTestID)
+                    .Select(at => at.Name)
+                    .FirstOrDefaultAsync();
+
+                var baseName = subGroupName ?? analysisTypeName ?? header.LaboratoryTest?.Name ?? "Unknown Test";
 
                 // Add specimen label when multiple headers share same lab test
                 var hasMultipleSpecimens = labTestGroups.GetValueOrDefault(header.LaboratoryTestID, 1) > 1;
@@ -1523,11 +1543,11 @@ namespace LIMSApi.ServiceWORepo
                     TestName = testName,
                     TestType = testType,
                     TestCategory = DetermineTestCategory(header, testType),
-                    SpecificationName = header.LaboratoryTest?.SubGroup,
+                    SpecificationName = header.LaboratoryTest?.Name,
                     TestMethod = header.Parameters
                         .Select(p => p.TestMethodUsed)
                         .FirstOrDefault(m => !string.IsNullOrEmpty(m))
-                        ?? header.LaboratoryTest?.SubGroup,
+                        ?? header.LaboratoryTest?.Name,
                     DateOfTesting = header.CompletedAt?.ToString("dd-MM-yyyy") ?? "",
                     Parameters = header.Parameters
                         .OrderBy(p => p.ID)
@@ -1545,7 +1565,14 @@ namespace LIMSApi.ServiceWORepo
                             NablScopeStatus = p.NablScopeStatus,
                             ExpandedUncertainty = p.ExpandedUncertainty,
                             CoverageFactor = p.CoverageFactor,
-                            SubGroup = testType == "Chemical" ? (header.LaboratoryTest?.TestCaption ?? header.LaboratoryTest?.Name) : null
+                            SubGroup = testType == "Chemical"
+                                ? (_db.ChemicalTests
+                                    .Where(ct => ct.SampleTestPlanID == header.TestPlanID)
+                                    .Include(ct => ct.AnalysisType)
+                                        .ThenInclude(at => at.SubGroup)
+                                    .Select(ct => ct.AnalysisType != null && ct.AnalysisType.SubGroup != null ? (ct.AnalysisType.SubGroup.ReportTestName ?? ct.AnalysisType.SubGroup.Name) : null)
+                                    .FirstOrDefault() ?? header.LaboratoryTest?.Name)
+                                : subGroupName
                         })
                         .ToList(),
                     Images = header.Images

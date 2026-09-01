@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Helpers;
 using LIMSApi.Middleware;
@@ -95,6 +95,5 @@ namespace LIMSApi.Controllers
             var data = await _MetalClassificationService.GetParameterByMetalId(Id);
             return data == null ? NoContent(): Ok(data);
         }
-
     }
 }

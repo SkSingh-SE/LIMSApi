@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 
 namespace LIMSApi.Services.Interface
@@ -14,7 +14,11 @@ namespace LIMSApi.Services.Interface
         Task<List<DropdwonSelector>> GetTestMethodDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<List<DropdwonSelector>> GetGeneralTestMethodDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<List<DropdwonSelector>> GetChemicalTestMethodDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<DropdwonSelector>> GetUnifiedTestMethodDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<List<object>> GetTestCases(long labTestId);
         Task<List<string>> GetDistinctTestNames(string? searchTerm, int pageSize);
+        Task<long> DuplicateLaboratoryTest(long id);
+        Task<List<DropdwonSelector>> GetTestMethodSpecificationByLabTestId(long labTestId);
+        Task<List<PricingTemplateRowDto>> GetPricingTemplate(long labTestId, long? analysisTypeId = null);
     }
 }

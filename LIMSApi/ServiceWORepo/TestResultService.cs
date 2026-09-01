@@ -1,4 +1,4 @@
-﻿using LIMSApi.Data;
+using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Helpers.Enums;
@@ -77,9 +77,17 @@ namespace LIMSApi.ServiceWORepo
                         .Where(h => h.SampleID == sample.ID && h.IsActive)
                         .Select(h => new
                         {
-                            TestName = _db.LaboratoryTests
+                            TestName = _db.LaboratoryTestSubGroups
+                                        .Where(sg => sg.ID == h.LaboratoryTestID)
+                                        .Select(sg => sg.ReportTestName ?? sg.Name)
+                                        .FirstOrDefault()
+                                        ?? _db.LaboratoryTestAnalysisTypes
+                                        .Where(at => at.ID == h.LaboratoryTestID)
+                                        .Select(at => at.Name)
+                                        .FirstOrDefault()
+                                        ?? _db.LaboratoryTests
                                         .Where(t => t.ID == h.LaboratoryTestID)
-                                        .Select(t => t.SubGroup)
+                                        .Select(t => t.Name)
                                         .FirstOrDefault(),
                         }).ToList(),
 
@@ -772,13 +780,21 @@ namespace LIMSApi.ServiceWORepo
                 var chemicalTests = new List<object>();
                 foreach (var ct in plan.ChemicalTests)
                 {
-                    // ct.TestTypes is a list (or collection) of ChemicalTestType items
-                    // We create header(si) for each selected LaboratoryTestID in ct.TestTypes where IsSelected=true
-                    var typeLabIds = ct.TestTypes?.Where(tt => tt.IsSelected && tt.LaboratoryTestID.HasValue)
-                                                  .Select(tt => tt.LaboratoryTestID!.Value)
+                    // ct.TestTypes or ct.Methods represents selected chemical analysis types / techniques
+                    var typeLabIds = ct.TestTypes?.Where(tt => tt.IsSelected && (tt.LaboratoryTestAnalysisTypeID.HasValue || tt.LaboratoryTestID.HasValue))
+                                                  .Select(tt => tt.LaboratoryTestAnalysisTypeID ?? tt.LaboratoryTestID!.Value)
+                                                  .Distinct()
                                                   .ToList();
 
-                    // If no explicit selected types found, fallback to ct.TestMethod (single)
+                    if ((typeLabIds == null || !typeLabIds.Any()) && ct.Methods?.Any() == true)
+                    {
+                        typeLabIds = ct.Methods.Where(m => !m.Cancel && m.LaboratoryTestAnalysisTypeID > 0)
+                                               .Select(m => m.LaboratoryTestAnalysisTypeID)
+                                               .Distinct()
+                                               .ToList();
+                    }
+
+                    // If no explicit selected types found, fallback to ct.LaboratoryTestAnalysisTypeID
                     if (typeLabIds != null && typeLabIds.Any())
                     {
                         // create header for each labTestId
@@ -802,7 +818,9 @@ namespace LIMSApi.ServiceWORepo
                                 headerId = header.ID,
                                 chemicalTestId = ct.ID,
                                 labTestId = labTestId,
-                                laboratoryTest = (await _db.LaboratoryTests.FindAsync(labTestId))?.Name ?? "Chemical Test",
+                                laboratoryTest = (await _db.LaboratoryTestAnalysisTypes.FindAsync(labTestId))?.Name 
+                                              ?? (await _db.LaboratoryTests.FindAsync(labTestId))?.Name 
+                                              ?? "Chemical Test",
                                 sequenceNo = 1,
                                 totalSpecimens = 1,
                                 standard = (long?)null,
@@ -1306,18 +1324,55 @@ namespace LIMSApi.ServiceWORepo
 
             var labTestName = labTest?.Name ?? $"LabTest#{labTestId}";
 
-            // Get specification lines (Type="mechanical") by grade — no join table needed
+            // Get specification lines (Type="mechanical") by grade
             var specLines = new List<SpecificationLine>();
             if (specIds.Any())
             {
-                specLines = await _db.SpecificationLines
+                var baseQuery = _db.SpecificationLines
                     .Include(sl => sl.Parameter)
                         .ThenInclude(p => p.ParameterUnit)
                     .Where(sl => sl.SpecificationGradeID.HasValue
                         && specIds.Contains(sl.SpecificationGradeID.Value)
                         && sl.Type == "mechanical"
-                        && sl.ParameterID.HasValue)
-                    .ToListAsync();
+                        && sl.ParameterID.HasValue);
+
+                if (labTestId > 0)
+                {
+                    var targetTestIds = new HashSet<long> { labTestId };
+
+                    // If labTestId is a SubGroup, include parent LaboratoryTestID
+                    var subGroup = await _db.LaboratoryTestSubGroups.FirstOrDefaultAsync(sg => sg.ID == labTestId);
+                    if (subGroup != null)
+                    {
+                        targetTestIds.Add(subGroup.LaboratoryTestID);
+                    }
+                    else
+                    {
+                        // If labTestId is a Master LaboratoryTest, include all its SubGroups
+                        var childSubGroupIds = await _db.LaboratoryTestSubGroups
+                            .Where(sg => sg.LaboratoryTestID == labTestId)
+                            .Select(sg => sg.ID)
+                            .ToListAsync();
+                        foreach (var id in childSubGroupIds) targetTestIds.Add(id);
+                    }
+
+                    var filteredLines = await baseQuery
+                        .Where(sl => sl.LaboratoryTestID.HasValue && targetTestIds.Contains(sl.LaboratoryTestID.Value))
+                        .ToListAsync();
+
+                    if (filteredLines.Any())
+                    {
+                        specLines = filteredLines;
+                    }
+                    else
+                    {
+                        specLines = await baseQuery.ToListAsync();
+                    }
+                }
+                else
+                {
+                    specLines = await baseQuery.ToListAsync();
+                }
             }
 
             // Create TestResultParameter from each specification line
@@ -1435,8 +1490,20 @@ namespace LIMSApi.ServiceWORepo
             var response = new StartTestResponse { Success = true };
 
             // Check preparation status — warn but don't block
-            var sample = await _db.SampleDetails.FindAsync(header.SampleID);
-            if (sample != null && sample.PreparationRequired)
+            var sample = await _db.SampleDetails
+                .Include(s => s.TestPlans)
+                    .ThenInclude(tp => tp.GeneralTests)
+                        .ThenInclude(gt => gt.Methods)
+                .Include(s => s.TestPlans)
+                    .ThenInclude(tp => tp.ChemicalTests)
+                        .ThenInclude(ct => ct.Methods)
+                .FirstOrDefaultAsync(s => s.ID == header.SampleID);
+
+            var isPrepRequired = sample != null && sample.TestPlans.Any(tp =>
+                tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) ||
+                tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired)));
+
+            if (isPrepRequired)
             {
                 var cuttingSample = await _db.CuttingChargeSamples
                     .FirstOrDefaultAsync(cs => cs.SampleID == header.SampleID);
@@ -1560,8 +1627,20 @@ namespace LIMSApi.ServiceWORepo
                     throw new InvalidOperationException($"Cannot complete test in '{header.Status}' status. Only 'Started' or 'In-Progress' tests can be completed.");
 
                 // --- Preparation Validation (Phase 5) ---
-                var sampleForPrep = await _db.SampleDetails.FindAsync(header.SampleID);
-                if (sampleForPrep != null && sampleForPrep.PreparationRequired)
+                var sampleForPrep = await _db.SampleDetails
+                    .Include(s => s.TestPlans)
+                        .ThenInclude(tp => tp.GeneralTests)
+                            .ThenInclude(gt => gt.Methods)
+                    .Include(s => s.TestPlans)
+                        .ThenInclude(tp => tp.ChemicalTests)
+                            .ThenInclude(ct => ct.Methods)
+                    .FirstOrDefaultAsync(s => s.ID == header.SampleID);
+
+                var isPrepNeeded = sampleForPrep != null && sampleForPrep.TestPlans.Any(tp =>
+                    tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) ||
+                    tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired)));
+
+                if (isPrepNeeded)
                 {
                     var prepExists = await _db.CuttingChargeSamples
                         .AnyAsync(cs => cs.SampleID == header.SampleID);
@@ -1769,7 +1848,7 @@ namespace LIMSApi.ServiceWORepo
                     headerId = lt.TestResultHeaderID,
                     header.SampleID,
                     sample.SampleNo,
-                    TestName = labTest.SubGroup,
+                    TestName = labTest.Name,
                     lt.DurationHours,
                     lt.StartedAt,
                     lt.EndedAt,
@@ -1890,7 +1969,7 @@ namespace LIMSApi.ServiceWORepo
                         .FirstOrDefault()
                     : null,
 
-                testName = labTest?.SubGroup,
+                testName = labTest?.Name,
 
                 durationHours = lt.DurationHours,
                 startedAt = lt.StartedAt,
@@ -2583,7 +2662,15 @@ namespace LIMSApi.ServiceWORepo
                             sample.SampleNo,
                             InwardId = inward.ID,
                             inward.CaseNo,
-                            TestName = _db.LaboratoryTests
+                            TestName = _db.LaboratoryTestSubGroups
+                                .Where(sg => sg.ID == h.LaboratoryTestID)
+                                .Select(sg => sg.ReportTestName ?? sg.Name)
+                                .FirstOrDefault()
+                                ?? _db.LaboratoryTestAnalysisTypes
+                                .Where(at => at.ID == h.LaboratoryTestID)
+                                .Select(at => at.Name)
+                                .FirstOrDefault()
+                                ?? _db.LaboratoryTests
                                 .Where(t => t.ID == h.LaboratoryTestID)
                                 .Select(t => t.Name)
                                 .FirstOrDefault(),
@@ -2779,21 +2866,28 @@ namespace LIMSApi.ServiceWORepo
 
         public async Task<PreparationStatusDto> GetPreparationStatus(long sampleId)
         {
-            var sample = await _db.SampleDetails.FindAsync(sampleId);
+            var sample = await _db.SampleDetails
+                .Include(s => s.TestPlans)
+                    .ThenInclude(tp => tp.GeneralTests)
+                        .ThenInclude(gt => gt.Methods)
+                .Include(s => s.TestPlans)
+                    .ThenInclude(tp => tp.ChemicalTests)
+                        .ThenInclude(ct => ct.Methods)
+                .FirstOrDefaultAsync(s => s.ID == sampleId);
             if (sample == null) throw new Exception("Sample not found.");
 
             var result = new PreparationStatusDto
             {
-                PreparationRequired = sample.PreparationRequired,
+                PreparationRequired = sample.TestPlans.Any(tp =>
+                    tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) ||
+                    tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired))),
             };
 
-            // Machining charges from MachiningChargeItems (fallback to SampleDetail.MachiningAmount)
+            // Machining charges from MachiningChargeItems
             var machiningItems = await _db.MachiningChargeItems
                 .Where(m => m.SampleID == sampleId && m.IsActive)
                 .ToListAsync();
-            result.MachiningCharges = machiningItems.Any()
-                ? machiningItems.Sum(m => m.Amount)
-                : sample.MachiningAmount;
+            result.MachiningCharges = machiningItems.Sum(m => m.Amount);
             result.MachiningBreakdown = machiningItems.Select(m => new MachiningChargeLineDto
             {
                 Id = m.ID, Description = m.Description, Amount = m.Amount, Remark = m.Remark
@@ -2852,10 +2946,8 @@ namespace LIMSApi.ServiceWORepo
             {
                 SampleId = sampleId,
                 InwardId = sample.InwardID,
-                MachiningCharges = machiningItems.Any()
-                    ? machiningItems.Sum(m => m.Amount)
-                    : sample.MachiningAmount,
-                OtherPreparationCharges = sample.OtherPreparationCharge,
+                MachiningCharges = machiningItems.Sum(m => m.Amount),
+                OtherPreparationCharges = 0,
                 BillingStatus = sample.SampleInward?.BillingStatus,
                 MachiningBreakdown = machiningItems.Select(m => new MachiningChargeLineDto
                 {

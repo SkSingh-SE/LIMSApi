@@ -371,3 +371,6 @@ FodyWeavers.xsd
 /LIMSApi/wwwroot/Uploads
 *.rar
 LIMSApi/publish.rar
+
+# Import source PDFs — user-managed, not tracked in Git
+ImportSources/

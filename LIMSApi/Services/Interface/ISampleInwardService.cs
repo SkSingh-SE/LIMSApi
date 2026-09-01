@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using Microsoft.AspNetCore.Mvc;
 
@@ -21,10 +21,20 @@ namespace LIMSApi.Services.Interface
         Task<List<DropdwonSelector>> GetSamplePreparationInwardDropdown(string? searchTerm, int pageNo, int pageSize);
 
         Task<byte[]> GeneratePIPdfAsync(long piId);
+        Task<byte[]> GenerateInwardChallanPdfAsync(long inwardId);
         Task CancelSampleAsync(long sampleDetailId, string reason);
         Task DeleteSampleAsync(long sampleDetailId);
         Task<PaymentInfoDto> UpdatePaymentInfoAsync(long id, PaymentInfoDto dto);
         Task UpdateSamplePrepAsync(long sampleId, SamplePrepReviewDto dto);
+        Task<string> CompleteSamplePreparationAsync(long inwardId);
 
+        Task StopReportAsync(long inwardId, string reason);
+        Task UnstopReportAsync(long inwardId);
+
+        Task<string> VerifyAndLockReviewOfRequestAsync(long inwardId, string? remarks = null);
+        Task RequestReplanAsync(long inwardId, string reason);
+        Task ApproveReplanAsync(long replanRequestId, string remarks);
+        Task<LifecycleSummaryDto?> GetLifecycleSummaryAsync(long id);
     }
 }
+

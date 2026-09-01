@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using LIMSApi.Models;
@@ -28,6 +28,9 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<CountryMaster> CountryMasters { get; set; }
     public virtual DbSet<CourierMaster> CourierMasters { get; set; }
     public virtual DbSet<ProductSizeMaster> ProductSizeMasters { get; set; }
+    public virtual DbSet<AnalysisTechniqueMaster> AnalysisTechniqueMasters { get; set; }
+    public virtual DbSet<MetalClassificationAnalysisTechnique> MetalClassificationAnalysisTechniques { get; set; }
+    public virtual DbSet<EquipmentAnalysisTechnique> EquipmentAnalysisTechniques { get; set; }
     public virtual DbSet<CurrencyMaster> CurrencyMasters { get; set; }
     public virtual DbSet<Customer> Customers { get; set; }
     public virtual DbSet<CustomerChangeRequest> CustomerChangeRequests { get; set; }
@@ -62,10 +65,11 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<MakerMaster> MakerMasters { get; set; }
     public virtual DbSet<MenuMaster> MenuMasters { get; set; }
     public virtual DbSet<MetalClassificationMaster> MetalClassificationMasters { get; set; }
-    public virtual DbSet<ParameterCategoryMaster> ParameterCategoryMasters { get; set; }
+    public virtual DbSet<MetalClassificationParameter> MetalClassificationParameters { get; set; }
+    // ParameterCategoryMasters — table dropped (see migration Parameter-InputType-DropdownOptions-Cleanup)
     public virtual DbSet<HeatTreatmentCategoryMaster> HeatTreatmentCategoryMasters { get; set; }
     public virtual DbSet<CoolingMediumMaster> CoolingMediumMasters { get; set; }
-    public virtual DbSet<ParameterSpecimenOrientation> ParameterSpecimenOrientations { get; set; }
+    // ParameterSpecimenOrientations — table dropped (see migration Parameter-InputType-DropdownOptions-Cleanup)
     public virtual DbSet<HeatTreatmentMetalClassification> HeatTreatmentMetalClassifications { get; set; }
     public virtual DbSet<ProductFormMaster> ProductFormMasters { get; set; }
     public virtual DbSet<SpecimenOrientationCategoryMaster> SpecimenOrientationCategoryMasters { get; set; }
@@ -78,12 +82,12 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<OEMMaster> OEMMasters { get; set; }
     public virtual DbSet<OrganisationMaster> OrganisationMasters { get; set; }
     public virtual DbSet<ParameterMaster> ParameterMasters { get; set; }
+    public virtual DbSet<ParameterDropdownOption> ParameterDropdownOptions { get; set; }
     public virtual DbSet<ParameterUnitMaster> ParameterUnitMasters { get; set; }
     public virtual DbSet<ParameterUnitEquivalent> ParameterUnitEquivalents { get; set; }
     public virtual DbSet<HardnessEquivalence> HardnessEquivalences { get; set; }
     public virtual DbSet<ToleranceMaster> ToleranceMasters { get; set; }
     public virtual DbSet<ProductConditionMaster> ProductConditionMasters { get; set; }
-    public virtual DbSet<ProductSpecification> ProductSpecifications { get; set; }
     public virtual DbSet<RemarkMaster> RemarkMasters { get; set; }
     public virtual DbSet<RoleMaster> RoleMasters { get; set; }
     public virtual DbSet<RoleMenuMapping> RoleMenuMappings { get; set; }
@@ -114,7 +118,6 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<TestGroupMapping> TestGroupMappings { get; set; }
     public virtual DbSet<TestMaster> TestMasters { get; set; }
     public virtual DbSet<LaboratoryTest> LaboratoryTests { get; set; }
-    public virtual DbSet<LaboratoryTestInvoiceCase> LaboratoryTestInvoiceCase { get; set; }
     public virtual DbSet<TestMethodSubGroup> TestMethodSubGroups { get; set; }
     public virtual DbSet<TestMethodSpecification> TestMethodSpecifications { get; set; }
     public virtual DbSet<TestMethodSpecificationVersion> TestMethodSpecificationVersions { get; set; }
@@ -148,8 +151,6 @@ public partial class LIMSContext : DbContext
     public DbSet<MachiningChargeVersion> MachiningChargeVersions { get; set; }
     public DbSet<SamplePreparationMaster> SamplePreparationMasters { get; set; }
     public DbSet<SamplePreparation> SamplePreparations { get; set; }
-    public DbSet<ProductTestGroup> ProductTestGroups { get; set; }
-    public DbSet<ProductSpecificationGrade> ProductSpecificationGrades { get; set; }
 
     public DbSet<ProformaInvoiceHeader> ProformaInvoiceHeader { get; set; }
     public DbSet<ProformaInvoiceDetail> ProformaInvoiceDetails { get; set; }
@@ -159,6 +160,7 @@ public partial class LIMSContext : DbContext
     public DbSet<GeneralTest> GeneralTests { get; set; }
     public DbSet<GeneralTestMethod> GeneralTestMethods { get; set; }
     public DbSet<ChemicalTest> ChemicalTests { get; set; }
+    public DbSet<ChemicalTestMethod> ChemicalTestMethods { get; set; }
     public DbSet<ChemicalTestElement> ChemicalTestElements { get; set; }
     public DbSet<ChemicalTestType> ChemicalTestTypes { get; set; }
     public DbSet<LongTermTest> LongTermTests { get; set; }
@@ -274,6 +276,25 @@ public partial class LIMSContext : DbContext
     public DbSet<TpiInspection> TpiInspections { get; set; }
     public DbSet<PurchaseOrderItem> PurchaseOrderItems { get; set; }
     public DbSet<EquipmentReferenceMaterial> EquipmentReferenceMaterials { get; set; }
+    public DbSet<LaboratoryTestSubGroup> LaboratoryTestSubGroups { get; set; }
+    public DbSet<LaboratoryTestAnalysisType> LaboratoryTestAnalysisTypes { get; set; }
+    public DbSet<LaboratoryTestAnalysisTypeTechnique> LaboratoryTestAnalysisTypeTechniques { get; set; }
+    public DbSet<LaboratoryTestSubGroupInvoiceCase> LaboratoryTestSubGroupInvoiceCases { get; set; }
+    public DbSet<LaboratoryTestAnalysisTypeInvoiceCase> LaboratoryTestAnalysisTypeInvoiceCases { get; set; }
+    public DbSet<LaboratoryTestSubGroupParameter> LaboratoryTestSubGroupParameters { get; set; }
+    public DbSet<LaboratoryTestSubGroupMethod> LaboratoryTestSubGroupMethods { get; set; }
+    public DbSet<LaboratoryTestSubGroupEquipment> LaboratoryTestSubGroupEquipments { get; set; }
+    public DbSet<LaboratoryTestSubGroupSpecification> LaboratoryTestSubGroupSpecifications { get; set; }
+    public DbSet<LaboratoryTestAnalysisTypeParameter> LaboratoryTestAnalysisTypeParameters { get; set; }
+    public DbSet<LaboratoryTestAnalysisTypeMethod> LaboratoryTestAnalysisTypeMethods { get; set; }
+    public DbSet<LaboratoryTestAnalysisTypeEquipment> LaboratoryTestAnalysisTypeEquipments { get; set; }
+    public DbSet<LaboratoryTestAnalysisTypeSpecification> LaboratoryTestAnalysisTypeSpecifications { get; set; }
+
+    public DbSet<ProductMaster> ProductMasters { get; set; }
+    public DbSet<ProductMasterMetalClassification> ProductMasterMetalClassifications { get; set; }
+    public DbSet<ProductMasterVersion> ProductMasterVersions { get; set; }
+    public DbSet<ProductMasterVersionGrade> ProductMasterVersionGrades { get; set; }
+    public DbSet<ProductMasterVersionGradeCondition> ProductMasterVersionGradeConditions { get; set; }
 
     //    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     //#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the BankName= syntax to read it from _configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
@@ -281,6 +302,39 @@ public partial class LIMSContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<ProductMasterMetalClassification>()
+            .HasKey(x => new { x.ProductMasterID, x.MetalClassificationID });
+
+        modelBuilder.Entity<ProductMasterMetalClassification>()
+            .HasOne(x => x.ProductMaster)
+            .WithMany(p => p.MetalClassifications)
+            .HasForeignKey(x => x.ProductMasterID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProductMasterMetalClassification>()
+            .HasOne(x => x.MetalClassification)
+            .WithMany()
+            .HasForeignKey(x => x.MetalClassificationID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<ProductMasterVersionGrade>()
+            .HasOne(x => x.ProductMasterVersion)
+            .WithMany(v => v.Grades)
+            .HasForeignKey(x => x.ProductMasterVersionID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ProductMasterVersionGrade>()
+            .HasOne(x => x.SpecificationGrade)
+            .WithMany()
+            .HasForeignKey(x => x.SpecificationGradeID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<ProductMasterVersionGradeCondition>()
+            .HasOne(x => x.ProductMasterVersionGrade)
+            .WithMany(g => g.Conditions)
+            .HasForeignKey(x => x.ProductMasterVersionGradeID)
+            .OnDelete(DeleteBehavior.Cascade);
+
         // RolePermission — one (Role, Permission) pair only when active
         modelBuilder.Entity<RolePermission>()
             .HasIndex(x => new { x.RoleID, x.PermissionID })
@@ -358,17 +412,44 @@ public partial class LIMSContext : DbContext
             .HasFilter("[IsActive] = 1 AND [Code] IS NOT NULL")
             .HasDatabaseName("IX_MetalClassificationMaster_Code");
 
-        modelBuilder.Entity<ParameterMaster>()
-            .HasIndex(x => x.Code)
-            .IsUnique()
-            .HasFilter("[IsActive] = 1 AND [Code] IS NOT NULL")
-            .HasDatabaseName("IX_ParameterMaster_Code");
 
         modelBuilder.Entity<HeatTreatmentMaster>()
             .HasIndex(x => x.Code)
             .IsUnique()
             .HasFilter("[IsActive] = 1 AND [Code] IS NOT NULL")
             .HasDatabaseName("IX_HeatTreatmentMaster_Code");
+
+        modelBuilder.Entity<AnalysisTechniqueMaster>()
+            .HasIndex(x => x.Code)
+            .IsUnique()
+            .HasFilter("[IsActive] = 1 AND [Code] IS NOT NULL")
+            .HasDatabaseName("IX_AnalysisTechniqueMaster_Code");
+
+        // MetalClassification ↔ AnalysisTechnique junction (both FKs NoAction; synced in service)
+        modelBuilder.Entity<MetalClassificationAnalysisTechnique>()
+            .HasOne(x => x.MetalClassification)
+            .WithMany()
+            .HasForeignKey(x => x.MetalClassificationID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<MetalClassificationAnalysisTechnique>()
+            .HasOne(x => x.AnalysisTechnique)
+            .WithMany()
+            .HasForeignKey(x => x.AnalysisTechniqueID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // Equipment ↔ AnalysisTechnique junction (both FKs NoAction; synced in service)
+        modelBuilder.Entity<EquipmentAnalysisTechnique>()
+            .HasOne(x => x.Equipment)
+            .WithMany(e => e.AnalysisTechniques)
+            .HasForeignKey(x => x.EquipmentID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<EquipmentAnalysisTechnique>()
+            .HasOne(x => x.AnalysisTechnique)
+            .WithMany()
+            .HasForeignKey(x => x.AnalysisTechniqueID)
+            .OnDelete(DeleteBehavior.NoAction);
 
         // HeatTreatmentMaster FK configs
         modelBuilder.Entity<HeatTreatmentMaster>()
@@ -383,19 +464,6 @@ public partial class LIMSContext : DbContext
             .HasForeignKey(x => x.CoolingMediumID)
             .OnDelete(DeleteBehavior.NoAction);
 
-        // ParameterMaster FK configs
-        modelBuilder.Entity<ParameterMaster>()
-            .HasOne(x => x.DefaultTestMethod)
-            .WithMany()
-            .HasForeignKey(x => x.DefaultTestMethodID)
-            .IsRequired(false)
-            .OnDelete(DeleteBehavior.NoAction);
-
-        modelBuilder.Entity<ParameterMaster>()
-            .HasOne(x => x.ParameterCategory)
-            .WithMany()
-            .HasForeignKey(x => x.ParameterCategoryID)
-            .OnDelete(DeleteBehavior.NoAction);
 
         modelBuilder.Entity<ParameterMaster>()
             .HasOne(x => x.ParameterUnit)
@@ -403,6 +471,13 @@ public partial class LIMSContext : DbContext
             .HasForeignKey(x => x.ParameterUnitID)
             .IsRequired(false)
             .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<ParameterMaster>()
+            .HasOne(x => x.ParameterUnitEquivalent)
+            .WithMany()
+            .HasForeignKey(x => x.ParameterUnitEquivalentID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
 
         // Phase 2: Junction table composite keys
         modelBuilder.Entity<SpecimenOrientationProductForm>().HasKey(x => new { x.SpecimenOrientationID, x.ProductFormID });
@@ -503,6 +578,7 @@ public partial class LIMSContext : DbContext
             .HasForeignKey(l => l.StepID)
             .OnDelete(DeleteBehavior.NoAction);
 
+
         // --------------------------------------------------
         // SampleDetail → TestResultHeader
         // ❌ NO CASCADE (prevents multiple cascade paths)
@@ -593,6 +669,66 @@ public partial class LIMSContext : DbContext
         .WithMany(c => c.TestTypes)
         .HasForeignKey(t => t.ChemicalTestID)
         .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ChemicalTestType>()
+        .HasOne(t => t.LaboratoryTestAnalysisType)
+        .WithMany()
+        .HasForeignKey(t => t.LaboratoryTestAnalysisTypeID)
+        .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<ChemicalTestMethod>()
+        .HasOne(m => m.ChemicalTest)
+        .WithMany(c => c.Methods)
+        .HasForeignKey(m => m.ChemicalTestID)
+        .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ChemicalTestMethod>()
+        .HasOne(m => m.AnalysisType)
+        .WithMany()
+        .HasForeignKey(m => m.LaboratoryTestAnalysisTypeID)
+        .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<ChemicalTestMethod>()
+        .HasOne(m => m.TestMethodSpecification)
+        .WithMany()
+        .HasForeignKey(m => m.TestMethodSpecificationID)
+        .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<ChemicalTestElement>()
+        .HasOne(e => e.AnalysisType)
+        .WithMany()
+        .HasForeignKey(e => e.LaboratoryTestAnalysisTypeID)
+        .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<ChemicalTestElement>()
+        .HasOne(e => e.SpecificationLine)
+        .WithMany()
+        .HasForeignKey(e => e.SpecificationLineID)
+        .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<SampleDetail>()
+        .HasOne(s => s.ProductMaster)
+        .WithMany()
+        .HasForeignKey(s => s.ProductMasterID)
+        .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<SampleDetail>()
+        .HasOne(s => s.ProductSizeMaster)
+        .WithMany()
+        .HasForeignKey(s => s.ProductSizeMasterID)
+        .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<SampleDetail>()
+        .HasOne(s => s.SpecificationGrade)
+        .WithMany()
+        .HasForeignKey(s => s.SpecificationGradeID)
+        .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<SampleDetail>()
+        .HasOne(s => s.AssignedGrade)
+        .WithMany()
+        .HasForeignKey(s => s.AssignedGradeID)
+        .OnDelete(DeleteBehavior.NoAction);
 
         modelBuilder.Entity<PlanHistory>()
         .HasOne(h => h.SampleTestPlan)
@@ -757,54 +893,11 @@ public partial class LIMSContext : DbContext
             .HasForeignKey(x => x.TestMethodSpecificationID)
             .OnDelete(DeleteBehavior.NoAction);
 
-        // ProductSpecificationGrade → SpecificationGrade (no cascade)
-        modelBuilder.Entity<ProductSpecificationGrade>()
-            .HasOne(x => x.SpecificationGrade)
-            .WithMany()
-            .HasForeignKey(x => x.SpecificationGradeID)
-            .OnDelete(DeleteBehavior.NoAction);
-
-        // ProductSpecificationGrade → ProductSpecification (no cascade)
-        modelBuilder.Entity<ProductSpecificationGrade>()
-            .HasOne(x => x.ProductSpecification)
-            .WithMany(p => p.ProductSpecificationGrades)
-            .HasForeignKey(x => x.ProductSpecificationID)
-            .OnDelete(DeleteBehavior.NoAction);
-
-        // ProductTestGroup → ProductSpecification (no cascade)
-        modelBuilder.Entity<ProductTestGroup>()
-            .HasOne(x => x.ProductSpecification)
-            .WithMany(p => p.ProductTestGroups)
-            .HasForeignKey(x => x.ProductSpecificationID)
-            .OnDelete(DeleteBehavior.NoAction);
-
-        // ProductSpecification → TestMethodSpecificationVersion (no cascade, nullable)
-        modelBuilder.Entity<ProductSpecification>()
-            .HasOne(x => x.TestMethodSpecificationVersion)
-            .WithMany()
-            .HasForeignKey(x => x.TestMethodSpecificationVersionID)
-            .OnDelete(DeleteBehavior.NoAction);
-
         // LabScopeSpecification → TestMethodSpecificationVersion (no cascade, nullable)
         modelBuilder.Entity<LabScopeSpecification>()
             .HasOne(x => x.TestMethodSpecificationVersion)
             .WithMany()
             .HasForeignKey(x => x.TestMethodSpecificationVersionID)
-            .OnDelete(DeleteBehavior.NoAction);
-
-        // ProductTestGroup → LaboratoryTest (no cascade)
-        modelBuilder.Entity<ProductTestGroup>()
-            .HasOne(x => x.LaboratoryTest)
-            .WithMany()
-            .HasForeignKey(x => x.LaboratoryTestID)
-            .OnDelete(DeleteBehavior.NoAction);
-
-        // ProductTestGroup → TestMethodSpecification (no cascade, nullable)
-        modelBuilder.Entity<ProductTestGroup>()
-            .HasOne(x => x.TestMethodSpecification)
-            .WithMany()
-            .HasForeignKey(x => x.TestMethodStandardID)
-            .IsRequired(false)
             .OnDelete(DeleteBehavior.NoAction);
 
         // TpiInspection FKs (no cascade)
@@ -922,19 +1015,6 @@ public partial class LIMSContext : DbContext
             .WithMany()
             .HasForeignKey(x => x.TestMethodStandardID)
             .IsRequired(false)
-            .OnDelete(DeleteBehavior.NoAction);
-
-        // MachiningChargeMaster FKs (no cascade)
-        modelBuilder.Entity<MachiningChargeMaster>()
-            .HasOne(x => x.LaboratoryTest)
-            .WithMany()
-            .HasForeignKey(x => x.LaboratoryTestID)
-            .OnDelete(DeleteBehavior.NoAction);
-
-        modelBuilder.Entity<MachiningChargeMaster>()
-            .HasOne(x => x.TestMethodSpecification)
-            .WithMany()
-            .HasForeignKey(x => x.TestMethodStandardID)
             .OnDelete(DeleteBehavior.NoAction);
 
         // MachiningChargeItem → MachiningChargeMaster (optional FK, no cascade)
@@ -1062,6 +1142,227 @@ public partial class LIMSContext : DbContext
             .WithMany()
             .HasForeignKey(g => g.SampleID)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // ── LaboratoryTestSubGroup (sections under a LabTest) ──
+        modelBuilder.Entity<LaboratoryTestSubGroup>()
+            .HasOne(x => x.LaboratoryTest)
+            .WithMany(t => t.SubGroups)
+            .HasForeignKey(x => x.LaboratoryTestID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<LaboratoryTestSubGroup>()
+            .HasOne(x => x.MetalClassification)
+            .WithMany()
+            .HasForeignKey(x => x.MetalClassificationID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // ── LaboratoryTestAnalysisType (under a SubGroup) ──
+        modelBuilder.Entity<LaboratoryTestAnalysisType>()
+            .HasOne(x => x.SubGroup)
+            .WithMany(g => g.AnalysisTypes)
+            .HasForeignKey(x => x.LaboratoryTestSubGroupID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<LaboratoryTestAnalysisType>()
+            .HasOne(x => x.MetalClassification)
+            .WithMany()
+            .HasForeignKey(x => x.MetalClassificationID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // ── LaboratoryTestAnalysisTypeTechnique (Many-to-Many Techniques) ──
+        modelBuilder.Entity<LaboratoryTestAnalysisTypeTechnique>()
+            .HasOne(x => x.AnalysisType)
+            .WithMany(t => t.AllowedTechniques)
+            .HasForeignKey(x => x.LaboratoryTestAnalysisTypeID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<LaboratoryTestAnalysisTypeTechnique>()
+            .HasOne(x => x.AnalysisTechnique)
+            .WithMany()
+            .HasForeignKey(x => x.AnalysisTechniqueID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // ── LaboratoryTestSubGroup Mappings ──
+        modelBuilder.Entity<LaboratoryTestSubGroupParameter>()
+            .HasOne(x => x.SubGroup)
+            .WithMany(g => g.Parameters)
+            .HasForeignKey(x => x.LaboratoryTestSubGroupID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<LaboratoryTestSubGroupParameter>()
+            .HasOne(x => x.Parameter)
+            .WithMany()
+            .HasForeignKey(x => x.ParameterID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<LaboratoryTestSubGroupMethod>()
+            .HasOne(x => x.SubGroup)
+            .WithMany(g => g.TestMethods)
+            .HasForeignKey(x => x.LaboratoryTestSubGroupID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<LaboratoryTestSubGroupMethod>()
+            .HasOne(x => x.TestMethodSpecification)
+            .WithMany()
+            .HasForeignKey(x => x.TestMethodSpecificationID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<LaboratoryTestSubGroupMethod>()
+            .HasOne(x => x.TestMethodSpecificationVersion)
+            .WithMany()
+            .HasForeignKey(x => x.TestMethodSpecificationVersionID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<LaboratoryTestSubGroupEquipment>()
+            .HasOne(x => x.SubGroup)
+            .WithMany(g => g.Equipments)
+            .HasForeignKey(x => x.LaboratoryTestSubGroupID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<LaboratoryTestSubGroupEquipment>()
+            .HasOne(x => x.Equipment)
+            .WithMany()
+            .HasForeignKey(x => x.EquipmentID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<LaboratoryTestSubGroupSpecification>()
+            .HasOne(x => x.SubGroup)
+            .WithMany(g => g.Specifications)
+            .HasForeignKey(x => x.LaboratoryTestSubGroupID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<LaboratoryTestSubGroupSpecification>()
+            .HasOne(x => x.MaterialSpecification)
+            .WithMany()
+            .HasForeignKey(x => x.SpecificationHeaderID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<LaboratoryTestSubGroupSpecification>()
+            .HasOne(x => x.SpecificationGrade)
+            .WithMany()
+            .HasForeignKey(x => x.SpecificationGradeID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<LaboratoryTestSubGroupSpecification>()
+            .HasOne(x => x.ProductMaster)
+            .WithMany()
+            .HasForeignKey(x => x.ProductMasterID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<LaboratoryTestSubGroupInvoiceCase>()
+            .HasOne(x => x.SubGroup)
+            .WithMany(g => g.InvoiceCases)
+            .HasForeignKey(x => x.LaboratoryTestSubGroupID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<LaboratoryTestSubGroupInvoiceCase>()
+            .HasOne(x => x.InvoiceCaseConfiguration)
+            .WithMany()
+            .HasForeignKey(x => x.InvoiceCaseConfigID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // ── LaboratoryTestAnalysisType Mappings ──
+        modelBuilder.Entity<LaboratoryTestAnalysisTypeParameter>()
+            .HasOne(x => x.AnalysisType)
+            .WithMany(t => t.Parameters)
+            .HasForeignKey(x => x.LaboratoryTestAnalysisTypeID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<LaboratoryTestAnalysisTypeParameter>()
+            .HasOne(x => x.Parameter)
+            .WithMany()
+            .HasForeignKey(x => x.ParameterID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<LaboratoryTestAnalysisTypeMethod>()
+            .HasOne(x => x.AnalysisType)
+            .WithMany(t => t.TestMethods)
+            .HasForeignKey(x => x.LaboratoryTestAnalysisTypeID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<LaboratoryTestAnalysisTypeMethod>()
+            .HasOne(x => x.TestMethodSpecification)
+            .WithMany()
+            .HasForeignKey(x => x.TestMethodSpecificationID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<LaboratoryTestAnalysisTypeMethod>()
+            .HasOne(x => x.TestMethodSpecificationVersion)
+            .WithMany()
+            .HasForeignKey(x => x.TestMethodSpecificationVersionID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<LaboratoryTestAnalysisTypeEquipment>()
+            .HasOne(x => x.AnalysisType)
+            .WithMany(t => t.Equipments)
+            .HasForeignKey(x => x.LaboratoryTestAnalysisTypeID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<LaboratoryTestAnalysisTypeEquipment>()
+            .HasOne(x => x.Equipment)
+            .WithMany()
+            .HasForeignKey(x => x.EquipmentID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<LaboratoryTestAnalysisTypeSpecification>()
+            .HasOne(x => x.AnalysisType)
+            .WithMany(t => t.Specifications)
+            .HasForeignKey(x => x.LaboratoryTestAnalysisTypeID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<LaboratoryTestAnalysisTypeSpecification>()
+            .HasOne(x => x.MaterialSpecification)
+            .WithMany()
+            .HasForeignKey(x => x.SpecificationHeaderID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<LaboratoryTestAnalysisTypeSpecification>()
+            .HasOne(x => x.SpecificationGrade)
+            .WithMany()
+            .HasForeignKey(x => x.SpecificationGradeID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<LaboratoryTestAnalysisTypeSpecification>()
+            .HasOne(x => x.ProductMaster)
+            .WithMany()
+            .HasForeignKey(x => x.ProductMasterID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<LaboratoryTestAnalysisTypeInvoiceCase>()
+            .HasOne(x => x.AnalysisType)
+            .WithMany(t => t.InvoiceCases)
+            .HasForeignKey(x => x.LaboratoryTestAnalysisTypeID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<LaboratoryTestAnalysisTypeInvoiceCase>()
+            .HasOne(x => x.InvoiceCaseConfiguration)
+            .WithMany()
+            .HasForeignKey(x => x.InvoiceCaseConfigID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // ── ChemicalTest → LaboratoryTestAnalysisType (nullable FK) ──
+        modelBuilder.Entity<ChemicalTest>()
+            .HasOne(x => x.AnalysisType)
+            .WithMany()
+            .HasForeignKey(x => x.LaboratoryTestAnalysisTypeID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // ── GeneralTest → LaboratoryTestSubGroup (nullable FK) ──
+        modelBuilder.Entity<GeneralTest>()
+            .HasOne(x => x.SubGroup)
+            .WithMany()
+            .HasForeignKey(x => x.LaboratoryTestSubGroupID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
 
     }
 

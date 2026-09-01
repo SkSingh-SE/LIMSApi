@@ -1,4 +1,4 @@
-﻿using LIMSApi.Data;
+using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Helpers.Enums;
@@ -52,7 +52,7 @@ namespace LIMSApi.Repositories
 
                 where i.IsActive
                       && i.CompanyCode == loggedInUser.CompanyCode
-                      && i.SampleDetails.Any(s => s.PreparationRequired)
+                      && i.SampleDetails.Any(s => s.TestPlans.Any(tp => tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) || tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired))))
 
                 join c in _context.CuttingChargeHeaders
                     on i.ID equals c.InwardID into cuttingJoin
@@ -75,18 +75,18 @@ namespace LIMSApi.Repositories
                     ModifiedBy = e != null ? e.Name : string.Empty,
 
                     // 🔥 Preparation stats
-                    TotalRequired = i.SampleDetails.Count(s => s.PreparationRequired),
+                    TotalRequired = i.SampleDetails.Count(s => s.TestPlans.Any(tp => tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) || tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired)))),
                     CompletedCount = c != null
                         ? _context.CuttingChargeSamples.Count(x => x.CuttingChargeHeaderID == c.ID)
                         : 0,
 
                     // 🔥 Preparation Status
                     PreparationStatus =
-                        i.SampleDetails.Any(s => s.PreparationRequired)
+                        i.SampleDetails.Any(s => s.TestPlans.Any(tp => tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) || tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired))))
                             ? (
                                 _context.CuttingChargeSamples
                                     .Count(x => x.CuttingChargeHeaderID == c.ID)
-                                >= i.SampleDetails.Count(s => s.PreparationRequired)
+                                >= i.SampleDetails.Count(s => s.TestPlans.Any(tp => tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) || tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired))))
                                 ? "Completed"
                                 : "Pending"
                               )
@@ -98,7 +98,7 @@ namespace LIMSApi.Repositories
                     // 🔥 Action status
                     ActionStatus =
                         i.SampleDetails.Any(s =>
-                            s.PreparationRequired &&
+                            s.TestPlans.Any(tp => tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) || tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired))) &&
                             s.SampleStatus == SampleStatus.PREPARATION_COMPLETED.ToString()
                         )
                         ? ActionStatus.COMPLETED.ToString()

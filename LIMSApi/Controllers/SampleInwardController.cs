@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Helpers;
 using LIMSApi.Middleware;
@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Mvc;
 using Twilio.TwiML.Voice;
 
 public record CancelSampleRequest(long SampleDetailId, string Reason);
+public record StopReportRequest(string Reason);
 
 namespace LIMSApi.Controllers
 {
@@ -65,6 +66,14 @@ namespace LIMSApi.Controllers
             return entity == null ? NoContent() : Ok(entity);
         }
 
+        [RequirePermission(Permissions.Inward.Read)]
+        [HttpGet("{id}/lifecycle-summary")]
+        public async Task<IActionResult> GetLifecycleSummary(long id)
+        {
+            var summary = await _SampleInwardService.GetLifecycleSummaryAsync(id);
+            return summary == null ? NotFound(new { message = $"Sample Inward with ID {id} not found." }) : Ok(summary);
+        }
+
 
         [RequirePermission(Permissions.Inward.Update)]
         [HttpPut("update")]
@@ -87,10 +96,24 @@ namespace LIMSApi.Controllers
         }
 
         [HttpPatch("update-prep/{sampleId}")]
+        [RequirePermission(Permissions.Inward.Update)]
         public async Task<IActionResult> UpdateSamplePrep(long sampleId, [FromBody] SamplePrepReviewDto dto)
         {
             await _SampleInwardService.UpdateSamplePrepAsync(sampleId, dto);
             return Ok(new { message = "Preparation details updated." });
+        }
+
+        [HttpPost("complete-sample-preparation/{inwardId}")]
+        [RequirePermission(Permissions.Inward.Update)]
+        public async Task<IActionResult> CompleteSamplePreparation(long inwardId)
+        {
+            var updatedStatus = await _SampleInwardService.CompleteSamplePreparationAsync(inwardId);
+            return Ok(new
+            {
+                message = "Sample preparation completed successfully. Case is now Under Testing.",
+                inwardStatus = updatedStatus,
+                status = updatedStatus
+            });
         }
 
         [HttpPut("plan")]
@@ -210,7 +233,7 @@ namespace LIMSApi.Controllers
             return Ok(new { message = "Sample cancelled successfully." });
         }
 
-        [HttpDelete("delete-sample/{id}")]
+        [HttpPost("delete-sample/{id}")]
         [RequirePermission(Permissions.Inward.Update)]
         public async Task<IActionResult> DeleteSample(long id)
         {
@@ -218,5 +241,70 @@ namespace LIMSApi.Controllers
             return Ok(new { message = "Sample deleted successfully." });
         }
 
+        [HttpPost("stop-report/{inwardId}")]
+        [RequirePermission(Permissions.Inward.Update)]
+        public async Task<IActionResult> StopReport(long inwardId, [FromBody] StopReportRequest request)
+        {
+            await _SampleInwardService.StopReportAsync(inwardId, request.Reason);
+            return Ok(new { message = "Report has been stopped." });
+        }
+
+        [HttpPost("unstop-report/{inwardId}")]
+        [RequirePermission(Permissions.Inward.Update)]
+        public async Task<IActionResult> UnstopReport(long inwardId)
+        {
+            await _SampleInwardService.UnstopReportAsync(inwardId);
+            return Ok(new { message = "Report stop has been removed." });
+        }
+
+        [HttpPost("verify-and-lock-review/{inwardId}")]
+        [RequirePermission(Permissions.Inward.Update)]
+        public async Task<IActionResult> VerifyAndLockReview(long inwardId, [FromBody] VerifyReviewRequestDto? dto = null)
+        {
+            var updatedStatus = await _SampleInwardService.VerifyAndLockReviewOfRequestAsync(inwardId, dto?.Remarks);
+            return Ok(new 
+            { 
+                message = "Review of Request verified and locked successfully.",
+                inwardStatus = updatedStatus,
+                status = updatedStatus
+            });
+        }
+
+        [HttpPost("request-replan")]
+        [RequirePermission(Permissions.Plan.Update)]
+        public async Task<IActionResult> RequestReplan([FromBody] ReplanRequestDto dto)
+        {
+            await _SampleInwardService.RequestReplanAsync(dto.InwardId, dto.Reason);
+            return Ok(new { message = "Re-Plan requested successfully." });
+        }
+
+        [HttpPost("approve-replan")]
+        [RequirePermission(Permissions.Plan.Approve)]
+        public async Task<IActionResult> ApproveReplan([FromBody] ReplanApprovalDto dto)
+        {
+            await _SampleInwardService.ApproveReplanAsync(dto.ReplanRequestId, dto.Remarks);
+            return Ok(new { message = "Re-Plan approved successfully." });
+        }
+
+        [HttpGet("{inwardId}/print-challan")]
+        [RequirePermission(Permissions.Inward.Read)]
+        public async Task<IActionResult> PrintInwardChallan(long inwardId)
+        {
+            try
+            {
+                var pdfBytes = await _SampleInwardService.GenerateInwardChallanPdfAsync(inwardId);
+                if (pdfBytes == null || pdfBytes.Length == 0)
+                    return NotFound("Challan PDF could not be generated.");
+
+                return File(pdfBytes, "application/pdf", $"Inward_Challan_{inwardId}.pdf");
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ex.Message);
+            }
+        }
     }
 }
+
+
+

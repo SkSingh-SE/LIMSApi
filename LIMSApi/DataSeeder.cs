@@ -62,6 +62,7 @@ public static class DataSeeder
             await SeedPriceDimensionTypesAsync(db);
             await SeedFinancialYearsAsync(db);
             await BackfillFinancialYearIdsAsync(db, logger);
+            await FixMachiningChargeMasterConstraintsAsync(db, logger);
 
             // Role-Permission defaults — idempotent, runs every startup to pick up new permissions
             await SeedRolePermissionDefaultsAsync(db, logger);
@@ -159,7 +160,6 @@ public static class DataSeeder
             (N'Bank Master',         NULL, N'/bank',               NULL, N'Administration'),
             (N'Courier Master',      NULL, N'/courier',            NULL, N'Administration'),
             (N'Product Size Master', NULL, N'/product-size-master',NULL, N'Administration'),
-            (N'Chemical Sample Category', NULL, N'/chemical-sample-category', NULL, N'Administration'),
             (N'Analysis Technique',  NULL, N'/analysis-technique', NULL, N'Administration'),
             (N'TPI Master',          NULL, N'/tpi',                NULL, N'Administration'),
             (N'Supplier Master',     NULL, N'/supplier',           NULL, N'Administration'),
@@ -438,11 +438,6 @@ public static class DataSeeder
             ('CanDeleteProductSizeMaster','Delete Product Size','Product Size Master',NULL,'Delete'),
             ('CanManageProductSizeMaster','Manage Product Size','Product Size Master',NULL,'Manage'),
 
-            ('CanReadChemicalSampleCategory','View Chemical Sample Category','Chemical Sample Category',NULL,'Read'),
-            ('CanCreateChemicalSampleCategory','Create Chemical Sample Category','Chemical Sample Category',NULL,'Create'),
-            ('CanUpdateChemicalSampleCategory','Update Chemical Sample Category','Chemical Sample Category',NULL,'Update'),
-            ('CanDeleteChemicalSampleCategory','Delete Chemical Sample Category','Chemical Sample Category',NULL,'Delete'),
-            ('CanManageChemicalSampleCategory','Manage Chemical Sample Category','Chemical Sample Category',NULL,'Manage'),
 
             ('CanReadAnalysisTechnique','View Analysis Technique','Analysis Technique Master',NULL,'Read'),
             ('CanCreateAnalysisTechnique','Create Analysis Technique','Analysis Technique Master',NULL,'Create'),
@@ -517,11 +512,11 @@ public static class DataSeeder
 
             -- 'Product Specification' title exists on BOTH folder (202) and leaf (33).
             -- ParentTitle='Product Specification' picks the leaf (33).
-            ('CanReadProductSpecification','View Product Specification','Product Specification','Product Specification','Read'),
-            ('CanCreateProductSpecification','Create Product Spec','Product Specification','Product Specification','Create'),
-            ('CanUpdateProductSpecification','Update Product Spec','Product Specification','Product Specification','Update'),
-            ('CanDeleteProductSpecification','Delete Product Spec','Product Specification','Product Specification','Delete'),
-            ('CanManageProductSpecification','Manage Product Spec','Product Specification','Product Specification','Manage'),
+            ('CanReadProductMaster','View Product Master','Product Master','Product Master','Read'),
+            ('CanCreateProductMaster','Create Product Master','Product Master','Product Master','Create'),
+            ('CanUpdateProductMaster','Update Product Master','Product Master','Product Master','Update'),
+            ('CanDeleteProductMaster','Delete Product Master','Product Master','Product Master','Delete'),
+            ('CanManageProductMaster','Manage Product Master','Product Master','Product Master','Manage'),
 
             ('CanReadCustomProductSpecification','View Custom Product Specification','Custom Product Specification',NULL,'Read'),
 
@@ -537,6 +532,7 @@ public static class DataSeeder
             ('CanUpdateTestMethodSpecification','Update Test Method Spec','Test Method Specification',NULL,'Update'),
             ('CanDeleteTestMethodSpecification','Delete Test Method Spec','Test Method Specification',NULL,'Delete'),
             ('CanManageTestMethodSpecification','Manage Test Method Spec','Test Method Specification',NULL,'Manage'),
+            ('CanImportTestMethodSpecification','Import Test Method Spec','Test Method Specification',NULL,'Action'),
 
             -- 'Invoice Case' exists under ''Test'' (ID 37) AND under ''Invoice'' (ID 48).
             -- ParentTitle=''Test'' picks ID 37 (permissions side); ID 48 is a UI shortcut with same permissions.
@@ -842,6 +838,10 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
             IF NOT EXISTS (SELECT 1 FROM Configurations WHERE KeyName = N'Entity Type' AND CompanyCode = N'LIMS')
                 INSERT INTO Configurations (KeyName, GroupName, [Value], ValueType, [Description], CreatedBy, CreatedOn, CompanyCode, IsActive)
                 VALUES (N'Entity Type', N'dropdown', N'Request Review|Report Review|Report Amendment|Test Result Verification|Customer Field Change', N'string', N'Entity types used for workflow configuration. Values must match the exact strings used by the workflow engine.', 0, GETUTCDATE(), N'LIMS', 1);
+
+            IF NOT EXISTS (SELECT 1 FROM Configurations WHERE KeyName = N'ProductPrefix' AND CompanyCode = N'LIMS')
+                INSERT INTO Configurations (KeyName, GroupName, [Value], ValueType, [Description], CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'ProductPrefix', N'dropdown', N'Grade|Class|Designation|Type|Series', N'string', N'Product Master Grade Prefix Options', 0, GETUTCDATE(), N'LIMS', 1);
 
             -- Migrate existing installs: rename old short-form TestResult to canonical Test Result Verification
 
@@ -1164,35 +1164,45 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
 
             -- Analysis Technique Master (chemical testing techniques)
             IF NOT EXISTS (SELECT 1 FROM AnalysisTechniqueMasters WHERE Code = N'OES' AND IsActive = 1)
-                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, IsSpectro, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'OES', N'OES (Optical Emission Spectrometry)', N'Optical Emission Spectrometry', 1, 1, 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'OES', N'OES (Optical Emission Spectrometry)', N'Optical Emission Spectrometry', 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM AnalysisTechniqueMasters WHERE Code = N'ICP' AND IsActive = 1)
-                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, IsSpectro, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'ICP', N'ICP (Inductively Coupled Plasma)', N'Inductively Coupled Plasma', 0, 2, 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'ICP', N'ICP (Inductively Coupled Plasma)', N'Inductively Coupled Plasma', 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM AnalysisTechniqueMasters WHERE Code = N'WET' AND IsActive = 1)
-                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, IsSpectro, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'WET', N'Wet Chemical Analysis', N'Wet Chemical Analysis', 0, 3, 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'WET', N'Wet Chemical Analysis', N'Wet Chemical Analysis', 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM AnalysisTechniqueMasters WHERE Code = N'LECO' AND IsActive = 1)
-                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, IsSpectro, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'LECO', N'LECO (Combustion Analysis)', N'LECO Combustion Analysis', 1, 4, 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'LECO', N'LECO (Combustion Analysis)', N'LECO Combustion Analysis', 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM AnalysisTechniqueMasters WHERE Code = N'WDXRF' AND IsActive = 1)
-                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, IsSpectro, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'WDXRF', N'WDXRF (Wavelength Dispersive XRF)', N'Wavelength Dispersive X-Ray Fluorescence', 1, 5, 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'WDXRF', N'WDXRF (Wavelength Dispersive XRF)', N'Wavelength Dispersive X-Ray Fluorescence', 0, GETUTCDATE(), N'LIMS', 1);
             IF NOT EXISTS (SELECT 1 FROM AnalysisTechniqueMasters WHERE Code = N'EDXRF' AND IsActive = 1)
-                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, IsSpectro, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
-                VALUES (N'EDXRF', N'EDXRF (Energy Dispersive XRF)', N'Energy Dispersive X-Ray Fluorescence', 1, 6, 0, GETUTCDATE(), N'LIMS', 1);
+                INSERT INTO AnalysisTechniqueMasters (Code, Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'EDXRF', N'EDXRF (Energy Dispersive XRF)', N'Energy Dispersive X-Ray Fluorescence', 0, GETUTCDATE(), N'LIMS', 1);
 
             -- Chemical Sample Category
-            IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Ferro Alloys' AND IsActive = 1)
-                INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Ferro Alloys', 1, 0, GETUTCDATE(), N'LIMS', 1);
-            IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Pharma' AND IsActive = 1)
-                INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Pharma', 2, 0, GETUTCDATE(), N'LIMS', 1);
-            IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Industrial' AND IsActive = 1)
-                INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Industrial', 3, 0, GETUTCDATE(), N'LIMS', 1);
-            IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'ROHS' AND IsActive = 1)
-                INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'ROHS', 4, 0, GETUTCDATE(), N'LIMS', 1);
-            IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Special Chemicals' AND IsActive = 1)
-                INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Special Chemicals', 5, 0, GETUTCDATE(), N'LIMS', 1);
+            IF OBJECT_ID(N'ChemicalSampleCategories', N'U') IS NOT NULL
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Ferro Alloys' AND IsActive = 1)
+                    INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Ferro Alloys', 1, 0, GETUTCDATE(), N'LIMS', 1);
+                IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Pharma' AND IsActive = 1)
+                    INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Pharma', 2, 0, GETUTCDATE(), N'LIMS', 1);
+                IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Industrial' AND IsActive = 1)
+                    INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Industrial', 3, 0, GETUTCDATE(), N'LIMS', 1);
+                IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'ROHS' AND IsActive = 1)
+                    INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'ROHS', 4, 0, GETUTCDATE(), N'LIMS', 1);
+                IF NOT EXISTS (SELECT 1 FROM ChemicalSampleCategories WHERE Name = N'Special Chemicals' AND IsActive = 1)
+                    INSERT INTO ChemicalSampleCategories (Name, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'Special Chemicals', 5, 0, GETUTCDATE(), N'LIMS', 1);
+            END
+
+            -- Normalize Parameter Types (Mechanical -> Reported, Observation -> Observed)
+            IF OBJECT_ID(N'ParameterMasters', N'U') IS NOT NULL
+            BEGIN
+                UPDATE ParameterMasters SET ParameterType = N'Observed' WHERE ParameterType = N'Observation';
+                UPDATE ParameterMasters SET ParameterType = N'Reported' WHERE ParameterType = N'Mechanical';
+            END
         ");
     }
 
@@ -1378,11 +1388,11 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 "CanReadPlan", "CanReadReview",
                 // Masters typically needed at inward
                 "CanReadCourier", "CanReadTPI", "CanReadCompanyCategory",
-                "CanReadMaterialSpecification", "CanReadProductSpecification",
+                "CanReadMaterialSpecification", "CanReadProductMaster",
                 "CanReadMetalClassification", "CanReadHeatTreatment",
                 "CanReadProductCondition", "CanReadSpecimenOrientation",
                 "CanReadProductForm", "CanReadLaboratoryTest",
-                "CanReadProductSizeMaster", "CanReadChemicalSampleCategory", "CanReadAnalysisTechnique",
+                "CanReadProductSizeMaster", "CanReadAnalysisTechnique",
             },
 
             ["Technical"] = new[]
@@ -1399,7 +1409,7 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 // Reporting read
                 "CanReadReporting",
                 // Most masters read
-                "CanReadMaterialSpecification", "CanReadProductSpecification",
+                "CanReadMaterialSpecification", "CanReadProductMaster",
                 "CanReadLaboratoryTest", "CanReadTestMethodSpecification",
                 "CanReadChemicalParameter", "CanReadMechanicalParameter",
                 "CanReadParameterUnit", "CanReadMetalClassification",
@@ -1407,7 +1417,7 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 "CanReadSpecimenOrientation", "CanReadProductForm",
                 "CanReadDimensionalFactors", "CanReadStandardOrganization",
                 "CanReadEquipment", "CanReadCalibrationAgency",
-                "CanReadProductSizeMaster", "CanReadChemicalSampleCategory", "CanReadAnalysisTechnique",
+                "CanReadProductSizeMaster", "CanReadAnalysisTechnique",
             },
 
             ["Lab"] = new[]
@@ -1460,9 +1470,9 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 "CanReadEquipment", "CanCreateEquipment", "CanUpdateEquipment", "CanDeleteEquipment", "CanManageEquipment",
                 "CanReadCalibrationAgency", "CanCreateCalibrationAgency", "CanUpdateCalibrationAgency", "CanDeleteCalibrationAgency", "CanManageCalibrationAgency",
                 "CanReadMaterialSpecification", "CanCreateMaterialSpecification", "CanUpdateMaterialSpecification", "CanDeleteMaterialSpecification", "CanManageMaterialSpecification",
-                "CanReadProductSpecification", "CanCreateProductSpecification", "CanUpdateProductSpecification", "CanDeleteProductSpecification", "CanManageProductSpecification",
+                "CanReadProductMaster", "CanCreateProductMaster", "CanUpdateProductMaster", "CanDeleteProductMaster", "CanManageProductMaster",
                 "CanReadLaboratoryTest", "CanCreateLaboratoryTest", "CanUpdateLaboratoryTest", "CanDeleteLaboratoryTest", "CanManageLaboratoryTest",
-                "CanReadTestMethodSpecification", "CanCreateTestMethodSpecification", "CanUpdateTestMethodSpecification", "CanDeleteTestMethodSpecification", "CanManageTestMethodSpecification",
+                "CanReadTestMethodSpecification", "CanCreateTestMethodSpecification", "CanUpdateTestMethodSpecification", "CanDeleteTestMethodSpecification", "CanManageTestMethodSpecification", "CanImportTestMethodSpecification",
                 "CanReadChemicalParameter", "CanReadMechanicalParameter", "CanCreateParameter", "CanUpdateParameter", "CanDeleteParameter", "CanManageParameter",
                 "CanReadParameterUnit",
                 "CanReadMetalClassification", "CanCreateMetalClassification", "CanUpdateMetalClassification", "CanDeleteMetalClassification", "CanManageMetalClassification",
@@ -1662,5 +1672,28 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
                 VALUES (N'Algorithm', NULL, 0, N'UserInput', NULL, N'Custom price formula evaluated at runtime (P3 feature)', 21, 0, GETUTCDATE(), N'LIMS', 1);
         ");
+    }
+
+    private static async Task FixMachiningChargeMasterConstraintsAsync(LIMSContext db, ILogger logger)
+    {
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(@"
+                IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_MachiningChargeMasters_LaboratoryTests_LaboratoryTestID')
+                BEGIN
+                    ALTER TABLE [dbo].[MachiningChargeMasters] DROP CONSTRAINT [FK_MachiningChargeMasters_LaboratoryTests_LaboratoryTestID];
+                END
+
+                IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_MachiningChargeMasters_TestMethodSpecifications_TestMethodStandardID')
+                BEGIN
+                    ALTER TABLE [dbo].[MachiningChargeMasters] DROP CONSTRAINT [FK_MachiningChargeMasters_TestMethodSpecifications_TestMethodStandardID];
+                END
+            ");
+            logger.LogInformation("DataSeeder: MachiningChargeMasters foreign key constraints updated to polymorphic references.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "DataSeeder: Exception checking/dropping MachiningChargeMasters constraints (safe to proceed).");
+        }
     }
 }

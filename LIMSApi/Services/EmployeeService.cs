@@ -1,4 +1,4 @@
-﻿using LIMSApi.Data;
+using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
@@ -49,7 +49,19 @@ namespace LIMSApi.Services
                 if (!phoneRegex.IsMatch(model.MobileNo.Trim()))
                     throw new ArgumentException("Invalid mobile number. Must be 10-13 digits.");
             }
-            if (!string.IsNullOrWhiteSpace(model.PANNumber))
+            if (!model.DepartmentID.HasValue || model.DepartmentID.Value <= 0)
+                throw new ArgumentException("Department is required.");
+            if (!model.DesignationID.HasValue || model.DesignationID.Value <= 0)
+                throw new ArgumentException("Designation is required.");
+            if (!model.ReportingManagerID.HasValue || model.ReportingManagerID.Value <= 0)
+                throw new ArgumentException("Reporting Manager is required.");
+            if (model.DateOfBirth == default)
+                throw new ArgumentException("Date of birth is required.");
+            if (model.DateOfJoin == default)
+                throw new ArgumentException("Date of joining is required.");
+            if (string.IsNullOrWhiteSpace(model.PANNumber))
+                throw new ArgumentException("PAN number is required.");
+            else
             {
                 var panRegex = new System.Text.RegularExpressions.Regex(@"^[A-Z]{5}\d{4}[A-Z]{1}$");
                 if (!panRegex.IsMatch(model.PANNumber.Trim().ToUpper()))
@@ -119,7 +131,19 @@ namespace LIMSApi.Services
                 if (!phoneRegex.IsMatch(model.MobileNo.Trim()))
                     throw new ArgumentException("Invalid mobile number. Must be 10-13 digits.");
             }
-            if (!string.IsNullOrWhiteSpace(model.PANNumber))
+            if (!model.DepartmentID.HasValue || model.DepartmentID.Value <= 0)
+                throw new ArgumentException("Department is required.");
+            if (!model.DesignationID.HasValue || model.DesignationID.Value <= 0)
+                throw new ArgumentException("Designation is required.");
+            if (!model.ReportingManagerID.HasValue || model.ReportingManagerID.Value <= 0)
+                throw new ArgumentException("Reporting Manager is required.");
+            if (model.DateOfBirth == default)
+                throw new ArgumentException("Date of birth is required.");
+            if (model.DateOfJoin == default)
+                throw new ArgumentException("Date of joining is required.");
+            if (string.IsNullOrWhiteSpace(model.PANNumber))
+                throw new ArgumentException("PAN number is required.");
+            else
             {
                 var panRegex = new System.Text.RegularExpressions.Regex(@"^[A-Z]{5}\d{4}[A-Z]{1}$");
                 if (!panRegex.IsMatch(model.PANNumber.Trim().ToUpper()))

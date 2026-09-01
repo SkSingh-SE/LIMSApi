@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Services;
 using LIMSApi.Services.Interface;
@@ -80,6 +80,29 @@ namespace LIMSApi.Controllers
         {
             var data = await _invoiceConfigService.GetInvoiceCaseConfigurationDropdown(searchTerm, pageNo, pageSize);
             return data == null ? NoContent() : Ok(data);
+        }
+
+        [HttpPost("validate-condition")]
+        public IActionResult ValidateCondition([FromBody] System.Text.Json.JsonElement requestBody)
+        {
+            try
+            {
+                string? value = requestBody.GetProperty("value").GetString();
+                if (string.IsNullOrWhiteSpace(value))
+                    return Ok(new { isValid = false, type = "Unknown", message = "Value cannot be empty." });
+
+                if (Helpers.ConditionMatcher.IsBaseTier(value))
+                    return Ok(new { isValid = true, type = "BaseTier" });
+
+                if (Helpers.ConditionMatcher.IsOverride(value))
+                    return Ok(new { isValid = true, type = "Override" });
+
+                return Ok(new { isValid = false, type = "Unknown", message = "Value must be a valid condition (e.g., <=1, ==2, >3) or 'override'." });
+            }
+            catch (Exception ex)
+            {
+                return Ok(new { isValid = false, type = "Unknown", message = ex.Message });
+            }
         }
     }
 }

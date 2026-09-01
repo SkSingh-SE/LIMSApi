@@ -35,12 +35,52 @@ namespace LIMSApi.ServiceWORepo
         /// </summary>
         private async Task<InvoiceCase?> GetInvoiceCaseForTestAsync(long laboratoryTestId, DateTime inwardDate)
         {
+            // 1. First check if laboratoryTestId matches AnalysisTypeID
             var versions = await _db.InvoiceCases
-                .Where(ic => ic.LaboratoryTestID == laboratoryTestId && ic.IsActive)
+                .Where(ic => ic.AnalysisTypeID == laboratoryTestId && ic.IsActive)
                 .Include(ic => ic.InvoiceCasePrices)
                     .ThenInclude(p => p.Configuration)
                 .Include(ic => ic.FinancialYearEntity)
                 .ToListAsync();
+
+            // 2. If not found, check direct LaboratoryTestID
+            if (!versions.Any())
+            {
+                versions = await _db.InvoiceCases
+                    .Where(ic => ic.LaboratoryTestID == laboratoryTestId && ic.IsActive)
+                    .Include(ic => ic.InvoiceCasePrices)
+                        .ThenInclude(p => p.Configuration)
+                    .Include(ic => ic.FinancialYearEntity)
+                    .ToListAsync();
+            }
+
+            // 3. If still not found, check if laboratoryTestId is a SubGroup or AnalysisType and find its parent LaboratoryTestID
+            if (!versions.Any())
+            {
+                var subGroup = await _db.LaboratoryTestSubGroups.FirstOrDefaultAsync(sg => sg.ID == laboratoryTestId);
+                if (subGroup != null)
+                {
+                    versions = await _db.InvoiceCases
+                        .Where(ic => ic.LaboratoryTestID == subGroup.LaboratoryTestID && ic.IsActive)
+                        .Include(ic => ic.InvoiceCasePrices)
+                            .ThenInclude(p => p.Configuration)
+                        .Include(ic => ic.FinancialYearEntity)
+                        .ToListAsync();
+                }
+                else
+                {
+                    var analysisType = await _db.LaboratoryTestAnalysisTypes.Include(at => at.SubGroup).FirstOrDefaultAsync(at => at.ID == laboratoryTestId);
+                    if (analysisType?.SubGroup != null)
+                    {
+                        versions = await _db.InvoiceCases
+                            .Where(ic => ic.LaboratoryTestID == analysisType.SubGroup.LaboratoryTestID && ic.IsActive)
+                            .Include(ic => ic.InvoiceCasePrices)
+                                .ThenInclude(p => p.Configuration)
+                            .Include(ic => ic.FinancialYearEntity)
+                            .ToListAsync();
+                    }
+                }
+            }
 
             var invoiceCase = PriceVersionResolver.Resolve(versions, v => v.EffectiveFrom, inwardDate);
 
@@ -108,7 +148,12 @@ namespace LIMSApi.ServiceWORepo
                     .Where(d => d.IsActive)
                     .ToDictionaryAsync(d => d.Name, StringComparer.OrdinalIgnoreCase);
 
-                var breakdown = BuildPriceBreakdown(header.Parameters, pricesToUse, testName, header.Sample, header.PricingDimensionValue, header, dimTypes, labTest);
+                var paramIds = header.Parameters.Select(p => p.ParameterID).ToList();
+                var paramDetailsDict = await _db.ParameterMasters
+                    .Where(p => paramIds.Contains(p.ID) && p.IsActive)
+                    .ToDictionaryAsync(p => p.ID, p => p.ElementType ?? "normal");
+
+                var breakdown = BuildPriceBreakdown(header.Parameters, pricesToUse, testName, header.Sample, header.PricingDimensionValue, header, dimTypes, labTest, paramDetailsDict);
                 calculatedTotal = breakdown.Sum(b => b.Amount);
 
                 if (calculatedTotal == 0)
@@ -159,7 +204,12 @@ namespace LIMSApi.ServiceWORepo
                 .Where(d => d.IsActive)
                 .ToDictionaryAsync(d => d.Name, StringComparer.OrdinalIgnoreCase);
 
-            return BuildPriceBreakdown(header.Parameters, invoiceCase.InvoiceCasePrices, labTest?.Name ?? "Test", header.Sample, header.PricingDimensionValue, header, dimTypes, labTest);
+            var paramIds = header.Parameters.Select(p => p.ParameterID).ToList();
+            var paramDetailsDict = await _db.ParameterMasters
+                .Where(p => paramIds.Contains(p.ID) && p.IsActive)
+                .ToDictionaryAsync(p => p.ID, p => p.ElementType ?? "normal");
+
+            return BuildPriceBreakdown(header.Parameters, invoiceCase.InvoiceCasePrices, labTest?.Name ?? "Test", header.Sample, header.PricingDimensionValue, header, dimTypes, labTest, paramDetailsDict);
         }
 
         /// <inheritdoc />
@@ -545,7 +595,8 @@ namespace LIMSApi.ServiceWORepo
             string? dimensionOverride = null,
             TestResultHeader? header = null,
             IReadOnlyDictionary<string, PriceDimensionType>? dimTypes = null,
-            LaboratoryTest? labTest = null)
+            LaboratoryTest? labTest = null,
+            Dictionary<long, string>? paramDetailsDict = null)
         {
             var breakdown = new List<PriceBreakdownDto>();
 
@@ -745,47 +796,104 @@ namespace LIMSApi.ServiceWORepo
                     }
                 }
 
-                // --- GROUP 2d: Fixed + Algorithm pricing ---
-                var fixedAlgoTypes = new[] { "FixedWithAlgorithm" };
-                var fixedAlgoPrices = dimensionalPrices.Where(p =>
-                    fixedAlgoTypes.Contains(p.Configuration!.SelectionType, StringComparer.OrdinalIgnoreCase)).ToList();
+                // --- GROUP 2d: Element Count Formula pricing ---
+                var ecfPrices = dimensionalPrices.Where(p =>
+                    string.Equals(p.Configuration!.SelectionType, "ElementCountFormula", StringComparison.OrdinalIgnoreCase)).ToList();
 
-                foreach (var fap in fixedAlgoPrices)
+                if (ecfPrices.Any())
                 {
-                    var basePrice = fap.Price;
-                    decimal additional = 0;
+                    var elementCount = billableParams.Count;
+                    var baseTierPrices = ecfPrices.Where(p => Helpers.ConditionMatcher.IsBaseTier(p.Configuration!.Value)).ToList();
+                    var overridePrices = ecfPrices.Where(p => Helpers.ConditionMatcher.IsOverride(p.Configuration!.Value)).ToList();
 
-                    // If config Value contains a formula, evaluate it using parameter values
-                    var formula = fap.Configuration!.Value;
-                    if (!string.IsNullOrWhiteSpace(formula) && !decimal.TryParse(formula, out _))
+                    // Match Base Tier
+                    var matchedBase = baseTierPrices
+                        .FirstOrDefault(p => Helpers.ConditionMatcher.MatchesCount(p.Configuration!.Value, elementCount));
+
+                    int baseCountLimit = 0;
+                    if (matchedBase != null)
                     {
-                        var variables = new Dictionary<string, double>();
-                        foreach (var param in billableParams)
+                        baseCountLimit = Helpers.ConditionMatcher.ParseCountLimit(matchedBase.Configuration!.Value);
+                        breakdown.Add(new PriceBreakdownDto
                         {
-                            if (param.Value.HasValue && !string.IsNullOrWhiteSpace(param.ParameterName))
-                            {
-                                var key = param.ParameterName.Trim().Replace(" ", "_");
-                                variables[key] = (double)param.Value.Value;
-                            }
-                        }
-
-                        var evaluator = new Helpers.FormulaEvaluator();
-                        var result = evaluator.Evaluate(formula, variables);
-                        if (result.HasValue)
-                            additional = (decimal)result.Value;
+                            ParameterId = 0,
+                            ParameterName = $"{matchedBase.Configuration!.Name} ({elementCount} elements)",
+                            UnitPrice = matchedBase.Price,
+                            Quantity = 1,
+                            Amount = matchedBase.Price
+                        });
                     }
 
-                    var total = basePrice + additional;
-                    breakdown.Add(new PriceBreakdownDto
+                    // Get Unit Deduction (from ==1 or <=1 tier)
+                    decimal baseUnitDeduction = 0;
+                    var oneElementTier = baseTierPrices.FirstOrDefault(t => Helpers.ConditionMatcher.ParseCountLimit(t.Configuration!.Value) == 1);
+                    if (oneElementTier != null)
                     {
-                        ParameterId = 0,
-                        ParameterName = additional > 0
-                            ? $"{fap.Name ?? fap.Configuration!.Name} (Base:{basePrice} + Calc:{additional})"
-                            : fap.Name ?? fap.Configuration!.Name ?? "Fixed Fee",
-                        UnitPrice = total,
-                        Quantity = 1,
-                        Amount = total
-                    });
+                        baseUnitDeduction = oneElementTier.Price;
+                    }
+
+                    // Apply Overrides with Subsumed Deductions
+                    var specialOrSuperParamIds = paramDetailsDict != null
+                        ? paramDetailsDict
+                            .Where(kv => string.Equals(kv.Value, "special", StringComparison.OrdinalIgnoreCase) ||
+                                         string.Equals(kv.Value, "super", StringComparison.OrdinalIgnoreCase))
+                            .Select(kv => kv.Key)
+                            .ToList()
+                        : new List<long>();
+
+                    var selectedElementParamIds = billableParams.Select(p => p.ParameterID).ToList();
+                    var sortedSelectedParamIds = selectedElementParamIds.OrderBy(id => {
+                        bool isOverride = overridePrices.Any(op => {
+                            var cfg = op.Configuration!;
+                            if (string.IsNullOrEmpty(cfg.OverrideParameterIDs))
+                                return specialOrSuperParamIds.Contains(id);
+                            var ids = cfg.OverrideParameterIDs.Split(',').Select(idStr => long.TryParse(idStr.Trim(), out var pId) ? pId : 0).ToList();
+                            return ids.Contains(id);
+                        });
+                        return isOverride ? 1 : 0;
+                    }).ToList();
+
+                    for (int i = 0; i < sortedSelectedParamIds.Count; i++)
+                    {
+                        long paramId = sortedSelectedParamIds[i];
+
+                        // 1. Check for specific override config
+                        var op = overridePrices.FirstOrDefault(o => {
+                            var cfg = o.Configuration!;
+                            if (string.IsNullOrEmpty(cfg.OverrideParameterIDs)) return false;
+                            var ids = cfg.OverrideParameterIDs.Split(',').Select(idStr => long.TryParse(idStr.Trim(), out var pId) ? pId : 0).ToList();
+                            return ids.Contains(paramId);
+                        });
+
+                        // 2. Fallback to wildcard override if param is special/super
+                        if (op == null && specialOrSuperParamIds.Contains(paramId))
+                        {
+                            op = overridePrices.FirstOrDefault(o => string.IsNullOrEmpty(o.Configuration!.OverrideParameterIDs));
+                        }
+
+                        if (op != null)
+                        {
+                            int position = i + 1;
+                            decimal finalAmount = op.Price;
+                            string labelExt = "";
+
+                            // Subsume deduction if within base limit
+                            if (position <= baseCountLimit)
+                            {
+                                finalAmount -= baseUnitDeduction;
+                                labelExt = $" (Subsumed -{baseUnitDeduction})";
+                            }
+
+                            breakdown.Add(new PriceBreakdownDto
+                            {
+                                ParameterId = paramId,
+                                ParameterName = $"{op.Configuration!.Name} (Override Surcharge){labelExt}",
+                                UnitPrice = finalAmount,
+                                Quantity = 1,
+                                Amount = finalAmount
+                            });
+                        }
+                    }
                 }
 
                 // --- GROUP 2e: Standard range/slab pricing (remaining dimensional prices) ---
@@ -796,7 +904,7 @@ namespace LIMSApi.ServiceWORepo
                 var handledTypes = quantitySelectionTypes
                     .Concat(daysSelectionTypes)
                     .Concat(sizeLoadTypes)
-                    .Concat(fixedAlgoTypes)
+                    .Concat(new[] { "ElementCountFormula" })
                     .Concat(new[] { "Element", "SpectroCombination", "FlatRate" })
                     .ToArray();
 

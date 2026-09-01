@@ -1,4 +1,4 @@
-﻿using System.Runtime.ConstrainedExecution;
+using System.Runtime.ConstrainedExecution;
 using System.Security.Claims;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
@@ -662,10 +662,10 @@ namespace LIMSApi.Services
             switch (action)
             {
                 case WorkflowActions.Next:
-                    // Fix 2A — exclude cancelled samples from status advancement
                     foreach (var d in inward.SampleDetails.Where(s => s.IsActive && !s.IsCancelled))
                     {
-                        var status = d.PreparationRequired
+                        var hasPrep = d.TestPlans.Any(tp => tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) || tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired)));
+                        var status = hasPrep
                             ? SampleStatus.PREPARATION_REQUIRED
                             : SampleStatus.REQUEST_APPROVED;
 

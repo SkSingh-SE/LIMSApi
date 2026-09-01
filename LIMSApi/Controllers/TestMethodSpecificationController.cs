@@ -238,5 +238,35 @@ namespace LIMSApi.Controllers
             await _testMethodService.SetDefaultVersion(dto.SpecificationId, dto.VersionId);
             return Ok(new { status = "success", message = "Default version set successfully." });
         }
+
+        [HttpGet("versions/dropdown")]
+        public async Task<IActionResult> GetTestMethodSpecificationVersionDropdown(string? searchTerm, int pageNo, int pageSize, [FromQuery] long metalId = 0)
+        {
+            var data = await _testMethodService.GetTestMethodSpecificationVersionDropdown(searchTerm, pageNo, pageSize, metalId);
+            return data == null ? NoContent() : Ok(data);
+        }
+
+        [HttpPost("validate-import")]
+        [RequirePermission(Permissions.TestMethodSpecification.Import)]
+        public async Task<IActionResult> ValidateImport([FromBody] BulkImportRequestDto request)
+        {
+            var results = await _testMethodService.ValidateImport(request.Items);
+            return Ok(results);
+        }
+
+        [HttpPost("bulk-import")]
+        [RequirePermission(Permissions.TestMethodSpecification.Import)]
+        public async Task<IActionResult> BulkImport([FromBody] BulkImportRequestDto request)
+        {
+            var result = await _testMethodService.BulkImport(request.Items);
+            return Ok(result);
+        }
+
+        [HttpGet("standard-organizations")]
+        public async Task<IActionResult> GetAllStandardOrganizations()
+        {
+            var data = await _testMethodService.GetAllStandardOrganizations();
+            return Ok(data);
+        }
     }
 }

@@ -1,4 +1,4 @@
-﻿using LIMSApi.Data;
+using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Helpers.Enums;
@@ -474,7 +474,7 @@ namespace LIMSApi.ServiceWORepo
                         if (finalPrice <= 0) continue;
 
                         var labTest = await _db.LaboratoryTests.FindAsync(header.LaboratoryTestID);
-                        var description = labTest?.SubGroup ?? "Test";
+                        var description = labTest?.Name ?? "Test";
                         if (header.SequenceNo > 1 || testHeaders.Count(h => h.LaboratoryTestID == header.LaboratoryTestID) > 1)
                             description += $" - Specimen {header.SequenceNo}";
 

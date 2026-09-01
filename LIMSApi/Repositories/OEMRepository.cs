@@ -1,4 +1,4 @@
-﻿using System.Linq.Dynamic.Core;
+using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -51,7 +51,37 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllOEMs(PageFilter filter)
         {
-            var _query = from c in _context.OEMMasters where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c;
+            var _query = from c in _context.OEMMasters
+                         join empMod in _context.EmployeeMasters on c.ModifiedBy equals empMod.ID into empModGroup
+                         from empMod in empModGroup.DefaultIfEmpty()
+                         join empCre in _context.EmployeeMasters on c.CreatedBy equals empCre.ID into empCreGroup
+                         from empCre in empCreGroup.DefaultIfEmpty()
+                         where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
+                         select new
+                         {
+                             c.ID,
+                             c.Name,
+                             c.ContactPerson1,
+                             c.ContactPerson2,
+                             c.ContactPerson3,
+                             c.ContactNo1,
+                             c.ContactNo2,
+                             c.ContactNo3,
+                             c.EmailId1,
+                             c.EmailId2,
+                             c.EmailId3,
+                             c.Address,
+                             c.AgreementFilePath,
+                             c.FileName,
+                             c.SupplierApproved,
+                             c.IsBlacklisted,
+                             c.ReasonForBlacklisting,
+                             c.CreatedBy,
+                             CreatedByName = empCre != null ? empCre.Name : "-",
+                             c.CreatedOn,
+                             ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : "-"),
+                             ModifiedOn = c.ModifiedOn ?? c.CreatedOn
+                         };
 
             _query = _query.AsQueryable().ApplyFilters(filter.Filter);
 

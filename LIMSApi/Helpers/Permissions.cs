@@ -86,6 +86,25 @@ namespace LIMSApi.Helpers
             public const string Manage = "CanManageProductSizeMaster";
         }
 
+
+        public static class AnalysisTechnique
+        {
+            public const string Read   = "CanReadAnalysisTechnique";
+            public const string Create = "CanCreateAnalysisTechnique";
+            public const string Update = "CanUpdateAnalysisTechnique";
+            public const string Delete = "CanDeleteAnalysisTechnique";
+            public const string Manage = "CanManageAnalysisTechnique";
+        }
+
+        public static class LaboratoryTestSubType
+        {
+            public const string Read   = "CanReadLaboratoryTestSubType";
+            public const string Create = "CanCreateLaboratoryTestSubType";
+            public const string Update = "CanUpdateLaboratoryTestSubType";
+            public const string Delete = "CanDeleteLaboratoryTestSubType";
+            public const string Manage = "CanManageLaboratoryTestSubType";
+        }
+
         public static class TPI
         {
             public const string Read   = "CanReadTPI";
@@ -254,22 +273,13 @@ namespace LIMSApi.Helpers
             public const string Manage = "CanManageMaterialSpecification";
         }
 
-        public static class ProductSpecification
+        public static class ProductMaster
         {
-            public const string Read   = "CanReadProductSpecification";
-            public const string Create = "CanCreateProductSpecification";
-            public const string Update = "CanUpdateProductSpecification";
-            public const string Delete = "CanDeleteProductSpecification";
-            public const string Manage = "CanManageProductSpecification";
-        }
-
-        public static class ProductSpecificationGrade
-        {
-            public const string Read   = "CanReadProductSpecificationGrade";
-            public const string Create = "CanCreateProductSpecificationGrade";
-            public const string Update = "CanUpdateProductSpecificationGrade";
-            public const string Delete = "CanDeleteProductSpecificationGrade";
-            public const string Manage = "CanManageProductSpecificationGrade";
+            public const string Read   = "CanReadProductMaster";
+            public const string Create = "CanCreateProductMaster";
+            public const string Update = "CanUpdateProductMaster";
+            public const string Delete = "CanDeleteProductMaster";
+            public const string Manage = "CanManageProductMaster";
         }
 
         public static class LaboratoryTest
@@ -288,6 +298,7 @@ namespace LIMSApi.Helpers
             public const string Update = "CanUpdateTestMethodSpecification";
             public const string Delete = "CanDeleteTestMethodSpecification";
             public const string Manage = "CanManageTestMethodSpecification";
+            public const string Import = "CanImportTestMethodSpecification";
         }
 
         public static class TestMethodStandard

@@ -1,4 +1,4 @@
-﻿using System.Linq.Dynamic.Core;
+using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -38,7 +38,7 @@ namespace LIMSApi.Repositories
         public async Task<ParameterUnitMaster?> GetParameterUnitById(long id)
         {
             return await _context.ParameterUnitMasters
-                .Include(x => x.Equivalents)
+                .Include(x => x.Equivalents.Where(e => e.IsActive).OrderBy(e => e.DisplayOrder))
                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
         }
 
@@ -50,15 +50,15 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllParameterUnits(PageFilter filter)
         {
-            var _query = (from c in _context.ParameterUnitMasters where c.IsActive select c).AsQueryable().ApplyFilters(filter.Filter);
-
+            var _query = (from c in _context.ParameterUnitMasters.AsNoTracking() where c.IsActive select c).AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim();
                 _query = _query.Where(x =>
                     (x.Name != null && x.Name.Contains(search))
-                    || (x.ConversaionFactor != null && x.ConversaionFactor.Contains(search))
+                    || (x.ConversionFactor != null && x.ConversionFactor.ToString().Contains(search))
+                    || x.Equivalents.Any(e => e.IsActive && e.Name.Contains(search))
                 );
             }
             if (filter.SortByColumn != null)
@@ -66,7 +66,30 @@ namespace LIMSApi.Repositories
                 _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
             }
 
-            return await _query.Cast<object>().ToPagedAsync(filter);
+            var projected = _query.Select(x => new
+            {
+                x.ID,
+                x.Name,
+                x.ConversionFactor,
+                x.CreatedBy,
+                x.CreatedOn,
+                x.ModifiedBy,
+                x.ModifiedOn,
+                x.IsActive,
+                Equivalents = x.Equivalents
+                    .Where(e => e.IsActive)
+                    .OrderBy(e => e.DisplayOrder)
+                    .Select(e => new
+                    {
+                        e.ID,
+                        e.Name,
+                        e.ConversionFactor,
+                        e.DisplayOrder,
+                        e.IsActive
+                    }).ToList()
+            });
+
+            return await projected.Cast<object>().ToPagedAsync(filter);
         }
 
         public async Task<List<DropdwonSelector>> GetParameterUnitDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
@@ -97,6 +120,91 @@ namespace LIMSApi.Repositories
             })).ToListAsync();
 
             return data;
+        }
+
+        public async Task<List<GroupedUnitDropdownOption>> GetGroupedParameterUnitDropdown(string? searchTerm, int pageNo = 0, int pageSize = 50)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var query = _context.ParameterUnitMasters
+                .AsNoTracking()
+                .Include(x => x.Equivalents)
+                .Where(x => x.IsActive);
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    query = query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    query = query.Where(x =>
+                        (x.Name != null && x.Name.Contains(search)) ||
+                        x.Equivalents.Any(e => e.IsActive && e.Name != null && e.Name.Contains(search))
+                    );
+                }
+            }
+
+            var baseUnits = await query
+                .OrderBy(x => x.Name)
+                .Skip(pageNo * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            var result = new List<GroupedUnitDropdownOption>();
+
+            foreach (var baseUnit in baseUnits)
+            {
+                var activeEquivalents = baseUnit.Equivalents
+                    .Where(e => e.IsActive)
+                    .OrderBy(e => e.DisplayOrder ?? int.MaxValue)
+                    .ThenBy(e => e.Name)
+                    .ToList();
+
+                // 1. Group Header Item (Id = 0 so it never matches Unit ID lookups)
+                result.Add(new GroupedUnitDropdownOption
+                {
+                    Id = 0,
+                    Name = baseUnit.Name.ToUpper(),
+                    GroupName = baseUnit.Name,
+                    IsHeader = true,
+                    IsChild = false,
+                    IsBase = false
+                });
+
+                // 2. Base Unit Option
+                result.Add(new GroupedUnitDropdownOption
+                {
+                    Id = baseUnit.ID,
+                    EquivalentId = null,
+                    Name = baseUnit.Name,
+                    GroupName = baseUnit.Name,
+                    IsHeader = false,
+                    IsChild = true,
+                    IsBase = true,
+                    ConversionFactor = baseUnit.ConversionFactor
+                });
+
+                // 3. Child Equivalent Options
+                foreach (var eq in activeEquivalents)
+                {
+                    result.Add(new GroupedUnitDropdownOption
+                    {
+                        Id = baseUnit.ID,
+                        EquivalentId = eq.ID,
+                        Name = eq.Name,
+                        GroupName = baseUnit.Name,
+                        IsHeader = false,
+                        IsChild = true,
+                        IsBase = false,
+                        ConversionFactor = eq.ConversionFactor
+                    });
+                }
+            }
+
+            return result;
         }
 
         public async Task<bool> ExistsByName(string name)

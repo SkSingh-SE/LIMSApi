@@ -1,4 +1,4 @@
-﻿
+
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -96,9 +96,9 @@ namespace LIMSApi.Repositories
 
                 var cuttingAmount = cuttingHeader?.GrandTotal ?? 0;
 
-                var machiningAmount = await _context.SampleDetails
-                    .Where(x => x.InwardID == inwardId && x.MachiningRequired)
-                    .SumAsync(x => x.MachiningAmount + x.OtherPreparationCharge);
+                var machiningAmount = await _context.MachiningChargeItems
+                    .Where(x => _context.SampleDetails.Any(s => s.ID == x.SampleID && s.InwardID == inwardId) && x.IsActive)
+                    .SumAsync(x => (decimal?)x.Amount) ?? 0;
 
                 // ===========================
                 //  4. LAB TEST CHARGES (FULLY IMPLEMENTED)
@@ -485,9 +485,9 @@ namespace LIMSApi.Repositories
             int usedElements,
             DateTime inwardDate)
         {
-            // Get all InvoiceCaseConfigurations linked to this LaboratoryTest
-            var configs = await _context.LaboratoryTestInvoiceCase
-                .Where(lt => lt.LabTestID == laboratoryTestId)
+            // Get all InvoiceCaseConfigurations linked to this Chemical Test's AnalysisType
+            var configs = await _context.LaboratoryTestAnalysisTypeInvoiceCases
+                .Where(lt => lt.LaboratoryTestAnalysisTypeID == chemicalTest.LaboratoryTestAnalysisTypeID)
                 .Include(lt => lt.InvoiceCaseConfiguration)
                 .Where(lt => lt.InvoiceCaseConfiguration != null && lt.InvoiceCaseConfiguration.IsActive)
                 .Select(lt => lt.InvoiceCaseConfiguration!)

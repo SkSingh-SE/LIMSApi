@@ -56,7 +56,6 @@ namespace LIMSApi.Repositories
                 var search = filter.searchTerm.Trim();
                 _query = _query.Where(x =>
                     (x.Name != null && x.Name.Contains(search))
-                    || (x.NumberType != null && x.NumberType.Contains(search))
                 );
             }
 
@@ -89,13 +88,12 @@ namespace LIMSApi.Repositories
 
             var skip = pageNo * pageSize;
 
-            var items = await _query.Skip(skip).Take(pageSize).Select(x => new { x.ID, x.Name, x.NumberType }).ToListAsync();
+            var items = await _query.Skip(skip).Take(pageSize).Select(x => new { x.ID, x.Name }).ToListAsync();
 
             var data = items.Select(x => new DropdwonSelector
             {
                 Id = x.ID,
-                Name = x.Name,
-                AdditionalValues = new Dictionary<string, object> { { "numberType", x.NumberType ?? "None" } }
+                Name = x.Name
             }).ToList();
 
             return data;

@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using LIMSApi.Models;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -42,6 +42,8 @@ namespace LIMSApi.Dtos
         public string? RequestFileName { get; set; }
         public long? UploadReferenceID { get; set; } = null;
         public string Status { get; set; } = "Sample Received";
+        public bool IsReportStopped { get; set; } = false;
+        public string? StopReportReason { get; set; }
         public DateTime CollectionTime { get; set; } = DateTime.Now;
         public string ReviewStatus { get; set; } = "Pending";
         public long? ReviewedBy { get; set; }
@@ -88,18 +90,18 @@ namespace LIMSApi.Dtos
     public class PartyAddressDto
     {
         public long ID { get; set; }
-        public long ContactPersonID { get; set; }
-        public string ContactPersonName { get; set; }
-        public string Address { get; set; }
-        public string PinCode { get; set; }
-        public string Area { get; set; }
-        public string City { get; set; }
-        public string State { get; set; }
-        public string Country { get; set; }
-        public string Type { get; set; }
+        public long? ContactPersonID { get; set; }
+        public string? ContactPersonName { get; set; } = string.Empty;
+        public string? Address { get; set; } = string.Empty;
+        public string? PinCode { get; set; } = string.Empty;
+        public string? Area { get; set; } = string.Empty;
+        public string? City { get; set; } = string.Empty;
+        public string? State { get; set; } = string.Empty;
+        public string? Country { get; set; } = string.Empty;
+        public string? Type { get; set; } = string.Empty;
         public long InwardID { get; set; }
-        public string EmailId { get; set; } = string.Empty;
-        public string MobileNo { get; set; } = string.Empty;
+        public string? EmailId { get; set; } = string.Empty;
+        public string? MobileNo { get; set; } = string.Empty;
         public long? CustomerID { get; set; }
     }
 
@@ -132,6 +134,7 @@ namespace LIMSApi.Dtos
         public decimal? OtherPreparationCharge { get; set; }
         public bool TpiRequired { get; set; }
         public long? TpiAgencyID { get; set; }
+        public string? TpiInspectorsJson { get; set; }
         public string? Specimen { get; set; }
         public string? TestInstructions { get; set; }
 
@@ -152,6 +155,18 @@ namespace LIMSApi.Dtos
         public decimal? Diameter { get; set; }
         public decimal? Width { get; set; }
         public decimal? Length { get; set; }
+
+        // Product Master & Size Cascade linkage
+        public long? ProductMasterID { get; set; }
+        public string? ProductMasterName { get; set; }
+        public long? ProductSizeMasterID { get; set; }
+        public long? ProductSizeID { get; set; }
+        public string? ProductSizeName { get; set; }
+        public long? SpecificationGradeID { get; set; }
+        public bool IsUnknownSample { get; set; }
+        public long? AssignedGradeID { get; set; }
+        public string? AssignedGradeName { get; set; }
+        public string? AssignedGradeNote { get; set; }
 
         public ICollection<SampleAdditionalDetailDto> AdditionalDetails { get; set; } = new List<SampleAdditionalDetailDto>();
         public ICollection<SampleTestPlanDto> TestPlans { get; set; } = new List<SampleTestPlanDto>();
@@ -177,8 +192,23 @@ namespace LIMSApi.Dtos
         public long? ApprovedById { get; set; }
         public string? ApprovedByName { get; set; }
         public DateTime? ApprovedAt { get; set; }
+        public List<PlanHistoryDto> PlanHistories { get; set; } = new();
         public List<GeneralTestDto> GeneralTests { get; set; } = new();
         public List<ChemicalTestDto> ChemicalTests { get; set; } = new();
+    }
+
+    public class PlanHistoryDto
+    {
+        public long Id { get; set; }
+        public long PlanId { get; set; }
+        public int Version { get; set; }
+        public string Action { get; set; } = string.Empty;
+        public string ChangeType { get; set; } = string.Empty;
+        public long? CreatedBy { get; set; }
+        public string? CreatedByName { get; set; }
+        public DateTime CreatedOn { get; set; }
+        public string? Remarks { get; set; }
+        public string? ChangedFieldsJson { get; set; }
     }
 
     public class GeneralTestDto
@@ -188,6 +218,8 @@ namespace LIMSApi.Dtos
         public string? SampleNo { get; set; }
         public long? Specification1 { get; set; }
         public long? Specification2 { get; set; }
+        public long? LaboratoryTestSubGroupID { get; set; }
+        public string? SubGroupName { get; set; }
         public List<GeneralTestMethodDto> Methods { get; set; } = new();
     }
 
@@ -201,8 +233,28 @@ namespace LIMSApi.Dtos
         public string? ReportNo { get; set; }
         public string? UlrNo { get; set; }
         public bool Cancel { get; set; }
+        public bool PreparationRequired { get; set; }
         public long? StandardID { get; set; }
         public string? StandardName { get; set; }
+    }
+
+    public class ChemicalTestMethodDto
+    {
+        public long ID { get; set; }
+        public long ChemicalTestID { get; set; }
+        public long? TestMethodID { get; set; }
+        public long? LaboratoryTestAnalysisTypeID { get; set; }
+        public string? AnalysisTypeName { get; set; }
+        public List<string> TechniqueCodes { get; set; } = new();
+        public List<string> TechniqueNames { get; set; } = new();
+        public long? TestMethodSpecificationID { get; set; }
+        public long? StandardID { get; set; }
+        public string? StandardName { get; set; }
+        public int Quantity { get; set; } = 1;
+        public string? ReportNo { get; set; }
+        public string? UlrNo { get; set; }
+        public bool Cancel { get; set; }
+        public bool PreparationRequired { get; set; }
     }
 
     public class ChemicalTestDto
@@ -212,11 +264,21 @@ namespace LIMSApi.Dtos
         public string? SampleNo { get; set; }
         public string? ReportNo { get; set; } = "";
         public string? UlrNo { get; set; } = "";
-        public List<long> TestTypeIds { get; set; } = new();
+        public List<long> AnalysisTypeIds { get; set; } = new();
+        public List<long> TestTypeIds
+        {
+            get => AnalysisTypeIds;
+            set => AnalysisTypeIds = value ?? new();
+        }
+        public List<string> TechniqueCodes { get; set; } = new();
+        public List<string> TechniqueNames { get; set; } = new();
+        public long? LaboratoryTestAnalysisTypeID { get; set; }
+        public string? AnalysisTypeName { get; set; }
         public long? MetalClassificationID { get; set; }
         public string? MetalClassificationName { get; set; }
         public long? Specification1 { get; set; }
         public long? Specification2 { get; set; }
+        public List<ChemicalTestMethodDto> Methods { get; set; } = new();
         public List<ChemicalTestElementDto> Elements { get; set; } = new();
     }
 
@@ -225,12 +287,21 @@ namespace LIMSApi.Dtos
         public long ID { get; set; }
         public long ChemicalTestID { get; set; }
         public long ParameterID { get; set; }
-        public long SpecificationLineID { get; set; }
+        public string? ParameterName { get; set; }
+        public long? SpecificationLineID { get; set; }
+        public long? LaboratoryTestAnalysisTypeID { get; set; }
+        public string? LaboratoryTestAnalysisTypeName { get; set; }
+        public string? AnalysisTypeName
+        {
+            get => LaboratoryTestAnalysisTypeName;
+            set => LaboratoryTestAnalysisTypeName = value;
+        }
+        public string? SourceType { get; set; } // "Specification", "AnalysisType", "MachineSpectro"
         public long ParameterUnitID { get; set; }
-        public string ParameterUnit { get; set; }
+        public string ParameterUnit { get; set; } = "";
         public decimal? MinValue { get; set; }
         public decimal? MaxValue { get; set; }
-        public bool Selected { get; set; }
+        public bool Selected { get; set; } = true;
     }
 
     public enum SampleWorkflowStatus
@@ -283,5 +354,38 @@ namespace LIMSApi.Dtos
         public string? TestInstructions { get; set; }
         public bool TpiRequired { get; set; }
         public long? TpiAgencyID { get; set; }
+        public string? TpiInspectorsJson { get; set; }
+
+        // Cutting & Stage 3 parameters
+        public int? NumberOfCuts { get; set; }
+        public decimal? CutThickness { get; set; }
+        public decimal? WaterJetCuttingMins { get; set; }
+        public string? EdmCutting { get; set; }
+        public string? GasCutting { get; set; }
+        public string? SpecialCutting { get; set; }
+        public decimal? MachiningChargesTotal { get; set; }
+        public decimal? CuttingChargesTotal { get; set; }
+        public decimal? OtherChargesTotal { get; set; }
+        public List<SampleTestPrepItemDto>? Tests { get; set; } = new();
+    }
+
+    public class SampleTestPrepItemDto
+    {
+        public long TestId { get; set; }
+        public string? TestName { get; set; }
+        public long? SpecimenPreparationMasterID { get; set; }
+        public string? SpecimenSize { get; set; }
+        public string? SpecimenRawMaterialSize { get; set; }
+        public decimal? MachiningRate { get; set; }
+        public decimal? CuttingRate { get; set; }
+        public bool RequiresCutting { get; set; }
+        public bool NoTesting { get; set; }
+    }
+
+    public class VerifyReviewRequestDto
+    {
+        public string? Remarks { get; set; }
     }
 }
+
+

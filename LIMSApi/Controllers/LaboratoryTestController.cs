@@ -1,13 +1,10 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Helpers;
 using LIMSApi.Middleware;
 using LIMSApi.Services.Interface;
-using MailKit.Search;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Controllers
 {
@@ -30,16 +27,13 @@ namespace LIMSApi.Controllers
             return Ok(await _testMethodService.FetchTestMethodList(filter));
         }
 
-
         [RequirePermission(Permissions.LaboratoryTest.Read)]
         [HttpGet("details/{id}")]
         public async Task<ActionResult<LaboratoryTest>> GetTestMethodMaster(long id)
         {
             var entity = await _testMethodService.GetTestMethodDetails(id);
-
             return entity == null ? NoContent() : Ok(entity);
         }
-
 
         [RequirePermission(Permissions.LaboratoryTest.Update)]
         [HttpPut("update")]
@@ -49,7 +43,8 @@ namespace LIMSApi.Controllers
             return Ok(new
             {
                 status = "success",
-                message = $"TestMethod '{model.Name}' updated successfully."
+                message = $"TestMethod '{model.Name}' updated successfully.",
+                id = model.ID
             });
         }
 
@@ -61,7 +56,8 @@ namespace LIMSApi.Controllers
             return Ok(new
             {
                 status = "success",
-                message = $"TestMethod '{model.Name}' created successfully."
+                message = $"TestMethod '{model.Name}' created successfully.",
+                id = model.ID
             });
         }
 
@@ -103,6 +99,13 @@ namespace LIMSApi.Controllers
             return data == null ? NoContent(): Ok(data);
         }
 
+        [HttpGet("unified-dropdown")]
+        public async Task<IActionResult> GetUnifiedTestMethodDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            var data = await _testMethodService.GetUnifiedTestMethodDropdown(searchTerm, pageNo, pageSize);
+            return data == null ? NoContent() : Ok(data);
+        }
+
         [HttpGet("distinct-names")]
         public async Task<IActionResult> GetDistinctTestNames(string? searchTerm, int pageSize = 20)
         {
@@ -115,8 +118,34 @@ namespace LIMSApi.Controllers
         {
             var data = await _testMethodService.GetTestCases(testMethodId);
             return data == null ? NoContent() : Ok(data);
-
         }
 
+        [RequirePermission(Permissions.LaboratoryTest.Create)]
+        [HttpPost("duplicate/{id}")]
+        public async Task<IActionResult> DuplicateTestMethod(long id)
+        {
+            var duplicatedId = await _testMethodService.DuplicateLaboratoryTest(id);
+            return Ok(new
+            {
+                status = "success",
+                message = "Laboratory Test duplicated successfully.",
+                id = duplicatedId
+            });
+        }
+
+        [RequirePermission(Permissions.LaboratoryTest.Read)]
+        [HttpGet("pricing-template/{labTestId}")]
+        public async Task<IActionResult> GetPricingTemplate(long labTestId, [FromQuery] long? analysisTypeId = null)
+        {
+            var data = await _testMethodService.GetPricingTemplate(labTestId, analysisTypeId);
+            return Ok(data);
+        }
+
+        [HttpGet("test-method-specification/{labTestId}")]
+        public async Task<IActionResult> GetTestMethodSpecificationByLabTest(long labTestId)
+        {
+            var data = await _testMethodService.GetTestMethodSpecificationByLabTestId(labTestId);
+            return Ok(data);
+        }
     }
 }

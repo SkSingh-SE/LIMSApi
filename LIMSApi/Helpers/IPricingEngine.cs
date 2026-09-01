@@ -23,7 +23,8 @@ namespace LIMSApi.Helpers
             long laboratoryTestId,
             InvoiceCaseConfiguration config,
             decimal usedValue,
-            DateTime inwardDate);
+            DateTime inwardDate,
+            long? analysisTypeId = null);
 
         /// <summary>
         /// Strict name matching: exact → alias exact → token match (3+ chars).

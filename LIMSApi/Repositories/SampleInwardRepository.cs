@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
@@ -46,6 +46,8 @@ namespace LIMSApi.Repositories
         public async Task<SampleInward?> GetSampleInwardById(long id)
         {
             var sampleInward = await _context.SampleInwards
+                                .AsNoTracking()
+                                .AsSplitQuery()
                                 .Include(x => x.DispatchModes)
                                 .Include(x => x.Contacts)
                                 .Include(x => x.Addresses)
@@ -66,10 +68,9 @@ namespace LIMSApi.Repositories
         public async Task<SampleInward?> GetSampleInwardWithPlans(long id)
         {
             var sampleInward = await _context.SampleInwards
+                .AsNoTracking()
+                .AsSplitQuery()
                 .Include(x => x.Customer)
-                .Include(x => x.DispatchModes)
-                .Include(x => x.Contacts)
-                .Include(x => x.Addresses)
                 .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
                     .ThenInclude(sd => sd.AdditionalDetails)
                 .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
@@ -77,9 +78,24 @@ namespace LIMSApi.Repositories
                 .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
                     .ThenInclude(sd => sd.ProductCondition)
                 .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
+                    .ThenInclude(sd => sd.ProductMaster)
+                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
+                    .ThenInclude(sd => sd.ProductSizeMaster)
+                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
+                    .ThenInclude(sd => sd.SpecificationGrade)
+                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
+                    .ThenInclude(sd => sd.AssignedGrade)
+                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
+                    .ThenInclude(sd => sd.TestPlans)
+                        .ThenInclude(tp => tp.Histories)
+                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
                     .ThenInclude(sd => sd.TestPlans)
                         .ThenInclude(tp => tp.GeneralTests)
                             .ThenInclude(gt => gt.Methods)
+                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
+                    .ThenInclude(sd => sd.TestPlans)
+                        .ThenInclude(tp => tp.ChemicalTests)
+                            .ThenInclude(ct => ct.Methods)
                 .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
                     .ThenInclude(sd => sd.TestPlans)
                         .ThenInclude(tp => tp.ChemicalTests)
@@ -316,7 +332,20 @@ namespace LIMSApi.Repositories
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = _context.SampleInwards.Include(x => x.SampleDetails).Where(a => a.IsActive && a.CompanyCode == loggedInUser.CompanyCode && a.SampleDetails.Any(sd => !sd.IsCancelled && sd.PreparationRequired));
+            var _query = _context.SampleInwards
+                .Include(x => x.SampleDetails)
+                    .ThenInclude(sd => sd.TestPlans)
+                        .ThenInclude(tp => tp.GeneralTests)
+                            .ThenInclude(gt => gt.Methods)
+                .Include(x => x.SampleDetails)
+                    .ThenInclude(sd => sd.TestPlans)
+                        .ThenInclude(tp => tp.ChemicalTests)
+                            .ThenInclude(ct => ct.Methods)
+                .Where(a => a.IsActive && a.CompanyCode == loggedInUser.CompanyCode &&
+                            a.SampleDetails.Any(sd => !sd.IsCancelled && sd.TestPlans.Any(tp =>
+                                tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) ||
+                                tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired))
+                            )));
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
@@ -336,7 +365,7 @@ namespace LIMSApi.Repositories
             var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
             {
                 Id = x.ID,
-                Name = $"{x.CaseNo} ({x.SampleDetails.Count(sd => !sd.IsCancelled && sd.PreparationRequired)} Prep Samples)",
+                Name = $"{x.CaseNo} ({x.SampleDetails.Count(sd => !sd.IsCancelled && sd.TestPlans.Any(tp => tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) || tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired))))} Prep Samples)",
             })).ToListAsync();
 
             return data;

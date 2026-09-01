@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -22,6 +22,9 @@ public partial class SpecificationLine
 
     [Column(TypeName = "decimal(18,6)")]
     public decimal? MaxValue { get; set; }
+
+    public string? TextValue { get; set; }
+    public string? InputType { get; set; }
 
     public string? Notes { get; set; }
     public string? Equation { get; set; }
@@ -82,21 +85,21 @@ public partial class SpecificationLine
     [ForeignKey("ParameterID")]
     public virtual ParameterMaster? Parameter { get; set; }
 
-    [ForeignKey("ProductSizeMasterID")]
+    [ForeignKey("ProductSizeMasterID"), JsonIgnore]
     public virtual ProductSizeMaster? ProductSizeMaster { get; set; }
     [ForeignKey("ParameterUnitID")]
     public virtual ParameterUnitMaster? ParameterUnit { get; set; }
-    [ForeignKey("ParameterUnitEquivalentID")]
+    [ForeignKey("ParameterUnitEquivalentID"), JsonIgnore]
     public virtual ParameterUnitEquivalent? ParameterUnitEquivalent { get; set; }
-    [ForeignKey("LaboratoryTestID")]
+    [ForeignKey("LaboratoryTestID"), JsonIgnore]
     public virtual LaboratoryTest? LaboratoryTest { get; set; }
 
-    [ForeignKey("SpecimenOrientationID")]
+    [ForeignKey("SpecimenOrientationID"), JsonIgnore]
     public virtual SpecimenOrientationMaster? SpecimenOrientation { get; set; }
-    [ForeignKey("DimensionalFactorID")]
+    [ForeignKey("DimensionalFactorID"), JsonIgnore]
     public virtual DimensionalFactorMaster? DimensionalFactor { get; set; }
     
-    [ForeignKey("HeatTreatmentID")]
+    [ForeignKey("HeatTreatmentID"), JsonIgnore]
     public virtual HeatTreatmentMaster? HeatTreatment { get; set; }
 
     [ForeignKey("SpecificationGradeID"),JsonIgnore]

@@ -11,6 +11,8 @@ namespace LIMSApi.Dtos
         public string? FinancialYear { get; set; }
         public string? DefaultPricingType { get; set; }
         public bool IsCurrentFy { get; set; }
+        public long? AnalysisTypeID { get; set; }
+        public string? AnalysisTypeName { get; set; }
         public List<InvoiceCasePriceDto> Prices { get; set; } = new();
     }
 
@@ -21,6 +23,7 @@ namespace LIMSApi.Dtos
         public string Name { get; set; } = string.Empty;
         public string AliasName { get; set; } = string.Empty;
         public decimal Price { get; set; }
+        public string? ElementPrices { get; set; }
     }
 
     /// <summary>
@@ -29,6 +32,7 @@ namespace LIMSApi.Dtos
     public class SaveAllInvoiceCaseDto
     {
         public long LaboratoryTestID { get; set; }
+        public long? AnalysisTypeID { get; set; }
         public List<InvoiceCaseVersionDto> Versions { get; set; } = new();
     }
 
@@ -39,6 +43,8 @@ namespace LIMSApi.Dtos
     {
         public long LaboratoryTestID { get; set; }
         public string? LaboratoryTest { get; set; }
+        public long? AnalysisTypeID { get; set; }
+        public string? AnalysisTypeName { get; set; }
         public List<InvoiceCaseVersionDto> Versions { get; set; } = new();
     }
 }

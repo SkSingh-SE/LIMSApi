@@ -1,4 +1,4 @@
-﻿using System.Linq.Dynamic.Core;
+using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -39,9 +39,8 @@ namespace LIMSApi.Repositories
         {
             return await _context.ParameterMasters
                 .Include(p => p.ParameterUnit)
-                .Include(p => p.DefaultTestMethod)
-                .Include(p => p.ParameterCategory)
-                .Include(p => p.AllowedOrientations).ThenInclude(ao => ao.SpecimenOrientation)
+                .Include(p => p.ParameterUnitEquivalent)
+                .Include(p => p.DropdownOptions.Where(o => o.IsActive))
                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
         }
 
@@ -51,93 +50,110 @@ namespace LIMSApi.Repositories
             await _context.SaveChangesAsync();
         }
 
+        // ─── Chemical Parameter List ───────────────────────
         public async Task<PagedResponse<object>> GetAllChemicalParameters(PageFilter filter)
         {
             var _query = (from c in _context.ParameterMasters
                           join u in _context.ParameterUnitMasters on c.ParameterUnitID equals u.ID into unitGroup
                           from u in unitGroup.DefaultIfEmpty()
-                          join cat in _context.ParameterCategoryMasters on c.ParameterCategoryID equals cat.ID into catGroup
-                          from cat in catGroup.DefaultIfEmpty()
+                          join eq in _context.ParameterUnitEquivalents on c.ParameterUnitEquivalentID equals eq.ID into eqGroup
+                          from eq in eqGroup.DefaultIfEmpty()
+                          join empMod in _context.EmployeeMasters on c.ModifiedBy equals empMod.ID into empModGroup
+                          from empMod in empModGroup.DefaultIfEmpty()
+                          join empCre in _context.EmployeeMasters on c.CreatedBy equals empCre.ID into empCreGroup
+                          from empCre in empCreGroup.DefaultIfEmpty()
                           where c.IsActive && c.ParameterType == "Chemical"
                           select new
                           {
                               c.ID,
                               c.Name,
-                              c.Code,
                               c.Symbol,
-                              c.AliasName,
                               c.ElementType,
-                              UnitName = u != null ? u.Name : "",
-                              Factor = u != null ? u.ConversaionFactor : "1",
-                              CategoryName = cat != null ? cat.Name : "",
+                              c.InputType,
+                              c.IsCalculated,
+                              c.FormulaDisplay,
+                              c.ParameterUnitID,
+                              c.ParameterUnitEquivalentID,
+                              c.UnitConversionFactor,
+                              UnitName = eq != null ? eq.Name : (u != null ? u.Name : ""),
+                              Factor = c.UnitConversionFactor.HasValue ? c.UnitConversionFactor.Value.ToString() : (eq != null && eq.ConversionFactor.HasValue ? eq.ConversionFactor.Value.ToString() : (u != null && u.ConversionFactor.HasValue ? u.ConversionFactor.Value.ToString() : "1")),
                               c.DecimalPrecision,
+                              c.CreatedBy,
+                              CreatedByName = empCre != null ? empCre.Name : "-",
                               c.CreatedOn,
-                              c.ModifiedOn
+                              ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : "-"),
+                              ModifiedOn = c.ModifiedOn ?? c.CreatedOn
                           }).AsQueryable().ApplyFilters(filter.Filter);
-
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                // NOTE: SQL Server's default collation is case-insensitive (CI_AS), so we
-                // rely on that rather than wrapping columns in LOWER() which would make the
-                // query non-sargable and force a full table scan.
                 var search = filter.searchTerm.Trim();
                 _query = _query.Where(x =>
                     (x.Name != null && x.Name.Contains(search)) ||
-                    (x.Code != null && x.Code.Contains(search)) ||
                     (x.Symbol != null && x.Symbol.Contains(search)) ||
                     (x.UnitName != null && x.UnitName.Contains(search)));
             }
+
             if (filter.SortByColumn != null)
-            {
                 _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
-            }
 
             return await _query.Cast<object>().ToPagedAsync(filter);
         }
+
+        // ─── Mechanical / Observation Parameter List ───────
         public async Task<PagedResponse<object>> GetAllMechanicalParameters(PageFilter filter)
         {
             var _query = (from c in _context.ParameterMasters
                           join u in _context.ParameterUnitMasters on c.ParameterUnitID equals u.ID into unitGroup
                           from u in unitGroup.DefaultIfEmpty()
-                          join cat in _context.ParameterCategoryMasters on c.ParameterCategoryID equals cat.ID into catGroup
-                          from cat in catGroup.DefaultIfEmpty()
-                          where c.IsActive && c.ParameterType == "Mechanical"
+                          join eq in _context.ParameterUnitEquivalents on c.ParameterUnitEquivalentID equals eq.ID into eqGroup
+                          from eq in eqGroup.DefaultIfEmpty()
+                          join empMod in _context.EmployeeMasters on c.ModifiedBy equals empMod.ID into empModGroup
+                          from empMod in empModGroup.DefaultIfEmpty()
+                          join empCre in _context.EmployeeMasters on c.CreatedBy equals empCre.ID into empCreGroup
+                          from empCre in empCreGroup.DefaultIfEmpty()
+                          where c.IsActive && (c.ParameterType == null || c.ParameterType != "Chemical")
                           select new
                           {
                               c.ID,
                               c.Name,
-                              c.Code,
-                              c.AliasName,
+                              c.Symbol,
+                              c.ParameterType,
                               c.ElementType,
-                              UnitName = u != null ? u.Name : "",
-                              Factor = u != null ? u.ConversaionFactor : "1",
-                              CategoryName = cat != null ? cat.Name : "",
+                              c.InputType,
+                              c.IsCalculated,
+                              c.FormulaDisplay,
+                              c.ParameterUnitID,
+                              c.ParameterUnitEquivalentID,
+                              c.UnitConversionFactor,
+                              UnitName = eq != null ? eq.Name : (u != null ? u.Name : ""),
+                              Factor = c.UnitConversionFactor.HasValue ? c.UnitConversionFactor.Value.ToString() : (eq != null && eq.ConversionFactor.HasValue ? eq.ConversionFactor.Value.ToString() : (u != null && u.ConversionFactor.HasValue ? u.ConversionFactor.Value.ToString() : "1")),
                               c.DecimalPrecision,
+                              c.CreatedBy,
+                              CreatedByName = empCre != null ? empCre.Name : "-",
                               c.CreatedOn,
-                              c.ModifiedOn
+                              ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : "-"),
+                              ModifiedOn = c.ModifiedOn ?? c.CreatedOn
                           }).AsQueryable().ApplyFilters(filter.Filter);
-
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                // Rely on SQL Server CI collation — no LOWER() on columns (keeps indexes sargable).
                 var search = filter.searchTerm.Trim();
                 _query = _query.Where(x =>
                     (x.Name != null && x.Name.Contains(search)) ||
-                    (x.Code != null && x.Code.Contains(search)) ||
-                    (x.AliasName != null && x.AliasName.Contains(search)) ||
+                    (x.Symbol != null && x.Symbol.Contains(search)) ||
                     (x.ElementType != null && x.ElementType.Contains(search)) ||
-                    (x.UnitName != null && x.UnitName.Contains(search)) ||
-                    (x.CategoryName != null && x.CategoryName.Contains(search)));
+                    (x.ParameterType != null && x.ParameterType.Contains(search)) ||
+                    (x.UnitName != null && x.UnitName.Contains(search)));
             }
+
             if (filter.SortByColumn != null)
-            {
                 _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
-            }
 
             return await _query.Cast<object>().ToPagedAsync(filter);
         }
+
+        // ─── All Parameters List ───────────────────────────
         public async Task<PagedResponse<object>> ParameterList(PageFilter filter)
         {
             var _query = (from c in _context.ParameterMasters
@@ -148,24 +164,22 @@ namespace LIMSApi.Repositories
                           {
                               c.ID,
                               c.Name,
-                              c.AliasName,
+                              c.Symbol,
                               c.ElementType,
+                              c.InputType,
                               ParameterType = c.ParameterType,
                               UnitName = u != null ? u.Name : "",
-                              Min = 0, // Placeholder for Min value, replace with actual value if available
-                              Max = 0, // Placeholder for Max value, replace with actual value if available
-                              Factor = u != null ? u.ConversaionFactor : "1",
+                              Factor = u != null && u.ConversionFactor.HasValue ? u.ConversionFactor.Value.ToString() : "1",
                               c.CreatedOn,
                               c.ModifiedOn
                           }).AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
-                // Rely on SQL Server CI collation — no LOWER() on columns (keeps indexes sargable).
                 var search = filter.searchTerm.Trim();
                 _query = _query.Where(x =>
                     (x.Name != null && x.Name.Contains(search))
-                    || (x.AliasName != null && x.AliasName.Contains(search))
+                    || (x.Symbol != null && x.Symbol.Contains(search))
                     || (x.ElementType != null && x.ElementType.Contains(search))
                     || (x.ParameterType != null && x.ParameterType.Contains(search))
                     || (x.UnitName != null && x.UnitName.Contains(search))
@@ -173,15 +187,13 @@ namespace LIMSApi.Repositories
             }
 
             if (filter.SortByColumn != null)
-            {
                 _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
-            }
 
             return await _query.Cast<object>().ToPagedAsync(filter);
         }
 
-
-        public async Task<List<DropdwonSelector>> GetParameterDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        // ─── Dropdown: All Parameters ───────────────────────
+        public async Task<List<DropdwonSelector>> GetParameterDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20, string? elementTypes = null)
         {
             if (pageNo < 0) pageNo = 0;
 
@@ -193,58 +205,68 @@ namespace LIMSApi.Repositories
                          {
                              a.ID,
                              a.Name,
-                             a.AliasName,
                              a.ParameterType,
                              a.Symbol,
-                             a.Code,
+                             a.InputType,
                              a.DecimalPrecision,
-                             a.MinReportableLimit,
                              a.ElementType,
                              a.IsCalculated,
                              a.Formula,
-                             a.ParameterCategoryID,
+                             a.FormulaDisplay,
                              unitID = a.ParameterUnitID,
-                             unit = u != null ? u.Name : ""
+                             unit = u != null ? u.Name : "",
+                             DropdownOptions = a.DropdownOptions
+                                 .Where(o => o.IsActive)
+                                 .OrderBy(o => o.DisplayOrder)
+                                 .Select(o => new { o.DisplayText, o.Value, o.IsDefault })
                          };
+
+            if (!string.IsNullOrWhiteSpace(elementTypes))
+            {
+                var typesList = elementTypes.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                           .Select(t => t.Trim().ToLower())
+                                           .ToList();
+                if (typesList.Any())
+                    _query = _query.Where(x => x.ElementType != null && typesList.Contains(x.ElementType));
+            }
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
-                {
                     _query = _query.Where(x => x.ID == exactId);
-                }
                 else
                 {
-                    // Rely on SQL Server CI collation — no LOWER() on columns (keeps indexes sargable).
                     var search = searchTerm.Trim();
-                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
+                    _query = _query.Where(x => x.Name != null && x.Name.Contains(search));
                 }
             }
 
             var skip = pageNo * pageSize;
-
-            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            var data = await _query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
             {
                 Id = x.ID,
                 Name = $"{x.Name} - ({x.ParameterType})",
                 AdditionalValues = new Dictionary<string, object>
                 {
+                    { "PureName", x.Name },
                     { "UnitID", x.unitID! },
                     { "Unit", x.unit ?? "" },
                     { "ParameterType", x.ParameterType ?? "" },
-                    { "Symbol", x.Symbol ?? x.Code },
+                    { "Symbol", x.Symbol ?? "" },
+                    { "InputType", x.InputType ?? "Decimal" },
                     { "DecimalPrecision", x.DecimalPrecision },
-                    { "MinReportableLimit", x.MinReportableLimit! },
                     { "ElementType", x.ElementType ?? "" },
                     { "IsCalculated", x.IsCalculated },
                     { "Formula", x.Formula ?? "" },
-                    { "ParameterCategoryID", x.ParameterCategoryID! },
-                    { "AliasName", x.AliasName ?? "" }
+                    { "FormulaDisplay", x.FormulaDisplay ?? "" },
+                    { "DropdownOptions", x.DropdownOptions.ToList() }
                 }
-            })).ToListAsync();
+            }).ToListAsync();
 
             return data;
         }
+
+        // ─── Dropdown: Chemical ───────────────────────────
         public async Task<List<DropdwonSelector>> GetChemicalParameterDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
         {
             if (pageNo < 0) pageNo = 0;
@@ -257,58 +279,56 @@ namespace LIMSApi.Repositories
                          {
                              a.ID,
                              a.Name,
-                             a.AliasName,
                              a.ParameterType,
                              a.Symbol,
-                             a.Code,
+                             a.InputType,
                              a.DecimalPrecision,
-                             a.MinReportableLimit,
                              a.ElementType,
                              a.IsCalculated,
                              a.Formula,
-                             a.ParameterCategoryID,
+                             a.FormulaDisplay,
                              unitID = a.ParameterUnitID,
-                             unit = u != null ? u.Name : ""
-                         };
+                             unit = u != null ? u.Name : "",
+                              DropdownOptions = a.DropdownOptions.Where(o => o.IsActive).OrderBy(o => o.DisplayOrder).Select(o => new { o.DisplayText, o.Value, o.IsDefault })
+                          };
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
-                {
                     _query = _query.Where(x => x.ID == exactId);
-                }
                 else
                 {
-                    // Rely on SQL Server CI collation — no LOWER() on columns (keeps indexes sargable).
                     var search = searchTerm.Trim();
-                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
+                    _query = _query.Where(x => x.Name != null && x.Name.Contains(search));
                 }
             }
 
             var skip = pageNo * pageSize;
-
-            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            var data = await _query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
             {
                 Id = x.ID,
                 Name = $"{x.Name}",
                 AdditionalValues = new Dictionary<string, object>
                 {
+                    { "PureName", x.Name },
                     { "UnitID", x.unitID! },
                     { "Unit", x.unit ?? "" },
                     { "ParameterType", x.ParameterType ?? "" },
-                    { "Symbol", x.Symbol ?? x.Code },
+                    { "Symbol", x.Symbol ?? "" },
+                    { "InputType", x.InputType ?? "Decimal" },
                     { "DecimalPrecision", x.DecimalPrecision },
-                    { "MinReportableLimit", x.MinReportableLimit! },
                     { "ElementType", x.ElementType ?? "" },
                     { "IsCalculated", x.IsCalculated },
                     { "Formula", x.Formula ?? "" },
-                    { "ParameterCategoryID", x.ParameterCategoryID! },
-                    { "AliasName", x.AliasName ?? "" }
+                    { "FormulaDisplay", x.FormulaDisplay ?? "" },
+                    { "DropdownOptions", x.DropdownOptions.ToList() }
                 }
-            })).ToListAsync();
+            }).ToListAsync();
 
             return data;
         }
+
+        // ─── Dropdown: Mechanical + Observation ───────────
         public async Task<List<DropdwonSelector>> GetMechanicalParameterDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
         {
             if (pageNo < 0) pageNo = 0;
@@ -316,82 +336,64 @@ namespace LIMSApi.Repositories
             var _query = from a in _context.ParameterMasters
                          join u in _context.ParameterUnitMasters on a.ParameterUnitID equals u.ID into uGroup
                          from u in uGroup.DefaultIfEmpty()
-                         where a.IsActive && a.ParameterType == "Mechanical"
+                         where a.IsActive && (a.ParameterType == null || a.ParameterType != "Chemical")
                          select new
                          {
                              a.ID,
                              a.Name,
-                             a.AliasName,
                              a.ParameterType,
                              a.Symbol,
-                             a.Code,
+                             a.InputType,
                              a.DecimalPrecision,
-                             a.MinReportableLimit,
                              a.ElementType,
                              a.IsCalculated,
                              a.Formula,
-                             a.ParameterCategoryID,
+                             a.FormulaDisplay,
                              unitID = a.ParameterUnitID,
-                             unit = u != null ? u.Name : ""
-                         };
+                             unit = u != null ? u.Name : "",
+                              DropdownOptions = a.DropdownOptions.Where(o => o.IsActive).OrderBy(o => o.DisplayOrder).Select(o => new { o.DisplayText, o.Value, o.IsDefault })
+                          };
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
-                {
                     _query = _query.Where(x => x.ID == exactId);
-                }
                 else
                 {
-                    // Rely on SQL Server CI collation — no LOWER() on columns (keeps indexes sargable).
                     var search = searchTerm.Trim();
-                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
+                    _query = _query.Where(x => x.Name != null && x.Name.Contains(search));
                 }
             }
 
             var skip = pageNo * pageSize;
-
-            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            var data = await _query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
             {
                 Id = x.ID,
                 Name = $"{x.Name}",
                 AdditionalValues = new Dictionary<string, object>
                 {
+                    { "PureName", x.Name },
                     { "UnitID", x.unitID! },
                     { "Unit", x.unit ?? "" },
                     { "ParameterType", x.ParameterType ?? "" },
-                    { "Symbol", x.Symbol ?? x.Code },
+                    { "Symbol", x.Symbol ?? "" },
+                    { "InputType", x.InputType ?? "Decimal" },
                     { "DecimalPrecision", x.DecimalPrecision },
-                    { "MinReportableLimit", x.MinReportableLimit! },
                     { "ElementType", x.ElementType ?? "" },
                     { "IsCalculated", x.IsCalculated },
                     { "Formula", x.Formula ?? "" },
-                    { "ParameterCategoryID", x.ParameterCategoryID! },
-                    { "AliasName", x.AliasName ?? "" }
+                    { "FormulaDisplay", x.FormulaDisplay ?? "" },
+                    { "DropdownOptions", x.DropdownOptions.ToList() }
                 }
-            })).ToListAsync();
+            }).ToListAsync();
 
             return data;
         }
 
         public async Task<bool> ExistsByName(string name)
-        {
-            return await _context.ParameterMasters.AnyAsync(x => x.Name == name && x.IsActive);
-        }
+            => await _context.ParameterMasters.AnyAsync(x => x.Name == name && x.IsActive);
 
-        public async Task<bool> ExistsByNameAndNotId(string name, long Id)
-        {
-            return await _context.ParameterMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive);
-        }
-
-        public async Task<bool> ExistsByCode(string code)
-        {
-            return await _context.ParameterMasters.AnyAsync(x => x.Code == code && x.IsActive);
-        }
-
-        public async Task<bool> ExistsByCodeAndNotId(string code, long Id)
-        {
-            return await _context.ParameterMasters.AnyAsync(x => x.Code == code && x.ID != Id && x.IsActive);
-        }
+        public async Task<bool> ExistsByNameAndNotId(string name, long id)
+            => await _context.ParameterMasters.AnyAsync(x => x.Name == name && x.ID != id && x.IsActive);
     }
 }

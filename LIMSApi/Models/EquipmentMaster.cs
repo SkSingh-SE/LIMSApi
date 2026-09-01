@@ -50,5 +50,5 @@ public partial class EquipmentMaster : AuditProperty
     [ForeignKey("EquipmentTypeID")]
     public virtual EquipmentTypeMaster? EquipmentType { get; set; }
 
-
+    public virtual ICollection<EquipmentAnalysisTechnique> AnalysisTechniques { get; set; } = new List<EquipmentAnalysisTechnique>();
 }
