@@ -353,13 +353,32 @@ namespace LIMSApi.ServiceWORepo
                 .Include(h => h.Parameters)
                 .FirstAsync(h => h.ID == headerId);
 
-            // Build dictionary for formula vars
-            Dictionary<string, double> vars = header.Parameters
-                .Where(x => x.Value.HasValue && x.Value > 0)
-                .ToDictionary(
-                    x => $"P{x.ParameterID}",
-                    x => (double)x.Value.Value
-                );
+            // Build dictionary for formula vars with symbols and names for metallurgical formulas
+            var vars = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+
+            var allParamIds = header.Parameters.Select(p => p.ParameterID).Distinct().ToList();
+            var paramEntities = await _db.ParameterMasters
+                .Where(p => allParamIds.Contains(p.ID))
+                .ToDictionaryAsync(p => p.ID, p => p);
+
+            foreach (var x in header.Parameters.Where(x => x.Value.HasValue))
+            {
+                double val = (double)x.Value.Value;
+                vars[$"P{x.ParameterID}"] = val;
+                if (!string.IsNullOrWhiteSpace(x.ParameterName))
+                    vars[x.ParameterName.Trim()] = val;
+
+                if (paramEntities.TryGetValue(x.ParameterID, out var pe))
+                {
+                    if (!string.IsNullOrWhiteSpace(pe.Symbol))
+                    {
+                        vars[pe.Symbol.Trim()] = val;
+                        vars[$"%{pe.Symbol.Trim()}"] = val;
+                    }
+                    if (!string.IsNullOrWhiteSpace(pe.Name))
+                        vars[pe.Name.Trim()] = val;
+                }
+            }
 
             bool changed = true;
             int loopGuard = 0;
@@ -399,6 +418,18 @@ namespace LIMSApi.ServiceWORepo
 
                                     // update dictionary for next dependencies
                                     vars[$"P{param.ParameterID}"] = (double)newValue;
+                                    if (!string.IsNullOrWhiteSpace(param.ParameterName))
+                                        vars[param.ParameterName.Trim()] = (double)newValue;
+                                    if (paramEntities.TryGetValue(param.ParameterID, out var pe))
+                                    {
+                                        if (!string.IsNullOrWhiteSpace(pe.Symbol))
+                                        {
+                                            vars[pe.Symbol.Trim()] = (double)newValue;
+                                            vars[$"%{pe.Symbol.Trim()}"] = (double)newValue;
+                                        }
+                                        if (!string.IsNullOrWhiteSpace(pe.Name))
+                                            vars[pe.Name.Trim()] = (double)newValue;
+                                    }
                                 }
                             }
                         }
@@ -1133,13 +1164,18 @@ namespace LIMSApi.ServiceWORepo
                             var pm = sl.Parameter;
                             if (pm == null) continue;
 
+                            var formulaExpr = !string.IsNullOrWhiteSpace(sl.Equation) ? sl.Equation.Trim() : pm.Formula;
+                            var isCalc = !string.IsNullOrWhiteSpace(sl.Equation) || pm.IsCalculated;
+
                             specParams.Add(new TestResultParameter
                             {
                                 ParameterID = pm.ID,
                                 ParameterName = pm.Name,
                                 Unit = pm.ParameterUnit?.Name ?? "",
                                 Value = null,
-                                IsCalculated = false,
+                                IsCalculated = isCalc,
+                                Formula = formulaExpr,
+                                FormulaExpression = formulaExpr,
                                 IsAdditional = false,
                                 MinValue = sl.MinValue,
                                 MaxValue = sl.MaxValue,
@@ -1381,13 +1417,17 @@ namespace LIMSApi.ServiceWORepo
                 var pm = specLine.Parameter;
                 if (pm == null) continue;
 
+                var formulaExpr = !string.IsNullOrWhiteSpace(specLine.Equation) ? specLine.Equation.Trim() : pm.Formula;
+                var isCalc = !string.IsNullOrWhiteSpace(specLine.Equation) || pm.IsCalculated;
+
                 result.Add(new TestResultParameter
                 {
                     ParameterID = pm.ID,
                     ParameterName = pm.Name,
                     Unit = pm.ParameterUnit?.Name,
-                    Formula = pm.Formula,
-                    IsCalculated = pm.IsCalculated,
+                    Formula = formulaExpr,
+                    FormulaExpression = formulaExpr,
+                    IsCalculated = isCalc,
                     Value = null,
                     IsAdditional = false,
                     MinValue = specLine.MinValue,
