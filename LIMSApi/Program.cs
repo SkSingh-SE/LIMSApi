@@ -44,16 +44,16 @@ builder.Services.AddCors(options =>
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 // Add services to the container.
 
-// Global upload size limit — safety net for all multipart form endpoints (100 MB)
+// Global upload size limit — safety net for all multipart form endpoints (250 MB)
 builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
 {
-    options.MultipartBodyLengthLimit = 100 * 1024 * 1024; // 100 MB
+    options.MultipartBodyLengthLimit = 250L * 1024 * 1024; // 250 MB
 });
 
-// Configure Kestrel request body limit to 100 MB (overriding default ~28.6 MB limit)
+// Configure Kestrel request body limit to 250 MB (overriding default ~28.6 MB limit)
 builder.WebHost.ConfigureKestrel(serverOptions =>
 {
-    serverOptions.Limits.MaxRequestBodySize = 100 * 1024 * 1024; // 100 MB
+    serverOptions.Limits.MaxRequestBodySize = 250L * 1024 * 1024; // 250 MB
 });
 
 builder.Services.AddControllers(options =>
@@ -68,6 +68,7 @@ builder.Services.AddControllers(options =>
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+        options.JsonSerializerOptions.Converters.Add(new LIMSApi.Helpers.NullableDecimalJsonConverter());
     });
 builder.Services.AddDbContext<LIMSContext>(opt => opt
     .UseSqlServer(connectionString)
