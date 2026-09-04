@@ -51,6 +51,7 @@ $SourcePath = Join-Path $PSScriptRoot "LIMSApi\bin\Release\net8.0\publish"
     -enableRule:AppOffline `
     -skip:objectName=dirPath,absolutePath=".*\\logs" `
     -skip:objectName=filePath,absolutePath=".*\\logs\\.*" `
+    -skip:objectName=dirPath,absolutePath=".*\\Uploads" `
     -allowUntrusted
 
 if ($LASTEXITCODE -eq 0) {
