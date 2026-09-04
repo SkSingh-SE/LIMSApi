@@ -6,7 +6,7 @@ namespace LIMSApi.Helpers
     /// </summary>
     public static class FileUploadValidator
     {
-        public const long MaxFileSizeBytes = 10 * 1024 * 1024; // 10 MB
+        public const long MaxFileSizeBytes = 100 * 1024 * 1024; // 100 MB
 
         /// <summary>
         /// Allowed extensions mapped to their expected MIME content-type prefixes.

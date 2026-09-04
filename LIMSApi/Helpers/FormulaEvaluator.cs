@@ -33,7 +33,7 @@ namespace LIMSApi.Helpers
                 string ncalcExpr = ConvertToNCalcExpression(expression);
                 ncalcExpr = PreProcessAggregates(ncalcExpr, namedValues);
 
-                var exp = new Expression(ncalcExpr);
+                var exp = new Expression(ncalcExpr, EvaluateOptions.IgnoreCase);
                 foreach (var kv in namedValues)
                     exp.Parameters[kv.Key] = kv.Value;
 
@@ -54,7 +54,7 @@ namespace LIMSApi.Helpers
                 string ncalcExpr = ConvertToNCalcExpression(expression);
                 ncalcExpr = PreProcessAggregates(ncalcExpr, variables);
 
-                var exp = new Expression(ncalcExpr);
+                var exp = new Expression(ncalcExpr, EvaluateOptions.IgnoreCase);
                 foreach (var kv in variables)
                     exp.Parameters[kv.Key] = kv.Value;
 
@@ -169,10 +169,28 @@ namespace LIMSApi.Helpers
         // ──────────────────────────────────────────────────
 
         /// <summary>
-        /// Converts "{P12}+({P15}/6)" → "P12+(P15/6)" for NCalc.
+        /// Converts "{P12}+({P15}/6)" → "P12+(P15/6)" for NCalc, and cleans % prefixes and target assignments.
         /// </summary>
         private static string ConvertToNCalcExpression(string formula)
-            => ParamTokenRegex.Replace(formula, m => $"P{m.Groups[1].Value}");
+        {
+            if (string.IsNullOrWhiteSpace(formula)) return string.Empty;
+            string expr = ParamTokenRegex.Replace(formula, m => $"P{m.Groups[1].Value}");
+
+            // Strip assignment if present (e.g. "CE = C + Mn / 6")
+            int eqIdx = expr.IndexOf('=');
+            if (eqIdx > 0 && !expr.StartsWith(">=") && !expr.StartsWith("<=") && !expr.StartsWith("==") && !expr.StartsWith("!="))
+            {
+                var left = expr.Substring(0, eqIdx).Trim();
+                if (Regex.IsMatch(left, @"^[a-zA-Z_%][a-zA-Z0-9_ %]*$"))
+                {
+                    expr = expr.Substring(eqIdx + 1).Trim();
+                }
+            }
+
+            // Strip % prefix from parameter tokens (e.g. "%C" -> "C", "%Mn" -> "Mn")
+            expr = Regex.Replace(expr, @"%([a-zA-Z_][a-zA-Z0-9_]*)", "$1");
+            return expr;
+        }
 
         /// <summary>
         /// Pre-processes MEAN/AVG/MAX/MIN/SUM/COUNT/STDEV aggregate functions

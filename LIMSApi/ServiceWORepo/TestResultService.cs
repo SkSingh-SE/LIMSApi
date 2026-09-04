@@ -353,13 +353,32 @@ namespace LIMSApi.ServiceWORepo
                 .Include(h => h.Parameters)
                 .FirstAsync(h => h.ID == headerId);
 
-            // Build dictionary for formula vars
-            Dictionary<string, double> vars = header.Parameters
-                .Where(x => x.Value.HasValue && x.Value > 0)
-                .ToDictionary(
-                    x => $"P{x.ParameterID}",
-                    x => (double)x.Value.Value
-                );
+            // Build dictionary for formula vars with symbols and names for metallurgical formulas
+            var vars = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+
+            var allParamIds = header.Parameters.Select(p => p.ParameterID).Distinct().ToList();
+            var paramEntities = await _db.ParameterMasters
+                .Where(p => allParamIds.Contains(p.ID))
+                .ToDictionaryAsync(p => p.ID, p => p);
+
+            foreach (var x in header.Parameters.Where(x => x.Value.HasValue))
+            {
+                double val = (double)x.Value.Value;
+                vars[$"P{x.ParameterID}"] = val;
+                if (!string.IsNullOrWhiteSpace(x.ParameterName))
+                    vars[x.ParameterName.Trim()] = val;
+
+                if (paramEntities.TryGetValue(x.ParameterID, out var pe))
+                {
+                    if (!string.IsNullOrWhiteSpace(pe.Symbol))
+                    {
+                        vars[pe.Symbol.Trim()] = val;
+                        vars[$"%{pe.Symbol.Trim()}"] = val;
+                    }
+                    if (!string.IsNullOrWhiteSpace(pe.Name))
+                        vars[pe.Name.Trim()] = val;
+                }
+            }
 
             bool changed = true;
             int loopGuard = 0;
@@ -399,6 +418,18 @@ namespace LIMSApi.ServiceWORepo
 
                                     // update dictionary for next dependencies
                                     vars[$"P{param.ParameterID}"] = (double)newValue;
+                                    if (!string.IsNullOrWhiteSpace(param.ParameterName))
+                                        vars[param.ParameterName.Trim()] = (double)newValue;
+                                    if (paramEntities.TryGetValue(param.ParameterID, out var pe))
+                                    {
+                                        if (!string.IsNullOrWhiteSpace(pe.Symbol))
+                                        {
+                                            vars[pe.Symbol.Trim()] = (double)newValue;
+                                            vars[$"%{pe.Symbol.Trim()}"] = (double)newValue;
+                                        }
+                                        if (!string.IsNullOrWhiteSpace(pe.Name))
+                                            vars[pe.Name.Trim()] = (double)newValue;
+                                    }
                                 }
                             }
                         }
@@ -1133,13 +1164,18 @@ namespace LIMSApi.ServiceWORepo
                             var pm = sl.Parameter;
                             if (pm == null) continue;
 
+                            var formulaExpr = !string.IsNullOrWhiteSpace(sl.Equation) ? sl.Equation.Trim() : pm.Formula;
+                            var isCalc = !string.IsNullOrWhiteSpace(sl.Equation) || pm.IsCalculated;
+
                             specParams.Add(new TestResultParameter
                             {
                                 ParameterID = pm.ID,
                                 ParameterName = pm.Name,
                                 Unit = pm.ParameterUnit?.Name ?? "",
                                 Value = null,
-                                IsCalculated = false,
+                                IsCalculated = isCalc,
+                                Formula = formulaExpr,
+                                FormulaExpression = formulaExpr,
                                 IsAdditional = false,
                                 MinValue = sl.MinValue,
                                 MaxValue = sl.MaxValue,
@@ -1381,13 +1417,17 @@ namespace LIMSApi.ServiceWORepo
                 var pm = specLine.Parameter;
                 if (pm == null) continue;
 
+                var formulaExpr = !string.IsNullOrWhiteSpace(specLine.Equation) ? specLine.Equation.Trim() : pm.Formula;
+                var isCalc = !string.IsNullOrWhiteSpace(specLine.Equation) || pm.IsCalculated;
+
                 result.Add(new TestResultParameter
                 {
                     ParameterID = pm.ID,
                     ParameterName = pm.Name,
                     Unit = pm.ParameterUnit?.Name,
-                    Formula = pm.Formula,
-                    IsCalculated = pm.IsCalculated,
+                    Formula = formulaExpr,
+                    FormulaExpression = formulaExpr,
+                    IsCalculated = isCalc,
                     Value = null,
                     IsAdditional = false,
                     MinValue = specLine.MinValue,
@@ -1499,21 +1539,41 @@ namespace LIMSApi.ServiceWORepo
                         .ThenInclude(ct => ct.Methods)
                 .FirstOrDefaultAsync(s => s.ID == header.SampleID);
 
-            var isPrepRequired = sample != null && sample.TestPlans.Any(tp =>
-                tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) ||
-                tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired)));
-
-            if (isPrepRequired)
+            // Test-specific preparation execution guard (Phase 7 Mandate)
+            if (sample != null)
             {
-                var cuttingSample = await _db.CuttingChargeSamples
-                    .FirstOrDefaultAsync(cs => cs.SampleID == header.SampleID);
+                var matchingGeneralMethod = sample.TestPlans
+                    .Where(tp => header.TestPlanID == 0 || tp.ID == header.TestPlanID)
+                    .SelectMany(tp => tp.GeneralTests)
+                    .Where(gt => gt.LaboratoryTestSubGroupID == header.LaboratoryTestID)
+                    .SelectMany(gt => gt.Methods)
+                    .FirstOrDefault(m => !m.Cancel && (header.TestID == null || m.ID == header.TestID.Value || m.LaboratoryTestID == header.LaboratoryTestID));
 
-                if (cuttingSample == null ||
-                    (cuttingSample.PreparationStatus != "Completed" && cuttingSample.PreparationStatus != "QCVerified"))
+                var matchingChemMethod = sample.TestPlans
+                    .Where(tp => header.TestPlanID == 0 || tp.ID == header.TestPlanID)
+                    .SelectMany(tp => tp.ChemicalTests)
+                    .Where(ct => ct.LaboratoryTestAnalysisTypeID == header.LaboratoryTestID)
+                    .SelectMany(ct => ct.Methods)
+                    .FirstOrDefault(m => !m.Cancel && (header.TestID == null || m.ID == header.TestID.Value || m.LaboratoryTestAnalysisTypeID == header.LaboratoryTestID));
+
+                bool thisTestPrepRequired = (matchingGeneralMethod != null && matchingGeneralMethod.PreparationRequired)
+                    || (matchingChemMethod != null && matchingChemMethod.PreparationRequired);
+
+                if (thisTestPrepRequired)
                 {
-                    response.PreparationWarning = true;
-                    response.PreparationStatus = cuttingSample?.PreparationStatus ?? "No preparation record";
-                    response.WarningMessage = "Sample preparation data is not yet entered in the system. You can add preparation details later.";
+                    long plannedMethodId = matchingGeneralMethod?.ID ?? matchingChemMethod?.ID ?? 0;
+
+                    var prepItem = await _db.SamplePreparationTestItems
+                        .FirstOrDefaultAsync(ti => ti.SampleID == header.SampleID
+                            && ti.IsActive
+                            && ((plannedMethodId > 0 && ti.PlannedTestMethodID == plannedMethodId)
+                                || ti.LaboratoryTestID == header.LaboratoryTestID));
+
+                    if (prepItem == null || (prepItem.Status != "Completed" && prepItem.Status != "QCVerified"))
+                    {
+                        var statusStr = prepItem?.Status ?? "Not Initiated";
+                        throw new InvalidOperationException($"Cannot start test. Sample preparation for this test is required and currently in '{statusStr}' status. Specimen preparation must be completed before test execution can begin.");
+                    }
                 }
             }
 

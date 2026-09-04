@@ -58,6 +58,10 @@ namespace LIMSApi.Repositories
                           from u in unitGroup.DefaultIfEmpty()
                           join eq in _context.ParameterUnitEquivalents on c.ParameterUnitEquivalentID equals eq.ID into eqGroup
                           from eq in eqGroup.DefaultIfEmpty()
+                          join empMod in _context.EmployeeMasters on c.ModifiedBy equals empMod.ID into empModGroup
+                          from empMod in empModGroup.DefaultIfEmpty()
+                          join empCre in _context.EmployeeMasters on c.CreatedBy equals empCre.ID into empCreGroup
+                          from empCre in empCreGroup.DefaultIfEmpty()
                           where c.IsActive && c.ParameterType == "Chemical"
                           select new
                           {
@@ -74,8 +78,11 @@ namespace LIMSApi.Repositories
                               UnitName = eq != null ? eq.Name : (u != null ? u.Name : ""),
                               Factor = c.UnitConversionFactor.HasValue ? c.UnitConversionFactor.Value.ToString() : (eq != null && eq.ConversionFactor.HasValue ? eq.ConversionFactor.Value.ToString() : (u != null && u.ConversionFactor.HasValue ? u.ConversionFactor.Value.ToString() : "1")),
                               c.DecimalPrecision,
+                              c.CreatedBy,
+                              CreatedByName = empCre != null ? empCre.Name : "-",
                               c.CreatedOn,
-                              c.ModifiedOn
+                              ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : "-"),
+                              ModifiedOn = c.ModifiedOn ?? c.CreatedOn
                           }).AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
@@ -101,7 +108,11 @@ namespace LIMSApi.Repositories
                           from u in unitGroup.DefaultIfEmpty()
                           join eq in _context.ParameterUnitEquivalents on c.ParameterUnitEquivalentID equals eq.ID into eqGroup
                           from eq in eqGroup.DefaultIfEmpty()
-                          where c.IsActive && (c.ParameterType == "Mechanical" || c.ParameterType == "Observation")
+                          join empMod in _context.EmployeeMasters on c.ModifiedBy equals empMod.ID into empModGroup
+                          from empMod in empModGroup.DefaultIfEmpty()
+                          join empCre in _context.EmployeeMasters on c.CreatedBy equals empCre.ID into empCreGroup
+                          from empCre in empCreGroup.DefaultIfEmpty()
+                          where c.IsActive && (c.ParameterType == null || c.ParameterType != "Chemical")
                           select new
                           {
                               c.ID,
@@ -118,8 +129,11 @@ namespace LIMSApi.Repositories
                               UnitName = eq != null ? eq.Name : (u != null ? u.Name : ""),
                               Factor = c.UnitConversionFactor.HasValue ? c.UnitConversionFactor.Value.ToString() : (eq != null && eq.ConversionFactor.HasValue ? eq.ConversionFactor.Value.ToString() : (u != null && u.ConversionFactor.HasValue ? u.ConversionFactor.Value.ToString() : "1")),
                               c.DecimalPrecision,
+                              c.CreatedBy,
+                              CreatedByName = empCre != null ? empCre.Name : "-",
                               c.CreatedOn,
-                              c.ModifiedOn
+                              ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : "-"),
+                              ModifiedOn = c.ModifiedOn ?? c.CreatedOn
                           }).AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
@@ -322,7 +336,7 @@ namespace LIMSApi.Repositories
             var _query = from a in _context.ParameterMasters
                          join u in _context.ParameterUnitMasters on a.ParameterUnitID equals u.ID into uGroup
                          from u in uGroup.DefaultIfEmpty()
-                         where a.IsActive && (a.ParameterType == "Mechanical" || a.ParameterType == "Observation")
+                         where a.IsActive && (a.ParameterType == null || a.ParameterType != "Chemical")
                          select new
                          {
                              a.ID,

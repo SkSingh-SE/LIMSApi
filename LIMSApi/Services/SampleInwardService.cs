@@ -1611,6 +1611,12 @@ namespace LIMSApi.Services
                     .ToDictionaryAsync(p => p.ID, p => p.Name)
                 : new Dictionary<long, string>();
 
+            var sampleIds = sampleInward.SampleDetails.Select(s => s.ID).ToList();
+            var prepMap = await _context.SamplePreparations
+                .Include(sp => sp.TestItems.Where(ti => ti.IsActive))
+                .Where(sp => sampleIds.Contains(sp.SampleID) && sp.IsActive)
+                .ToDictionaryAsync(sp => sp.SampleID, sp => sp);
+
             var dto = new SampleInwardDto
             {
                 ID = sampleInward.ID,
@@ -1761,7 +1767,45 @@ namespace LIMSApi.Services
                         Thickness = s.Thickness,
                         Diameter = s.Diameter,
                         Width = s.Width,
-                        Length = s.Length
+                        Length = s.Length,
+                        PreparationDetails = prepMap.TryGetValue(s.ID, out var prep) ? new SamplePrepReviewDto
+                        {
+                            NumberOfCuts = prep.NumberOfCuts,
+                            CutThickness = prep.CutThickness,
+                            WaterJetCuttingMins = prep.WaterJetCuttingMins,
+                            EdmCutting = prep.EdmCutting,
+                            EdmCuttingCharge = prep.EdmCuttingCharge,
+                            GasCutting = prep.GasCutting,
+                            GasCuttingCharge = prep.GasCuttingCharge,
+                            SpecialCutting = prep.SpecialCutting,
+                            SpecialCuttingCharge = prep.SpecialCuttingCharge,
+                            MachiningChargesTotal = prep.MachiningChargesTotal,
+                            CuttingChargesTotal = prep.CuttingChargesTotal,
+                            OtherChargesTotal = prep.OtherChargesTotal,
+                            Tests = prep.TestItems.Where(ti => ti.IsActive).Select(ti => new SampleTestPrepItemDto
+                            {
+                                ID = ti.ID,
+                                TestId = ti.LaboratoryTestID,
+                                PlannedTestMethodID = ti.PlannedTestMethodID,
+                                PlannedTestType = ti.PlannedTestType,
+                                StandardId = ti.TestMethodSpecificationID,
+                                SpecimenPreparationMasterID = ti.SpecimenPreparationMasterID,
+                                SpecimenSize = ti.SpecimenSize,
+                                SpecimenRawMaterialSize = ti.SpecimenRawMaterialSize,
+                                DrawingFilePath = ti.DrawingFilePath,
+                                FileName = ti.FileName,
+                                Quantity = ti.Quantity,
+                                CuttingRate = ti.ResolvedCuttingRate,
+                                MachiningRate = ti.ResolvedMachiningRate,
+                                CuttingTotal = ti.CuttingTotal,
+                                MachiningTotal = ti.MachiningTotal,
+                                RequiresCutting = ti.CuttingRequired,
+                                RequiresMachining = ti.MachiningRequired,
+                                NoTesting = ti.NoTesting,
+                                Remarks = ti.Remarks,
+                                Status = ti.Status
+                            }).ToList()
+                        } : null
                     }).ToList(),
 
                 SampleAdditionalDetails = sampleInward.SampleDetails
@@ -2212,17 +2256,143 @@ namespace LIMSApi.Services
             sample.ModifiedBy = loggedInUser.EmployeeID;
             sample.ModifiedOn = DateTime.UtcNow;
 
-            // Also update or create SamplePreparation record if exists
+            // Also update or create active SamplePreparation record
             var prepRecord = await _context.SamplePreparations
+                .Include(sp => sp.TestItems)
                 .FirstOrDefaultAsync(sp => sp.SampleID == sampleId && sp.IsActive);
-            if (prepRecord != null)
+
+            if (prepRecord == null)
             {
-                if (dto.MachiningChargesTotal.HasValue) prepRecord.MachiningChargesTotal = dto.MachiningChargesTotal.Value;
-                if (dto.CuttingChargesTotal.HasValue) prepRecord.CuttingChargesTotal = dto.CuttingChargesTotal.Value;
-                if (dto.OtherChargesTotal.HasValue) prepRecord.OtherChargesTotal = dto.OtherChargesTotal.Value;
-                prepRecord.ModifiedBy = loggedInUser.EmployeeID;
-                prepRecord.ModifiedOn = DateTime.UtcNow;
+                prepRecord = new SamplePreparation
+                {
+                    SampleID = sampleId,
+                    InwardID = sample.InwardID,
+                    Status = "Pending",
+                    CreatedBy = loggedInUser.EmployeeID,
+                    CreatedOn = DateTime.UtcNow,
+                    CompanyCode = loggedInUser.CompanyCode,
+                    IsActive = true
+                };
+                await _context.SamplePreparations.AddAsync(prepRecord);
+                await _context.SaveChangesAsync();
             }
+
+            // Persist sample-level Other Cutting fields
+            prepRecord.NumberOfCuts = dto.NumberOfCuts;
+            prepRecord.CutThickness = dto.CutThickness;
+            prepRecord.WaterJetCuttingMins = dto.WaterJetCuttingMins;
+            prepRecord.EdmCutting = dto.EdmCutting;
+            prepRecord.EdmCuttingCharge = dto.EdmCuttingCharge ?? 0;
+            prepRecord.GasCutting = dto.GasCutting;
+            prepRecord.GasCuttingCharge = dto.GasCuttingCharge ?? 0;
+            prepRecord.SpecialCutting = dto.SpecialCutting;
+            prepRecord.SpecialCuttingCharge = dto.SpecialCuttingCharge ?? 0;
+
+            // Persist test-wise preparation items
+            if (dto.Tests != null && dto.Tests.Count > 0)
+            {
+                var existingItems = prepRecord.TestItems.Where(ti => ti.IsActive).ToList();
+
+                foreach (var itemDto in dto.Tests)
+                {
+                    var existing = existingItems.FirstOrDefault(ti =>
+                        (itemDto.ID.HasValue && itemDto.ID.Value > 0 && ti.ID == itemDto.ID.Value) ||
+                        (itemDto.PlannedTestMethodID > 0 && ti.PlannedTestMethodID == itemDto.PlannedTestMethodID) ||
+                        (ti.LaboratoryTestID == itemDto.TestId && ti.SpecimenPreparationMasterID == itemDto.SpecimenPreparationMasterID));
+
+                    var qty = itemDto.Quantity > 0 ? itemDto.Quantity : 1;
+                    var cRate = itemDto.CuttingRate ?? 0;
+                    var mRate = itemDto.MachiningRate ?? 0;
+                    var cTotal = itemDto.RequiresCutting ? (itemDto.CuttingTotal ?? (cRate * qty)) : 0;
+                    var mTotal = itemDto.RequiresMachining ? (itemDto.MachiningTotal ?? (mRate * qty)) : 0;
+
+                    if (existing != null)
+                    {
+                        existing.PlannedTestMethodID = itemDto.PlannedTestMethodID;
+                        existing.PlannedTestType = !string.IsNullOrEmpty(itemDto.PlannedTestType) ? itemDto.PlannedTestType : "General";
+                        existing.LaboratoryTestID = itemDto.TestId;
+                        existing.TestMethodSpecificationID = itemDto.StandardId;
+                        existing.SpecimenPreparationMasterID = itemDto.SpecimenPreparationMasterID;
+                        existing.SpecimenSize = itemDto.SpecimenSize ?? string.Empty;
+                        existing.SpecimenRawMaterialSize = itemDto.SpecimenRawMaterialSize;
+                        existing.DrawingFilePath = itemDto.DrawingFilePath;
+                        existing.FileName = itemDto.FileName;
+                        existing.Quantity = qty;
+                        existing.CuttingRequired = itemDto.RequiresCutting;
+                        existing.MachiningRequired = itemDto.RequiresMachining;
+                        existing.NoTesting = itemDto.NoTesting;
+                        existing.ResolvedCuttingRate = cRate;
+                        existing.ResolvedMachiningRate = mRate;
+                        existing.CuttingTotal = cTotal;
+                        existing.MachiningTotal = mTotal;
+                        existing.Remarks = itemDto.Remarks;
+                        if (!string.IsNullOrEmpty(itemDto.Status)) existing.Status = itemDto.Status;
+                        existing.ModifiedBy = loggedInUser.EmployeeID;
+                        existing.ModifiedOn = DateTime.UtcNow;
+                    }
+                    else
+                    {
+                        var newItem = new SamplePreparationTestItem
+                        {
+                            SamplePreparationID = prepRecord.ID,
+                            SampleID = sampleId,
+                            PlannedTestMethodID = itemDto.PlannedTestMethodID,
+                            PlannedTestType = !string.IsNullOrEmpty(itemDto.PlannedTestType) ? itemDto.PlannedTestType : "General",
+                            LaboratoryTestID = itemDto.TestId,
+                            TestMethodSpecificationID = itemDto.StandardId,
+                            SpecimenPreparationMasterID = itemDto.SpecimenPreparationMasterID,
+                            SpecimenSize = itemDto.SpecimenSize ?? string.Empty,
+                            SpecimenRawMaterialSize = itemDto.SpecimenRawMaterialSize,
+                            DrawingFilePath = itemDto.DrawingFilePath,
+                            FileName = itemDto.FileName,
+                            Quantity = qty,
+                            CuttingRequired = itemDto.RequiresCutting,
+                            MachiningRequired = itemDto.RequiresMachining,
+                            NoTesting = itemDto.NoTesting,
+                            ResolvedCuttingRate = cRate,
+                            ResolvedMachiningRate = mRate,
+                            CuttingTotal = cTotal,
+                            MachiningTotal = mTotal,
+                            Remarks = itemDto.Remarks,
+                            Status = !string.IsNullOrEmpty(itemDto.Status) ? itemDto.Status : "Pending",
+                            CreatedBy = loggedInUser.EmployeeID,
+                            CreatedOn = DateTime.UtcNow,
+                            CompanyCode = loggedInUser.CompanyCode,
+                            IsActive = true
+                        };
+                        prepRecord.TestItems.Add(newItem);
+                    }
+                }
+            }
+
+            // Authoritative charge calculation
+            var activeTestItems = prepRecord.TestItems.Where(ti => ti.IsActive).ToList();
+            var calcCuttingTotal = activeTestItems.Where(ti => ti.CuttingRequired).Sum(ti => ti.CuttingTotal);
+            var calcMachiningTotal = activeTestItems.Where(ti => ti.MachiningRequired).Sum(ti => ti.MachiningTotal);
+            var calcOtherTotal = (prepRecord.EdmCuttingCharge) +
+                                 (prepRecord.GasCuttingCharge) +
+                                 (prepRecord.SpecialCuttingCharge);
+
+            prepRecord.CuttingChargesTotal = dto.CuttingChargesTotal ?? calcCuttingTotal;
+            prepRecord.MachiningChargesTotal = dto.MachiningChargesTotal ?? calcMachiningTotal;
+            prepRecord.OtherChargesTotal = dto.OtherChargesTotal ?? calcOtherTotal;
+
+            if (activeTestItems.Count > 0 && activeTestItems.All(ti => ti.Status == "Completed" || ti.Status == "Cancelled"))
+            {
+                prepRecord.Status = "Completed";
+                prepRecord.CompletedOn ??= DateTime.UtcNow;
+            }
+            else if (activeTestItems.Any(ti => ti.Status == "Completed" || ti.Status == "CuttingCompleted" || ti.Status == "MachiningCompleted"))
+            {
+                prepRecord.Status = "InProgress";
+            }
+            else
+            {
+                prepRecord.Status = "Pending";
+            }
+
+            prepRecord.ModifiedBy = loggedInUser.EmployeeID;
+            prepRecord.ModifiedOn = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
         }
@@ -2231,8 +2401,34 @@ namespace LIMSApi.Services
         {
             var inward = await _context.SampleInwards
                 .Include(i => i.SampleDetails)
+                    .ThenInclude(s => s.TestPlans)
+                        .ThenInclude(tp => tp.GeneralTests)
+                            .ThenInclude(gt => gt.Methods)
+                .Include(i => i.SampleDetails)
+                    .ThenInclude(s => s.TestPlans)
+                        .ThenInclude(tp => tp.ChemicalTests)
+                            .ThenInclude(ct => ct.Methods)
                 .FirstOrDefaultAsync(i => i.ID == inwardId && i.IsActive)
                 ?? throw new KeyNotFoundException($"SampleInward with ID {inwardId} not found.");
+
+            // Validation: Ensure preparation records exist for any sample with prep-required tests
+            foreach (var sample in inward.SampleDetails.Where(s => s.IsActive && !s.IsCancelled))
+            {
+                var prepReqMethodsCount = sample.TestPlans.SelectMany(tp => tp.GeneralTests).SelectMany(gt => gt.Methods).Count(m => !m.Cancel && m.PreparationRequired)
+                    + sample.TestPlans.SelectMany(tp => tp.ChemicalTests).SelectMany(ct => ct.Methods).Count(m => !m.Cancel && m.PreparationRequired);
+
+                if (prepReqMethodsCount > 0)
+                {
+                    var prepRecord = await _context.SamplePreparations
+                        .Include(sp => sp.TestItems)
+                        .FirstOrDefaultAsync(sp => sp.SampleID == sample.ID && sp.IsActive);
+
+                    if (prepRecord == null || !prepRecord.TestItems.Any(ti => ti.IsActive && !string.IsNullOrWhiteSpace(ti.SpecimenSize)))
+                    {
+                        throw new InvalidOperationException($"Sample '{sample.SampleNo}' has {prepReqMethodsCount} test(s) requiring preparation, but specimen preparation details have not been saved.");
+                    }
+                }
+            }
 
             const string targetStatus = "UNDER_TESTING";
             inward.InwardStatus = targetStatus;
@@ -2246,6 +2442,7 @@ namespace LIMSApi.Services
                 sample.ModifiedOn = DateTime.UtcNow;
 
                 var prepRecord = await _context.SamplePreparations
+                    .Include(sp => sp.TestItems)
                     .FirstOrDefaultAsync(sp => sp.SampleID == sample.ID && sp.IsActive);
                 if (prepRecord != null)
                 {
@@ -2254,6 +2451,15 @@ namespace LIMSApi.Services
                     prepRecord.PreparedByEmployeeID ??= loggedInUser.EmployeeID;
                     prepRecord.ModifiedBy = loggedInUser.EmployeeID;
                     prepRecord.ModifiedOn = DateTime.UtcNow;
+
+                    foreach (var ti in prepRecord.TestItems.Where(ti => ti.IsActive && ti.Status != "Completed"))
+                    {
+                        ti.Status = "Completed";
+                        ti.CompletedOn = DateTime.UtcNow;
+                        ti.CompletedByEmployeeID = loggedInUser.EmployeeID;
+                        ti.ModifiedBy = loggedInUser.EmployeeID;
+                        ti.ModifiedOn = DateTime.UtcNow;
+                    }
                 }
             }
 

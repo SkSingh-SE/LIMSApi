@@ -4,6 +4,7 @@ using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LIMSApi.Migrations
 {
     [DbContext(typeof(LIMSContext))]
-    partial class LIMSContextModelSnapshot : ModelSnapshot
+    [Migration("20260903091502_AddSpecimenPreparationTestItemsAndExtendMaster")]
+    partial class AddSpecimenPreparationTestItemsAndExtendMaster
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2329,9 +2332,6 @@ namespace LIMSApi.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<long?>("ParameterUnitEquivalentID")
-                        .HasColumnType("bigint");
-
                     b.Property<long?>("ParameterUnitID")
                         .HasColumnType("bigint");
 
@@ -2347,8 +2347,6 @@ namespace LIMSApi.Migrations
                         .HasFilter("[IsActive] = 1 AND [Code] IS NOT NULL");
 
                     b.HasIndex("DefaultTestMethodID");
-
-                    b.HasIndex("ParameterUnitEquivalentID");
 
                     b.HasIndex("ParameterUnitID");
 
@@ -15482,9 +15480,6 @@ namespace LIMSApi.Migrations
                     b.Property<DateTime?>("ModifiedOn")
                         .HasColumnType("datetime2");
 
-                    b.Property<long?>("ParameterUnitEquivalentID")
-                        .HasColumnType("bigint");
-
                     b.Property<long?>("ParameterUnitID")
                         .HasColumnType("bigint");
 
@@ -15494,8 +15489,6 @@ namespace LIMSApi.Migrations
                         .HasColumnType("nvarchar(50)");
 
                     b.HasKey("ID");
-
-                    b.HasIndex("ParameterUnitEquivalentID");
 
                     b.HasIndex("ParameterUnitID");
 
@@ -20596,10 +20589,6 @@ namespace LIMSApi.Migrations
                         .HasForeignKey("DefaultTestMethodID")
                         .OnDelete(DeleteBehavior.NoAction);
 
-                    b.HasOne("LIMSApi.Models.ParameterUnitEquivalent", "ParameterUnitEquivalent")
-                        .WithMany()
-                        .HasForeignKey("ParameterUnitEquivalentID");
-
                     b.HasOne("LIMSApi.Models.ParameterUnitMaster", "ParameterUnit")
                         .WithMany()
                         .HasForeignKey("ParameterUnitID")
@@ -20608,8 +20597,6 @@ namespace LIMSApi.Migrations
                     b.Navigation("DefaultTestMethod");
 
                     b.Navigation("ParameterUnit");
-
-                    b.Navigation("ParameterUnitEquivalent");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.DimensionalFactorProductForm", b =>
@@ -22093,17 +22080,11 @@ namespace LIMSApi.Migrations
 
             modelBuilder.Entity("LIMSApi.Models.ProductSizeMaster", b =>
                 {
-                    b.HasOne("LIMSApi.Models.ParameterUnitEquivalent", "ParameterUnitEquivalent")
-                        .WithMany()
-                        .HasForeignKey("ParameterUnitEquivalentID");
-
                     b.HasOne("LIMSApi.Models.ParameterUnitMaster", "ParameterUnit")
                         .WithMany()
                         .HasForeignKey("ParameterUnitID");
 
                     b.Navigation("ParameterUnit");
-
-                    b.Navigation("ParameterUnitEquivalent");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.ProformaInvoiceDetail", b =>

@@ -109,6 +109,15 @@ namespace LIMSApi.Services
             existing.TestMethodStandardID = model.TestMethodStandardID;
             existing.SpecimenRawMaterialSize = model.SpecimenRawMaterialSize;
             existing.SpecimenSize = model.SpecimenSize;
+            existing.SpecimenQuantity = model.SpecimenQuantity;
+            existing.PreparationRequired = model.PreparationRequired;
+            existing.CuttingRequired = model.CuttingRequired;
+            existing.MachiningRequired = model.MachiningRequired;
+            existing.OtherPreparation = model.OtherPreparation;
+            existing.MetalClassificationID = model.MetalClassificationID;
+            existing.ProductMasterID = model.ProductMasterID;
+            existing.CuttingInstructions = model.CuttingInstructions;
+            existing.MachiningInstructions = model.MachiningInstructions;
             existing.Remark = model.Remark;
             existing.ModifiedOn = DateTime.UtcNow;
             existing.ModifiedBy = loggedInUser.EmployeeID;

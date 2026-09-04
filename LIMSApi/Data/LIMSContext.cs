@@ -151,6 +151,7 @@ public partial class LIMSContext : DbContext
     public DbSet<MachiningChargeVersion> MachiningChargeVersions { get; set; }
     public DbSet<SamplePreparationMaster> SamplePreparationMasters { get; set; }
     public DbSet<SamplePreparation> SamplePreparations { get; set; }
+    public DbSet<SamplePreparationTestItem> SamplePreparationTestItems { get; set; }
 
     public DbSet<ProformaInvoiceHeader> ProformaInvoiceHeader { get; set; }
     public DbSet<ProformaInvoiceDetail> ProformaInvoiceDetails { get; set; }
@@ -334,6 +335,30 @@ public partial class LIMSContext : DbContext
             .WithMany(g => g.Conditions)
             .HasForeignKey(x => x.ProductMasterVersionGradeID)
             .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<SamplePreparationTestItem>()
+            .HasOne(x => x.SamplePreparation)
+            .WithMany(p => p.TestItems)
+            .HasForeignKey(x => x.SamplePreparationID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<SamplePreparationTestItem>()
+            .HasOne(x => x.Sample)
+            .WithMany()
+            .HasForeignKey(x => x.SampleID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<SamplePreparationTestItem>()
+            .HasOne(x => x.LaboratoryTest)
+            .WithMany()
+            .HasForeignKey(x => x.LaboratoryTestID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<SamplePreparationTestItem>()
+            .HasOne(x => x.SpecimenPreparationMaster)
+            .WithMany()
+            .HasForeignKey(x => x.SpecimenPreparationMasterID)
+            .OnDelete(DeleteBehavior.NoAction);
 
         // RolePermission — one (Role, Permission) pair only when active
         modelBuilder.Entity<RolePermission>()

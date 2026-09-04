@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -18,6 +18,8 @@ public partial class DimensionalFactorMaster : AuditProperty
 
     public long? ParameterUnitID { get; set; }
 
+    public long? ParameterUnitEquivalentID { get; set; }
+
     [StringLength(100)]
     public string? Instrument { get; set; }
 
@@ -28,6 +30,9 @@ public partial class DimensionalFactorMaster : AuditProperty
 
     [ForeignKey("ParameterUnitID")]
     public virtual ParameterUnitMaster? ParameterUnit { get; set; }
+
+    [ForeignKey(nameof(ParameterUnitEquivalentID))]
+    public virtual ParameterUnitEquivalent? ParameterUnitEquivalent { get; set; }
 
     [ForeignKey("DefaultTestMethodID")]
     public virtual TestMethodSpecification? DefaultTestMethod { get; set; }

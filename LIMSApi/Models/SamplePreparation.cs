@@ -58,6 +58,33 @@ namespace LIMSApi.Models
         [MaxLength(500)]
         public string? VerificationRemarks { get; set; }
 
+        // ── Sample-Level Other Cutting Fields ──
+        public int? NumberOfCuts { get; set; }
+
+        [Column(TypeName = "decimal(10,2)")]
+        public decimal? CutThickness { get; set; }
+
+        [Column(TypeName = "decimal(10,2)")]
+        public decimal? WaterJetCuttingMins { get; set; }
+
+        [MaxLength(200)]
+        public string? EdmCutting { get; set; }
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal EdmCuttingCharge { get; set; } = 0;
+
+        [MaxLength(200)]
+        public string? GasCutting { get; set; }
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal GasCuttingCharge { get; set; } = 0;
+
+        [MaxLength(200)]
+        public string? SpecialCutting { get; set; }
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal SpecialCuttingCharge { get; set; } = 0;
+
         // ── Denormalized Charge Totals (updated on save) ──
         [Column(TypeName = "decimal(18,2)")]
         public decimal CuttingChargesTotal { get; set; }
@@ -67,6 +94,9 @@ namespace LIMSApi.Models
 
         [Column(TypeName = "decimal(18,2)")]
         public decimal OtherChargesTotal { get; set; }
+
+        // ── Test-Wise Preparation Transactions ──
+        public virtual ICollection<SamplePreparationTestItem> TestItems { get; set; } = new List<SamplePreparationTestItem>();
 
         // ── Navigation ──
         [ForeignKey("SampleID")]
