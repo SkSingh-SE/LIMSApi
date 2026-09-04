@@ -1539,21 +1539,41 @@ namespace LIMSApi.ServiceWORepo
                         .ThenInclude(ct => ct.Methods)
                 .FirstOrDefaultAsync(s => s.ID == header.SampleID);
 
-            var isPrepRequired = sample != null && sample.TestPlans.Any(tp =>
-                tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) ||
-                tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired)));
-
-            if (isPrepRequired)
+            // Test-specific preparation execution guard (Phase 7 Mandate)
+            if (sample != null)
             {
-                var cuttingSample = await _db.CuttingChargeSamples
-                    .FirstOrDefaultAsync(cs => cs.SampleID == header.SampleID);
+                var matchingGeneralMethod = sample.TestPlans
+                    .Where(tp => header.TestPlanID == 0 || tp.ID == header.TestPlanID)
+                    .SelectMany(tp => tp.GeneralTests)
+                    .Where(gt => gt.LaboratoryTestSubGroupID == header.LaboratoryTestID)
+                    .SelectMany(gt => gt.Methods)
+                    .FirstOrDefault(m => !m.Cancel && (header.TestID == null || m.ID == header.TestID.Value || m.LaboratoryTestID == header.LaboratoryTestID));
 
-                if (cuttingSample == null ||
-                    (cuttingSample.PreparationStatus != "Completed" && cuttingSample.PreparationStatus != "QCVerified"))
+                var matchingChemMethod = sample.TestPlans
+                    .Where(tp => header.TestPlanID == 0 || tp.ID == header.TestPlanID)
+                    .SelectMany(tp => tp.ChemicalTests)
+                    .Where(ct => ct.LaboratoryTestAnalysisTypeID == header.LaboratoryTestID)
+                    .SelectMany(ct => ct.Methods)
+                    .FirstOrDefault(m => !m.Cancel && (header.TestID == null || m.ID == header.TestID.Value || m.LaboratoryTestAnalysisTypeID == header.LaboratoryTestID));
+
+                bool thisTestPrepRequired = (matchingGeneralMethod != null && matchingGeneralMethod.PreparationRequired)
+                    || (matchingChemMethod != null && matchingChemMethod.PreparationRequired);
+
+                if (thisTestPrepRequired)
                 {
-                    response.PreparationWarning = true;
-                    response.PreparationStatus = cuttingSample?.PreparationStatus ?? "No preparation record";
-                    response.WarningMessage = "Sample preparation data is not yet entered in the system. You can add preparation details later.";
+                    long plannedMethodId = matchingGeneralMethod?.ID ?? matchingChemMethod?.ID ?? 0;
+
+                    var prepItem = await _db.SamplePreparationTestItems
+                        .FirstOrDefaultAsync(ti => ti.SampleID == header.SampleID
+                            && ti.IsActive
+                            && ((plannedMethodId > 0 && ti.PlannedTestMethodID == plannedMethodId)
+                                || ti.LaboratoryTestID == header.LaboratoryTestID));
+
+                    if (prepItem == null || (prepItem.Status != "Completed" && prepItem.Status != "QCVerified"))
+                    {
+                        var statusStr = prepItem?.Status ?? "Not Initiated";
+                        throw new InvalidOperationException($"Cannot start test. Sample preparation for this test is required and currently in '{statusStr}' status. Specimen preparation must be completed before test execution can begin.");
+                    }
                 }
             }
 

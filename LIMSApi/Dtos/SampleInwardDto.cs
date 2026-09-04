@@ -170,6 +170,7 @@ namespace LIMSApi.Dtos
 
         public ICollection<SampleAdditionalDetailDto> AdditionalDetails { get; set; } = new List<SampleAdditionalDetailDto>();
         public ICollection<SampleTestPlanDto> TestPlans { get; set; } = new List<SampleTestPlanDto>();
+        public SamplePrepReviewDto? PreparationDetails { get; set; }
     }
 
     public class SampleAdditionalDetailDto
@@ -361,8 +362,11 @@ namespace LIMSApi.Dtos
         public decimal? CutThickness { get; set; }
         public decimal? WaterJetCuttingMins { get; set; }
         public string? EdmCutting { get; set; }
+        public decimal? EdmCuttingCharge { get; set; }
         public string? GasCutting { get; set; }
+        public decimal? GasCuttingCharge { get; set; }
         public string? SpecialCutting { get; set; }
+        public decimal? SpecialCuttingCharge { get; set; }
         public decimal? MachiningChargesTotal { get; set; }
         public decimal? CuttingChargesTotal { get; set; }
         public decimal? OtherChargesTotal { get; set; }
@@ -371,15 +375,28 @@ namespace LIMSApi.Dtos
 
     public class SampleTestPrepItemDto
     {
+        public long? ID { get; set; }
         public long TestId { get; set; }
+        public long PlannedTestMethodID { get; set; }
+        public string PlannedTestType { get; set; } = "General";
         public string? TestName { get; set; }
+        public long? StandardId { get; set; }
+        public string? StandardName { get; set; }
         public long? SpecimenPreparationMasterID { get; set; }
         public string? SpecimenSize { get; set; }
         public string? SpecimenRawMaterialSize { get; set; }
+        public string? DrawingFilePath { get; set; }
+        public string? FileName { get; set; }
+        public int Quantity { get; set; } = 1;
         public decimal? MachiningRate { get; set; }
         public decimal? CuttingRate { get; set; }
-        public bool RequiresCutting { get; set; }
-        public bool NoTesting { get; set; }
+        public decimal? MachiningTotal { get; set; }
+        public decimal? CuttingTotal { get; set; }
+        public bool RequiresCutting { get; set; } = true;
+        public bool RequiresMachining { get; set; } = true;
+        public bool NoTesting { get; set; } = false;
+        public string? Remarks { get; set; }
+        public string? Status { get; set; } = "Pending";
     }
 
     public class VerifyReviewRequestDto
