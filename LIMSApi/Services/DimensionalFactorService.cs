@@ -64,6 +64,7 @@ namespace LIMSApi.Services
             existingDimensionalFactor.Name = model.Name;
             existingDimensionalFactor.Code = model.Code;
             existingDimensionalFactor.ParameterUnitID = (model.ParameterUnitID == null || model.ParameterUnitID == 0) ? null : model.ParameterUnitID;
+            existingDimensionalFactor.ParameterUnitEquivalentID = (model.ParameterUnitEquivalentID == null || model.ParameterUnitEquivalentID == 0) ? null : model.ParameterUnitEquivalentID;
             existingDimensionalFactor.Instrument = model.Instrument;
             existingDimensionalFactor.ToleranceType = model.ToleranceType;
             existingDimensionalFactor.DefaultTestMethodID = (model.DefaultTestMethodID == null || model.DefaultTestMethodID == 0) ? null : model.DefaultTestMethodID;

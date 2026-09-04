@@ -115,9 +115,29 @@ namespace LIMSApi.Services
             }
 
             // Soft-delete equivalents that were in DB as active but not present in incoming list
-            foreach (var e in existingParameterUnit.Equivalents.Where(e => e.IsActive && e.ID > 0 && !incomingIds.Contains(e.ID)))
+            var equivalentsToDeactivate = existingParameterUnit.Equivalents
+                .Where(e => e.IsActive && e.ID > 0 && !incomingIds.Contains(e.ID))
+                .ToList();
+
+            if (equivalentsToDeactivate.Any())
             {
-                e.IsActive = false;
+                var deactivatingEqIds = equivalentsToDeactivate.Select(e => e.ID).ToList();
+
+                var paramCount = await _context.ParameterMasters.CountAsync(p => p.IsActive && p.ParameterUnitEquivalentID.HasValue && deactivatingEqIds.Contains(p.ParameterUnitEquivalentID.Value));
+                var sizeCount = await _context.ProductSizeMasters.CountAsync(s => s.IsActive && s.ParameterUnitEquivalentID.HasValue && deactivatingEqIds.Contains(s.ParameterUnitEquivalentID.Value));
+                var factorCount = await _context.DimensionalFactorMasters.CountAsync(d => d.IsActive && d.ParameterUnitEquivalentID.HasValue && deactivatingEqIds.Contains(d.ParameterUnitEquivalentID.Value));
+                var specCount = await _context.SpecificationLines.CountAsync(sl => sl.ParameterUnitEquivalentID.HasValue && deactivatingEqIds.Contains(sl.ParameterUnitEquivalentID.Value));
+
+                if (paramCount > 0 || sizeCount > 0 || factorCount > 0 || specCount > 0)
+                {
+                    var names = string.Join(", ", equivalentsToDeactivate.Select(e => e.Name));
+                    throw new InvalidOperationException($"Cannot remove or deactivate equivalent unit(s) '{names}' because active records are linked to them (Parameters: {paramCount}, Product Sizes: {sizeCount}, Dimensional Factors: {factorCount}, Specification Lines: {specCount}). Please migrate or reassign those records first.");
+                }
+
+                foreach (var e in equivalentsToDeactivate)
+                {
+                    e.IsActive = false;
+                }
             }
 
             await _context.SaveChangesAsync();

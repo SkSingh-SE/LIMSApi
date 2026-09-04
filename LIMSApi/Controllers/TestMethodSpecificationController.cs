@@ -43,6 +43,8 @@ namespace LIMSApi.Controllers
 
         [RequirePermission(Permissions.TestMethodSpecification.Update)]
         [HttpPut("update")]
+        [RequestSizeLimit(FileUploadValidator.MaxFileSizeBytes)]
+        [RequestFormLimits(MultipartBodyLengthLimit = FileUploadValidator.MaxFileSizeBytes)]
         public async Task<IActionResult> PutTestMethodSpecificationMaster([FromForm] TestMethodSpecificationDto model)
         {
 
@@ -73,6 +75,8 @@ namespace LIMSApi.Controllers
 
         [RequirePermission(Permissions.TestMethodSpecification.Create)]
         [HttpPost("create")]
+        [RequestSizeLimit(FileUploadValidator.MaxFileSizeBytes)]
+        [RequestFormLimits(MultipartBodyLengthLimit = FileUploadValidator.MaxFileSizeBytes)]
         public async Task<ActionResult<TestMethodSpecification>> PostTestMethodSpecificationMaster([FromForm] TestMethodSpecificationDto model)
         {
             var versions = JsonConvert.DeserializeObject<List<VersionDto>>(model.Versions);

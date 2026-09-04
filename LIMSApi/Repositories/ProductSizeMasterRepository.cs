@@ -35,6 +35,7 @@ namespace LIMSApi.Repositories
         {
             return await _context.ProductSizeMasters
                 .Include(x => x.ParameterUnit)
+                .Include(x => x.ParameterUnitEquivalent)
                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
@@ -46,7 +47,9 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllProductSizes(PageFilter filter)
         {
-            var _query = (from c in _context.ProductSizeMasters.Include(x => x.ParameterUnit)
+            var _query = (from c in _context.ProductSizeMasters
+                              .Include(x => x.ParameterUnit)
+                              .Include(x => x.ParameterUnitEquivalent)
                           where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
                           select c).AsQueryable().ApplyFilters(filter.Filter);
 
@@ -57,6 +60,7 @@ namespace LIMSApi.Repositories
                     (x.DisplayName != null && x.DisplayName.Contains(search))
                     || (x.SizeType != null && x.SizeType.Contains(search))
                     || (x.ParameterUnit != null && x.ParameterUnit.Name.Contains(search))
+                    || (x.ParameterUnitEquivalent != null && x.ParameterUnitEquivalent.Name.Contains(search))
                 );
             }
             if (filter.SortByColumn != null)
@@ -71,7 +75,8 @@ namespace LIMSApi.Repositories
                 x.MinValue,
                 x.MaxValue,
                 x.ParameterUnitID,
-                UnitName = x.ParameterUnit != null ? x.ParameterUnit.Name : null,
+                x.ParameterUnitEquivalentID,
+                UnitName = x.ParameterUnitEquivalent != null ? x.ParameterUnitEquivalent.Name : (x.ParameterUnit != null ? x.ParameterUnit.Name : null),
                 x.DisplayName,
                 x.CreatedBy,
                 x.CreatedOn,

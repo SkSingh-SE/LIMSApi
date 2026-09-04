@@ -57,6 +57,7 @@ namespace LIMSApi.Services
             existing.MinValue = model.MinValue;
             existing.MaxValue = model.MaxValue;
             existing.ParameterUnitID = model.ParameterUnitID;
+            existing.ParameterUnitEquivalentID = model.ParameterUnitEquivalentID;
             existing.DisplayName = model.DisplayName;
             existing.ModifiedOn = DateTime.UtcNow;
             existing.ModifiedBy = loggedInUser.EmployeeID;

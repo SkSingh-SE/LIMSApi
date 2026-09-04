@@ -733,10 +733,10 @@ namespace LIMSApi.Services
                     try
                     {
                         var fileInfo = new FileInfo(pdfFilePath);
-                        // Skip files > 10 MB silently (log only)
+                        // Skip files > 100 MB silently (log only)
                         if (fileInfo.Length > FileUploadValidator.MaxFileSizeBytes)
                         {
-                            _logger.LogInformation("Skipping PDF '{FileName}' ({Size:F1} MB) — exceeds 10 MB limit.", pdfFileName, fileInfo.Length / (1024.0 * 1024));
+                            _logger.LogInformation("Skipping PDF '{FileName}' ({Size:F1} MB) — exceeds 100 MB limit.", pdfFileName, fileInfo.Length / (1024.0 * 1024));
                             continue;
                         }
 

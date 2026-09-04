@@ -1,4 +1,4 @@
-﻿using System.Linq.Dynamic.Core;
+using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -40,6 +40,7 @@ namespace LIMSApi.Repositories
         {
             return await _context.DimensionalFactorMasters
                 .Include(x => x.ParameterUnit)
+                .Include(x => x.ParameterUnitEquivalent)
                 .Include(x => x.DefaultTestMethod)
                 .Include(x => x.ApplicableForms).ThenInclude(af => af.ProductForm)
                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
@@ -56,6 +57,7 @@ namespace LIMSApi.Repositories
             var _query = _context.DimensionalFactorMasters
                 .Where(c => c.IsActive)
                 .Include(x => x.ParameterUnit)
+                .Include(x => x.ParameterUnitEquivalent)
                 .Include(x => x.DefaultTestMethod)
                 .Include(x => x.ApplicableForms).ThenInclude(af => af.ProductForm)
                 .AsQueryable()

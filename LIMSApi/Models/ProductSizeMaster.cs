@@ -28,6 +28,9 @@ namespace LIMSApi.Models
         /// Unit of measure for Min/Max — FK to ParameterUnitMaster (mm / inch / cm …).
         public long? ParameterUnitID { get; set; }
 
+        /// Normalized equivalent unit — FK to ParameterUnitEquivalent.
+        public long? ParameterUnitEquivalentID { get; set; }
+
         /// Human-readable label shown in dropdowns and on certificates.
         [Required]
         [StringLength(100)]
@@ -35,5 +38,8 @@ namespace LIMSApi.Models
 
         [ForeignKey(nameof(ParameterUnitID))]
         public virtual ParameterUnitMaster? ParameterUnit { get; set; }
+
+        [ForeignKey(nameof(ParameterUnitEquivalentID))]
+        public virtual ParameterUnitEquivalent? ParameterUnitEquivalent { get; set; }
     }
 }

@@ -44,10 +44,16 @@ builder.Services.AddCors(options =>
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 // Add services to the container.
 
-// Global upload size limit — safety net for all multipart form endpoints
+// Global upload size limit — safety net for all multipart form endpoints (100 MB)
 builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
 {
-    options.MultipartBodyLengthLimit = 10 * 1024 * 1024; // 10 MB
+    options.MultipartBodyLengthLimit = 100 * 1024 * 1024; // 100 MB
+});
+
+// Configure Kestrel request body limit to 100 MB (overriding default ~28.6 MB limit)
+builder.WebHost.ConfigureKestrel(serverOptions =>
+{
+    serverOptions.Limits.MaxRequestBodySize = 100 * 1024 * 1024; // 100 MB
 });
 
 builder.Services.AddControllers(options =>
