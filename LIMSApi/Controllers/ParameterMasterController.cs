@@ -36,35 +36,63 @@ namespace LIMSApi.Controllers
             return Ok(await _parameterService.FetchMechanicalParameterList(filter));
         }
 
+        [HttpPost("list")]
+        [RequirePermission(Permissions.Parameter.ReadChemical)]
+        public async Task<IActionResult> GetAllParametersUnified([FromBody] PageFilter filter)
+        {
+            return Ok(await _parameterService.GetAllParametersUnified(filter));
+        }
+
+        [HttpGet("types")]
+        public async Task<IActionResult> GetParameterTypes()
+        {
+            return Ok(await _parameterService.GetParameterTypesMetadata());
+        }
+
         [HttpGet("details/{id}")]
         [RequirePermission(Permissions.Parameter.ReadChemical)]
-        public async Task<ActionResult<ParameterMaster>> GetParameterMaster(long id)
+        public async Task<IActionResult> GetParameterMaster(long id)
         {
-            var entity = await _parameterService.GetParameterDetails(id);
-            return entity == null ? NoContent() : Ok(entity);
+            var entity = await _parameterService.GetParameterDetailById(id);
+            return Ok(entity);
         }
 
         [HttpPut("update")]
         [RequirePermission(Permissions.Parameter.Update)]
-        public async Task<IActionResult> PutParameterMaster(ParameterMaster model)
+        public async Task<IActionResult> PutParameterMaster([FromBody] ParameterUpdateDto model)
         {
-            await _parameterService.ModifyParameter(model);
+            await _parameterService.ModifyParameterUnified(model);
             return Ok(new
             {
                 status = "success",
-                message = $"Parameter '{model.Name}' updated successfully."
+                id = model.ID,
+                message = $"Parameter '{model.Name}' ({model.Code}) updated successfully."
             });
         }
 
         [HttpPost("create")]
         [RequirePermission(Permissions.Parameter.Create)]
-        public async Task<ActionResult<ParameterMaster>> PostParameterMaster(ParameterMaster model)
+        public async Task<IActionResult> PostParameterMaster([FromBody] ParameterCreateDto model)
         {
-            await _parameterService.CreateParameter(model);
+            var id = await _parameterService.CreateParameterUnified(model);
             return Ok(new
             {
                 status = "success",
-                message = $"Parameter '{model.Name}' created successfully."
+                id = id,
+                message = $"Parameter '{model.Name}' ({model.Code}) created successfully."
+            });
+        }
+
+        [HttpPost("toggle-status/{id}")]
+        [RequirePermission(Permissions.Parameter.Update)]
+        public async Task<IActionResult> ToggleParameterStatus(long id)
+        {
+            var newStatus = await _parameterService.ToggleParameterStatus(id);
+            return Ok(new
+            {
+                status = "success",
+                isActive = newStatus,
+                message = $"Parameter {(newStatus ? "activated" : "deactivated")} successfully."
             });
         }
 

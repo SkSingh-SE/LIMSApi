@@ -14,6 +14,10 @@ public partial class ParameterMaster : AuditProperty
     [StringLength(50)]
     public string? Symbol { get; set; }
 
+    /// <summary>Universal code for formula evaluation (e.g. "SOIL_LL")</summary>
+    [StringLength(100)]
+    public string? Code { get; set; }
+
     /// <summary>
     /// "Chemical" | "Mechanical" | "Observation"
     /// Kept as string for backward compatibility — no type change.
@@ -56,7 +60,22 @@ public partial class ParameterMaster : AuditProperty
     /// </summary>
     public string? FormulaDisplay { get; set; }
 
+    /// <summary>Calculation role: "Input" | "Calculated" | "Derived"</summary>
+    [StringLength(50)]
+    public string? CalculationRole { get; set; } = "Input";
+
+    /// <summary>Master display order / sequence hint.</summary>
+    public int? Sequence { get; set; }
+
     public string? Note { get; set; }
+
+    /// <summary>Alias for Note / scientific description.</summary>
+    [NotMapped]
+    public string? Description
+    {
+        get => Note;
+        set => Note = value;
+    }
 
     /// <summary>Billing tier. "normal" | "special" | "super". No type change.</summary>
     public string? ElementType { get; set; } = "normal";

@@ -22,60 +22,94 @@ namespace LIMSApi.Controllers
 
         [RequirePermission(Permissions.LaboratoryTest.Read)]
         [HttpPost("list")]
-        public async Task<IActionResult> TestMethodList(PageFilter filter)
+        public async Task<IActionResult> TestMethodList([FromBody] PageFilter filter)
         {
             return Ok(await _testMethodService.FetchTestMethodList(filter));
         }
 
         [RequirePermission(Permissions.LaboratoryTest.Read)]
-        [HttpGet("details/{id}")]
-        public async Task<ActionResult<LaboratoryTest>> GetTestMethodMaster(long id)
+        [HttpPost("paged")]
+        public async Task<IActionResult> GetPagedUniversalTests(
+            [FromBody] PageFilter filter,
+            [FromQuery] long? disciplineId = null,
+            [FromQuery] long? departmentId = null,
+            [FromQuery] bool? isActive = null)
         {
-            var entity = await _testMethodService.GetTestMethodDetails(id);
-            return entity == null ? NoContent() : Ok(entity);
+            var result = await _testMethodService.GetPagedTestsAsync(filter, disciplineId, departmentId, isActive);
+            return Ok(result);
         }
 
-        [RequirePermission(Permissions.LaboratoryTest.Update)]
-        [HttpPut("update")]
-        public async Task<IActionResult> PutTestMethodMaster(LaboratoryTest model)
+        [RequirePermission(Permissions.LaboratoryTest.Read)]
+        [HttpGet("details/{id}")]
+        public async Task<IActionResult> GetUniversalTestDetails(long id)
         {
-            await _testMethodService.ModifyTestMethod(model);
-            return Ok(new
-            {
-                status = "success",
-                message = $"TestMethod '{model.Name}' updated successfully.",
-                id = model.ID
-            });
+            var entity = await _testMethodService.GetUniversalTestByIdAsync(id);
+            return Ok(entity);
         }
 
         [RequirePermission(Permissions.LaboratoryTest.Create)]
         [HttpPost("create")]
-        public async Task<ActionResult<LaboratoryTest>> PostTestMethodMaster(LaboratoryTest model)
+        public async Task<IActionResult> PostUniversalTest([FromBody] LaboratoryTestCreateDto dto)
         {
-            await _testMethodService.CreateTestMethod(model);
+            var id = await _testMethodService.CreateUniversalTestAsync(dto);
             return Ok(new
             {
                 status = "success",
-                message = $"TestMethod '{model.Name}' created successfully.",
-                id = model.ID
+                message = $"Laboratory Test '{dto.Name}' created successfully.",
+                id
+            });
+        }
+
+        [RequirePermission(Permissions.LaboratoryTest.Update)]
+        [HttpPut("update")]
+        public async Task<IActionResult> PutUniversalTest([FromBody] LaboratoryTestUpdateDto dto)
+        {
+            var id = await _testMethodService.UpdateUniversalTestAsync(dto);
+            return Ok(new
+            {
+                status = "success",
+                message = $"Laboratory Test '{dto.Name}' updated successfully.",
+                id
+            });
+        }
+
+        [RequirePermission(Permissions.LaboratoryTest.Update)]
+        [HttpPatch("toggle-status/{id}")]
+        public async Task<IActionResult> ToggleTestStatus(long id)
+        {
+            bool isActive = await _testMethodService.ToggleTestStatusAsync(id);
+            return Ok(new
+            {
+                status = "success",
+                message = $"Laboratory Test status updated to {(isActive ? "Active" : "Inactive")}.",
+                isActive
             });
         }
 
         [RequirePermission(Permissions.LaboratoryTest.Delete)]
         [HttpDelete("delete/{id}")]
-        public async Task<IActionResult> DeleteTestMethodMaster(long id)
+        public async Task<IActionResult> DeleteUniversalTest(long id)
         {
-            var entity = await _testMethodService.GetTestMethodDetails(id);
-            if (entity == null)
-            {
-                throw new InvalidOperationException("TestMethod not found!");
-            }
-            await _testMethodService.RemoveTestMethod(id);
+            await _testMethodService.DeleteUniversalTestAsync(id);
             return Ok(new
             {
                 status = "success",
-                message = $"TestMethod '{entity.Name}' deleted successfully."
+                message = "Laboratory Test deleted successfully."
             });
+        }
+
+        [HttpGet("universal-dropdown")]
+        public async Task<IActionResult> GetUniversalDropdown([FromQuery] long? disciplineId = null)
+        {
+            var data = await _testMethodService.GetUniversalDropdownAsync(disciplineId);
+            return Ok(data);
+        }
+
+        [HttpGet("check-code-unique")]
+        public async Task<IActionResult> CheckCodeUnique([FromQuery] string code, [FromQuery] long? excludeId = null)
+        {
+            var isUnique = await _testMethodService.CheckCodeUniqueAsync(code, excludeId);
+            return Ok(new { isUnique });
         }
 
         [HttpGet("dropdown")]

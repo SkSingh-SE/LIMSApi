@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -22,6 +22,9 @@ public partial class SpecificationGrade
     public long? MetalClassificationID { get; set; }
     [ForeignKey("MetalClassificationID")]
     public virtual MetalClassificationMaster? MetalClassification { get; set; }
+
+    [ForeignKey("SpecificationHeaderID")]
+    public virtual SpecificationHeader? SpecificationHeader { get; set; }
 
     public virtual ICollection<SpecificationLine> SpecificationLines { get; set; } = new List<SpecificationLine>();
 

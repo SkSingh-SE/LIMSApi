@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace LIMSApi.Models
 {
@@ -22,5 +22,9 @@ namespace LIMSApi.Models
         [MaxLength(50)]
         [Required]
         public string IFSCCode { get; set; } = string.Empty;
+
+        public long? BranchID { get; set; }
+        [System.ComponentModel.DataAnnotations.Schema.ForeignKey("BranchID")]
+        public virtual Branch? Branch { get; set; }
     }
 }

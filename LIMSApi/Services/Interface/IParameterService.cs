@@ -17,6 +17,13 @@ namespace LIMSApi.Services.Interface
         Task<List<DropdwonSelector>> GetChemicalParameterDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<List<DropdwonSelector>> GetMechanicalParameterDropdown(string? searchTerm, int pageNo, int pageSize);
 
+        Task<PagedResponse<ParameterListItemDto>> GetAllParametersUnified(PageFilter filter);
+        Task<ParameterDetailDto> GetParameterDetailById(long id);
+        Task<long> CreateParameterUnified(ParameterCreateDto dto);
+        Task ModifyParameterUnified(ParameterUpdateDto dto);
+        Task<bool> ToggleParameterStatus(long id);
+        Task<object> GetParameterTypesMetadata();
+
         Task<(bool IsValid, string? Error, IEnumerable<long> ParamIds)> ValidateFormulaForApi(string formula);
     }
 }

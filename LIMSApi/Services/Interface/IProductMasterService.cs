@@ -11,8 +11,10 @@ namespace LIMSApi.Services.Interface
         Task<ProductMasterDetailsDto?> GetProductMasterById(long id);
         Task<PagedResponse<object>> GetAllProductMasters(PageFilter filter);
         Task<List<DropdwonSelector>> GetProductMasterDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20, long metalId = 0);
+        Task<GradeApplicabilityInfoDto?> GetGradeApplicabilityInfo(long gradeId);
         Task<GradeParametersDto?> GetGradeParametersByGradeId(long gradeId);
         Task<List<string>> GetPrefixOptions();
         Task<bool> AddPrefixOption(string prefix);
+        Task<bool> ToggleProductMasterStatus(long id);
     }
 }

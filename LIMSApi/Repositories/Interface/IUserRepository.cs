@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 
 namespace LIMSApi.Repositories.Interface
@@ -15,5 +15,10 @@ namespace LIMSApi.Repositories.Interface
         Task<UserMaster> GetByEmployee(long employeeId);
         Task UpdateByEmployee(long employeeId, UserAccountDto dto);
 
+        Task<UserMaster?> GetUserWithBranchesById(long userId);
+        Task<UserMaster?> GetUserWithBranchesByEmployeeId(long employeeId);
+        Task<List<Branch>> GetActiveBranchesByOrganizationId(long organizationId);
+        Task UpdateUserBranchAccess(long userId, UpdateUserBranchAccessDto dto, long? modifiedBy);
+        Task SetDefaultBranch(long userId, long branchId, long? modifiedBy);
     }
 }

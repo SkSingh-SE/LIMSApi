@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace LIMSApi.Models
@@ -41,5 +41,7 @@ namespace LIMSApi.Models
 
         [StringLength(20)]
         public string? LabLocationCode { get; set; }
+
+        public bool IsMultiBranch { get; set; } = false;
     }
 }

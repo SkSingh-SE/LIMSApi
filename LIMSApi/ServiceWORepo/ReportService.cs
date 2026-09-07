@@ -798,12 +798,25 @@ namespace LIMSApi.ServiceWORepo
                 .Include(x => x.Sample).ThenInclude(s => s.SampleInward).ThenInclude(c => c.Customer)
                 .FirstOrDefaultAsync(r => r.SampleID == sampleId);
 
-            // If no report header exists, create one via GenerateReportAsync
+            // If no report header exists, create one via GenerateReportAsync or GetOrCreateReportHeaderAsync
             if (reportHeader == null)
             {
-                var reportId = await GenerateReportAsync(sampleId);
-                var report = await _db.Reports.Include(r => r.Blocks).FirstAsync(r => r.ID == reportId);
-                reportHeader = await _db.ReportHeaders.FindAsync(report.ReportHeaderID);
+                var hasLegacyHeaders = await _db.TestResultHeaders.AnyAsync(h => h.SampleID == sampleId);
+                if (hasLegacyHeaders)
+                {
+                    var reportId = await GenerateReportAsync(sampleId);
+                    var report = await _db.Reports.Include(r => r.Blocks).FirstAsync(r => r.ID == reportId);
+                    reportHeader = await _db.ReportHeaders.FindAsync(report.ReportHeaderID);
+                }
+                else
+                {
+                    var sampleEntity = await _db.SampleDetails
+                        .Include(s => s.SampleInward).ThenInclude(i => i.Customer)
+                        .FirstOrDefaultAsync(s => s.ID == sampleId)
+                        ?? throw new InvalidOperationException("Sample not found");
+
+                    reportHeader = await GetOrCreateReportHeaderAsync(sampleEntity);
+                }
             }
 
             if (reportHeader == null)
@@ -1486,7 +1499,7 @@ namespace LIMSApi.ServiceWORepo
             var customer = inward.Customer
                 ?? throw new InvalidOperationException("Customer not found.");
 
-            // 2. Load test result headers with parameters + images
+            // 2. Load test result headers with parameters + images (Legacy)
             var testHeaders = await _db.TestResultHeaders
                 .Include(h => h.Parameters)
                 .Include(h => h.Images)
@@ -1494,6 +1507,24 @@ namespace LIMSApi.ServiceWORepo
                     .ThenInclude(lt => lt.LabDepartment)
                 .Where(h => h.SampleID == sample.ID)
                 .OrderBy(h => h.LaboratoryTest.Name)
+                .ToListAsync();
+
+            // 2.1 Load Universal Test Executions (Phase C)
+            var universalExecutions = await _db.TestExecutions
+                .Include(e => e.UniversalTestGroup)
+                    .ThenInclude(utg => utg.LaboratoryTest)
+                .Include(e => e.UniversalTestGroup)
+                    .ThenInclude(utg => utg.TestMethodSpecification)
+                .Include(e => e.UniversalTestGroup)
+                    .ThenInclude(utg => utg.SpecificationHeader)
+                .Include(e => e.ExecutionConfigSnapshot)
+                .Include(e => e.TestSpecimens)
+                    .ThenInclude(s => s.TestObservations)
+                        .ThenInclude(o => o.ParameterObservationResults)
+                            .ThenInclude(p => p.ParameterMaster)
+                                .ThenInclude(pm => pm.ParameterUnit)
+                .Where(e => e.UniversalTestGroup.SampleTestPlan.SampleDetail.InwardID == sample.InwardID &&
+                            (e.Status == "Completed" || e.Status == "Verified" || e.Status == "Approved"))
                 .ToListAsync();
 
             // 3. Determine tested/completed dates
@@ -1585,6 +1616,94 @@ namespace LIMSApi.ServiceWORepo
                         .ToList()
                 };
 
+                testSections.Add(section);
+            }
+
+            // 4.1 Append Universal Executions
+            foreach (var exec in universalExecutions)
+            {
+                var baseName = exec.UniversalTestGroup.LaboratoryTest?.Name ?? "Universal Test";
+                var testMethodStandard = exec.UniversalTestGroup.TestMethodSpecification?.TestMethodStandard;
+                TestExecutionConfigSnapshotDto? snapshot = null;
+                if (!string.IsNullOrWhiteSpace(exec.ExecutionConfigSnapshot?.ConfigJson))
+                {
+                    try
+                    {
+                        snapshot = System.Text.Json.JsonSerializer.Deserialize<TestExecutionConfigSnapshotDto>(
+                            exec.ExecutionConfigSnapshot.ConfigJson,
+                            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    }
+                    catch { }
+                }
+
+                var paramMap = snapshot?.Parameters?.ToDictionary(p => p.ParameterMasterID) ?? new Dictionary<long, SnapshotParameterDto>();
+
+                var testType = (exec.UniversalTestGroup.LaboratoryTest?.IsChemicalTest == true) ? "Chemical" : "General";
+                var category = (exec.UniversalTestGroup.LaboratoryTest?.IsChemicalTest == true) ? "CHEMICAL"
+                    : (exec.UniversalTestGroup.LaboratoryTest?.IsMechanical == true) ? "MECHANICAL"
+                    : "UNIVERSAL";
+
+                var parameters = new List<ReportDataParameter>();
+
+                var allResults = exec.TestSpecimens
+                    .Where(s => !s.IsDiscarded)
+                    .SelectMany(s => s.TestObservations.SelectMany(o => o.ParameterObservationResults))
+                    .GroupBy(r => r.ParameterMasterID)
+                    .ToList();
+
+                foreach (var group in allResults)
+                {
+                    var paramId = group.Key;
+                    paramMap.TryGetValue(paramId, out var snapParam);
+                    var firstResult = group.First();
+                    var pm = firstResult.ParameterMaster;
+
+                    string name = snapParam?.Name ?? pm?.Name ?? "Parameter";
+                    string unit = snapParam?.Unit ?? pm?.ParameterUnit?.Name ?? "";
+                    string? specMin = snapParam?.SpecMin?.ToString() ?? firstResult.SpecMin?.ToString();
+                    string? specMax = snapParam?.SpecMax?.ToString() ?? firstResult.SpecMax?.ToString();
+
+                    string resultStr;
+                    var numVals = group.Where(r => r.NumericValue.HasValue).Select(r => r.NumericValue!.Value).ToList();
+                    if (numVals.Count > 1)
+                    {
+                        var avg = Math.Round(numVals.Average(), snapParam?.DecimalPrecision ?? pm?.DecimalPrecision ?? 2);
+                        resultStr = avg.ToString();
+                    }
+                    else
+                    {
+                        resultStr = firstResult.CalculatedValue ?? firstResult.RawValue ?? firstResult.NumericValue?.ToString() ?? "-";
+                    }
+
+                    string status = group.Any(r => r.ResultStatus == "Fail") ? "Fail"
+                                  : group.All(r => r.ResultStatus == "Pass") ? "Pass"
+                                  : firstResult.ResultStatus ?? "Pass";
+
+                    parameters.Add(new ReportDataParameter
+                    {
+                        Name = name,
+                        Unit = unit,
+                        SpecMin = specMin,
+                        SpecMax = specMax,
+                        Result = resultStr,
+                        Status = status,
+                        IsWithinNablScope = true,
+                        NablScopeStatus = "WithinScope"
+                    });
+                }
+
+                var section = new ReportDataTestSection
+                {
+                    TestResultHeaderId = exec.ID,
+                    TestName = !string.IsNullOrWhiteSpace(testMethodStandard) ? $"{baseName} ({testMethodStandard})" : baseName,
+                    TestType = testType,
+                    TestCategory = category,
+                    SpecificationName = snapshot?.SpecificationTitle ?? exec.UniversalTestGroup.SpecificationHeader?.DisplayTitle,
+                    TestMethod = testMethodStandard ?? snapshot?.TestMethodStandard ?? baseName,
+                    DateOfTesting = exec.CompletedOn?.ToString("dd-MM-yyyy") ?? exec.StartedOn?.ToString("dd-MM-yyyy") ?? "",
+                    Parameters = parameters,
+                    Images = new List<ReportDataImage>()
+                };
                 testSections.Add(section);
             }
 

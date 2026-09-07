@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Helpers.Enums;
@@ -199,6 +199,92 @@ namespace LIMSApi.Services
                 "2FA enabled for UserId {UserId}",
                 user.ID
             );
+        }
+
+        public async Task<UserBranchAccessDto> GetUserBranchAccess(long userId)
+        {
+            var user = await _userRepository.GetUserWithBranchesById(userId);
+            if (user == null)
+            {
+                // Try finding by employeeId as fallback
+                user = await _userRepository.GetUserWithBranchesByEmployeeId(userId);
+            }
+
+            if (user == null)
+            {
+                throw new KeyNotFoundException($"User with ID {userId} not found.");
+            }
+
+            var orgId = user.OrganizationID ?? (user.Branch != null ? user.Branch.OrganizationID : 0);
+            var activeBranches = orgId > 0
+                ? await _userRepository.GetActiveBranchesByOrganizationId(orgId)
+                : new List<Branch>();
+
+            var defaultBranch = user.UserBranches?.FirstOrDefault(ub => ub.IsDefault && ub.IsActive)?.Branch
+                ?? user.Branch;
+
+            var assignedBranches = user.UserBranches?
+                .Where(ub => ub.IsActive && ub.Branch != null && ub.Branch.IsActive)
+                .Select(ub => new UserBranchDetailDto
+                {
+                    Id = ub.ID,
+                    BranchId = ub.BranchID,
+                    BranchCode = ub.Branch?.Code ?? string.Empty,
+                    BranchName = ub.Branch?.Name ?? string.Empty,
+                    IsHeadOffice = ub.Branch?.IsHeadOffice ?? false,
+                    IsDefault = ub.IsDefault,
+                    CanView = ub.CanView,
+                    CanCreate = ub.CanCreate,
+                    CanEdit = ub.CanEdit,
+                    CanExecute = ub.CanExecute,
+                    CanApprove = ub.CanApprove,
+                    CanDelete = ub.CanDelete,
+                    IsActive = ub.IsActive
+                })
+                .OrderByDescending(b => b.IsDefault)
+                .ThenBy(b => b.BranchName)
+                .ToList() ?? new List<UserBranchDetailDto>();
+
+            var availableBranches = activeBranches
+                .Select(b => new DropdwonSelector
+                {
+                    Id = b.ID,
+                    Name = $"{b.Name} ({b.Code})"
+                })
+                .ToList();
+
+            return new UserBranchAccessDto
+            {
+                UserId = user.ID,
+                EmployeeId = user.EmployeeID ?? 0,
+                UserName = user.UserName,
+                Email = user.EmailId ?? string.Empty,
+                OrganizationId = user.OrganizationID,
+                OrganizationName = user.Branch?.Organization?.LabName ?? "Divine Metallurgical Services Pvt. Ltd.",
+                DefaultBranchId = defaultBranch?.ID ?? user.BranchID,
+                DefaultBranchName = defaultBranch?.Name ?? string.Empty,
+                CanViewAllBranches = user.CanViewAllBranches,
+                AssignedBranches = assignedBranches,
+                AvailableBranches = availableBranches
+            };
+        }
+
+        public async Task UpdateUserBranchAccess(long userId, UpdateUserBranchAccessDto dto)
+        {
+            var loggedInUser = LoggedInUserProvider.CurrentUser;
+            var modifiedBy = loggedInUser?.EmployeeID;
+
+            await _userRepository.UpdateUserBranchAccess(userId, dto, modifiedBy);
+            _logger.LogInformation("Updated branch access for UserId {UserId} by {ModifiedBy}", userId, modifiedBy);
+        }
+
+        public async Task SetDefaultBranch(SetDefaultBranchDto dto)
+        {
+            var loggedInUser = LoggedInUserProvider.CurrentUser;
+            var modifiedBy = loggedInUser?.EmployeeID;
+
+            await _userRepository.SetDefaultBranch(dto.UserId, dto.BranchId, modifiedBy);
+            _logger.LogInformation("Set default branch {BranchId} for UserId {UserId} by {ModifiedBy}", dto.BranchId, dto.UserId, modifiedBy);
         }
     }
 }

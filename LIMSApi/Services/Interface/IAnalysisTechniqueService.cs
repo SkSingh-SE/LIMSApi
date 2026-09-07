@@ -5,10 +5,10 @@ namespace LIMSApi.Services.Interface
 {
     public interface IAnalysisTechniqueService
     {
-        Task CreateAnalysisTechnique(AnalysisTechniqueMaster model);
-        Task ModifyAnalysisTechnique(AnalysisTechniqueMaster model);
-        Task RemoveAnalysisTechnique(long id);
-        Task<AnalysisTechniqueMaster> GetAnalysisTechniqueDetails(long id);
+        Task CreateAnalysisTechnique(AnalysisTechniqueCreateDto dto);
+        Task ModifyAnalysisTechnique(AnalysisTechniqueUpdateDto dto);
+        Task<bool> ToggleAnalysisTechniqueStatus(long id);
+        Task<AnalysisTechniqueDetailDto> GetAnalysisTechniqueDetails(long id);
         Task<PagedResponse<object>> FetchAnalysisTechniqueList(PageFilter filter);
         Task<List<DropdwonSelector>> GetAnalysisTechniqueDropdown(string? searchTerm, int pageNo, int pageSize);
     }

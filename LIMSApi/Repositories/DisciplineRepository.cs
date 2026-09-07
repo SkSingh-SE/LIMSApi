@@ -1,4 +1,4 @@
-﻿using System.Linq.Dynamic.Core;
+using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -33,7 +33,7 @@ namespace LIMSApi.Repositories
 
         public async Task<DisciplineMaster?> GetDisciplineById(long id)
         {
-            return await _context.DisciplineMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.DisciplineMasters.FirstOrDefaultAsync(x => x.ID == id && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
         public async Task UpdateDiscipline(DisciplineMaster model)
@@ -44,19 +44,25 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllDisciplines(PageFilter filter)
         {
-            var _query = from c in _context.DisciplineMasters where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c;
+            var _query = from c in _context.DisciplineMasters where c.CompanyCode == loggedInUser.CompanyCode select c;
 
             _query = _query.AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim();
-                _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
+                _query = _query.Where(x => (x.Name != null && x.Name.Contains(search))
+                                        || (x.Code != null && x.Code.Contains(search))
+                                        || (x.Description != null && x.Description.Contains(search)));
             }
 
             if (filter.SortByColumn != null)
             {
                 _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
+            }
+            else
+            {
+                _query = _query.OrderBy(x => x.SortOrder).ThenBy(x => x.Name);
             }
 
             return await _query.Cast<object>().ToPagedAsync(filter);
@@ -77,13 +83,14 @@ namespace LIMSApi.Repositories
                 else
                 {
                     var search = searchTerm.Trim();
-                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
+                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search))
+                                            || (x.Code != null && x.Code.Contains(search)));
                 }
             }
 
             var skip = pageNo * pageSize;
 
-            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            var data = await (_query.OrderBy(x => x.SortOrder).ThenBy(x => x.Name).Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
             {
                 Id = x.ID,
                 Name = x.Name,
@@ -94,12 +101,22 @@ namespace LIMSApi.Repositories
 
         public async Task<bool> ExistsByName(string name)
         {
-            return await _context.DisciplineMasters.AnyAsync(x => x.Name == name && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.DisciplineMasters.AnyAsync(x => x.Name.ToLower() == name.ToLower() && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
         public async Task<bool> ExistsByNameAndNotId(string name, long Id)
         {
-            return await _context.DisciplineMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.DisciplineMasters.AnyAsync(x => x.Name.ToLower() == name.ToLower() && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+        }
+
+        public async Task<bool> ExistsByCode(string code)
+        {
+            return await _context.DisciplineMasters.AnyAsync(x => x.Code.ToLower() == code.ToLower() && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+        }
+
+        public async Task<bool> ExistsByCodeAndNotId(string code, long Id)
+        {
+            return await _context.DisciplineMasters.AnyAsync(x => x.Code.ToLower() == code.ToLower() && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
     }
 }

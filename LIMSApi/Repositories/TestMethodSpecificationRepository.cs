@@ -824,5 +824,155 @@ namespace LIMSApi.Repositories
             return result;
         }
 
+        // Screen 06: Test Method Master methods
+        public async Task<TestMethodSpecification?> GetTestMethodEntityById(long id)
+        {
+            return await _context.TestMethodSpecifications
+                .FirstOrDefaultAsync(x => x.ID == id && x.CompanyCode == loggedInUser.CompanyCode);
+        }
+
+        public async Task<bool> ExistsByCode(string code)
+        {
+            var normalized = code.Trim().ToUpper();
+            return await _context.TestMethodSpecifications
+                .AnyAsync(x => x.Code == normalized && x.CompanyCode == loggedInUser.CompanyCode);
+        }
+
+        public async Task<bool> ExistsByCodeAndNotId(string code, long id)
+        {
+            var normalized = code.Trim().ToUpper();
+            return await _context.TestMethodSpecifications
+                .AnyAsync(x => x.Code == normalized && x.ID != id && x.CompanyCode == loggedInUser.CompanyCode);
+        }
+
+        public async Task<PagedResponse<TestMethodListItemDto>> GetTestMethodList(PageFilter filter, string? codeFilter, string? nameFilter, long? techniqueId, string? statusFilter)
+        {
+            var query = from c in _context.TestMethodSpecifications
+                        join a in _context.AnalysisTechniqueMasters on c.AnalysisTechniqueID equals a.ID into techGroup
+                        from a in techGroup.DefaultIfEmpty()
+                        where c.CompanyCode == loggedInUser.CompanyCode
+                        select new TestMethodListItemDto
+                        {
+                            ID = c.ID,
+                            Code = c.Code ?? "",
+                            Name = c.Name,
+                            StandardReference = c.TestMethodStandard,
+                            AnalysisTechniqueID = c.AnalysisTechniqueID,
+                            AnalysisTechniqueName = a != null ? a.Name : null,
+                            AnalysisTechniqueCode = a != null ? a.Code : null,
+                            Description = c.Description,
+                            IsActive = c.IsActive,
+                            CreatedOn = c.CreatedOn,
+                            ModifiedOn = c.ModifiedOn
+                        };
+
+            if (!string.IsNullOrWhiteSpace(codeFilter))
+            {
+                var cf = codeFilter.Trim();
+                query = query.Where(x => x.Code.Contains(cf));
+            }
+
+            if (!string.IsNullOrWhiteSpace(nameFilter))
+            {
+                var nf = nameFilter.Trim();
+                query = query.Where(x => x.Name.Contains(nf));
+            }
+
+            if (techniqueId.HasValue && techniqueId.Value > 0)
+            {
+                query = query.Where(x => x.AnalysisTechniqueID == techniqueId.Value);
+            }
+
+            if (!string.IsNullOrWhiteSpace(statusFilter) && statusFilter != "All Statuses")
+            {
+                if (statusFilter.Equals("Active", StringComparison.OrdinalIgnoreCase))
+                    query = query.Where(x => x.IsActive);
+                else if (statusFilter.Equals("Inactive", StringComparison.OrdinalIgnoreCase))
+                    query = query.Where(x => !x.IsActive);
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.searchTerm))
+            {
+                var search = filter.searchTerm.Trim();
+                query = query.Where(x => x.Code.Contains(search)
+                                      || x.Name.Contains(search)
+                                      || (x.StandardReference != null && x.StandardReference.Contains(search))
+                                      || (x.AnalysisTechniqueName != null && x.AnalysisTechniqueName.Contains(search))
+                                      || (x.AnalysisTechniqueCode != null && x.AnalysisTechniqueCode.Contains(search)));
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.SortByColumn))
+            {
+                query = query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "desc" ? "descending" : "ascending")}");
+            }
+            else
+            {
+                query = query.OrderBy(x => x.Code);
+            }
+
+            var totalCount = await query.CountAsync();
+            var pagedData = await query.Skip(filter.PageNumber * filter.PageSize).Take(filter.PageSize).ToListAsync();
+
+            return new PagedResponse<TestMethodListItemDto>(pagedData, totalCount, filter.PageNumber, filter.PageSize);
+        }
+
+        public async Task<TestMethodDetailDto?> GetTestMethodDetailById(long id)
+        {
+            var item = await (from c in _context.TestMethodSpecifications
+                              join a in _context.AnalysisTechniqueMasters on c.AnalysisTechniqueID equals a.ID into techGroup
+                              from a in techGroup.DefaultIfEmpty()
+                              where c.ID == id && c.CompanyCode == loggedInUser.CompanyCode
+                              select new TestMethodDetailDto
+                              {
+                                  ID = c.ID,
+                                  Code = c.Code ?? "",
+                                  Name = c.Name,
+                                  StandardReference = c.TestMethodStandard,
+                                  AnalysisTechniqueID = c.AnalysisTechniqueID,
+                                  AnalysisTechniqueName = a != null ? a.Name : null,
+                                  AnalysisTechniqueCode = a != null ? a.Code : null,
+                                  Description = c.Description,
+                                  IsActive = c.IsActive,
+                                  CreatedBy = c.CreatedBy,
+                                  CreatedOn = c.CreatedOn,
+                                  ModifiedBy = c.ModifiedBy,
+                                  ModifiedOn = c.ModifiedOn,
+                                  CompanyCode = c.CompanyCode
+                              }).FirstOrDefaultAsync();
+
+            return item;
+        }
+
+        public async Task ToggleTestMethodStatus(long id)
+        {
+            var item = await _context.TestMethodSpecifications
+                .FirstOrDefaultAsync(x => x.ID == id && x.CompanyCode == loggedInUser.CompanyCode);
+            if (item == null)
+                throw new KeyNotFoundException($"Test Method with ID {id} not found.");
+
+            item.IsActive = !item.IsActive;
+            item.ModifiedOn = DateTime.UtcNow;
+            item.ModifiedBy = loggedInUser.EmployeeID;
+            _context.TestMethodSpecifications.Update(item);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<List<TestMethodDropdownDto>> GetActiveTestMethodDropdown()
+        {
+            return await (from c in _context.TestMethodSpecifications
+                          join a in _context.AnalysisTechniqueMasters on c.AnalysisTechniqueID equals a.ID into techGroup
+                          from a in techGroup.DefaultIfEmpty()
+                          where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
+                          orderby c.Code
+                          select new TestMethodDropdownDto
+                          {
+                              ID = c.ID,
+                              Code = c.Code ?? "",
+                              Name = c.Name,
+                              StandardReference = c.TestMethodStandard,
+                              AnalysisTechniqueID = c.AnalysisTechniqueID,
+                              AnalysisTechniqueCode = a != null ? a.Code : null
+                          }).ToListAsync();
+        }
     }
 }

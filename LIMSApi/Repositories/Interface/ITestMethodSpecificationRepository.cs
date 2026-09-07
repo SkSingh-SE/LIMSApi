@@ -25,5 +25,14 @@ namespace LIMSApi.Repositories.Interface
         Task<List<DropdwonSelector>> GetAllStandardOrganizations();
         Task AddRangeAsync(List<TestMethodSpecification> specs);
         Task UpdateVersionFileRef(long versionId, string filePath, string originalFileName, long uploadRefId);
+
+        // Screen 06: Test Method Master contracts
+        Task<TestMethodSpecification?> GetTestMethodEntityById(long id);
+        Task<bool> ExistsByCode(string code);
+        Task<bool> ExistsByCodeAndNotId(string code, long id);
+        Task<PagedResponse<TestMethodListItemDto>> GetTestMethodList(PageFilter filter, string? codeFilter, string? nameFilter, long? techniqueId, string? statusFilter);
+        Task<TestMethodDetailDto?> GetTestMethodDetailById(long id);
+        Task ToggleTestMethodStatus(long id);
+        Task<List<TestMethodDropdownDto>> GetActiveTestMethodDropdown();
     }
 }

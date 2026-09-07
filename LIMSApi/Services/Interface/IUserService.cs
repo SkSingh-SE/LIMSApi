@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 
 namespace LIMSApi.Services.Interface
@@ -18,5 +18,8 @@ namespace LIMSApi.Services.Interface
         Task SendTwoFactorOtp(Send2FADto dto);
         Task VerifyTwoFactorOtp(Verify2FADto dto);
 
+        Task<UserBranchAccessDto> GetUserBranchAccess(long userId);
+        Task UpdateUserBranchAccess(long userId, UpdateUserBranchAccessDto dto);
+        Task SetDefaultBranch(SetDefaultBranchDto dto);
     }
 }

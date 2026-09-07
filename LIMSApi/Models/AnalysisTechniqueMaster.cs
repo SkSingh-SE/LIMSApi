@@ -3,29 +3,30 @@ using System.ComponentModel.DataAnnotations;
 namespace LIMSApi.Models
 {
     /// <summary>
-    /// Chemical analysis technique / instrument family used to perform chemical analysis
-    /// (NOT a test method). e.g. OES, ICP, Wet Analysis, LECO, WDXRF, EDXRF.
-    /// Sits in the chemical hierarchy: Chemical Test → Analysis Technique → Method → Instrument → Parameters.
+    /// Enterprise Scientific Master representing the scientific/analytical approach used by a laboratory test.
+    /// Reusable across Soil, Mechanical, Chemical, Electrical, Civil, Environmental, Metrology, etc.
+    /// Not branch-owned, not department-owned, not discipline-owned.
     /// </summary>
     public class AnalysisTechniqueMaster : AuditProperty
     {
         [Key]
         public long ID { get; set; }
 
-        /// Display name — e.g. "OES", "ICP", "Wet Analysis", "LECO", "WDXRF", "EDXRF".
+        /// <summary>Stable uppercase business identifier (e.g. OES, ICP, WET, GRAV_METRIC).</summary>
+        [Required]
+        [StringLength(50)]
+        public string Code { get; set; } = string.Empty;
+
+        /// <summary>Display name — e.g. "OES", "ICP", "Wet Analysis", "Gravimetric Analysis".</summary>
         [Required]
         [StringLength(100)]
         public string Name { get; set; } = string.Empty;
 
-        /// Short unique code — e.g. OES / ICP / WET / LECO / WDXRF / EDXRF.
-        [StringLength(40)]
-        public string? Code { get; set; }
-
-        /// Comma-separated alternate names — e.g. "Spectro Test, Metal Analysis, Spectrometer Test".
+        /// <summary>Comma-separated alternate names — e.g. "Spectro Test, Metal Analysis".</summary>
         [StringLength(500)]
         public string? AliasNames { get; set; }
 
-        /// Optional notes on purpose / typical use.
+        /// <summary>Optional notes on purpose / typical scientific use.</summary>
         [StringLength(1000)]
         public string? Description { get; set; }
     }

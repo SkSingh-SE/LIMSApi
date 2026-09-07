@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -9,8 +9,17 @@ public partial class SpecificationHeader : AuditProperty
 {
     [Key]
     public long ID { get; set; }
+
+    [StringLength(100)]
+    public string? Code { get; set; }
+
     [StringLength(100),Required]
     public required string AliasName { get; set; }
+
+    public string? Description { get; set; }
+
+    [StringLength(300)]
+    public string? StandardReference { get; set; }
 
     public long? StandardOrganizationID { get; set; }
 
@@ -51,4 +60,5 @@ public partial class SpecificationHeader : AuditProperty
     // MS-A: header-level parameter template (copied into grade tabs on Add Grade)
     public virtual ICollection<SpecificationHeaderParameter> HeaderParameters { get; set; } = new List<SpecificationHeaderParameter>();
 
+    public virtual ICollection<SpecificationVersion> Versions { get; set; } = new List<SpecificationVersion>();
 }

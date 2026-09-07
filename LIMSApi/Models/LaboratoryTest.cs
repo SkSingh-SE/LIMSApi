@@ -8,9 +8,15 @@ namespace LIMSApi.Models
         [Key]
         public long ID { get; set; }
 
+        [StringLength(50)]
+        public string? Code { get; set; }
+
         [Required]
         [StringLength(100)]
         public required string Name { get; set; }
+
+        [StringLength(500)]
+        public string? Description { get; set; }
 
         public long? LabDepartmentID { get; set; }
 
@@ -21,6 +27,11 @@ namespace LIMSApi.Models
 
         // True = mechanical testing (tensile, impact, hardness, etc.).
         public bool IsMechanical { get; set; } = false;
+
+        public long? DisciplineID { get; set; }
+
+        [ForeignKey("DisciplineID")]
+        public virtual DisciplineMaster? Discipline { get; set; }
 
         [Range(1, 365)]
         public int? TestDuration { get; set; }
@@ -33,5 +44,8 @@ namespace LIMSApi.Models
         public virtual DepartmentMaster? LabDepartment { get; set; }
 
         public virtual ICollection<LaboratoryTestSubGroup> SubGroups { get; set; } = new List<LaboratoryTestSubGroup>();
+        public virtual ICollection<LaboratoryTestParameter> Parameters { get; set; } = new List<LaboratoryTestParameter>();
+        public virtual ICollection<LaboratoryTestMethod> Methods { get; set; } = new List<LaboratoryTestMethod>();
+        public virtual ICollection<LaboratoryTestCondition> Conditions { get; set; } = new List<LaboratoryTestCondition>();
     }
 }

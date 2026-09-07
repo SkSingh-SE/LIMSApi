@@ -40,6 +40,7 @@ namespace LIMSApi.Repositories
         public async Task<LaboratoryTest?> GetTestMethodById(long id)
         {
             var test = await _context.LaboratoryTests
+                .Include(y => y.Discipline)
                 .Include(y => y.SubGroups)
                     .ThenInclude(g => g.MetalClassification)
                 .Include(y => y.SubGroups)
@@ -78,12 +79,16 @@ namespace LIMSApi.Repositories
                          where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
                          join d in _context.DepartmentMasters on c.LabDepartmentID equals d.ID into dsGroup
                          from ds in dsGroup.DefaultIfEmpty()
+                         join dm in _context.DisciplineMasters on c.DisciplineID equals dm.ID into dmGroup
+                         from dm in dmGroup.DefaultIfEmpty()
                          select new
                          {
                              c.ID,
                              c.Name,
                              c.LabDepartmentID,
                              DepartmentName = ds.Name,
+                             c.DisciplineID,
+                             DisciplineName = dm.Name,
                              c.IsChemicalTest,
                              c.ModifiedOn,
                              c.CreatedOn
@@ -96,7 +101,8 @@ namespace LIMSApi.Repositories
                 var search = filter.searchTerm.Trim();
                 _query = _query.Where(x =>
                                     (!string.IsNullOrEmpty(x.Name) && x.Name.Contains(search)) ||
-                                    (!string.IsNullOrEmpty(x.DepartmentName) && x.DepartmentName.Contains(search))
+                                    (!string.IsNullOrEmpty(x.DepartmentName) && x.DepartmentName.Contains(search)) ||
+                                    (!string.IsNullOrEmpty(x.DisciplineName) && x.DisciplineName.Contains(search))
                                     );
             }
 
@@ -106,6 +112,391 @@ namespace LIMSApi.Repositories
             }
 
             return await _query.Cast<object>().ToPagedAsync(filter);
+        }
+
+        public async Task<PagedResponse<LaboratoryTestListDto>> GetPagedTestsAsync(PageFilter filter, long? disciplineId = null, long? departmentId = null, bool? isActive = null)
+        {
+            var query = from t in _context.LaboratoryTests
+                        where t.CompanyCode == loggedInUser.CompanyCode
+                        join d in _context.DepartmentMasters on t.LabDepartmentID equals d.ID into deptJoin
+                        from dept in deptJoin.DefaultIfEmpty()
+                        join disc in _context.DisciplineMasters on t.DisciplineID equals disc.ID into discJoin
+                        from disc in discJoin.DefaultIfEmpty()
+                        select new LaboratoryTestListDto
+                        {
+                            ID = t.ID,
+                            Code = t.Code,
+                            Name = t.Name,
+                            DisciplineID = t.DisciplineID,
+                            DisciplineName = disc != null ? disc.Name : null,
+                            LabDepartmentID = t.LabDepartmentID,
+                            DepartmentName = dept != null ? dept.Name : null,
+                            TestDuration = t.TestDuration,
+                            Description = t.Description,
+                            IsActive = t.IsActive,
+                            ParameterCount = _context.LaboratoryTestParameters.Count(p => p.LaboratoryTestID == t.ID && p.IsActive),
+                            MethodCount = _context.LaboratoryTestMethods.Count(m => m.LaboratoryTestID == t.ID && m.IsActive),
+                            ConditionCount = _context.LaboratoryTestConditions.Count(c => c.LaboratoryTestID == t.ID && c.IsActive),
+                            CompanyCode = t.CompanyCode,
+                            CreatedOn = t.CreatedOn
+                        };
+
+            if (disciplineId.HasValue && disciplineId.Value > 0)
+            {
+                query = query.Where(x => x.DisciplineID == disciplineId.Value);
+            }
+
+            if (departmentId.HasValue && departmentId.Value > 0)
+            {
+                query = query.Where(x => x.LabDepartmentID == departmentId.Value);
+            }
+
+            if (isActive.HasValue)
+            {
+                query = query.Where(x => x.IsActive == isActive.Value);
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.searchTerm))
+            {
+                var s = filter.searchTerm.Trim();
+                query = query.Where(x =>
+                    (!string.IsNullOrEmpty(x.Code) && x.Code.Contains(s)) ||
+                    (!string.IsNullOrEmpty(x.Name) && x.Name.Contains(s)) ||
+                    (!string.IsNullOrEmpty(x.Description) && x.Description.Contains(s)) ||
+                    (!string.IsNullOrEmpty(x.DisciplineName) && x.DisciplineName.Contains(s)) ||
+                    (!string.IsNullOrEmpty(x.DepartmentName) && x.DepartmentName.Contains(s))
+                );
+            }
+
+            query = query.AsQueryable().ApplyFilters(filter.Filter);
+
+            if (!string.IsNullOrWhiteSpace(filter.SortByColumn))
+            {
+                query = query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
+            }
+            else
+            {
+                query = query.OrderByDescending(x => x.ID);
+            }
+
+            return await query.ToPagedAsync(filter);
+        }
+
+        public async Task<LaboratoryTestDetailDto?> GetUniversalTestByIdAsync(long id)
+        {
+            var test = await (from t in _context.LaboratoryTests
+                              where t.ID == id && t.CompanyCode == loggedInUser.CompanyCode
+                              join d in _context.DepartmentMasters on t.LabDepartmentID equals d.ID into deptJoin
+                              from dept in deptJoin.DefaultIfEmpty()
+                              join disc in _context.DisciplineMasters on t.DisciplineID equals disc.ID into discJoin
+                              from disc in discJoin.DefaultIfEmpty()
+                              join empCre in _context.EmployeeMasters on t.CreatedBy equals empCre.ID into empCreJoin
+                              from empCre in empCreJoin.DefaultIfEmpty()
+                              join empMod in _context.EmployeeMasters on t.ModifiedBy equals empMod.ID into empModJoin
+                              from empMod in empModJoin.DefaultIfEmpty()
+                              join usrCre in _context.UserMasters on t.CreatedBy equals usrCre.ID into usrCreJoin
+                              from usrCre in usrCreJoin.DefaultIfEmpty()
+                              join usrMod in _context.UserMasters on t.ModifiedBy equals usrMod.ID into usrModJoin
+                              from usrMod in usrModJoin.DefaultIfEmpty()
+                              select new LaboratoryTestDetailDto
+                              {
+                                  ID = t.ID,
+                                  Code = t.Code,
+                                  Name = t.Name,
+                                  Description = t.Description,
+                                  DisciplineID = t.DisciplineID,
+                                  DisciplineName = disc != null ? disc.Name : null,
+                                  LabDepartmentID = t.LabDepartmentID,
+                                  DepartmentName = dept != null ? dept.Name : null,
+                                  TestDuration = t.TestDuration,
+                                  Equation = t.Equation,
+                                  IsChemicalTest = t.IsChemicalTest,
+                                  IsMechanical = t.IsMechanical,
+                                  IsActive = t.IsActive,
+                                  CompanyCode = t.CompanyCode,
+                                  CreatedBy = t.CreatedBy,
+                                  CreatedByName = empCre != null ? empCre.Name : (usrCre != null ? usrCre.UserName : null),
+                                  CreatedOn = t.CreatedOn,
+                                  ModifiedBy = t.ModifiedBy,
+                                  ModifiedByName = empMod != null ? empMod.Name : (usrMod != null ? usrMod.UserName : null),
+                                  ModifiedOn = t.ModifiedOn
+                              }).FirstOrDefaultAsync();
+
+            if (test == null) return null;
+
+            test.Parameters = await (from p in _context.LaboratoryTestParameters
+                                     join pm in _context.ParameterMasters on p.ParameterID equals pm.ID
+                                     join u in _context.ParameterUnitMasters on pm.ParameterUnitID equals u.ID into uJoin
+                                     from pu in uJoin.DefaultIfEmpty()
+                                     where p.LaboratoryTestID == id && p.IsActive
+                                     orderby p.DisplayOrder, pm.Name
+                                     select new LaboratoryTestParameterItemDto
+                                     {
+                                         ID = p.ID,
+                                         LaboratoryTestID = p.LaboratoryTestID,
+                                         ParameterID = p.ParameterID,
+                                         ParameterCode = pm.Code,
+                                         ParameterName = pm.Name,
+                                         ParameterUnit = pu != null ? pu.Name : null,
+                                         InputType = pm.InputType,
+                                         IsMandatory = p.IsMandatory,
+                                         IsReportable = p.IsReportable,
+                                         DisplayOrder = p.DisplayOrder,
+                                         IsActive = p.IsActive
+                                     }).ToListAsync();
+
+            test.Methods = await (from m in _context.LaboratoryTestMethods
+                                  join tms in _context.TestMethodSpecifications on m.TestMethodSpecificationID equals tms.ID
+                                  join at in _context.AnalysisTechniqueMasters on tms.AnalysisTechniqueID equals at.ID into atJoin
+                                  from tech in atJoin.DefaultIfEmpty()
+                                  where m.LaboratoryTestID == id && m.IsActive
+                                  orderby m.DisplayOrder, m.ID
+                                  select new LaboratoryTestMethodItemDto
+                                  {
+                                      ID = m.ID,
+                                      LaboratoryTestID = m.LaboratoryTestID,
+                                      TestMethodSpecificationID = m.TestMethodSpecificationID,
+                                      MethodCode = tms.Code ?? string.Empty,
+                                      MethodName = tms.Name,
+                                      DisplayTitle = !string.IsNullOrEmpty(tms.DisplayTitle) ? tms.DisplayTitle : (!string.IsNullOrEmpty(tms.Name) ? tms.Name : (tms.Code ?? string.Empty)),
+                                      StandardReference = tms.TestMethodStandard,
+                                      AnalysisTechniqueName = tech != null ? tech.Name : null,
+                                      IsDefault = m.IsDefault,
+                                      DisplayOrder = m.DisplayOrder,
+                                      IsActive = m.IsActive
+                                  }).ToListAsync();
+
+            test.Conditions = await (from c in _context.LaboratoryTestConditions
+                                     join cm in _context.ConditionMasters on c.ConditionMasterID equals cm.ID
+                                     join u in _context.ParameterUnitMasters on cm.ParameterUnitID equals u.ID into uJoin
+                                     from pu in uJoin.DefaultIfEmpty()
+                                     where c.LaboratoryTestID == id && c.IsActive
+                                     orderby c.DisplayOrder, cm.Name
+                                     select new LaboratoryTestConditionItemDto
+                                     {
+                                         ID = c.ID,
+                                         LaboratoryTestID = c.LaboratoryTestID,
+                                         ConditionMasterID = c.ConditionMasterID,
+                                         ConditionCode = cm.Code,
+                                         ConditionName = cm.Name,
+                                         Category = cm.Category ?? "",
+                                         ValueType = cm.ValueType ?? "",
+                                         ParameterUnit = pu != null ? pu.Name : null,
+                                         IsMandatory = c.IsMandatory,
+                                         DisplayOrder = c.DisplayOrder,
+                                         IsActive = c.IsActive
+                                     }).ToListAsync();
+
+            return test;
+        }
+
+        public async Task<bool> IsCodeUniqueAsync(string code, long? excludeId = null)
+        {
+            var query = _context.LaboratoryTests
+                .Where(t => t.CompanyCode == loggedInUser.CompanyCode && t.Code == code);
+
+            if (excludeId.HasValue && excludeId.Value > 0)
+            {
+                query = query.Where(t => t.ID != excludeId.Value);
+            }
+
+            return !await query.AnyAsync();
+        }
+
+        public async Task<bool> HasExecutionHistoryAsync(long id)
+        {
+            bool inUniversalGroups = await _context.UniversalTestGroups.AnyAsync(utg => utg.LaboratoryTestID == id);
+            if (inUniversalGroups) return true;
+
+            bool inResults = await _context.TestResultHeaders.AnyAsync(tr => tr.LaboratoryTestID == id);
+            if (inResults) return true;
+
+            return false;
+        }
+
+        public async Task<List<LaboratoryTestDropdownDto>> GetUniversalDropdownAsync(long? disciplineId = null)
+        {
+            var query = from t in _context.LaboratoryTests
+                        where t.IsActive && t.CompanyCode == loggedInUser.CompanyCode
+                        join disc in _context.DisciplineMasters on t.DisciplineID equals disc.ID into discJoin
+                        from disc in discJoin.DefaultIfEmpty()
+                        select new LaboratoryTestDropdownDto
+                        {
+                            ID = t.ID,
+                            Code = t.Code,
+                            Name = t.Name,
+                            DisciplineID = t.DisciplineID,
+                            DisciplineName = disc != null ? disc.Name : null
+                        };
+
+            if (disciplineId.HasValue && disciplineId.Value > 0)
+            {
+                query = query.Where(t => t.DisciplineID == disciplineId.Value);
+            }
+
+            return await query.OrderBy(t => t.Name).ToListAsync();
+        }
+
+        public async Task SyncParametersAsync(long testId, List<LaboratoryTestParameterItemDto> incomingList, string companyCode)
+        {
+            var existingRows = await _context.LaboratoryTestParameters
+                .Where(p => p.LaboratoryTestID == testId)
+                .ToListAsync();
+
+            var incomingParamIds = incomingList.Select(i => i.ParameterID).ToHashSet();
+
+            // 1. Process incoming items (Add or Reactivate)
+            foreach (var item in incomingList)
+            {
+                var existing = existingRows.FirstOrDefault(r => r.ParameterID == item.ParameterID);
+                if (existing != null)
+                {
+                    existing.IsActive = true;
+                    existing.IsMandatory = item.IsMandatory;
+                    existing.IsReportable = item.IsReportable;
+                    existing.DisplayOrder = item.DisplayOrder;
+                    existing.ModifiedOn = DateTime.UtcNow;
+                    existing.ModifiedBy = loggedInUser.EmployeeID;
+                    _context.LaboratoryTestParameters.Update(existing);
+                }
+                else
+                {
+                    var newRow = new LaboratoryTestParameter
+                    {
+                        LaboratoryTestID = testId,
+                        ParameterID = item.ParameterID,
+                        IsMandatory = item.IsMandatory,
+                        IsReportable = item.IsReportable,
+                        DisplayOrder = item.DisplayOrder,
+                        IsActive = true,
+                        CompanyCode = companyCode,
+                        CreatedOn = DateTime.UtcNow,
+                        CreatedBy = loggedInUser.EmployeeID
+                    };
+                    await _context.LaboratoryTestParameters.AddAsync(newRow);
+                }
+            }
+
+            // 2. Deactivate any existing rows not in incoming list
+            foreach (var existing in existingRows)
+            {
+                if (!incomingParamIds.Contains(existing.ParameterID) && existing.IsActive)
+                {
+                    existing.IsActive = false;
+                    existing.ModifiedOn = DateTime.UtcNow;
+                    existing.ModifiedBy = loggedInUser.EmployeeID;
+                    _context.LaboratoryTestParameters.Update(existing);
+                }
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task SyncMethodsAsync(long testId, List<LaboratoryTestMethodItemDto> incomingList, string companyCode)
+        {
+            var existingRows = await _context.LaboratoryTestMethods
+                .Where(m => m.LaboratoryTestID == testId)
+                .ToListAsync();
+
+            var incomingMethodIds = incomingList.Select(i => i.TestMethodSpecificationID).ToHashSet();
+
+            // 1. Process incoming items (Add or Reactivate)
+            foreach (var item in incomingList)
+            {
+                var existing = existingRows.FirstOrDefault(r => r.TestMethodSpecificationID == item.TestMethodSpecificationID);
+                if (existing != null)
+                {
+                    existing.IsActive = true;
+                    existing.IsDefault = item.IsDefault;
+                    existing.DisplayOrder = item.DisplayOrder;
+                    existing.ModifiedOn = DateTime.UtcNow;
+                    existing.ModifiedBy = loggedInUser.EmployeeID;
+                    _context.LaboratoryTestMethods.Update(existing);
+                }
+                else
+                {
+                    var newRow = new LaboratoryTestMethod
+                    {
+                        LaboratoryTestID = testId,
+                        TestMethodSpecificationID = item.TestMethodSpecificationID,
+                        IsDefault = item.IsDefault,
+                        DisplayOrder = item.DisplayOrder,
+                        IsActive = true,
+                        CompanyCode = companyCode,
+                        CreatedOn = DateTime.UtcNow,
+                        CreatedBy = loggedInUser.EmployeeID
+                    };
+                    await _context.LaboratoryTestMethods.AddAsync(newRow);
+                }
+            }
+
+            // 2. Deactivate any existing rows not in incoming list
+            foreach (var existing in existingRows)
+            {
+                if (!incomingMethodIds.Contains(existing.TestMethodSpecificationID) && existing.IsActive)
+                {
+                    existing.IsActive = false;
+                    existing.IsDefault = false;
+                    existing.ModifiedOn = DateTime.UtcNow;
+                    existing.ModifiedBy = loggedInUser.EmployeeID;
+                    _context.LaboratoryTestMethods.Update(existing);
+                }
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task SyncConditionsAsync(long testId, List<LaboratoryTestConditionItemDto> incomingList, string companyCode)
+        {
+            var existingRows = await _context.LaboratoryTestConditions
+                .Where(c => c.LaboratoryTestID == testId)
+                .ToListAsync();
+
+            var incomingConditionIds = incomingList.Select(i => i.ConditionMasterID).ToHashSet();
+
+            // 1. Process incoming items (Add or Reactivate)
+            foreach (var item in incomingList)
+            {
+                var existing = existingRows.FirstOrDefault(r => r.ConditionMasterID == item.ConditionMasterID);
+                if (existing != null)
+                {
+                    existing.IsActive = true;
+                    existing.IsMandatory = item.IsMandatory;
+                    existing.DisplayOrder = item.DisplayOrder;
+                    existing.ModifiedOn = DateTime.UtcNow;
+                    existing.ModifiedBy = loggedInUser.EmployeeID;
+                    _context.LaboratoryTestConditions.Update(existing);
+                }
+                else
+                {
+                    var newRow = new LaboratoryTestCondition
+                    {
+                        LaboratoryTestID = testId,
+                        ConditionMasterID = item.ConditionMasterID,
+                        IsMandatory = item.IsMandatory,
+                        DisplayOrder = item.DisplayOrder,
+                        IsActive = true,
+                        CompanyCode = companyCode,
+                        CreatedOn = DateTime.UtcNow,
+                        CreatedBy = loggedInUser.EmployeeID
+                    };
+                    await _context.LaboratoryTestConditions.AddAsync(newRow);
+                }
+            }
+
+            // 2. Deactivate any existing rows not in incoming list
+            foreach (var existing in existingRows)
+            {
+                if (!incomingConditionIds.Contains(existing.ConditionMasterID) && existing.IsActive)
+                {
+                    existing.IsActive = false;
+                    existing.ModifiedOn = DateTime.UtcNow;
+                    existing.ModifiedBy = loggedInUser.EmployeeID;
+                    _context.LaboratoryTestConditions.Update(existing);
+                }
+            }
+
+            await _context.SaveChangesAsync();
         }
 
         public async Task<List<DropdwonSelector>> GetTestMethodDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)

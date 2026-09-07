@@ -40,6 +40,7 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <CopyToPublishDirectory>Always</CopyToPublishDirectory>
     </None>
+    <Compile Remove="Migrations\**" />
   </ItemGroup>
 
 </Project>

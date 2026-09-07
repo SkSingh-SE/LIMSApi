@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -84,6 +84,10 @@ public partial class EmployeeMaster : AuditProperty
     public string? IFSCCode { get; set; }
 
     public long? DepartmentID { get; set; }
+
+    public long? BranchID { get; set; }
+    [ForeignKey("BranchID")]
+    public virtual Branch? OperatingBranch { get; set; }
 
     public long? ReportingManagerID { get; set; }
 

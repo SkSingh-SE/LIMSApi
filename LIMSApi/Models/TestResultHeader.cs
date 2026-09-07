@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.ComponentModel.DataAnnotations;
 
 namespace LIMSApi.Models
@@ -86,7 +86,6 @@ namespace LIMSApi.Models
         public ICollection<TestResultImage> Images { get; set; } = new List<TestResultImage>();
         public ICollection<LongTermTest> LongTermTests { get; set; } = new List<LongTermTest>();
 
-        [ForeignKey(nameof(LaboratoryTestID))]
         public virtual LaboratoryTest? LaboratoryTest { get; set; }
         [ForeignKey(nameof(SampleID))]
         public virtual SampleDetail? Sample { get; set; }

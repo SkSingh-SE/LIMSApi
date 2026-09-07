@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -11,10 +12,12 @@ namespace LIMSApi.Data;
 public partial class LIMSContext : DbContext
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
-    public LIMSContext(DbContextOptions<LIMSContext> options, IHttpContextAccessor httpContextAccessor)
+    private readonly IBranchContext _branchContext;
+    public LIMSContext(DbContextOptions<LIMSContext> options, IHttpContextAccessor httpContextAccessor, IBranchContext branchContext)
         : base(options)
     {
         _httpContextAccessor = httpContextAccessor;
+        _branchContext = branchContext;
     }
 
     public virtual DbSet<AreaMaster> AreaMasters { get; set; }
@@ -95,6 +98,8 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<SiteError> SiteErrors { get; set; }
     public virtual DbSet<SpecificationHeader> SpecificationHeaders { get; set; }
     public virtual DbSet<SpecificationHeaderParameter> SpecificationHeaderParameters { get; set; }
+    public virtual DbSet<SpecificationVersion> SpecificationVersions { get; set; }
+    public virtual DbSet<SpecificationVersionParameter> SpecificationVersionParameters { get; set; }
     public virtual DbSet<SpecificationGrade> SpecificationGrades { get; set; }
     public virtual DbSet<SpecificationLine> SpecificationLines { get; set; }
     public virtual DbSet<SpecificationLineTestMethod> SpecificationLineTestMethods { get; set; }
@@ -118,6 +123,9 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<TestGroupMapping> TestGroupMappings { get; set; }
     public virtual DbSet<TestMaster> TestMasters { get; set; }
     public virtual DbSet<LaboratoryTest> LaboratoryTests { get; set; }
+    public virtual DbSet<LaboratoryTestParameter> LaboratoryTestParameters { get; set; }
+    public virtual DbSet<LaboratoryTestMethod> LaboratoryTestMethods { get; set; }
+    public virtual DbSet<LaboratoryTestCondition> LaboratoryTestConditions { get; set; }
     public virtual DbSet<TestMethodSubGroup> TestMethodSubGroups { get; set; }
     public virtual DbSet<TestMethodSpecification> TestMethodSpecifications { get; set; }
     public virtual DbSet<TestMethodSpecificationVersion> TestMethodSpecificationVersions { get; set; }
@@ -166,6 +174,17 @@ public partial class LIMSContext : DbContext
     public DbSet<LongTermTest> LongTermTests { get; set; }
     public DbSet<LongTermRecord> LongTermRecords { get; set; }
 
+    // Day 2 Execution Core
+    public DbSet<ConditionMaster> ConditionMasters { get; set; }
+    public DbSet<TestConditionDimension> TestConditionDimensions { get; set; }
+    public DbSet<SpecificationLineCondition> SpecificationLineConditions { get; set; }
+    public DbSet<UniversalTestGroup> UniversalTestGroups { get; set; }
+    public DbSet<TestExecution> TestExecutions { get; set; }
+    public DbSet<TestSpecimen> TestSpecimens { get; set; }
+    public DbSet<TestObservation> TestObservations { get; set; }
+    public DbSet<ParameterObservationResult> ParameterObservationResults { get; set; }
+    public DbSet<ExecutionConfigSnapshot> ExecutionConfigSnapshots { get; set; }
+
     public DbSet<ReportHeader> ReportHeaders { get; set; }
     public DbSet<Report> Reports { get; set; }
     public DbSet<ReportBlock> ReportBlocks { get; set; }
@@ -197,6 +216,9 @@ public partial class LIMSContext : DbContext
            ============================ */
 
     public DbSet<Organization> Organizations => Set<Organization>();
+    public DbSet<Branch> Branches => Set<Branch>();
+    public DbSet<BranchDiscipline> BranchDisciplines => Set<BranchDiscipline>();
+    public DbSet<UserBranch> UserBranches => Set<UserBranch>();
     public DbSet<NablAccreditation> NablAccreditations => Set<NablAccreditation>();
     public DbSet<NablJobDescription> NablJobDescriptions => Set<NablJobDescription>();
     public DbSet<NablFormRevisionHistory> NablFormRevisionHistory => Set<NablFormRevisionHistory>();
@@ -302,6 +324,135 @@ public partial class LIMSContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // ==========================================
+        // MULTI-BRANCH & MULTI-TENANT ARCHITECTURE
+        // ==========================================
+
+        // Branch Constraints & Deletion Behavior
+        modelBuilder.Entity<Branch>(b =>
+        {
+            b.HasIndex(x => new { x.OrganizationID, x.Code }).IsUnique();
+            b.HasOne(x => x.Organization)
+             .WithMany()
+             .HasForeignKey(x => x.OrganizationID)
+             .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // BranchDiscipline Constraints & Deletion Behavior
+        modelBuilder.Entity<BranchDiscipline>(bd =>
+        {
+            bd.HasIndex(x => new { x.BranchID, x.DisciplineID }).IsUnique();
+            bd.HasOne(x => x.Branch)
+              .WithMany()
+              .HasForeignKey(x => x.BranchID)
+              .OnDelete(DeleteBehavior.Restrict);
+            bd.HasOne(x => x.Discipline)
+              .WithMany()
+              .HasForeignKey(x => x.DisciplineID)
+              .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // UserBranch Constraints & Deletion Behavior
+        modelBuilder.Entity<UserBranch>(ub =>
+        {
+            ub.HasIndex(x => new { x.UserID, x.BranchID }).IsUnique();
+            ub.HasIndex(x => x.UserID)
+              .IsUnique()
+              .HasFilter("[IsDefault] = 1")
+              .HasDatabaseName("IX_UserBranches_UserID_IsDefault");
+
+            ub.HasOne(x => x.User)
+              .WithMany(u => u.UserBranches)
+              .HasForeignKey(x => x.UserID)
+              .OnDelete(DeleteBehavior.Cascade);
+
+            ub.HasOne(x => x.Branch)
+              .WithMany()
+              .HasForeignKey(x => x.BranchID)
+              .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Restrict Deletion on UserMaster -> Branch
+        modelBuilder.Entity<UserMaster>()
+            .HasOne(x => x.Branch)
+            .WithMany()
+            .HasForeignKey(x => x.BranchID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Branch-owned Transactional & Physical Entities (DeleteBehavior.Restrict)
+        modelBuilder.Entity<SampleInward>()
+            .HasOne(x => x.Branch)
+            .WithMany()
+            .HasForeignKey(x => x.BranchID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<EquipmentMaster>()
+            .HasOne(x => x.Branch)
+            .WithMany()
+            .HasForeignKey(x => x.BranchID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<DepartmentMaster>()
+            .HasOne(x => x.Branch)
+            .WithMany()
+            .HasForeignKey(x => x.BranchID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<DepartmentMaster>()
+            .HasOne(x => x.Discipline)
+            .WithMany()
+            .HasForeignKey(x => x.DisciplineID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<DepartmentMaster>()
+            .HasIndex(d => new { d.BranchID, d.Code })
+            .HasDatabaseName("IX_DepartmentMasters_BranchID_Code_Filtered")
+            .IsUnique()
+            .HasFilter("[Code] IS NOT NULL AND [IsActive] = 1");
+
+        modelBuilder.Entity<LabRoom>()
+            .HasOne(x => x.Branch)
+            .WithMany()
+            .HasForeignKey(x => x.BranchID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<SpecificationHeader>(entity =>
+        {
+            entity.HasIndex(e => new { e.CompanyCode, e.Code }, "IX_SpecificationHeaders_CompanyCode_Code")
+                .IsUnique()
+                .HasFilter("([Code] IS NOT NULL)");
+        });
+
+        // FAIL-CLOSED GLOBAL QUERY FILTERS
+        modelBuilder.Entity<SampleInward>()
+            .HasQueryFilter(e => e.Branch != null &&
+                e.Branch.OrganizationID == (_branchContext.CurrentOrganizationID ?? -1) &&
+                (_branchContext.CanViewAllBranches || (_branchContext.CurrentBranchID.HasValue && e.BranchID == _branchContext.CurrentBranchID.Value)));
+
+        modelBuilder.Entity<EquipmentMaster>()
+            .HasQueryFilter(e => e.Branch != null &&
+                e.Branch.OrganizationID == (_branchContext.CurrentOrganizationID ?? -1) &&
+                (_branchContext.CanViewAllBranches || (_branchContext.CurrentBranchID.HasValue && e.BranchID == _branchContext.CurrentBranchID.Value)));
+
+        modelBuilder.Entity<DepartmentMaster>()
+            .HasQueryFilter(e => e.Branch != null &&
+                e.Branch.OrganizationID == (_branchContext.CurrentOrganizationID ?? -1) &&
+                (_branchContext.CanViewAllBranches || (_branchContext.CurrentBranchID.HasValue && e.BranchID == _branchContext.CurrentBranchID.Value)));
+
+        modelBuilder.Entity<LabRoom>()
+            .HasQueryFilter(e => e.Branch != null &&
+                e.Branch.OrganizationID == (_branchContext.CurrentOrganizationID ?? -1) &&
+                (_branchContext.CanViewAllBranches || (_branchContext.CurrentBranchID.HasValue && e.BranchID == _branchContext.CurrentBranchID.Value)));
+
+        modelBuilder.Entity<Branch>()
+            .HasQueryFilter(e => e.OrganizationID == (_branchContext.CurrentOrganizationID ?? -1));
+
+        modelBuilder.Entity<BranchDiscipline>()
+            .HasQueryFilter(e => e.Branch != null && e.Branch.OrganizationID == (_branchContext.CurrentOrganizationID ?? -1));
+
+        modelBuilder.Entity<UserBranch>()
+            .HasQueryFilter(e => e.Branch != null && e.Branch.OrganizationID == (_branchContext.CurrentOrganizationID ?? -1));
+
         modelBuilder.Entity<ProductMasterMetalClassification>()
             .HasKey(x => new { x.ProductMasterID, x.MetalClassificationID });
 
@@ -395,6 +546,57 @@ public partial class LIMSContext : DbContext
             .HasFilter("[IsDefault] = 1")
             .IsUnique();
 
+        // SpecificationVersion: at most one IsDefault=true per specification.
+        modelBuilder.Entity<SpecificationVersion>()
+            .HasIndex(v => new { v.SpecificationHeaderID, v.IsDefault })
+            .HasFilter("[IsDefault] = 1")
+            .IsUnique();
+
+        // SpecificationVersion: unique version per specification header.
+        modelBuilder.Entity<SpecificationVersion>()
+            .HasIndex(v => new { v.SpecificationHeaderID, v.Version })
+            .IsUnique();
+
+        modelBuilder.Entity<SpecificationVersion>()
+            .HasOne(v => v.SpecificationHeader)
+            .WithMany(h => h.Versions)
+            .HasForeignKey(v => v.SpecificationHeaderID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // SpecificationVersionParameter: owned child of SpecificationVersion
+        modelBuilder.Entity<SpecificationVersionParameter>()
+            .HasOne(p => p.SpecificationVersion)
+            .WithMany(v => v.Parameters)
+            .HasForeignKey(p => p.SpecificationVersionID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<SpecificationVersionParameter>()
+            .HasOne(p => p.Parameter)
+            .WithMany()
+            .HasForeignKey(p => p.ParameterID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<SpecificationVersionParameter>()
+            .HasIndex(p => new { p.SpecificationVersionID, p.ParameterID })
+            .IsUnique();
+
+        // SpecificationLine: owned child under SpecificationGrade and SpecificationVersion
+        modelBuilder.Entity<SpecificationLine>()
+            .HasOne(l => l.SpecificationVersion)
+            .WithMany(v => v.SpecificationLines)
+            .HasForeignKey(l => l.SpecificationVersionID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<SpecificationLine>()
+            .HasIndex(l => new { l.SpecificationGradeID, l.SpecificationVersionID });
+
+        // UniversalTestGroup: pinned SpecificationVersion
+        modelBuilder.Entity<UniversalTestGroup>()
+            .HasOne(u => u.SpecificationVersion)
+            .WithMany()
+            .HasForeignKey(u => u.SpecificationVersionID)
+            .OnDelete(DeleteBehavior.NoAction);
+
         modelBuilder.Entity<ParameterSpecimenOrientation>().HasKey(x => new { x.ParameterID, x.SpecimenOrientationID });
 
         modelBuilder.Entity<HeatTreatmentMetalClassification>().HasKey(x => new { x.HeatTreatmentID, x.MetalClassificationID });
@@ -484,6 +686,27 @@ public partial class LIMSContext : DbContext
         modelBuilder.Entity<SpecimenOrientationMetalClassification>().HasKey(x => new { x.SpecimenOrientationID, x.MetalClassificationID });
         modelBuilder.Entity<DimensionalFactorProductForm>().HasKey(x => new { x.DimensionalFactorID, x.ProductFormID });
         modelBuilder.Entity<ProductConditionPropertyType>().HasKey(x => new { x.ProductConditionID, x.PropertyTypeID });
+
+        modelBuilder.Entity<UserBranch>(entity =>
+        {
+            entity.HasKey(e => e.ID);
+            entity.HasOne(e => e.User)
+                .WithMany(u => u.UserBranches)
+                .HasForeignKey(e => e.UserID)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Branch)
+                .WithMany(b => b.UserBranches)
+                .HasForeignKey(e => e.BranchID)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<UniversalTestGroup>(entity =>
+        {
+            entity.HasOne(d => d.SpecificationVersion)
+                .WithMany()
+                .HasForeignKey(d => d.SpecificationVersionID)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
 
         // Phase 2: Unique indexes on Code
         modelBuilder.Entity<SpecimenOrientationMaster>()
@@ -1364,6 +1587,122 @@ public partial class LIMSContext : DbContext
             .IsRequired(false)
             .OnDelete(DeleteBehavior.NoAction);
 
+        // ── Phase C: Universal Test Execution Core Relationships ──
+        modelBuilder.Entity<UniversalTestGroup>()
+            .HasOne(u => u.Branch)
+            .WithMany()
+            .HasForeignKey(u => u.BranchID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<TestExecution>()
+            .HasOne(e => e.Branch)
+            .WithMany()
+            .HasForeignKey(e => e.BranchID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<TestExecution>()
+            .HasOne(e => e.UniversalTestGroup)
+            .WithMany(u => u.TestExecutions)
+            .HasForeignKey(e => e.UniversalTestGroupID)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // ── Tier 3: Multi-Branch Gaps Remediation ──
+        modelBuilder.Entity<BankMaster>()
+            .HasOne(b => b.Branch)
+            .WithMany()
+            .HasForeignKey(b => b.BranchID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<EmployeeMaster>()
+            .HasOne(e => e.OperatingBranch)
+            .WithMany()
+            .HasForeignKey(e => e.BranchID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<NablAccreditation>()
+            .HasOne(n => n.Branch)
+            .WithMany()
+            .HasForeignKey(n => n.BranchID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<LabScopeMaster>()
+            .HasOne(l => l.Branch)
+            .WithMany()
+            .HasForeignKey(l => l.BranchID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<NumberingConfig>()
+            .HasOne(n => n.Branch)
+            .WithMany()
+            .HasForeignKey(n => n.BranchId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ConditionMaster>(entity =>
+        {
+            entity.HasIndex(e => new { e.Code, e.CompanyCode }).IsUnique();
+            entity.HasOne(e => e.ParameterUnit)
+                  .WithMany()
+                  .HasForeignKey(e => e.ParameterUnitID)
+                  .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<SpecificationLineCondition>(entity =>
+        {
+            entity.HasOne(e => e.ConditionMaster)
+                  .WithMany()
+                  .HasForeignKey(e => e.ConditionMasterID)
+                  .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── Screen 13: Universal Test Definition Direct Mappings ──
+        modelBuilder.Entity<LaboratoryTest>(entity =>
+        {
+            entity.HasIndex(e => new { e.CompanyCode, e.Code }).IsUnique();
+        });
+
+        modelBuilder.Entity<LaboratoryTestParameter>(entity =>
+        {
+            entity.HasIndex(e => new { e.LaboratoryTestID, e.ParameterID }).IsUnique();
+            entity.HasOne(e => e.LaboratoryTest)
+                  .WithMany(t => t.Parameters)
+                  .HasForeignKey(e => e.LaboratoryTestID)
+                  .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(e => e.Parameter)
+                  .WithMany()
+                  .HasForeignKey(e => e.ParameterID)
+                  .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        modelBuilder.Entity<LaboratoryTestMethod>(entity =>
+        {
+            entity.HasIndex(e => new { e.LaboratoryTestID, e.TestMethodSpecificationID }).IsUnique();
+            entity.HasOne(e => e.LaboratoryTest)
+                  .WithMany(t => t.Methods)
+                  .HasForeignKey(e => e.LaboratoryTestID)
+                  .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(e => e.TestMethodSpecification)
+                  .WithMany()
+                  .HasForeignKey(e => e.TestMethodSpecificationID)
+                  .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        modelBuilder.Entity<LaboratoryTestCondition>(entity =>
+        {
+            entity.HasIndex(e => new { e.LaboratoryTestID, e.ConditionMasterID }).IsUnique();
+            entity.HasOne(e => e.LaboratoryTest)
+                  .WithMany(t => t.Conditions)
+                  .HasForeignKey(e => e.LaboratoryTestID)
+                  .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(e => e.ConditionMaster)
+                  .WithMany()
+                  .HasForeignKey(e => e.ConditionMasterID)
+                  .OnDelete(DeleteBehavior.NoAction);
+        });
     }
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);

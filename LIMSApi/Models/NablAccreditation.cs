@@ -12,5 +12,11 @@ namespace LIMSApi.Models
         public string? CertificatePath { get; set; }
         public string? LogoPath { get; set; }
         public long OrganizationId { get; set; }
+        [System.ComponentModel.DataAnnotations.Schema.ForeignKey("OrganizationId")]
+        public virtual Organization? Organization { get; set; }
+
+        public long? BranchID { get; set; }
+        [System.ComponentModel.DataAnnotations.Schema.ForeignKey("BranchID")]
+        public virtual Branch? Branch { get; set; }
     }
 }

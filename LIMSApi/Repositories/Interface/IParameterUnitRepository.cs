@@ -13,7 +13,10 @@ namespace LIMSApi.Repositories.Interface
 
         Task<List<DropdwonSelector>> GetParameterUnitDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<List<GroupedUnitDropdownOption>> GetGroupedParameterUnitDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<bool> ExistsByCode(string code);
+        Task<bool> ExistsByCodeAndNotId(string code, long id);
         Task<bool> ExistsByName(string name);
         Task<bool> ExistsByNameAndNotId(string name, long Id);
+        Task<List<string>> GetQuantityTypes();
     }
 }

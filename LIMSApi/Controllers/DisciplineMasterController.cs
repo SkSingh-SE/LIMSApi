@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
@@ -69,7 +69,24 @@ namespace LIMSApi.Controllers
             return Ok(new
             {
                 status = "success",
-                message = $"DisciplineMaster '{entity.Name}' deleted successfully."
+                message = $"DisciplineMaster '{entity.Name}' deactivated successfully."
+            });
+        }
+
+        [HttpPost("toggle-status/{id}")]
+        public async Task<IActionResult> ToggleDisciplineStatus(long id)
+        {
+            var entity = await _DisciplineService.GetDisciplineDetails(id);
+            if (entity == null)
+            {
+                throw new InvalidOperationException("DisciplineMaster not found!");
+            }
+            bool newStatus = await _DisciplineService.ToggleDisciplineStatus(id);
+            return Ok(new
+            {
+                status = "success",
+                isActive = newStatus,
+                message = newStatus ? $"Discipline '{entity.Name}' activated successfully." : $"Discipline '{entity.Name}' deactivated successfully."
             });
         }
 

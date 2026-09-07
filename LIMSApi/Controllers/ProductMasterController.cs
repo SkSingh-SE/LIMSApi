@@ -65,10 +65,35 @@ namespace LIMSApi.Controllers
             return Ok(new { message = "Product Master deleted successfully." });
         }
 
+        [RequirePermission(Permissions.ProductMaster.Update)]
+        [HttpPut("toggle-status/{id}")]
+        [HttpPost("toggle-status/{id}")]
+        public async Task<IActionResult> ToggleStatus(long id)
+        {
+            var isActive = await _service.ToggleProductMasterStatus(id);
+            return Ok(new
+            {
+                status = "success",
+                isActive,
+                message = $"Product / Material Master {(isActive ? "activated" : "deactivated")} successfully."
+            });
+        }
+
         [HttpGet("dropdown")]
         public async Task<IActionResult> GetDropdown([FromQuery] string? searchTerm, [FromQuery] int pageNo = 0, [FromQuery] int pageSize = 20, [FromQuery] long metalId = 0)
         {
             var result = await _service.GetProductMasterDropdown(searchTerm, pageNo, pageSize, metalId);
+            return Ok(result);
+        }
+
+        [HttpGet("grade-applicability/{gradeId}")]
+        public async Task<IActionResult> GetGradeApplicability(long gradeId)
+        {
+            var result = await _service.GetGradeApplicabilityInfo(gradeId);
+            if (result == null)
+            {
+                return NotFound(new { message = $"Specification Grade with ID {gradeId} not found." });
+            }
             return Ok(result);
         }
 

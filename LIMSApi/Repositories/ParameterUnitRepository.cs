@@ -39,7 +39,7 @@ namespace LIMSApi.Repositories
         {
             return await _context.ParameterUnitMasters
                 .Include(x => x.Equivalents.Where(e => e.IsActive).OrderBy(e => e.DisplayOrder))
-                .FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
+                .FirstOrDefaultAsync(x => x.ID == id);
         }
 
         public async Task UpdateParameterUnit(ParameterUnitMaster model)
@@ -50,13 +50,17 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllParameterUnits(PageFilter filter)
         {
-            var _query = (from c in _context.ParameterUnitMasters.AsNoTracking() where c.IsActive select c).AsQueryable().ApplyFilters(filter.Filter);
+            var _query = _context.ParameterUnitMasters.AsNoTracking().AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim();
                 _query = _query.Where(x =>
-                    (x.Name != null && x.Name.Contains(search))
+                    (x.Code != null && x.Code.Contains(search))
+                    || (x.Name != null && x.Name.Contains(search))
+                    || (x.Symbol != null && x.Symbol.Contains(search))
+                    || (x.QuantityType != null && x.QuantityType.Contains(search))
+                    || (x.Description != null && x.Description.Contains(search))
                     || (x.ConversionFactor != null && x.ConversionFactor.ToString().Contains(search))
                     || x.Equivalents.Any(e => e.IsActive && e.Name.Contains(search))
                 );
@@ -65,11 +69,19 @@ namespace LIMSApi.Repositories
             {
                 _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
             }
+            else
+            {
+                _query = _query.OrderBy(x => x.Name);
+            }
 
             var projected = _query.Select(x => new
             {
                 x.ID,
+                x.Code,
                 x.Name,
+                x.Symbol,
+                x.QuantityType,
+                x.Description,
                 x.ConversionFactor,
                 x.CreatedBy,
                 x.CreatedOn,
@@ -107,16 +119,20 @@ namespace LIMSApi.Repositories
                 else
                 {
                     var search = searchTerm.Trim();
-                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
+                    _query = _query.Where(x => 
+                        (x.Name != null && x.Name.Contains(search))
+                        || (x.Code != null && x.Code.Contains(search))
+                        || (x.Symbol != null && x.Symbol.Contains(search))
+                    );
                 }
             }
 
             var skip = pageNo * pageSize;
 
-            var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            var data = await (_query.OrderBy(x => x.Name).Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
             {
                 Id = x.ID,
-                Name = x.Name,
+                Name = !string.IsNullOrEmpty(x.Symbol) && x.Symbol != x.Name ? $"{x.Name} ({x.Symbol})" : x.Name,
             })).ToListAsync();
 
             return data;
@@ -207,14 +223,54 @@ namespace LIMSApi.Repositories
             return result;
         }
 
+        public async Task<bool> ExistsByCode(string code)
+        {
+            var c = code.Trim().ToLower();
+            return await _context.ParameterUnitMasters.AnyAsync(x => x.Code.ToLower() == c && x.IsActive);
+        }
+
+        public async Task<bool> ExistsByCodeAndNotId(string code, long id)
+        {
+            var c = code.Trim().ToLower();
+            return await _context.ParameterUnitMasters.AnyAsync(x => x.Code.ToLower() == c && x.ID != id && x.IsActive);
+        }
+
         public async Task<bool> ExistsByName(string name)
         {
-            return await _context.ParameterUnitMasters.AnyAsync(x => x.Name == name && x.IsActive);
+            var n = name.Trim().ToLower();
+            return await _context.ParameterUnitMasters.AnyAsync(x => x.Name.ToLower() == n && x.IsActive);
         }
 
         public async Task<bool> ExistsByNameAndNotId(string name, long Id)
         {
-            return await _context.ParameterUnitMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive);
+            var n = name.Trim().ToLower();
+            return await _context.ParameterUnitMasters.AnyAsync(x => x.Name.ToLower() == n && x.ID != Id && x.IsActive);
+        }
+
+        public Task<List<string>> GetQuantityTypes()
+        {
+            var types = new List<string>
+            {
+                "Length",
+                "Mass",
+                "Force",
+                "Pressure",
+                "Temperature",
+                "Voltage",
+                "Current",
+                "Resistance",
+                "Density",
+                "Concentration",
+                "Percentage",
+                "Time",
+                "Area",
+                "Volume",
+                "Dimensionless",
+                "Energy",
+                "Hardness",
+                "Other"
+            };
+            return Task.FromResult(types);
         }
     }
 }

@@ -18,5 +18,11 @@ namespace LIMSApi.Models
         public int StartNumber { get; set; }
         public int CurrentNumber { get; set; }
         public long OrganizationId { get; set; }
+        [ForeignKey("OrganizationId")]
+        public virtual Organization? Organization { get; set; }
+
+        public long? BranchId { get; set; }
+        [ForeignKey("BranchId")]
+        public virtual Branch? Branch { get; set; }
     }
 }

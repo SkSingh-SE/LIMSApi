@@ -1,4 +1,4 @@
-using LIMSApi.Data;
+using System.Text.RegularExpressions;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
@@ -9,88 +9,109 @@ namespace LIMSApi.Services
 {
     public class AnalysisTechniqueService : IAnalysisTechniqueService
     {
+        private static readonly Regex ValidCodeRegex = new(@"^[A-Z0-9_]+$", RegexOptions.Compiled);
+
         private readonly IAnalysisTechniqueRepository _repository;
         private readonly ILogger<AnalysisTechniqueService> _logger;
-        private readonly LIMSContext _context;
         private LoggedInUserDTO loggedInUser;
 
-        public AnalysisTechniqueService(IAnalysisTechniqueRepository repository, ILogger<AnalysisTechniqueService> logger, LIMSContext context)
+        public AnalysisTechniqueService(IAnalysisTechniqueRepository repository, ILogger<AnalysisTechniqueService> logger)
         {
             _repository = repository;
             _logger = logger;
-            _context = context;
             loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
-        public async Task CreateAnalysisTechnique(AnalysisTechniqueMaster model)
+        public async Task CreateAnalysisTechnique(AnalysisTechniqueCreateDto dto)
         {
-            Validate(model);
+            var normalizedCode = NormalizeAndValidateCode(dto.Code);
+            var normalizedName = ValidateName(dto.Name);
 
-            if (await _repository.ExistsByName(model.Name))
-                throw new InvalidOperationException("An analysis technique with the same name already exists!");
+            if (await _repository.ExistsByCode(normalizedCode))
+                throw new InvalidOperationException($"An analysis technique with code '{normalizedCode}' already exists!");
 
-            if (!string.IsNullOrWhiteSpace(model.Code) && await _repository.ExistsByCode(model.Code))
-                throw new InvalidOperationException("An analysis technique with the same code already exists!");
+            var entity = new AnalysisTechniqueMaster
+            {
+                Code = normalizedCode,
+                Name = normalizedName,
+                AliasNames = string.IsNullOrWhiteSpace(dto.AliasNames) ? null : dto.AliasNames.Trim(),
+                Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim(),
+                IsActive = dto.IsActive,
+                CreatedOn = DateTime.UtcNow,
+                CreatedBy = loggedInUser.EmployeeID,
+                CompanyCode = loggedInUser.CompanyCode
+            };
 
-            model.CreatedOn = DateTime.UtcNow;
-            model.CreatedBy = loggedInUser.EmployeeID;
-            model.CompanyCode = loggedInUser.CompanyCode;
-
-            await _repository.AddAnalysisTechnique(model);
-            _logger.LogInformation("Analysis technique '{Name}' created successfully.", model.Name);
+            await _repository.AddAnalysisTechnique(entity);
+            _logger.LogInformation("Analysis technique '{Name}' ({Code}) created successfully.", entity.Name, entity.Code);
         }
 
-        public async Task ModifyAnalysisTechnique(AnalysisTechniqueMaster model)
+        public async Task ModifyAnalysisTechnique(AnalysisTechniqueUpdateDto dto)
         {
-            if (model.ID == 0)
+            if (dto.ID <= 0)
                 throw new ArgumentException("Analysis technique ID should not be empty!");
 
-            Validate(model);
+            var normalizedCode = NormalizeAndValidateCode(dto.Code);
+            var normalizedName = ValidateName(dto.Name);
 
-            if (await _repository.ExistsByNameAndNotId(model.Name, model.ID))
-                throw new InvalidOperationException("An analysis technique with the same name already exists!");
+            if (await _repository.ExistsByCodeAndNotId(normalizedCode, dto.ID))
+                throw new InvalidOperationException($"An analysis technique with code '{normalizedCode}' already exists!");
 
-            if (!string.IsNullOrWhiteSpace(model.Code) && await _repository.ExistsByCodeAndNotId(model.Code, model.ID))
-                throw new InvalidOperationException("An analysis technique with the same code already exists!");
-
-            var existing = await _repository.GetAnalysisTechniqueById(model.ID);
+            var existing = await _repository.GetAnalysisTechniqueById(dto.ID);
             if (existing == null)
                 throw new InvalidOperationException("Analysis technique not found!");
 
-            existing.Name = model.Name;
-            existing.Code = model.Code;
-            existing.AliasNames = model.AliasNames;
-            existing.Description = model.Description;
+            existing.Code = normalizedCode;
+            existing.Name = normalizedName;
+            existing.AliasNames = string.IsNullOrWhiteSpace(dto.AliasNames) ? null : dto.AliasNames.Trim();
+            existing.Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim();
+            existing.IsActive = dto.IsActive;
             existing.ModifiedOn = DateTime.UtcNow;
             existing.ModifiedBy = loggedInUser.EmployeeID;
 
             await _repository.UpdateAnalysisTechnique(existing);
-            _logger.LogInformation("Analysis technique '{Name}' updated successfully.", model.Name);
+            _logger.LogInformation("Analysis technique '{Name}' ({Code}) updated successfully.", existing.Name, existing.Code);
         }
 
-        public async Task RemoveAnalysisTechnique(long id)
+        public async Task<bool> ToggleAnalysisTechniqueStatus(long id)
         {
             var existing = await _repository.GetAnalysisTechniqueById(id);
             if (existing == null)
                 throw new InvalidOperationException("Analysis technique not found!");
 
-            await DeleteValidationHelper.ValidateDeleteAsync<AnalysisTechniqueMaster>(_context, id, "Analysis Technique");
+            if (!existing.IsActive)
+            {
+                // Reactivation guard: verify code collision across organization
+                if (await _repository.ExistsByCodeAndNotId(existing.Code, existing.ID))
+                    throw new InvalidOperationException($"Cannot reactivate: Technique code '{existing.Code}' is already in use by another technique.");
+            }
 
-            existing.IsActive = false;
+            existing.IsActive = !existing.IsActive;
             existing.ModifiedOn = DateTime.UtcNow;
             existing.ModifiedBy = loggedInUser.EmployeeID;
 
-            await _repository.DeleteAnalysisTechnique(existing);
-            _logger.LogInformation("Analysis technique with ID '{Id}' deleted successfully.", id);
+            await _repository.UpdateAnalysisTechnique(existing);
+            _logger.LogInformation("Analysis technique '{Name}' ({Code}) status toggled to {Status}.", existing.Name, existing.Code, existing.IsActive ? "Active" : "Inactive");
+            return existing.IsActive;
         }
 
-        public async Task<AnalysisTechniqueMaster> GetAnalysisTechniqueDetails(long id)
+        public async Task<AnalysisTechniqueDetailDto> GetAnalysisTechniqueDetails(long id)
         {
             var entity = await _repository.GetAnalysisTechniqueById(id);
             if (entity == null)
                 throw new InvalidOperationException("Analysis technique not found!");
 
-            return entity;
+            return new AnalysisTechniqueDetailDto
+            {
+                ID = entity.ID,
+                Code = entity.Code,
+                Name = entity.Name,
+                AliasNames = entity.AliasNames,
+                Description = entity.Description,
+                IsActive = entity.IsActive,
+                CreatedOn = entity.CreatedOn,
+                ModifiedOn = entity.ModifiedOn
+            };
         }
 
         public async Task<PagedResponse<object>> FetchAnalysisTechniqueList(PageFilter filter)
@@ -103,15 +124,34 @@ namespace LIMSApi.Services
             return await _repository.GetAnalysisTechniqueDropdown(searchTerm, pageNo, pageSize);
         }
 
-        private static void Validate(AnalysisTechniqueMaster model)
+        private static string NormalizeAndValidateCode(string? code)
         {
-            if (string.IsNullOrWhiteSpace(model.Name))
-                throw new ArgumentException("Name should not be empty!");
+            if (string.IsNullOrWhiteSpace(code))
+                throw new ArgumentException("Technique code should not be empty!");
 
-            model.Name = model.Name.Trim();
-            model.Code = string.IsNullOrWhiteSpace(model.Code) ? null : model.Code.Trim();
-            model.AliasNames = string.IsNullOrWhiteSpace(model.AliasNames) ? null : model.AliasNames.Trim();
-            model.Description = string.IsNullOrWhiteSpace(model.Description) ? null : model.Description.Trim();
+            // Trim, convert whitespace to single underscore, uppercase
+            var trimmed = code.Trim();
+            var normalized = Regex.Replace(trimmed, @"\s+", "_").ToUpperInvariant();
+
+            if (!ValidCodeRegex.IsMatch(normalized))
+                throw new ArgumentException("Technique code can only contain uppercase letters, numbers, and underscores (e.g. GRAV_METRIC).");
+
+            if (normalized.Length > 50)
+                throw new ArgumentException("Technique code cannot exceed 50 characters.");
+
+            return normalized;
+        }
+
+        private static string ValidateName(string? name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException("Technique name should not be empty!");
+
+            var trimmed = name.Trim();
+            if (trimmed.Length > 100)
+                throw new ArgumentException("Technique name cannot exceed 100 characters.");
+
+            return trimmed;
         }
     }
 }

@@ -26,9 +26,14 @@ namespace LIMSApi.Repositories
         public async Task<UserMaster> GetUserByEmail(string email)
         {
             var user = await context.UserMasters
+                .IgnoreQueryFilters()
                 .Include(x => x.Employee)
                     .ThenInclude(e => e.Designation)
                         .ThenInclude(d => d.Role)
+                .Include(x => x.Branch)
+                    .ThenInclude(b => b.Organization)
+                .Include(x => x.UserBranches)
+                    .ThenInclude(ub => ub.Branch)
                 .FirstOrDefaultAsync(x => x.EmailId == email);
             return user;
         }
@@ -137,7 +142,233 @@ namespace LIMSApi.Repositories
             user.TwoFactorEnabled = dto.TwoFactorEnabled;
 
             await context.SaveChangesAsync();
+        }
 
+        public async Task<UserMaster?> GetUserWithBranchesById(long userId)
+        {
+            return await context.UserMasters
+                .IgnoreQueryFilters()
+                .Include(u => u.Branch)
+                .Include(u => u.UserBranches)
+                    .ThenInclude(ub => ub.Branch)
+                .FirstOrDefaultAsync(u => u.ID == userId);
+        }
+
+        public async Task<UserMaster?> GetUserWithBranchesByEmployeeId(long employeeId)
+        {
+            return await context.UserMasters
+                .IgnoreQueryFilters()
+                .Include(u => u.Branch)
+                .Include(u => u.UserBranches)
+                    .ThenInclude(ub => ub.Branch)
+                .FirstOrDefaultAsync(u => u.EmployeeID == employeeId);
+        }
+
+        public async Task<List<Branch>> GetActiveBranchesByOrganizationId(long organizationId)
+        {
+            return await context.Branches
+                .IgnoreQueryFilters()
+                .Where(b => b.OrganizationID == organizationId && b.IsActive)
+                .OrderBy(b => b.Name)
+                .ToListAsync();
+        }
+
+        public async Task UpdateUserBranchAccess(long userId, UpdateUserBranchAccessDto dto, long? modifiedBy)
+        {
+            var user = await context.UserMasters
+                .IgnoreQueryFilters()
+                .Include(u => u.UserBranches)
+                .FirstOrDefaultAsync(u => u.ID == userId);
+
+            if (user == null)
+            {
+                throw new InvalidOperationException("User not found.");
+            }
+
+            var targetOrgId = user.OrganizationID ?? (user.Branch != null ? user.Branch.OrganizationID : 0);
+
+            // Cross-organization validation
+            if (dto.Branches != null && dto.Branches.Any())
+            {
+                var branchIds = dto.Branches.Select(b => b.BranchId).Distinct().ToList();
+                var validBranches = await context.Branches
+                    .IgnoreQueryFilters()
+                    .Where(b => branchIds.Contains(b.ID) && b.IsActive)
+                    .ToListAsync();
+
+                if (validBranches.Count != branchIds.Count)
+                {
+                    throw new ArgumentException("One or more assigned branches do not exist or are inactive.");
+                }
+
+                if (targetOrgId > 0)
+                {
+                    var foreignBranch = validBranches.FirstOrDefault(b => b.OrganizationID != targetOrgId);
+                    if (foreignBranch != null)
+                    {
+                        throw new ArgumentException($"Branch '{foreignBranch.Name}' (ID: {foreignBranch.ID}) does not belong to the user's organization (Org ID: {targetOrgId}). Cross-organization branch assignment is strictly rejected.");
+                    }
+                }
+            }
+
+            // Single default validation
+            long? defaultBranchId = null;
+            if (dto.Branches != null && dto.Branches.Any())
+            {
+                var defaultItems = dto.Branches.Where(b => b.IsDefault).ToList();
+                if (defaultItems.Count == 0)
+                {
+                    // Auto-promote first branch as default if none explicitly checked
+                    dto.Branches.First().IsDefault = true;
+                    defaultBranchId = dto.Branches.First().BranchId;
+                }
+                else if (defaultItems.Count > 1)
+                {
+                    // If multiple checked, pick the first one and uncheck others
+                    defaultBranchId = defaultItems.First().BranchId;
+                    foreach (var item in dto.Branches)
+                    {
+                        item.IsDefault = (item.BranchId == defaultBranchId);
+                    }
+                }
+                else
+                {
+                    defaultBranchId = defaultItems.First().BranchId;
+                }
+            }
+
+            using var transaction = await context.Database.BeginTransactionAsync();
+            try
+            {
+                // 1. Demote all existing user branches IsDefault = false first to prevent unique filtered index violation
+                var existingUserBranches = await context.UserBranches
+                    .IgnoreQueryFilters()
+                    .Where(ub => ub.UserID == user.ID)
+                    .ToListAsync();
+
+                foreach (var ub in existingUserBranches)
+                {
+                    ub.IsDefault = false;
+                }
+                await context.SaveChangesAsync();
+
+                // 2. Process assigned branches
+                var assignedBranchIds = dto.Branches != null
+                    ? dto.Branches.Select(b => b.BranchId).ToHashSet()
+                    : new HashSet<long>();
+
+                if (dto.Branches != null)
+                {
+                    foreach (var item in dto.Branches)
+                    {
+                        var existing = existingUserBranches.FirstOrDefault(ub => ub.BranchID == item.BranchId);
+                        if (existing != null)
+                        {
+                            existing.IsActive = true;
+                            existing.IsDefault = item.IsDefault;
+                            existing.CanView = item.CanView;
+                            existing.CanCreate = item.CanCreate;
+                            existing.CanEdit = item.CanEdit;
+                            existing.CanExecute = item.CanExecute;
+                            existing.CanApprove = item.CanApprove;
+                            existing.CanDelete = item.CanDelete;
+                            existing.ModifiedBy = modifiedBy;
+                            existing.ModifiedOn = DateTime.UtcNow;
+                        }
+                        else
+                        {
+                            var newUb = new UserBranch
+                            {
+                                UserID = user.ID,
+                                BranchID = item.BranchId,
+                                IsDefault = item.IsDefault,
+                                CanView = item.CanView,
+                                CanCreate = item.CanCreate,
+                                CanEdit = item.CanEdit,
+                                CanExecute = item.CanExecute,
+                                CanApprove = item.CanApprove,
+                                CanDelete = item.CanDelete,
+                                IsActive = true,
+                                CreatedBy = modifiedBy ?? 0,
+                                CreatedOn = DateTime.UtcNow
+                            };
+                            await context.UserBranches.AddAsync(newUb);
+                        }
+                    }
+                }
+
+                // 3. Deactivate unassigned branches
+                foreach (var ub in existingUserBranches)
+                {
+                    if (!assignedBranchIds.Contains(ub.BranchID))
+                    {
+                        ub.IsActive = false;
+                        ub.IsDefault = false;
+                        ub.ModifiedBy = modifiedBy;
+                        ub.ModifiedOn = DateTime.UtcNow;
+                    }
+                }
+
+                // 4. Update user master
+                user.CanViewAllBranches = dto.CanViewAllBranches;
+                user.BranchID = defaultBranchId;
+                user.ModifiedBy = modifiedBy;
+                user.ModifiedOn = DateTime.UtcNow;
+
+                await context.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+        public async Task SetDefaultBranch(long userId, long branchId, long? modifiedBy)
+        {
+            var user = await context.UserMasters
+                .IgnoreQueryFilters()
+                .Include(u => u.UserBranches)
+                .FirstOrDefaultAsync(u => u.ID == userId);
+
+            if (user == null)
+            {
+                throw new InvalidOperationException("User not found.");
+            }
+
+            var targetUb = user.UserBranches.FirstOrDefault(ub => ub.BranchID == branchId && ub.IsActive);
+            if (targetUb == null)
+            {
+                throw new InvalidOperationException("Cannot set an unassigned or inactive branch as default.");
+            }
+
+            using var transaction = await context.Database.BeginTransactionAsync();
+            try
+            {
+                // Demote existing
+                foreach (var ub in user.UserBranches)
+                {
+                    ub.IsDefault = false;
+                    ub.ModifiedBy = modifiedBy;
+                    ub.ModifiedOn = DateTime.UtcNow;
+                }
+                await context.SaveChangesAsync();
+
+                // Promote target
+                targetUb.IsDefault = true;
+                user.BranchID = branchId;
+                user.ModifiedBy = modifiedBy;
+                user.ModifiedOn = DateTime.UtcNow;
+
+                await context.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
     }
 }

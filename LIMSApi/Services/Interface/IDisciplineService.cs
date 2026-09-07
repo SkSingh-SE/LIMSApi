@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 
 namespace LIMSApi.Services.Interface
@@ -10,6 +10,7 @@ namespace LIMSApi.Services.Interface
         Task RemoveDiscipline(long id);
         Task<DisciplineMaster> GetDisciplineDetails(long id);
         Task<PagedResponse<object>> FetchDisciplineList(PageFilter filter);
+        Task<bool> ToggleDisciplineStatus(long id);
 
         Task<List<DropdwonSelector>> GetDisciplineDropdown(string? searchTerm, int pageNo, int pageSize);
     }

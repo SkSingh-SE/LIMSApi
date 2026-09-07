@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace LIMSApi.Models
 {
@@ -11,5 +11,9 @@ namespace LIMSApi.Models
         [StringLength(250)]
         public string? Description { get; set; }
 
+        [Required, StringLength(20)]
+        public string Code { get; set; } = string.Empty;
+
+        public int SortOrder { get; set; } = 0;
     }
 }

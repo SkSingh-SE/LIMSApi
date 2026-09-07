@@ -31,22 +31,16 @@ namespace LIMSApi.Repositories
             await _context.SaveChangesAsync();
         }
 
-        public async Task DeleteAnalysisTechnique(AnalysisTechniqueMaster model)
-        {
-            _context.AnalysisTechniqueMasters.Update(model);
-            await _context.SaveChangesAsync();
-        }
-
         public async Task<AnalysisTechniqueMaster?> GetAnalysisTechniqueById(long id)
         {
             return await _context.AnalysisTechniqueMasters
-                .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+                .FirstOrDefaultAsync(x => x.ID == id && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
         public async Task<PagedResponse<object>> GetAllAnalysisTechniques(PageFilter filter)
         {
             var _query = (from c in _context.AnalysisTechniqueMasters
-                          where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
+                          where c.CompanyCode == loggedInUser.CompanyCode
                           select c).AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
@@ -56,6 +50,7 @@ namespace LIMSApi.Repositories
                     (x.Name != null && x.Name.Contains(search))
                     || (x.Code != null && x.Code.Contains(search))
                     || (x.AliasNames != null && x.AliasNames.Contains(search))
+                    || (x.Description != null && x.Description.Contains(search))
                 );
             }
 
@@ -65,14 +60,14 @@ namespace LIMSApi.Repositories
             }
             else
             {
-                _query = _query.OrderBy(x => x.Name);
+                _query = _query.OrderBy(x => x.Code);
             }
 
             var projected = _query.Select(x => new
             {
                 x.ID,
-                x.Name,
                 x.Code,
+                x.Name,
                 x.AliasNames,
                 x.Description,
                 x.CreatedBy,
@@ -120,24 +115,18 @@ namespace LIMSApi.Repositories
             return data;
         }
 
-        public async Task<bool> ExistsByName(string name)
-        {
-            return await _context.AnalysisTechniqueMasters.AnyAsync(x => x.Name == name && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
-        }
-
-        public async Task<bool> ExistsByNameAndNotId(string name, long id)
-        {
-            return await _context.AnalysisTechniqueMasters.AnyAsync(x => x.Name == name && x.ID != id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
-        }
-
         public async Task<bool> ExistsByCode(string code)
         {
-            return await _context.AnalysisTechniqueMasters.AnyAsync(x => x.Code == code && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            var c = code.Trim().ToUpperInvariant();
+            return await _context.AnalysisTechniqueMasters
+                .AnyAsync(x => x.Code.ToUpper() == c && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
         public async Task<bool> ExistsByCodeAndNotId(string code, long id)
         {
-            return await _context.AnalysisTechniqueMasters.AnyAsync(x => x.Code == code && x.ID != id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            var c = code.Trim().ToUpperInvariant();
+            return await _context.AnalysisTechniqueMasters
+                .AnyAsync(x => x.Code.ToUpper() == c && x.ID != id && x.CompanyCode == loggedInUser.CompanyCode);
         }
     }
 }

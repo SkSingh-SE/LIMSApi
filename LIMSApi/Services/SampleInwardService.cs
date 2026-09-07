@@ -3,7 +3,6 @@ using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Helpers.Enums;
-using LIMSApi.Migrations;
 using LIMSApi.Models;
 using LIMSApi.Repositories;
 using LIMSApi.Repositories.Interface;
@@ -32,8 +31,9 @@ namespace LIMSApi.Services
         private readonly TemplateService _templateService;
         private readonly IPlanService _planService;
         private readonly INotificationService _notificationService;
+        private readonly IBranchContext _branchContext;
 
-        public SampleInwardService(ISampleInwardRepository SampleInwardRepo, ILogger<SampleInwardService> logger, IFileUploadService uploadService, IWorkflowService workflowService, ISampleStatusService sampleStatusService, IProformaInvoiceRepository proformaInvoiceRepository, ILaboratoryTestRepository laboratoryTestRepository, LIMSContext context, EmailService emailService, TemplateService templateService, IPlanService planService, INotificationService notificationService)
+        public SampleInwardService(ISampleInwardRepository SampleInwardRepo, ILogger<SampleInwardService> logger, IFileUploadService uploadService, IWorkflowService workflowService, ISampleStatusService sampleStatusService, IProformaInvoiceRepository proformaInvoiceRepository, ILaboratoryTestRepository laboratoryTestRepository, LIMSContext context, EmailService emailService, TemplateService templateService, IPlanService planService, INotificationService notificationService, IBranchContext branchContext)
         {
             _SampleInwardRepository = SampleInwardRepo;
             _logger = logger;
@@ -47,13 +47,18 @@ namespace LIMSApi.Services
             _templateService = templateService;
             _planService = planService;
             _notificationService = notificationService;
+            _branchContext = branchContext;
         }
 
         public async Task<long> CreateSampleInward(SampleInwardDto model)
         {
             try
             {
-
+                var branchId = _branchContext.RequireCurrentBranchId();
+                if (!_branchContext.IsAuthorizedForBranch(branchId, BranchAction.Create))
+                {
+                    throw new UnauthorizedAccessException($"User is not authorized to create sample inward in branch {branchId}.");
+                }
 
                 dynamic caseAndSample = await _SampleInwardRepository.GetCaseNoAndSampleNo();
 
@@ -104,6 +109,7 @@ namespace LIMSApi.Services
 
                 var entity = new SampleInward
                 {
+                    BranchID = branchId,
                     CaseNo = caseAndSample.caseNo,
                     CustomerID = model.CustomerID,
                     PurchaseOrderId = model.PurchaseOrderId,
@@ -185,6 +191,7 @@ namespace LIMSApi.Services
                     {
                         SampleNo = $"{year}-{(nextSampleNumber + index):D6}",
                         Details = s.Details,
+                        DisciplineID = s.DisciplineID,
                         MetalClassificationID = s.MetalClassificationID,
                         ProductConditionID = s.ProductConditionID,
                         ProductMasterID = s.ProductMasterID,
@@ -266,6 +273,22 @@ namespace LIMSApi.Services
                 {
                     await _SampleInwardRepository.AddSampleInward(entity);
                     _logger.LogInformation("SampleInward '{Case}' created successfully.", model.CaseNo);
+
+                    // Atomically ensure 1-to-1 Draft SampleTestPlan exists for each physical sample
+                    if (entity.SampleDetails != null && entity.SampleDetails.Any())
+                    {
+                        var draftPlans = entity.SampleDetails.Select(sd => new SampleTestPlan
+                        {
+                            SampleID = sd.ID,
+                            SampleNo = sd.SampleNo,
+                            Version = 1,
+                            PlanStatus = "Draft"
+                        }).ToList();
+
+                        _context.TestPlans.AddRange(draftPlans);
+                        await _context.SaveChangesAsync();
+                        _logger.LogInformation("Atomically created {Count} initial Draft TestPlans for Case '{Case}'.", draftPlans.Count, entity.CaseNo);
+                    }
 
                     // Process queued jobs
                     foreach (var job in statusJobs)
@@ -552,6 +575,7 @@ namespace LIMSApi.Services
                     {
                         //  Update existing sample, keep original SampleNo
                         existingSample.Details = s.Details;
+                        existingSample.DisciplineID = s.DisciplineID;
                         existingSample.MetalClassificationID = s.MetalClassificationID;
                         existingSample.ProductConditionID = s.ProductConditionID;
                         existingSample.ProductMasterID = s.ProductMasterID;
@@ -623,6 +647,7 @@ namespace LIMSApi.Services
                         {
                             SampleNo = newSampleNo,
                             Details = s.Details,
+                            DisciplineID = s.DisciplineID,
                             MetalClassificationID = s.MetalClassificationID,
                             ProductConditionID = s.ProductConditionID,
                             ProductMasterID = s.ProductMasterID,
@@ -683,6 +708,31 @@ namespace LIMSApi.Services
                 {
                     await _SampleInwardRepository.UpdateSampleInward(entity);
                     _logger.LogInformation("SampleInward '{Case}' updated successfully.", entity.CaseNo);
+
+                    // Atomically ensure all non-cancelled samples have a SampleTestPlan
+                    var sampleIds = entity.SampleDetails.Where(s => !s.IsCancelled).Select(s => s.ID).ToList();
+                    var existingPlanSampleIds = await _context.TestPlans
+                        .Where(tp => sampleIds.Contains(tp.SampleID))
+                        .Select(tp => tp.SampleID)
+                        .ToListAsync();
+
+                    var missingPlans = entity.SampleDetails
+                        .Where(s => !s.IsCancelled && !existingPlanSampleIds.Contains(s.ID))
+                        .Select(s => new SampleTestPlan
+                        {
+                            SampleID = s.ID,
+                            SampleNo = s.SampleNo,
+                            Version = 1,
+                            PlanStatus = "Draft"
+                        }).ToList();
+
+                    if (missingPlans.Any())
+                    {
+                        _context.TestPlans.AddRange(missingPlans);
+                        await _context.SaveChangesAsync();
+                        _logger.LogInformation("Atomically created {Count} missing Draft TestPlans for Case '{Case}'.", missingPlans.Count, entity.CaseNo);
+                    }
+
                     foreach (var job in statusJobs)
                     {
                         await job();
@@ -757,10 +807,14 @@ namespace LIMSApi.Services
                         .ThenInclude(sd => sd.TestPlans)
                             .ThenInclude(tp => tp.ChemicalTests)
                                 .ThenInclude(ct => ct.Elements)
+                    .Include(i => i.Branch)
                     .Include(i => i.SampleDetails)
                         .ThenInclude(sd => sd.TestPlans)
                             .ThenInclude(tp => tp.ChemicalTests)
                                 .ThenInclude(ct => ct.TestTypes)
+                    .Include(i => i.SampleDetails)
+                        .ThenInclude(sd => sd.TestPlans)
+                            .ThenInclude(tp => tp.UniversalTestGroups)
                     .FirstOrDefaultAsync(x => x.ID == model.ID);
 
                 if (entity == null)
@@ -1081,6 +1135,212 @@ namespace LIMSApi.Services
                     }
 
                     #endregion
+
+                    #region UNIVERSAL TEST (UPSERT)
+
+                    var incomingUtgList = planDto.UniversalTestGroups ?? new List<UniversalTestGroupDto>();
+                    var incomingUtgIds = incomingUtgList.Where(u => u.ID > 0).Select(u => u.ID).ToHashSet();
+
+                    // Soft-delete or remove any unstarted UTGs that were removed from the plan
+                    foreach (var existingUtg in plan.UniversalTestGroups.Where(u => u.IsActive && !incomingUtgIds.Contains(u.ID)).ToList())
+                    {
+                        var hasStarted = await _context.TestExecutions.AnyAsync(e => e.UniversalTestGroupID == existingUtg.ID);
+                        if (!hasStarted)
+                        {
+                            existingUtg.IsActive = false;
+                            existingUtg.ModifiedOn = DateTime.UtcNow;
+                            existingUtg.ModifiedBy = loggedInUser.EmployeeID;
+                        }
+                    }
+
+                    // Upsert incoming UTGs
+                    foreach (var utgDto in incomingUtgList)
+                    {
+                        var labTest = await _context.LaboratoryTests
+                            .Include(lt => lt.LabDepartment)
+                            .FirstOrDefaultAsync(lt => lt.ID == utgDto.LaboratoryTestID);
+
+                        if (labTest == null)
+                        {
+                            throw new KeyNotFoundException($"Laboratory Test with ID {utgDto.LaboratoryTestID} not found.");
+                        }
+
+                        // Section 11 Department Validation & Dynamic Branch-Aware Routing
+                        if (labTest.LabDepartmentID.HasValue || labTest.DisciplineID.HasValue)
+                        {
+                            DepartmentMaster? dept = null;
+
+                            if (labTest.LabDepartmentID.HasValue)
+                            {
+                                dept = await _context.DepartmentMasters
+                                    .FirstOrDefaultAsync(d => d.ID == labTest.LabDepartmentID.Value && d.BranchID == entity.BranchID);
+
+                                if (dept == null && labTest.LabDepartment != null)
+                                {
+                                    dept = await _context.DepartmentMasters
+                                        .FirstOrDefaultAsync(d => d.BranchID == entity.BranchID && d.Name == labTest.LabDepartment.Name);
+                                }
+                            }
+
+                            // Dynamic branch routing fallback: (BranchID, DisciplineID) -> Department
+                            if (dept == null && labTest.DisciplineID.HasValue)
+                            {
+                                dept = await _context.DepartmentMasters
+                                    .FirstOrDefaultAsync(d => d.BranchID == entity.BranchID && d.DisciplineID == labTest.DisciplineID.Value && d.IsActive);
+                            }
+
+                            if (dept == null && labTest.LabDepartmentID.HasValue)
+                            {
+                                throw new InvalidOperationException($"Department validation failed: Laboratory Test '{labTest.Name}' requires department '{labTest.LabDepartment?.Name ?? "Required Department"}', which is not configured for branch '{entity.Branch?.Name ?? $"Branch {entity.BranchID}"}'.");
+                            }
+
+                            if (dept != null && !dept.IsActive)
+                            {
+                                throw new InvalidOperationException($"Department validation failed: Laboratory Test '{labTest.Name}' requires department '{dept.Name}', which is inactive in branch '{entity.Branch?.Name ?? $"Branch {entity.BranchID}"}'.");
+                            }
+                        }
+
+                        long? versionId = utgDto.TestMethodSpecificationVersionID;
+                        if (!versionId.HasValue && utgDto.TestMethodSpecificationID.HasValue)
+                        {
+                            var inwardDate = entity.CollectionTime != default ? entity.CollectionTime : (entity.CreatedOn != default ? entity.CreatedOn : DateTime.UtcNow);
+                            var candidateVersions = await _context.TestMethodSpecificationVersions
+                                .Where(v => v.TestMethodSpecificationID == utgDto.TestMethodSpecificationID.Value &&
+                                            v.Status == Helpers.Enums.VersionStatus.Active &&
+                                            (v.EffectiveDate == null || v.EffectiveDate <= inwardDate) &&
+                                            (v.SupersededDate == null || v.SupersededDate > inwardDate))
+                                .ToListAsync();
+
+                            if (candidateVersions.Count == 1)
+                            {
+                                versionId = candidateVersions[0].ID;
+                            }
+                            else if (candidateVersions.Count > 1)
+                            {
+                                var defaultVer = candidateVersions.FirstOrDefault(v => v.IsDefault);
+                                versionId = defaultVer?.ID ?? candidateVersions.OrderByDescending(v => v.ID).First().ID;
+                            }
+                        }
+
+                        long? specHeaderId = utgDto.SpecificationHeaderID;
+                        long? specGradeId = utgDto.SpecificationGradeID;
+                        if (!specGradeId.HasValue && sample.SpecificationGradeID.HasValue)
+                        {
+                            specGradeId = sample.SpecificationGradeID;
+                        }
+                        if (!specHeaderId.HasValue && specGradeId.HasValue)
+                        {
+                            specHeaderId = await _context.SpecificationGrades
+                                .Where(g => g.ID == specGradeId.Value)
+                                .Select(g => (long?)g.SpecificationHeaderID)
+                                .FirstOrDefaultAsync();
+                        }
+
+                        // Resolve and strictly pin SpecificationVersionID (Section 5)
+                        long resolvedSpecVersionId;
+                        if (utgDto.SpecificationVersionID.HasValue && utgDto.SpecificationVersionID.Value > 0)
+                        {
+                            resolvedSpecVersionId = utgDto.SpecificationVersionID.Value;
+                        }
+                        else if (specHeaderId.HasValue)
+                        {
+                            var activeVer = await _context.SpecificationVersions
+                                .Where(v => v.SpecificationHeaderID == specHeaderId.Value && v.Status == Helpers.Enums.VersionStatus.Active)
+                                .OrderByDescending(v => v.IsDefault)
+                                .ThenByDescending(v => v.ID)
+                                .FirstOrDefaultAsync();
+
+                            if (activeVer == null)
+                            {
+                                throw new InvalidOperationException($"No Active Specification Version found for Specification Header ID {specHeaderId.Value}.");
+                            }
+                            resolvedSpecVersionId = activeVer.ID;
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException("A valid Specification Header and Specification Version are required for Universal Test Planning.");
+                        }
+
+                        // Validate that the selected SpecificationVersion belongs to the selected SpecificationHeader
+                        if (specHeaderId.HasValue)
+                        {
+                            var specVersion = await _context.SpecificationVersions.FirstOrDefaultAsync(v => v.ID == resolvedSpecVersionId);
+                            if (specVersion == null)
+                            {
+                                throw new KeyNotFoundException($"Specification Version {resolvedSpecVersionId} does not exist.");
+                            }
+                            if (specVersion.SpecificationHeaderID != specHeaderId.Value)
+                            {
+                                throw new InvalidOperationException($"Specification Version {resolvedSpecVersionId} does not belong to Specification Header {specHeaderId.Value}.");
+                            }
+                        }
+
+                        // Validate that the selected SpecificationGrade belongs to the selected SpecificationHeader
+                        if (specGradeId.HasValue && specHeaderId.HasValue)
+                        {
+                            var grade = await _context.SpecificationGrades.FirstOrDefaultAsync(g => g.ID == specGradeId.Value);
+                            if (grade == null)
+                            {
+                                throw new KeyNotFoundException($"Specification Grade {specGradeId.Value} does not exist.");
+                            }
+                            if (grade.SpecificationHeaderID != specHeaderId.Value)
+                            {
+                                throw new InvalidOperationException($"Specification Grade {specGradeId.Value} does not belong to Specification Header {specHeaderId.Value}.");
+                            }
+                        }
+
+                        // Validate that the version + grade combination has configured requirements
+                        if (specGradeId.HasValue)
+                        {
+                            var hasConfiguredLines = await _context.SpecificationLines.AnyAsync(l =>
+                                l.SpecificationVersionID == resolvedSpecVersionId &&
+                                l.SpecificationGradeID == specGradeId.Value);
+                            if (!hasConfiguredLines)
+                            {
+                                throw new InvalidOperationException($"No requirement configuration exists for Specification Version {resolvedSpecVersionId} and Applicability/Grade {specGradeId.Value}.");
+                            }
+                        }
+
+                        if (utgDto.ID > 0)
+                        {
+                            var existingUtg = plan.UniversalTestGroups.FirstOrDefault(u => u.ID == utgDto.ID);
+                            if (existingUtg != null)
+                            {
+                                existingUtg.LaboratoryTestID = utgDto.LaboratoryTestID;
+                                existingUtg.TestMethodSpecificationID = utgDto.TestMethodSpecificationID;
+                                existingUtg.TestMethodSpecificationVersionID = versionId;
+                                existingUtg.SpecificationHeaderID = specHeaderId;
+                                existingUtg.SpecificationGradeID = specGradeId;
+                                existingUtg.SpecificationVersionID = resolvedSpecVersionId;
+                                existingUtg.ModifiedOn = DateTime.UtcNow;
+                                existingUtg.ModifiedBy = loggedInUser.EmployeeID;
+                            }
+                        }
+                        else
+                        {
+                            // Add new UTG with pinned SpecificationVersionID
+                            var newUtg = new UniversalTestGroup
+                            {
+                                SampleTestPlanID = plan.ID,
+                                BranchID = entity.BranchID,
+                                OrganizationID = entity.Branch?.OrganizationID ?? orgForUlr2?.Id ?? 1,
+                                LaboratoryTestID = utgDto.LaboratoryTestID,
+                                TestMethodSpecificationID = utgDto.TestMethodSpecificationID,
+                                TestMethodSpecificationVersionID = versionId,
+                                SpecificationHeaderID = specHeaderId,
+                                SpecificationGradeID = specGradeId,
+                                SpecificationVersionID = resolvedSpecVersionId,
+                                Status = "Pending",
+                                IsActive = true,
+                                CreatedOn = DateTime.UtcNow,
+                                CreatedBy = loggedInUser.EmployeeID,
+                                CompanyCode = loggedInUser.CompanyCode
+                            };
+                            plan.UniversalTestGroups.Add(newUtg);
+                        }
+                    }
+
+                    #endregion
                 }
 
                 await _context.SaveChangesAsync();
@@ -1177,12 +1437,13 @@ namespace LIMSApi.Services
             var hasAnyTest = model.SampleDetails?.Any(s =>
                 s.TestPlans?.Any(tp =>
                     (tp.GeneralTests?.Any(gt => gt.Methods?.Any(m => m.Cancel != true) == true) == true) ||
-                    (tp.ChemicalTests?.Any(ct => (ct.TestTypeIds?.Count > 0) == true || ct.Elements?.Count > 0) == true)
+                    (tp.ChemicalTests?.Any(ct => (ct.TestTypeIds?.Count > 0) == true || ct.Elements?.Count > 0) == true) ||
+                    (tp.UniversalTestGroups?.Any(utg => utg.LaboratoryTestID > 0) == true)
                 ) == true
             ) == true;
 
             if (!hasAnyTest)
-                throw new InvalidOperationException("Cannot submit for review: At least one test (General or Chemical) must be added to the plan.");
+                throw new InvalidOperationException("Cannot submit for review: At least one test (General, Chemical, or Universal) must be added to the plan.");
 
             await using var trx = await _context.Database.BeginTransactionAsync();
             try
@@ -1376,6 +1637,8 @@ namespace LIMSApi.Services
                         ID = s.ID,
                         SampleNo = s.SampleNo,
                         Details = s.Details,
+                        DisciplineID = s.DisciplineID,
+                        DisciplineName = s.Discipline?.Name,
                         MetalClassificationID = s.MetalClassificationID,
                         MetalClassificationName = s.MetalClassification?.Name,
                         ProductConditionID = s.ProductConditionID,
@@ -1415,7 +1678,47 @@ namespace LIMSApi.Services
                         Thickness = s.Thickness,
                         Diameter = s.Diameter,
                         Width = s.Width,
-                        Length = s.Length
+                        Length = s.Length,
+                        TestPlans = s.TestPlans.Select(tp => new SampleTestPlanDto
+                        {
+                            ID = tp.ID,
+                            SampleNo = tp.SampleNo,
+                            SampleID = tp.SampleID,
+                            Version = tp.Version,
+                            ReplanCount = tp.ReplanCount,
+                            PlanStatus = tp.PlanStatus,
+                            ApprovedById = tp.ApprovedById,
+                            ApprovedByName = tp.ApprovedByName,
+                            ApprovedAt = tp.ApprovedAt,
+                            GeneralTests = new List<GeneralTestDto>(),
+                            ChemicalTests = new List<ChemicalTestDto>(),
+                            UniversalTestGroups = tp.UniversalTestGroups
+                                .Where(utg => utg.IsActive)
+                                .Select(utg => new UniversalTestGroupDto
+                                {
+                                    ID = utg.ID,
+                                    BranchID = utg.BranchID,
+                                    SampleTestPlanID = utg.SampleTestPlanID,
+                                    LaboratoryTestID = utg.LaboratoryTestID,
+                                    LaboratoryTestName = utg.LaboratoryTest != null ? utg.LaboratoryTest.Name : null,
+                                    DepartmentID = utg.LaboratoryTest != null ? utg.LaboratoryTest.LabDepartmentID : null,
+                                    DepartmentName = utg.LaboratoryTest != null && utg.LaboratoryTest.LabDepartment != null ? utg.LaboratoryTest.LabDepartment.Name : null,
+                                    TestMethodSpecificationID = utg.TestMethodSpecificationID,
+                                    TestMethodName = utg.TestMethodSpecification != null ? utg.TestMethodSpecification.Name : null,
+                                    TestMethodSpecificationVersionID = utg.TestMethodSpecificationVersionID,
+                                    TestMethodVersion = utg.TestMethodSpecificationVersion != null ? utg.TestMethodSpecificationVersion.Version : null,
+                                    SpecificationHeaderID = utg.SpecificationHeaderID,
+                                    SpecificationName = utg.SpecificationHeader != null ? (utg.SpecificationHeader.DisplayTitle ?? utg.SpecificationHeader.AliasName) : null,
+                                    SpecificationVersionID = utg.SpecificationVersionID,
+                                    SpecificationVersionNumber = utg.SpecificationVersion != null ? utg.SpecificationVersion.Version : null,
+                                    SpecificationGradeID = utg.SpecificationGradeID,
+                                    SpecificationGradeName = utg.SpecificationGrade != null ? utg.SpecificationGrade.Grade : null,
+                                    OrganizationID = utg.OrganizationID,
+                                    Status = utg.Status,
+                                    TestExecutionID = utg.TestExecutions.OrderByDescending(e => e.ID).Select(e => (long?)e.ID).FirstOrDefault(),
+                                    ExecutionStatus = utg.TestExecutions.OrderByDescending(e => e.ID).Select(e => e.Status).FirstOrDefault()
+                                }).ToList()
+                        }).ToList()
                     }).ToList(),
 
                 SampleAdditionalDetails = sampleInward.SampleDetails
@@ -1719,6 +2022,8 @@ namespace LIMSApi.Services
                         InwardID = s.InwardID,
                         SampleNo = s.SampleNo,
                         Details = s.Details,
+                        DisciplineID = s.DisciplineID,
+                        DisciplineName = s.Discipline?.Name,
                         MetalClassificationID = s.MetalClassificationID,
                         MetalClassificationName = s.MetalClassification?.Name,
                         ProductConditionID = s.ProductConditionID,
@@ -1761,7 +2066,47 @@ namespace LIMSApi.Services
                         Thickness = s.Thickness,
                         Diameter = s.Diameter,
                         Width = s.Width,
-                        Length = s.Length
+                        Length = s.Length,
+                        TestPlans = s.TestPlans.Select(tp => new SampleTestPlanDto
+                        {
+                            ID = tp.ID,
+                            SampleNo = tp.SampleNo,
+                            SampleID = tp.SampleID,
+                            Version = tp.Version,
+                            ReplanCount = tp.ReplanCount,
+                            PlanStatus = tp.PlanStatus,
+                            ApprovedById = tp.ApprovedById,
+                            ApprovedByName = tp.ApprovedByName,
+                            ApprovedAt = tp.ApprovedAt,
+                            GeneralTests = new List<GeneralTestDto>(),
+                            ChemicalTests = new List<ChemicalTestDto>(),
+                            UniversalTestGroups = tp.UniversalTestGroups
+                                .Where(utg => utg.IsActive)
+                                .Select(utg => new UniversalTestGroupDto
+                                {
+                                    ID = utg.ID,
+                                    BranchID = utg.BranchID,
+                                    SampleTestPlanID = utg.SampleTestPlanID,
+                                    LaboratoryTestID = utg.LaboratoryTestID,
+                                    LaboratoryTestName = utg.LaboratoryTest != null ? utg.LaboratoryTest.Name : null,
+                                    DepartmentID = utg.LaboratoryTest != null ? utg.LaboratoryTest.LabDepartmentID : null,
+                                    DepartmentName = utg.LaboratoryTest != null && utg.LaboratoryTest.LabDepartment != null ? utg.LaboratoryTest.LabDepartment.Name : null,
+                                    TestMethodSpecificationID = utg.TestMethodSpecificationID,
+                                    TestMethodName = utg.TestMethodSpecification != null ? utg.TestMethodSpecification.Name : null,
+                                    TestMethodSpecificationVersionID = utg.TestMethodSpecificationVersionID,
+                                    TestMethodVersion = utg.TestMethodSpecificationVersion != null ? utg.TestMethodSpecificationVersion.Version : null,
+                                    SpecificationHeaderID = utg.SpecificationHeaderID,
+                                    SpecificationName = utg.SpecificationHeader != null ? (utg.SpecificationHeader.DisplayTitle ?? utg.SpecificationHeader.AliasName) : null,
+                                    SpecificationVersionID = utg.SpecificationVersionID,
+                                    SpecificationVersionNumber = utg.SpecificationVersion != null ? utg.SpecificationVersion.Version : null,
+                                    SpecificationGradeID = utg.SpecificationGradeID,
+                                    SpecificationGradeName = utg.SpecificationGrade != null ? utg.SpecificationGrade.Grade : null,
+                                    OrganizationID = utg.OrganizationID,
+                                    Status = utg.Status,
+                                    TestExecutionID = utg.TestExecutions.OrderByDescending(e => e.ID).Select(e => (long?)e.ID).FirstOrDefault(),
+                                    ExecutionStatus = utg.TestExecutions.OrderByDescending(e => e.ID).Select(e => e.Status).FirstOrDefault()
+                                }).ToList()
+                        }).ToList()
                     }).ToList(),
 
                 SampleAdditionalDetails = sampleInward.SampleDetails
@@ -1961,6 +2306,32 @@ namespace LIMSApi.Services
                                         Selected = e.Selected
                                     }).ToList()
                                 };
+                            }).ToList(),
+                        UniversalTestGroups = tp.UniversalTestGroups
+                            .Where(utg => utg.IsActive)
+                            .Select(utg => new UniversalTestGroupDto
+                            {
+                                ID = utg.ID,
+                                BranchID = utg.BranchID,
+                                SampleTestPlanID = utg.SampleTestPlanID,
+                                LaboratoryTestID = utg.LaboratoryTestID,
+                                LaboratoryTestName = utg.LaboratoryTest != null ? utg.LaboratoryTest.Name : null,
+                                DepartmentID = utg.LaboratoryTest != null ? utg.LaboratoryTest.LabDepartmentID : null,
+                                DepartmentName = utg.LaboratoryTest != null && utg.LaboratoryTest.LabDepartment != null ? utg.LaboratoryTest.LabDepartment.Name : null,
+                                TestMethodSpecificationID = utg.TestMethodSpecificationID,
+                                TestMethodName = utg.TestMethodSpecification != null ? utg.TestMethodSpecification.Name : null,
+                                TestMethodSpecificationVersionID = utg.TestMethodSpecificationVersionID,
+                                TestMethodVersion = utg.TestMethodSpecificationVersion != null ? utg.TestMethodSpecificationVersion.Version : null,
+                                SpecificationHeaderID = utg.SpecificationHeaderID,
+                                SpecificationName = utg.SpecificationHeader != null ? (utg.SpecificationHeader.DisplayTitle ?? utg.SpecificationHeader.AliasName) : null,
+                                SpecificationVersionID = utg.SpecificationVersionID,
+                                SpecificationVersionNumber = utg.SpecificationVersion != null ? utg.SpecificationVersion.Version : null,
+                                SpecificationGradeID = utg.SpecificationGradeID,
+                                SpecificationGradeName = utg.SpecificationGrade != null ? utg.SpecificationGrade.Grade : null,
+                                OrganizationID = utg.OrganizationID,
+                                Status = utg.Status,
+                                TestExecutionID = utg.TestExecutions.OrderByDescending(e => e.ID).Select(e => (long?)e.ID).FirstOrDefault(),
+                                ExecutionStatus = utg.TestExecutions.OrderByDescending(e => e.ID).Select(e => e.Status).FirstOrDefault()
                             }).ToList()
                     }))
                     .ToList()
@@ -2096,9 +2467,19 @@ namespace LIMSApi.Services
             if (reportFinalized)
                 throw new InvalidOperationException("Test report has been finalized for this sample. Cannot cancel.");
 
-            // Cancel all test plans for this sample
+            // Cancel all test plans for this sample and their pending UniversalTestGroups
+            var planIds = sample.TestPlans.Select(p => p.ID).ToList();
             foreach (var plan in sample.TestPlans)
                 plan.PlanStatus = "Cancelled";
+
+            var pendingGroups = await _context.UniversalTestGroups
+                .Where(u => planIds.Contains(u.SampleTestPlanID) && u.IsActive && u.Status == "Pending")
+                .ToListAsync();
+            foreach (var g in pendingGroups)
+            {
+                g.Status = "Cancelled";
+                g.IsActive = false;
+            }
 
             // Soft-cancel the sample (IsActive stays true — row remains visible)
             var previousStatus = sample.SampleStatus;

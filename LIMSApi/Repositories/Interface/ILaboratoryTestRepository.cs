@@ -11,6 +11,16 @@ namespace LIMSApi.Repositories.Interface
         Task<LaboratoryTest> GetTestMethodById(long id);
         Task<PagedResponse<object>> GetAllTestMethods(PageFilter filter);
 
+        // Screen 13: Universal Test Definition Methods
+        Task<PagedResponse<LaboratoryTestListDto>> GetPagedTestsAsync(PageFilter filter, long? disciplineId = null, long? departmentId = null, bool? isActive = null);
+        Task<LaboratoryTestDetailDto?> GetUniversalTestByIdAsync(long id);
+        Task<bool> IsCodeUniqueAsync(string code, long? excludeId = null);
+        Task<bool> HasExecutionHistoryAsync(long id);
+        Task<List<LaboratoryTestDropdownDto>> GetUniversalDropdownAsync(long? disciplineId = null);
+        Task SyncParametersAsync(long testId, List<LaboratoryTestParameterItemDto> parameters, string companyCode);
+        Task SyncMethodsAsync(long testId, List<LaboratoryTestMethodItemDto> methods, string companyCode);
+        Task SyncConditionsAsync(long testId, List<LaboratoryTestConditionItemDto> conditions, string companyCode);
+
         Task<List<DropdwonSelector>> GetTestMethodDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<List<DropdwonSelector>> GetGeneralTestMethodDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<List<DropdwonSelector>> GetChemicalTestMethodDropdown(string? searchTerm, int pageNo, int pageSize);

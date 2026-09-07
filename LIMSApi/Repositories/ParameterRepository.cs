@@ -41,7 +41,7 @@ namespace LIMSApi.Repositories
                 .Include(p => p.ParameterUnit)
                 .Include(p => p.ParameterUnitEquivalent)
                 .Include(p => p.DropdownOptions.Where(o => o.IsActive))
-                .FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
+                .FirstOrDefaultAsync(x => x.ID == id);
         }
 
         public async Task UpdateParameter(ParameterMaster model)
@@ -204,6 +204,7 @@ namespace LIMSApi.Repositories
                          select new
                          {
                              a.ID,
+                             a.Code,
                              a.Name,
                              a.ParameterType,
                              a.Symbol,
@@ -237,7 +238,7 @@ namespace LIMSApi.Repositories
                 else
                 {
                     var search = searchTerm.Trim();
-                    _query = _query.Where(x => x.Name != null && x.Name.Contains(search));
+                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)) || (x.Code != null && x.Code.Contains(search)));
                 }
             }
 
@@ -249,11 +250,12 @@ namespace LIMSApi.Repositories
                 AdditionalValues = new Dictionary<string, object>
                 {
                     { "PureName", x.Name },
+                    { "Code", x.Code ?? "" },
                     { "UnitID", x.unitID! },
                     { "Unit", x.unit ?? "" },
                     { "ParameterType", x.ParameterType ?? "" },
                     { "Symbol", x.Symbol ?? "" },
-                    { "InputType", x.InputType ?? "Decimal" },
+                    { "InputType", x.InputType ?? "" },
                     { "DecimalPrecision", x.DecimalPrecision },
                     { "ElementType", x.ElementType ?? "" },
                     { "IsCalculated", x.IsCalculated },
@@ -278,6 +280,7 @@ namespace LIMSApi.Repositories
                          select new
                          {
                              a.ID,
+                             a.Code,
                              a.Name,
                              a.ParameterType,
                              a.Symbol,
@@ -289,8 +292,8 @@ namespace LIMSApi.Repositories
                              a.FormulaDisplay,
                              unitID = a.ParameterUnitID,
                              unit = u != null ? u.Name : "",
-                              DropdownOptions = a.DropdownOptions.Where(o => o.IsActive).OrderBy(o => o.DisplayOrder).Select(o => new { o.DisplayText, o.Value, o.IsDefault })
-                          };
+                             DropdownOptions = a.DropdownOptions.Where(o => o.IsActive).OrderBy(o => o.DisplayOrder).Select(o => new { o.DisplayText, o.Value, o.IsDefault })
+                         };
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
@@ -299,7 +302,7 @@ namespace LIMSApi.Repositories
                 else
                 {
                     var search = searchTerm.Trim();
-                    _query = _query.Where(x => x.Name != null && x.Name.Contains(search));
+                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)) || (x.Code != null && x.Code.Contains(search)));
                 }
             }
 
@@ -311,11 +314,12 @@ namespace LIMSApi.Repositories
                 AdditionalValues = new Dictionary<string, object>
                 {
                     { "PureName", x.Name },
+                    { "Code", x.Code ?? "" },
                     { "UnitID", x.unitID! },
                     { "Unit", x.unit ?? "" },
                     { "ParameterType", x.ParameterType ?? "" },
                     { "Symbol", x.Symbol ?? "" },
-                    { "InputType", x.InputType ?? "Decimal" },
+                    { "InputType", x.InputType ?? "" },
                     { "DecimalPrecision", x.DecimalPrecision },
                     { "ElementType", x.ElementType ?? "" },
                     { "IsCalculated", x.IsCalculated },
@@ -340,6 +344,7 @@ namespace LIMSApi.Repositories
                          select new
                          {
                              a.ID,
+                             a.Code,
                              a.Name,
                              a.ParameterType,
                              a.Symbol,
@@ -351,8 +356,8 @@ namespace LIMSApi.Repositories
                              a.FormulaDisplay,
                              unitID = a.ParameterUnitID,
                              unit = u != null ? u.Name : "",
-                              DropdownOptions = a.DropdownOptions.Where(o => o.IsActive).OrderBy(o => o.DisplayOrder).Select(o => new { o.DisplayText, o.Value, o.IsDefault })
-                          };
+                             DropdownOptions = a.DropdownOptions.Where(o => o.IsActive).OrderBy(o => o.DisplayOrder).Select(o => new { o.DisplayText, o.Value, o.IsDefault })
+                         };
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
@@ -361,7 +366,7 @@ namespace LIMSApi.Repositories
                 else
                 {
                     var search = searchTerm.Trim();
-                    _query = _query.Where(x => x.Name != null && x.Name.Contains(search));
+                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)) || (x.Code != null && x.Code.Contains(search)));
                 }
             }
 
@@ -373,11 +378,12 @@ namespace LIMSApi.Repositories
                 AdditionalValues = new Dictionary<string, object>
                 {
                     { "PureName", x.Name },
+                    { "Code", x.Code ?? "" },
                     { "UnitID", x.unitID! },
                     { "Unit", x.unit ?? "" },
                     { "ParameterType", x.ParameterType ?? "" },
                     { "Symbol", x.Symbol ?? "" },
-                    { "InputType", x.InputType ?? "Decimal" },
+                    { "InputType", x.InputType ?? "" },
                     { "DecimalPrecision", x.DecimalPrecision },
                     { "ElementType", x.ElementType ?? "" },
                     { "IsCalculated", x.IsCalculated },
@@ -395,5 +401,163 @@ namespace LIMSApi.Repositories
 
         public async Task<bool> ExistsByNameAndNotId(string name, long id)
             => await _context.ParameterMasters.AnyAsync(x => x.Name == name && x.ID != id && x.IsActive);
+
+        public async Task<bool> ExistsByCode(string code)
+            => await _context.ParameterMasters.AnyAsync(x => x.Code == code);
+
+        public async Task<bool> ExistsByCodeAndNotId(string code, long id)
+            => await _context.ParameterMasters.AnyAsync(x => x.Code == code && x.ID != id);
+
+        public async Task<PagedResponse<ParameterListItemDto>> GetAllParametersUnified(PageFilter filter)
+        {
+            var query = from p in _context.ParameterMasters
+                        join u in _context.ParameterUnitMasters on p.ParameterUnitID equals u.ID into unitGroup
+                        from u in unitGroup.DefaultIfEmpty()
+                        join empMod in _context.EmployeeMasters on p.ModifiedBy equals empMod.ID into empModGroup
+                        from empMod in empModGroup.DefaultIfEmpty()
+                        join empCre in _context.EmployeeMasters on p.CreatedBy equals empCre.ID into empCreGroup
+                        from empCre in empCreGroup.DefaultIfEmpty()
+                        select new ParameterListItemDto
+                        {
+                            ID = p.ID,
+                            Code = p.Code,
+                            Name = p.Name,
+                            Symbol = p.Symbol,
+                            ParameterType = p.ParameterType,
+                            InputType = p.InputType,
+                            ParameterUnitID = p.ParameterUnitID,
+                            UnitName = u != null ? u.Name : null,
+                            UnitSymbol = u != null ? u.Symbol : null,
+                            DecimalPrecision = p.DecimalPrecision,
+                            IsCalculated = p.IsCalculated,
+                            CalculationRole = p.CalculationRole,
+                            Formula = p.Formula,
+                            FormulaDisplay = p.FormulaDisplay,
+                            Sequence = p.Sequence,
+                            Description = p.Note,
+                            IsActive = p.IsActive,
+                            CreatedOn = p.CreatedOn,
+                            ModifiedOn = p.ModifiedOn,
+                            CreatedByName = empCre != null ? empCre.Name : "-",
+                            ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : "-")
+                        };
+
+            // Custom column-level dictionary filters
+            if (filter.Filter != null && filter.Filter.Any())
+            {
+                foreach (var f in filter.Filter)
+                {
+                    if (string.IsNullOrWhiteSpace(f.Value)) continue;
+                    var col = f.Column?.ToLower();
+                    var val = f.Value.Trim();
+
+                    switch (col)
+                    {
+                        case "code":
+                            query = query.Where(x => x.Code != null && x.Code.Contains(val));
+                            break;
+                        case "name":
+                            query = query.Where(x => x.Name != null && x.Name.Contains(val));
+                            break;
+                        case "parametertype":
+                            query = query.Where(x => x.ParameterType == val);
+                            break;
+                        case "inputtype":
+                            query = query.Where(x => x.InputType == val);
+                            break;
+                        case "calculationrole":
+                            query = query.Where(x => x.CalculationRole == val);
+                            break;
+                        case "unitid":
+                        case "parameterunitid":
+                            if (long.TryParse(val, out long uid))
+                                query = query.Where(x => x.ParameterUnitID == uid);
+                            break;
+                        case "isactive":
+                            if (bool.TryParse(val, out bool act))
+                                query = query.Where(x => x.IsActive == act);
+                            break;
+                    }
+                }
+            }
+
+            // Global search
+            if (!string.IsNullOrWhiteSpace(filter.searchTerm))
+            {
+                var search = filter.searchTerm.Trim();
+                query = query.Where(x =>
+                    (x.Code != null && x.Code.Contains(search)) ||
+                    (x.Name != null && x.Name.Contains(search)) ||
+                    (x.Symbol != null && x.Symbol.Contains(search)) ||
+                    (x.UnitName != null && x.UnitName.Contains(search)) ||
+                    (x.UnitSymbol != null && x.UnitSymbol.Contains(search)) ||
+                    (x.ParameterType != null && x.ParameterType.Contains(search)) ||
+                    (x.InputType != null && x.InputType.Contains(search))
+                );
+            }
+
+            // Sorting
+            if (!string.IsNullOrWhiteSpace(filter.SortByColumn))
+            {
+                var sortCol = filter.SortByColumn.Trim();
+                var sortOrder = string.Equals(filter.SortOrder, "desc", StringComparison.OrdinalIgnoreCase) ? "descending" : "ascending";
+                query = query.OrderBy($"{sortCol} {sortOrder}");
+            }
+            else
+            {
+                query = query.OrderBy("Name ascending");
+            }
+
+            return await query.ToPagedAsync(filter);
+        }
+
+        public async Task<ParameterDetailDto?> GetParameterDetailById(long id)
+        {
+            var entity = await _context.ParameterMasters
+                .Include(p => p.ParameterUnit)
+                .Include(p => p.DropdownOptions.Where(o => o.IsActive))
+                .FirstOrDefaultAsync(x => x.ID == id);
+
+            if (entity == null) return null;
+
+            return new ParameterDetailDto
+            {
+                ID = entity.ID,
+                Code = entity.Code,
+                Name = entity.Name,
+                Symbol = entity.Symbol,
+                ParameterType = entity.ParameterType,
+                InputType = entity.InputType,
+                ParameterUnitID = entity.ParameterUnitID,
+                UnitName = entity.ParameterUnit?.Name,
+                UnitSymbol = entity.ParameterUnit?.Symbol,
+                ParameterUnitEquivalentID = entity.ParameterUnitEquivalentID,
+                UnitConversionFactor = entity.UnitConversionFactor,
+                DecimalPrecision = entity.DecimalPrecision,
+                IsCalculated = entity.IsCalculated,
+                CalculationRole = entity.CalculationRole,
+                Formula = entity.Formula,
+                FormulaDisplay = entity.FormulaDisplay,
+                Sequence = entity.Sequence,
+                Description = entity.Note,
+                ElementType = entity.ElementType,
+                IsActive = entity.IsActive,
+                CreatedOn = entity.CreatedOn,
+                ModifiedOn = entity.ModifiedOn,
+                DropdownOptions = entity.DropdownOptions
+                    .Where(o => o.IsActive)
+                    .OrderBy(o => o.DisplayOrder)
+                    .Select(o => new ParameterDropdownOptionDto
+                    {
+                        ID = o.ID,
+                        ParameterID = o.ParameterID,
+                        DisplayText = o.DisplayText,
+                        Value = o.Value,
+                        DisplayOrder = o.DisplayOrder,
+                        IsDefault = o.IsDefault,
+                        IsActive = o.IsActive
+                    }).ToList()
+            };
+        }
     }
 }

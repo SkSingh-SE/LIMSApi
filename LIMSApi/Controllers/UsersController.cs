@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -138,6 +138,39 @@ namespace LIMSApi.Controllers
             {
                 status = "success",
                 message = "Two-factor authentication enabled"
+            });
+        }
+
+        [HttpGet("branch-access/{userId}")]
+        [RequirePermission(Permissions.User.Read)]
+        public async Task<ActionResult<UserBranchAccessDto>> GetBranchAccess(long userId)
+        {
+            var access = await _userService.GetUserBranchAccess(userId);
+            return Ok(access);
+        }
+
+        [HttpPut("branch-access/{userId}")]
+        [RequirePermission(Permissions.User.Update)]
+        public async Task<IActionResult> UpdateBranchAccess(long userId, UpdateUserBranchAccessDto dto)
+        {
+            await _userService.UpdateUserBranchAccess(userId, dto);
+            return Ok(new
+            {
+                status = "success",
+                message = "User branch access and permissions updated successfully."
+            });
+        }
+
+        [HttpPost("set-default-branch")]
+        [RequirePermission(Permissions.User.Update)]
+        public async Task<IActionResult> SetDefaultBranch(SetDefaultBranchDto dto)
+        {
+            await _userService.SetDefaultBranch(dto);
+            return Ok(new
+            {
+                status = "success",
+                message = "Default branch updated successfully.",
+                defaultBranchId = dto.BranchId
             });
         }
 

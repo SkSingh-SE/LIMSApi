@@ -273,6 +273,15 @@ namespace LIMSApi.Helpers
             public const string Manage = "CanManageMaterialSpecification";
         }
 
+        public static class SpecificationMaster
+        {
+            public const string Read   = "CanReadMaterialSpecification";
+            public const string Create = "CanCreateMaterialSpecification";
+            public const string Update = "CanUpdateMaterialSpecification";
+            public const string Delete = "CanDeleteMaterialSpecification";
+            public const string Manage = "CanManageMaterialSpecification";
+        }
+
         public static class ProductMaster
         {
             public const string Read   = "CanReadProductMaster";
@@ -418,6 +427,15 @@ namespace LIMSApi.Helpers
             public const string Update = "CanUpdateProductConditionCategory";
             public const string Delete = "CanDeleteProductConditionCategory";
             public const string Manage = "CanManageProductConditionCategory";
+        }
+
+        public static class ConditionMaster
+        {
+            public const string Read   = "CanReadConditionMaster";
+            public const string Create = "CanCreateConditionMaster";
+            public const string Update = "CanUpdateConditionMaster";
+            public const string Delete = "CanDeleteConditionMaster";
+            public const string Manage = "CanManageConditionMaster";
         }
 
         public static class SpecimenOrientation

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -24,6 +24,17 @@ public partial class UserMaster : AuditProperty
     public string? RoleName { get; set; }
     public bool IsAdmin { get; set; } = false;
     public bool IsLoginEnabled { get; set; } = true;
+
+    // Branch Mapping
+    public long? OrganizationID { get; set; }
+    
+    public long? BranchID { get; set; }
+    [ForeignKey("BranchID")]
+    public virtual Branch? Branch { get; set; }
+
+    public bool CanViewAllBranches { get; set; } = false;
+
+    public virtual ICollection<UserBranch> UserBranches { get; set; } = new List<UserBranch>();
 
     //Access Policy
 

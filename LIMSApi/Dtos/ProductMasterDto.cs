@@ -22,6 +22,7 @@ namespace LIMSApi.Dtos
 
     public class ProductMasterVersionCreateDto
     {
+        public long ID { get; set; }
         public string VersionNumber { get; set; } = "1";
         public string? Year { get; set; }
         public string? SpecificationFilePath { get; set; }
@@ -36,6 +37,7 @@ namespace LIMSApi.Dtos
 
     public class ProductMasterVersionGradeDto
     {
+        public long ID { get; set; }
         public long SpecificationGradeID { get; set; }
         public int SortOrder { get; set; } = 1;
         public List<ProductMasterVersionGradeConditionDto> Conditions { get; set; } = new List<ProductMasterVersionGradeConditionDto>();
@@ -43,6 +45,7 @@ namespace LIMSApi.Dtos
 
     public class ProductMasterVersionGradeConditionDto
     {
+        public long ID { get; set; }
         public long? ProductConditionID1 { get; set; }
         public long? ProductConditionID2 { get; set; }
         public long? HeatTreatmentID { get; set; }
@@ -68,7 +71,8 @@ namespace LIMSApi.Dtos
     public class ProductMasterVersionDetailsDto
     {
         public long ID { get; set; }
-        public string VersionNumber { get; set; } = "1";        public string? Year { get; set; }
+        public string VersionNumber { get; set; } = "1";
+        public string? Year { get; set; }
         public string? SpecificationFilePath { get; set; }
         public long? StandardOrganizationID { get; set; }
         public string? StandardOrganizationName { get; set; }
@@ -77,6 +81,7 @@ namespace LIMSApi.Dtos
         public string? Title { get; set; }
         public string? ProductCaption { get; set; }
         public bool IsActiveVersion { get; set; }
+        public int ApplicabilityCount { get; set; }
         public List<ProductMasterVersionGradeDetailsDto> Grades { get; set; } = new List<ProductMasterVersionGradeDetailsDto>();
     }
 
@@ -87,9 +92,12 @@ namespace LIMSApi.Dtos
         public string GradeName { get; set; } = string.Empty;
         public long SpecificationHeaderID { get; set; }
         public string SpecificationHeaderName { get; set; } = string.Empty;
+        public string SpecificationCode { get; set; } = string.Empty;
+        public long? ActiveVersionID { get; set; }
+        public string ActiveVersionName { get; set; } = string.Empty;
+        public int RequirementCount { get; set; }
         public int SortOrder { get; set; }
         public List<ProductMasterVersionGradeConditionDetailsDto> Conditions { get; set; } = new List<ProductMasterVersionGradeConditionDetailsDto>();
-        public GradeParametersDto Parameters { get; set; } = new GradeParametersDto();
     }
 
     public class ProductMasterVersionGradeConditionDetailsDto
@@ -106,20 +114,29 @@ namespace LIMSApi.Dtos
         public int Priority { get; set; }
     }
 
+    public class GradeApplicabilityInfoDto
+    {
+        public long SpecificationGradeID { get; set; }
+        public string GradeName { get; set; } = string.Empty;
+        public long SpecificationHeaderID { get; set; }
+        public string SpecificationHeaderName { get; set; } = string.Empty;
+        public string SpecificationCode { get; set; } = string.Empty;
+        public long? ActiveVersionID { get; set; }
+        public string ActiveVersionName { get; set; } = string.Empty;
+        public int RequirementCount { get; set; }
+    }
+
+    [Obsolete("Legacy specification limits are governed by Specification Requirement Configuration (Screen 11).")]
     public class GradeParametersDto
     {
         public long SpecificationGradeID { get; set; }
         public string GradeName { get; set; } = string.Empty;
         public long SpecificationHeaderID { get; set; }
         public string SpecificationHeaderName { get; set; } = string.Empty;
-
-        // 4 Category Tab Data
         public List<SpecParameterLineDto> ChemicalParameters { get; set; } = new List<SpecParameterLineDto>();
         public List<SpecParameterLineDto> GeneralParameters { get; set; } = new List<SpecParameterLineDto>();
         public List<GradeLaboratoryTestDto> LaboratoryTests { get; set; } = new List<GradeLaboratoryTestDto>();
         public List<GradeTestMethodDto> TestMethods { get; set; } = new List<GradeTestMethodDto>();
-
-        // Available condition options (extracted only from grade's spec lines)
         public List<DropdwonSelector> AvailablePC1 { get; set; } = new List<DropdwonSelector>();
         public List<DropdwonSelector> AvailablePC2 { get; set; } = new List<DropdwonSelector>();
         public List<DropdwonSelector> AvailableHeatTreatments { get; set; } = new List<DropdwonSelector>();
@@ -171,11 +188,18 @@ namespace LIMSApi.Dtos
         public long ID { get; set; }
         public string ProductName { get; set; } = string.Empty;
         public string? GradePrefix { get; set; }
+        public string? GradeValue { get; set; }
         public string? DisplayTitle { get; set; }
         public bool IsSizeApplicable { get; set; }
         public string? ProductSizeName { get; set; }
         public string ActiveVersionNo { get; set; } = string.Empty;
+        public int VersionCount { get; set; }
+        public int ApplicabilityCount { get; set; }
         public string LinkedSpecsSummary { get; set; } = string.Empty;
+        public string ApplicabilitySummary { get; set; } = string.Empty;
+        public string GoverningSpecificationsSummary { get; set; } = string.Empty;
+        public List<string> Applicabilities { get; set; } = new List<string>();
+        public List<string> GoverningSpecifications { get; set; } = new List<string>();
         public DateTime CreatedOn { get; set; }
         public bool IsActive { get; set; }
     }

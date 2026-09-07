@@ -78,6 +78,12 @@ namespace LIMSApi.Services
 
                     if (vDto.Grades != null)
                     {
+                        var dupGrades = vDto.Grades.GroupBy(g => g.SpecificationGradeID).Where(grp => grp.Count() > 1).Select(grp => grp.Key).ToList();
+                        if (dupGrades.Any())
+                        {
+                            throw new ArgumentException($"Duplicate applicability/grade ID(s) [{string.Join(", ", dupGrades)}] found in version '{vDto.VersionNumber}'. Each applicability must be unique per version.");
+                        }
+
                         int sortOrder = 1;
                         foreach (var gDto in vDto.Grades)
                         {
@@ -164,71 +170,209 @@ namespace LIMSApi.Services
                 }
             }
 
-            _context.ProductMasterVersions.RemoveRange(existing.Versions);
-            existing.Versions.Clear();
-
-            if (dto.Versions != null)
+            // Non-destructive reconciliation of ProductMasterVersions and child applicability
+            if (dto.Versions != null && dto.Versions.Any())
             {
+                var incomingVersionIds = dto.Versions.Where(v => v.ID > 0).Select(v => v.ID).ToHashSet();
+                var versionsToRemove = existing.Versions.Where(v => !incomingVersionIds.Contains(v.ID)).ToList();
+                foreach (var vToRemove in versionsToRemove)
+                {
+                    _context.ProductMasterVersions.Remove(vToRemove);
+                }
+
                 foreach (var vDto in dto.Versions)
                 {
-                    var versionEntity = new ProductMasterVersion
+                    var dupGrades = vDto.Grades?.GroupBy(g => g.SpecificationGradeID).Where(grp => grp.Count() > 1).Select(grp => grp.Key).ToList();
+                    if (dupGrades != null && dupGrades.Any())
                     {
-                        ProductMasterID = existing.ID,
-                        VersionNumber = vDto.VersionNumber,
-                        Year = vDto.Year,
-                        SpecificationFilePath = vDto.SpecificationFilePath,
-                        StandardOrganizationID = vDto.StandardOrganizationID,
-                        SpecStdNo = vDto.SpecStdNo,
-                        PartSection = vDto.PartSection,
-                        Title = vDto.Title,
-                        ProductCaption = vDto.ProductCaption,
-                        IsActiveVersion = vDto.IsActiveVersion,
-                        CreatedBy = _loggedInUser?.EmployeeID ?? 0,
-                        CreatedOn = DateTime.UtcNow,
-                        CompanyCode = _loggedInUser?.CompanyCode,
-                        IsActive = true
-                    };
+                        throw new ArgumentException($"Duplicate applicability/grade ID(s) [{string.Join(", ", dupGrades)}] found in version '{vDto.VersionNumber}'. Each applicability must be unique per version.");
+                    }
 
-                    if (vDto.Grades != null)
+                    var existingVersion = vDto.ID > 0 ? existing.Versions.FirstOrDefault(v => v.ID == vDto.ID) : null;
+                    if (existingVersion == null)
                     {
-                        int sortOrder = 1;
-                        foreach (var gDto in vDto.Grades)
+                        // New Version Insert
+                        var versionEntity = new ProductMasterVersion
                         {
-                            var versionGrade = new ProductMasterVersionGrade
-                            {
-                                SpecificationGradeID = gDto.SpecificationGradeID,
-                                SortOrder = gDto.SortOrder > 0 ? gDto.SortOrder : sortOrder++,
-                                CreatedBy = _loggedInUser?.EmployeeID ?? 0,
-                                CreatedOn = DateTime.UtcNow,
-                                CompanyCode = _loggedInUser?.CompanyCode,
-                                IsActive = true
-                            };
+                            ProductMasterID = existing.ID,
+                            VersionNumber = vDto.VersionNumber,
+                            Year = vDto.Year,
+                            SpecificationFilePath = vDto.SpecificationFilePath,
+                            StandardOrganizationID = vDto.StandardOrganizationID,
+                            SpecStdNo = vDto.SpecStdNo,
+                            PartSection = vDto.PartSection,
+                            Title = vDto.Title,
+                            ProductCaption = vDto.ProductCaption,
+                            IsActiveVersion = vDto.IsActiveVersion,
+                            CreatedBy = _loggedInUser?.EmployeeID ?? 0,
+                            CreatedOn = DateTime.UtcNow,
+                            CompanyCode = _loggedInUser?.CompanyCode,
+                            IsActive = true
+                        };
 
-                            if (gDto.Conditions != null)
+                        if (vDto.Grades != null)
+                        {
+                            int sortOrder = 1;
+                            foreach (var gDto in vDto.Grades)
                             {
-                                int priority = 1;
-                                foreach (var cDto in gDto.Conditions)
+                                var versionGrade = new ProductMasterVersionGrade
                                 {
-                                    versionGrade.Conditions.Add(new ProductMasterVersionGradeCondition
+                                    SpecificationGradeID = gDto.SpecificationGradeID,
+                                    SortOrder = gDto.SortOrder > 0 ? gDto.SortOrder : sortOrder++,
+                                    CreatedBy = _loggedInUser?.EmployeeID ?? 0,
+                                    CreatedOn = DateTime.UtcNow,
+                                    CompanyCode = _loggedInUser?.CompanyCode,
+                                    IsActive = true
+                                };
+
+                                if (gDto.Conditions != null)
+                                {
+                                    int priority = 1;
+                                    foreach (var cDto in gDto.Conditions)
                                     {
-                                        ProductConditionID1 = cDto.ProductConditionID1,
-                                        ProductConditionID2 = cDto.ProductConditionID2,
-                                        HeatTreatmentID = cDto.HeatTreatmentID,
-                                        ProductSizeMasterID = cDto.ProductSizeMasterID,
-                                        Priority = cDto.Priority > 0 ? cDto.Priority : priority++,
+                                        versionGrade.Conditions.Add(new ProductMasterVersionGradeCondition
+                                        {
+                                            ProductConditionID1 = cDto.ProductConditionID1,
+                                            ProductConditionID2 = cDto.ProductConditionID2,
+                                            HeatTreatmentID = cDto.HeatTreatmentID,
+                                            ProductSizeMasterID = cDto.ProductSizeMasterID,
+                                            Priority = cDto.Priority > 0 ? cDto.Priority : priority++,
+                                            CreatedBy = _loggedInUser?.EmployeeID ?? 0,
+                                            CreatedOn = DateTime.UtcNow,
+                                            CompanyCode = _loggedInUser?.CompanyCode,
+                                            IsActive = true
+                                        });
+                                    }
+                                }
+
+                                versionEntity.Grades.Add(versionGrade);
+                            }
+                        }
+
+                        existing.Versions.Add(versionEntity);
+                    }
+                    else
+                    {
+                        // Update Existing Version Metadata (Non-Destructive)
+                        existingVersion.VersionNumber = vDto.VersionNumber;
+                        existingVersion.Year = vDto.Year;
+                        existingVersion.Title = vDto.Title;
+                        existingVersion.ProductCaption = vDto.ProductCaption;
+                        existingVersion.IsActiveVersion = vDto.IsActiveVersion;
+                        existingVersion.StandardOrganizationID = vDto.StandardOrganizationID;
+                        existingVersion.SpecStdNo = vDto.SpecStdNo;
+                        existingVersion.PartSection = vDto.PartSection;
+                        existingVersion.SpecificationFilePath = vDto.SpecificationFilePath;
+                        existingVersion.ModifiedBy = _loggedInUser?.EmployeeID ?? 0;
+                        existingVersion.ModifiedOn = DateTime.UtcNow;
+
+                        // Reconcile Grades (Applicabilities)
+                        if (vDto.Grades != null)
+                        {
+                            var incomingGradeIds = vDto.Grades.Where(g => g.ID > 0).Select(g => g.ID).ToHashSet();
+                            var gradesToRemove = existingVersion.Grades
+                                .Where(g => !incomingGradeIds.Contains(g.ID) && !vDto.Grades.Any(x => x.SpecificationGradeID == g.SpecificationGradeID))
+                                .ToList();
+                            foreach (var gToRemove in gradesToRemove)
+                            {
+                                _context.ProductMasterVersionGrades.Remove(gToRemove);
+                            }
+
+                            int sortOrder = 1;
+                            foreach (var gDto in vDto.Grades)
+                            {
+                                var existingGrade = gDto.ID > 0
+                                    ? existingVersion.Grades.FirstOrDefault(g => g.ID == gDto.ID)
+                                    : existingVersion.Grades.FirstOrDefault(g => g.SpecificationGradeID == gDto.SpecificationGradeID);
+
+                                if (existingGrade == null)
+                                {
+                                    var newGrade = new ProductMasterVersionGrade
+                                    {
+                                        ProductMasterVersionID = existingVersion.ID,
+                                        SpecificationGradeID = gDto.SpecificationGradeID,
+                                        SortOrder = gDto.SortOrder > 0 ? gDto.SortOrder : sortOrder++,
                                         CreatedBy = _loggedInUser?.EmployeeID ?? 0,
                                         CreatedOn = DateTime.UtcNow,
                                         CompanyCode = _loggedInUser?.CompanyCode,
                                         IsActive = true
-                                    });
+                                    };
+
+                                    if (gDto.Conditions != null)
+                                    {
+                                        int priority = 1;
+                                        foreach (var cDto in gDto.Conditions)
+                                        {
+                                            newGrade.Conditions.Add(new ProductMasterVersionGradeCondition
+                                            {
+                                                ProductConditionID1 = cDto.ProductConditionID1,
+                                                ProductConditionID2 = cDto.ProductConditionID2,
+                                                HeatTreatmentID = cDto.HeatTreatmentID,
+                                                ProductSizeMasterID = cDto.ProductSizeMasterID,
+                                                Priority = cDto.Priority > 0 ? cDto.Priority : priority++,
+                                                CreatedBy = _loggedInUser?.EmployeeID ?? 0,
+                                                CreatedOn = DateTime.UtcNow,
+                                                CompanyCode = _loggedInUser?.CompanyCode,
+                                                IsActive = true
+                                            });
+                                        }
+                                    }
+
+                                    existingVersion.Grades.Add(newGrade);
+                                }
+                                else
+                                {
+                                    existingGrade.SpecificationGradeID = gDto.SpecificationGradeID;
+                                    existingGrade.SortOrder = gDto.SortOrder > 0 ? gDto.SortOrder : sortOrder++;
+                                    existingGrade.ModifiedBy = _loggedInUser?.EmployeeID ?? 0;
+                                    existingGrade.ModifiedOn = DateTime.UtcNow;
+
+                                    // Reconcile Conditions
+                                    if (gDto.Conditions != null)
+                                    {
+                                        var incomingCondIds = gDto.Conditions.Where(c => c.ID > 0).Select(c => c.ID).ToHashSet();
+                                        var condsToRemove = existingGrade.Conditions.Where(c => !incomingCondIds.Contains(c.ID)).ToList();
+                                        foreach (var cToRemove in condsToRemove)
+                                        {
+                                            _context.ProductMasterVersionGradeConditions.Remove(cToRemove);
+                                        }
+
+                                        int priority = 1;
+                                        foreach (var cDto in gDto.Conditions)
+                                        {
+                                            var existingCond = cDto.ID > 0 ? existingGrade.Conditions.FirstOrDefault(c => c.ID == cDto.ID) : null;
+                                            if (existingCond == null)
+                                            {
+                                                existingGrade.Conditions.Add(new ProductMasterVersionGradeCondition
+                                                {
+                                                    ProductMasterVersionGradeID = existingGrade.ID,
+                                                    ProductConditionID1 = cDto.ProductConditionID1,
+                                                    ProductConditionID2 = cDto.ProductConditionID2,
+                                                    HeatTreatmentID = cDto.HeatTreatmentID,
+                                                    ProductSizeMasterID = cDto.ProductSizeMasterID,
+                                                    Priority = cDto.Priority > 0 ? cDto.Priority : priority++,
+                                                    CreatedBy = _loggedInUser?.EmployeeID ?? 0,
+                                                    CreatedOn = DateTime.UtcNow,
+                                                    CompanyCode = _loggedInUser?.CompanyCode,
+                                                    IsActive = true
+                                                });
+                                            }
+                                            else
+                                            {
+                                                existingCond.ProductConditionID1 = cDto.ProductConditionID1;
+                                                existingCond.ProductConditionID2 = cDto.ProductConditionID2;
+                                                existingCond.HeatTreatmentID = cDto.HeatTreatmentID;
+                                                existingCond.ProductSizeMasterID = cDto.ProductSizeMasterID;
+                                                existingCond.Priority = cDto.Priority > 0 ? cDto.Priority : priority++;
+                                                existingCond.ModifiedBy = _loggedInUser?.EmployeeID ?? 0;
+                                                existingCond.ModifiedOn = DateTime.UtcNow;
+                                            }
+                                        }
+                                    }
                                 }
                             }
-
-                            versionEntity.Grades.Add(versionGrade);
                         }
                     }
-
-                    existing.Versions.Add(versionEntity);
                 }
             }
 
@@ -295,6 +439,17 @@ namespace LIMSApi.Services
                     var gradeEntity = vg.SpecificationGrade ?? await _context.SpecificationGrades.FindAsync(vg.SpecificationGradeID);
                     var headerEntity = gradeEntity != null ? await _context.SpecificationHeaders.FindAsync(gradeEntity.SpecificationHeaderID) : null;
 
+                    var activeSpecVer = headerEntity != null
+                        ? await _context.SpecificationVersions.AsNoTracking().FirstOrDefaultAsync(sv => sv.SpecificationHeaderID == headerEntity.ID && sv.Status == Helpers.Enums.VersionStatus.Active)
+                        : null;
+
+                    int reqCount = 0;
+                    if (activeSpecVer != null && gradeEntity != null)
+                    {
+                        reqCount = await _context.SpecificationLines.AsNoTracking()
+                            .CountAsync(sl => sl.SpecificationVersionID == activeSpecVer.ID && sl.SpecificationGradeID == gradeEntity.ID);
+                    }
+
                     var vgDto = new ProductMasterVersionGradeDetailsDto
                     {
                         ID = vg.ID,
@@ -302,6 +457,10 @@ namespace LIMSApi.Services
                         GradeName = gradeEntity != null ? gradeEntity.Grade : $"Grade {vg.SpecificationGradeID}",
                         SpecificationHeaderID = gradeEntity != null ? gradeEntity.SpecificationHeaderID : 0,
                         SpecificationHeaderName = headerEntity != null ? (headerEntity.AliasName ?? headerEntity.SpecificationNo ?? "") : "",
+                        SpecificationCode = headerEntity != null ? (headerEntity.SpecificationNo ?? headerEntity.AliasName ?? "") : "",
+                        ActiveVersionID = activeSpecVer?.ID,
+                        ActiveVersionName = activeSpecVer != null ? (activeSpecVer.Version ?? activeSpecVer.EffectiveDate?.ToString("yyyy") ?? "Active") : "No Active Version",
+                        RequirementCount = reqCount,
                         SortOrder = vg.SortOrder,
                         Conditions = vg.Conditions.OrderBy(c => c.Priority).Select(c => new ProductMasterVersionGradeConditionDetailsDto
                         {
@@ -315,13 +474,13 @@ namespace LIMSApi.Services
                             ProductSizeMasterID = c.ProductSizeMasterID,
                             ProductSizeName = c.ProductSizeMaster != null ? c.ProductSizeMaster.DisplayName : null,
                             Priority = c.Priority
-                        }).ToList(),
-                        Parameters = await GetGradeParametersByGradeId(vg.SpecificationGradeID) ?? new GradeParametersDto()
+                        }).ToList()
                     };
 
                     vDto.Grades.Add(vgDto);
                 }
 
+                vDto.ApplicabilityCount = vDto.Grades.Count;
                 dto.Versions.Add(vDto);
             }
 
@@ -336,6 +495,36 @@ namespace LIMSApi.Services
         public async Task<List<DropdwonSelector>> GetProductMasterDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20, long metalId = 0)
         {
             return await _repository.GetDropdown(searchTerm, pageNo, pageSize, metalId);
+        }
+
+        public async Task<GradeApplicabilityInfoDto?> GetGradeApplicabilityInfo(long gradeId)
+        {
+            var gradeEntity = await _context.SpecificationGrades.FindAsync(gradeId);
+            if (gradeEntity == null) return null;
+
+            var headerEntity = await _context.SpecificationHeaders.FindAsync(gradeEntity.SpecificationHeaderID);
+            var activeSpecVer = headerEntity != null
+                ? await _context.SpecificationVersions.AsNoTracking().FirstOrDefaultAsync(sv => sv.SpecificationHeaderID == headerEntity.ID && sv.Status == Helpers.Enums.VersionStatus.Active)
+                : null;
+
+            int reqCount = 0;
+            if (activeSpecVer != null)
+            {
+                reqCount = await _context.SpecificationLines.AsNoTracking()
+                    .CountAsync(sl => sl.SpecificationVersionID == activeSpecVer.ID && sl.SpecificationGradeID == gradeEntity.ID);
+            }
+
+            return new GradeApplicabilityInfoDto
+            {
+                SpecificationGradeID = gradeEntity.ID,
+                GradeName = gradeEntity.Grade,
+                SpecificationHeaderID = gradeEntity.SpecificationHeaderID,
+                SpecificationHeaderName = headerEntity != null ? (headerEntity.AliasName ?? headerEntity.SpecificationNo ?? "") : "",
+                SpecificationCode = headerEntity != null ? (headerEntity.SpecificationNo ?? headerEntity.AliasName ?? "") : "",
+                ActiveVersionID = activeSpecVer?.ID,
+                ActiveVersionName = activeSpecVer != null ? (activeSpecVer.Version ?? activeSpecVer.EffectiveDate?.ToString("yyyy") ?? "Active") : "No Active Version",
+                RequirementCount = reqCount
+            };
         }
 
         public async Task<GradeParametersDto?> GetGradeParametersByGradeId(long gradeId)
@@ -579,6 +768,31 @@ namespace LIMSApi.Services
             }
 
             return false;
+        }
+
+        public async Task<bool> ToggleProductMasterStatus(long id)
+        {
+            var existing = await _repository.GetById(id);
+            if (existing == null)
+            {
+                throw new KeyNotFoundException($"Product / Material Master with ID {id} not found.");
+            }
+
+            if (!existing.IsActive)
+            {
+                if (await _repository.ExistsByNameAndNotId(existing.ProductName, existing.ID))
+                {
+                    throw new InvalidOperationException($"Cannot reactivate: An active Product / Material Master with name '{existing.ProductName}' already exists.");
+                }
+            }
+
+            existing.IsActive = !existing.IsActive;
+            existing.ModifiedBy = _loggedInUser?.EmployeeID ?? 0;
+            existing.ModifiedOn = DateTime.UtcNow;
+
+            await _repository.Update(existing);
+            _logger.LogInformation("Product Master '{Name}' (ID {ID}) status toggled to {Status}.", existing.ProductName, existing.ID, existing.IsActive ? "Active" : "Inactive");
+            return existing.IsActive;
         }
     }
 }

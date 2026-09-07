@@ -110,6 +110,8 @@ namespace LIMSApi.Dtos
         public long ID { get; set; }
         public string SampleNo { get; set; }
         public string Details { get; set; }
+        public long? DisciplineID { get; set; }
+        public string? DisciplineName { get; set; }
         public long? MetalClassificationID { get; set; }
         public string? MetalClassificationName { get; set; }
         public long? ProductConditionID { get; set; }
@@ -195,6 +197,7 @@ namespace LIMSApi.Dtos
         public List<PlanHistoryDto> PlanHistories { get; set; } = new();
         public List<GeneralTestDto> GeneralTests { get; set; } = new();
         public List<ChemicalTestDto> ChemicalTests { get; set; } = new();
+        public List<UniversalTestGroupDto> UniversalTestGroups { get; set; } = new();
     }
 
     public class PlanHistoryDto

@@ -15,18 +15,28 @@ namespace LIMSApi.Services
         private readonly ILogger<EquipmentService> _logger;
         private readonly IFileUploadService _uploadService;
         private readonly LIMSContext _context;
-        public EquipmentService(IEquipmentRepository equipment, ILogger<EquipmentService> logger, IFileUploadService uploadService, LIMSContext context)
+        private readonly IBranchContext _branchContext;
+
+        public EquipmentService(IEquipmentRepository equipment, ILogger<EquipmentService> logger, IFileUploadService uploadService, LIMSContext context, IBranchContext branchContext)
         {
             _equipmentRepository = equipment;
             _logger = logger;
             _uploadService = uploadService;
             _context = context;
+            _branchContext = branchContext;
         }
 
         public async Task CreateEquipment(EquipmentMaster model)
         {
             if (string.IsNullOrWhiteSpace(model.Name))
                 throw new ArgumentException("Equipment name should not be empty!");
+
+            var branchId = _branchContext.RequireCurrentBranchId();
+            if (!_branchContext.IsAuthorizedForBranch(branchId, BranchAction.Create))
+            {
+                throw new UnauthorizedAccessException($"User is not authorized to create equipment in branch {branchId}.");
+            }
+            model.BranchID = branchId;
 
             bool exists = await _equipmentRepository.ExistsByName(model.Name);
             if (exists)
@@ -52,13 +62,18 @@ namespace LIMSApi.Services
             if (model.ID == 0)
                 throw new ArgumentException("Equipment ID should not be empty!");
 
-            bool exists = await _equipmentRepository.ExistsByNameAndNotId(model.Name, model.ID);
-            if (exists)
-                throw new InvalidOperationException("Same Equipment already exists!");
-
             var existingEquipment = await _equipmentRepository.GetEquipmentById(model.ID);
             if (existingEquipment == null)
                 throw new InvalidOperationException("Equipment not found!");
+
+            if (!_branchContext.IsAuthorizedForBranch(existingEquipment.BranchID, BranchAction.Edit))
+            {
+                throw new UnauthorizedAccessException($"User is not authorized to edit equipment in branch {existingEquipment.BranchID}.");
+            }
+
+            bool exists = await _equipmentRepository.ExistsByNameAndNotId(model.Name, model.ID);
+            if (exists)
+                throw new InvalidOperationException("Same Equipment already exists!");
 
             existingEquipment.Name = model.Name;
             existingEquipment.EquipmentNo = model.EquipmentNo;

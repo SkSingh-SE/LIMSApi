@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace LIMSApi.Models
 {
@@ -6,13 +6,28 @@ namespace LIMSApi.Models
     {
         [Key]
         public long ID { get; set; }
-        public long StandardOrganizationID { get; set; }
+
+        [MaxLength(50)]
+        public string? Code { get; set; }
+
+        public long? AnalysisTechniqueID { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Schema.ForeignKey(nameof(AnalysisTechniqueID))]
+        public virtual AnalysisTechniqueMaster? AnalysisTechnique { get; set; }
+
+        public long? StandardOrganizationID { get; set; }
+
         [MaxLength(255)]
         [Required]
         public string TestMethodStandard { get; set; } = string.Empty;
+
         [MaxLength(500)]
         [Required]
         public required string Name { get; set; }
+
+        [MaxLength(1000)]
+        public string? Description { get; set; }
+
         public string? Part { get; set; }
 
         // Auto-generated caption shown in dropdowns/lists: "{StdOrg} {TestMethodStandard} {Part} : {ActiveVersion}"

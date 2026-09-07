@@ -58,6 +58,8 @@ namespace LIMSApi.Repositories
                                 .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
                                     .ThenInclude(sd => sd.ProductCondition)
                                 .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
+                                    .ThenInclude(sd => sd.Discipline)
+                                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
                                     .ThenInclude(sd => sd.SpecimenOrientation)
                                 .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
                                     .ThenInclude(sd => sd.ProductForm)
@@ -86,6 +88,8 @@ namespace LIMSApi.Repositories
                 .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
                     .ThenInclude(sd => sd.AssignedGrade)
                 .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
+                    .ThenInclude(sd => sd.Discipline)
+                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
                     .ThenInclude(sd => sd.TestPlans)
                         .ThenInclude(tp => tp.Histories)
                 .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
@@ -104,6 +108,31 @@ namespace LIMSApi.Repositories
                     .ThenInclude(sd => sd.TestPlans)
                         .ThenInclude(tp => tp.ChemicalTests)
                             .ThenInclude(ct => ct.TestTypes)
+                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
+                    .ThenInclude(sd => sd.TestPlans)
+                        .ThenInclude(tp => tp.UniversalTestGroups.Where(utg => utg.IsActive))
+                            .ThenInclude(utg => utg.LaboratoryTest)
+                                .ThenInclude(lt => lt.LabDepartment)
+                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
+                    .ThenInclude(sd => sd.TestPlans)
+                        .ThenInclude(tp => tp.UniversalTestGroups.Where(utg => utg.IsActive))
+                            .ThenInclude(utg => utg.TestMethodSpecification)
+                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
+                    .ThenInclude(sd => sd.TestPlans)
+                        .ThenInclude(tp => tp.UniversalTestGroups.Where(utg => utg.IsActive))
+                            .ThenInclude(utg => utg.TestMethodSpecificationVersion)
+                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
+                    .ThenInclude(sd => sd.TestPlans)
+                        .ThenInclude(tp => tp.UniversalTestGroups.Where(utg => utg.IsActive))
+                            .ThenInclude(utg => utg.SpecificationHeader)
+                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
+                    .ThenInclude(sd => sd.TestPlans)
+                        .ThenInclude(tp => tp.UniversalTestGroups.Where(utg => utg.IsActive))
+                            .ThenInclude(utg => utg.SpecificationGrade)
+                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
+                    .ThenInclude(sd => sd.TestPlans)
+                        .ThenInclude(tp => tp.UniversalTestGroups.Where(utg => utg.IsActive))
+                            .ThenInclude(utg => utg.TestExecutions)
                 .FirstOrDefaultAsync(x =>
                     x.ID == id &&
                     x.IsActive &&
@@ -125,8 +154,15 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetInwardList(PageFilter filter)
         {
-            var query = _context.SampleInwards
-                .Where(c => c.IsActive && c.CompanyCode == loggedInUser.CompanyCode)
+            var baseQuery = _context.SampleInwards
+                .Where(c => c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
+
+            if (!loggedInUser.CanViewAllBranches && loggedInUser.BranchID.HasValue)
+            {
+                baseQuery = baseQuery.Where(c => c.BranchID == loggedInUser.BranchID.Value);
+            }
+
+            var query = baseQuery
                 .Select(c => new
                 {
                     c.ID,
@@ -159,9 +195,16 @@ namespace LIMSApi.Repositories
                 InwardStatus.UNDER_PLANNING,
                 InwardStatus.UNDER_REVIEW
             };
-            var query = _context.SampleInwards
+            var baseQuery = _context.SampleInwards
                 .Where(c => c.IsActive && c.CompanyCode == loggedInUser.CompanyCode)
-                .Where(c => c.InwardStatus == InwardStatus.UNDER_PLANNING.ToString() || c.InwardStatus == InwardStatus.UNDER_REVIEW.ToString()|| c.InwardStatus == InwardStatus.INWARD_COMPLETED.ToString() )
+                .Where(c => c.InwardStatus == InwardStatus.UNDER_PLANNING.ToString() || c.InwardStatus == InwardStatus.UNDER_REVIEW.ToString()|| c.InwardStatus == InwardStatus.INWARD_COMPLETED.ToString() );
+
+            if (!loggedInUser.CanViewAllBranches && loggedInUser.BranchID.HasValue)
+            {
+                baseQuery = baseQuery.Where(c => c.BranchID == loggedInUser.BranchID.Value);
+            }
+
+            var query = baseQuery
                 .Select(c => new
                 {
                     c.ID,
@@ -201,6 +244,7 @@ namespace LIMSApi.Repositories
                 from inward in _context.SampleInwards
                 where inward.IsActive
                       && inward.CompanyCode == loggedInUser.CompanyCode
+                      && (loggedInUser.CanViewAllBranches || (loggedInUser.BranchID.HasValue && inward.BranchID == loggedInUser.BranchID.Value))
 
                 join instance in _context.WorkflowInstances
                     .Where(w => latestInstanceIds.Contains(w.ID) && (w.IsActive || w.Status == "Completed"))
@@ -373,37 +417,6 @@ namespace LIMSApi.Repositories
 
         public async Task<object> GetCaseNoAndSampleNo()
         {
-            var lastCase = await _context.SampleInwards
-                .OrderByDescending(s => s.ID)
-                .Select(s => s.CaseNo)
-                .FirstOrDefaultAsync();
-
-            var lastSampleNo = await _context.SampleDetails
-                .OrderByDescending(s => s.ID)
-                .Select(s => s.SampleNo)
-                .FirstOrDefaultAsync();
-
-            long lastCaseNumber = 0;
-            long lastSampleNumber = 0;
-
-            if (!string.IsNullOrEmpty(lastCase))
-            {
-                if (long.TryParse(lastCase.Split('-')[1], out long parsed))
-                {
-                    lastCaseNumber = parsed;
-                }
-            }
-
-            if (!string.IsNullOrEmpty(lastSampleNo))
-            {
-                if (long.TryParse(lastSampleNo.Split('-')[1], out long parsed))
-                {
-                    lastSampleNumber = parsed;
-                }
-            }
-
-            long nextCaseNumber = lastCaseNumber + 1;
-            long nextSampleNumber = lastSampleNumber + 1;
             var year = DateTime.UtcNow.Year.ToString().Substring(2, 2);
 
             // Fetch LabCode from Organization settings, extract prefix before first "-"
@@ -412,6 +425,46 @@ namespace LIMSApi.Repositories
                 .Select(o => o.LabCode)
                 .FirstOrDefaultAsync() ?? "DMSPL";
             var casePrefix = fullLabCode.Contains('-') ? fullLabCode.Split('-')[0] : fullLabCode;
+
+            var existingCases = await _context.SampleInwards
+                .Where(s => s.CaseNo.StartsWith(casePrefix + "-"))
+                .Select(s => s.CaseNo)
+                .ToListAsync();
+
+            long maxCaseNumber = 0;
+            foreach (var c in existingCases)
+            {
+                var parts = c.Split('-');
+                if (parts.Length >= 2 && long.TryParse(parts[1], out long num))
+                {
+                    if (num > maxCaseNumber) maxCaseNumber = num;
+                }
+            }
+            long nextCaseNumber = maxCaseNumber + 1;
+            while (await _context.SampleInwards.AnyAsync(s => s.CaseNo == $"{casePrefix}-{nextCaseNumber:D6}"))
+            {
+                nextCaseNumber++;
+            }
+
+            var existingSamples = await _context.SampleDetails
+                .Where(s => s.SampleNo.StartsWith(year + "-"))
+                .Select(s => s.SampleNo)
+                .ToListAsync();
+
+            long maxSampleNumber = 0;
+            foreach (var s in existingSamples)
+            {
+                var parts = s.Split('-');
+                if (parts.Length >= 2 && long.TryParse(parts[1], out long num))
+                {
+                    if (num > maxSampleNumber) maxSampleNumber = num;
+                }
+            }
+            long nextSampleNumber = maxSampleNumber + 1;
+            while (await _context.SampleDetails.AnyAsync(s => s.SampleNo == $"{year}-{nextSampleNumber:D6}"))
+            {
+                nextSampleNumber++;
+            }
 
             var res = new
             {

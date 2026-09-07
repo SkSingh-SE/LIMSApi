@@ -65,35 +65,8 @@ namespace LIMSApi.ServiceWORepo
                     Material = sample.MetalClassificationID != null ? _db.MetalClassificationMasters.Where(x => x.ID == sample.MetalClassificationID.Value).Select(m => m.Name).FirstOrDefault() : string.Empty,
                     Condition = sample.ProductConditionID != null ? _db.ProductConditionMasters.Where(x => x.ID == sample.ProductConditionID.Value).Select(m => m.Name).FirstOrDefault() : string.Empty,
                     sample.ModifiedOn,
-
-                    // Sample-level status list
-                    SampleLevelStatus = _db.TestResultHeaders
-                        .Where(h => h.SampleID == sample.ID && h.IsActive)
-                        .Select(h => h.Status)
-                        .ToList(),
-
-                    // All tests for this sample
-                    Tests = _db.TestResultHeaders
-                        .Where(h => h.SampleID == sample.ID && h.IsActive)
-                        .Select(h => new
-                        {
-                            TestName = _db.LaboratoryTestSubGroups
-                                        .Where(sg => sg.ID == h.LaboratoryTestID)
-                                        .Select(sg => sg.ReportTestName ?? sg.Name)
-                                        .FirstOrDefault()
-                                        ?? _db.LaboratoryTestAnalysisTypes
-                                        .Where(at => at.ID == h.LaboratoryTestID)
-                                        .Select(at => at.Name)
-                                        .FirstOrDefault()
-                                        ?? _db.LaboratoryTests
-                                        .Where(t => t.ID == h.LaboratoryTestID)
-                                        .Select(t => t.Name)
-                                        .FirstOrDefault(),
-                        }).ToList(),
-
                     HasLongTermTests = _db.LongTermTests
-                        .Any(lt => lt.SampleID == sample.ID && lt.IsActive && lt.Status == "Running"),
-
+                        .Any(lt => lt.SampleID == sample.ID && lt.IsActive && lt.Status == "Running")
                 };
 
             // ----------------------------------------------------------
@@ -108,13 +81,26 @@ namespace LIMSApi.ServiceWORepo
             {
                 var search = filter.searchTerm.Trim();
 
+                var matchingSampleIdsFromLegacy = _db.TestResultHeaders
+                    .Where(h => h.IsActive && (
+                        _db.LaboratoryTestSubGroups.Any(sg => sg.ID == h.LaboratoryTestID && EF.Functions.Like(sg.Name, $"%{search}%")) ||
+                        _db.LaboratoryTestAnalysisTypes.Any(at => at.ID == h.LaboratoryTestID && EF.Functions.Like(at.Name, $"%{search}%")) ||
+                        _db.LaboratoryTests.Any(t => t.ID == h.LaboratoryTestID && EF.Functions.Like(t.Name, $"%{search}%"))
+                    ))
+                    .Select(h => h.SampleID);
+
+                var matchingSampleIdsFromUniversal = _db.UniversalTestGroups
+                    .Where(utg => utg.IsActive && utg.LaboratoryTest != null && EF.Functions.Like(utg.LaboratoryTest.Name, $"%{search}%"))
+                    .Select(utg => utg.SampleTestPlan.SampleID);
+
                 query = query.Where(x =>
                     EF.Functions.Like(EF.Property<string>(x, "SampleNo") ?? "", $"%{search}%") ||
+                    EF.Functions.Like(EF.Property<string>(x, "CaseNo") ?? "", $"%{search}%") ||
                     EF.Functions.Like(EF.Property<string>(x, "CustomerName") ?? "", $"%{search}%") ||
                     EF.Functions.Like(EF.Property<string>(x, "Material") ?? "", $"%{search}%") ||
-                    EF.Functions.Like(EF.Property<string>(x, "TestName") ?? "", $"%{search}%") ||
-                    x.Tests.Any(t => EF.Functions.Like(t.TestName.ToLower() ?? "", $"%{search}%")) ||
-                    EF.Functions.Like(EF.Property<string>(x, "Condition") ?? "", $"%{search}%")
+                    EF.Functions.Like(EF.Property<string>(x, "Condition") ?? "", $"%{search}%") ||
+                    matchingSampleIdsFromLegacy.Contains(x.ID) ||
+                    matchingSampleIdsFromUniversal.Contains(x.ID)
                 );
             }
 
@@ -140,39 +126,88 @@ namespace LIMSApi.ServiceWORepo
                 .Take(filter.PageSize)
                 .ToListAsync();
 
+            var sampleIds = data.Select(x => x.ID).ToList();
+
+            var legacyHeaders = await _db.TestResultHeaders
+                .Where(h => sampleIds.Contains(h.SampleID) && h.IsActive)
+                .Select(h => new
+                {
+                    h.SampleID,
+                    h.Status,
+                    TestName = _db.LaboratoryTestSubGroups
+                                .Where(sg => sg.ID == h.LaboratoryTestID)
+                                .Select(sg => sg.ReportTestName ?? sg.Name)
+                                .FirstOrDefault()
+                                ?? _db.LaboratoryTestAnalysisTypes
+                                .Where(at => at.ID == h.LaboratoryTestID)
+                                .Select(at => at.Name)
+                                .FirstOrDefault()
+                                ?? _db.LaboratoryTests
+                                .Where(t => t.ID == h.LaboratoryTestID)
+                                .Select(t => t.Name)
+                                .FirstOrDefault()
+                })
+                .ToListAsync();
+
+            var universalGroups = await _db.UniversalTestGroups
+                .Where(utg => utg.IsActive && sampleIds.Contains(utg.SampleTestPlan.SampleID))
+                .Select(utg => new
+                {
+                    SampleID = utg.SampleTestPlan.SampleID,
+                    utg.Status,
+                    TestName = utg.LaboratoryTest != null ? utg.LaboratoryTest.Name : "Universal Test"
+                })
+                .ToListAsync();
+
             // ----------------------------------------------------------
             // FINAL TRANSFORMATION FOR FRONTEND
             // (Calculate Sample-Level Status)
             // ----------------------------------------------------------
-            var result = data.Select(x => new
+            var result = data.Select(x =>
             {
-                x.ID,
-                x.SampleNo,
-                x.InwardId,
-                x.CaseNo,
-                x.CustomerID,
-                x.CustomerName,
-                x.Material,
-                x.Condition,
+                var sampleStatuses = legacyHeaders
+                    .Where(h => h.SampleID == x.ID)
+                    .Select(h => h.Status)
+                    .Concat(universalGroups.Where(u => u.SampleID == x.ID).Select(u => u.Status))
+                    .ToList();
 
-                // Combined Sample Status
-                SampleStatus = CalculateSampleStatus(x.SampleLevelStatus),
-                // 👇 Flow visibility
-                CurrentStageStatus = x.SampleStatus,
+                var testNames = legacyHeaders
+                    .Where(h => h.SampleID == x.ID && h.TestName != null)
+                    .Select(h => h.TestName!)
+                    .Concat(universalGroups.Where(u => u.SampleID == x.ID && u.TestName != null).Select(u => u.TestName!))
+                    .Distinct()
+                    .ToList();
 
-                // 👇 Action control
-                ActionStatus = ActionStatusResolver.Resolve(WorkflowListType.Testing,x.SampleStatus).ToString(),
+                return (object)new
+                {
+                    x.ID,
+                    x.SampleNo,
+                    x.InwardId,
+                    x.CaseNo,
+                    x.CustomerID,
+                    x.CustomerName,
+                    x.Material,
+                    x.Condition,
 
-                // Test list
-                Tests = string.Join(", ", x.Tests.Where(x => x.TestName != null).Select(t => t.TestName).ToList()),
+                    // Combined Sample Status
+                    SampleStatus = CalculateSampleStatus(sampleStatuses),
+                    // Flow visibility
+                    CurrentStageStatus = x.SampleStatus,
 
-                HasLongTermTests = x.HasLongTermTests,
+                    // Action control
+                    ActionStatus = ActionStatusResolver.Resolve(WorkflowListType.Testing, x.SampleStatus).ToString(),
 
-                // True only when the lab technician can actively perform / update test results
-                CanPerformTesting = x.SampleStatus == SampleStatus.REQUEST_APPROVED.ToString()
-                    || x.SampleStatus == SampleStatus.TESTING_IN_PROGRESS.ToString()
-                    || x.SampleStatus == SampleStatus.TESTING_VERIFICATION_REJECTED.ToString()
-            }).ToList<object>();
+                    // Test list
+                    Tests = string.Join(", ", testNames),
+
+                    HasLongTermTests = x.HasLongTermTests,
+
+                    // True only when the lab technician can actively perform / update test results
+                    CanPerformTesting = x.SampleStatus == SampleStatus.REQUEST_APPROVED.ToString()
+                        || x.SampleStatus == SampleStatus.TESTING_IN_PROGRESS.ToString()
+                        || x.SampleStatus == SampleStatus.TESTING_VERIFICATION_REJECTED.ToString()
+                };
+            }).ToList();
 
             return new PagedResponse<object>(
                 result,
@@ -597,6 +632,15 @@ namespace LIMSApi.ServiceWORepo
                 .Include(s => s.TestPlans)
                     .ThenInclude(tp => tp.ChemicalTests)
                         .ThenInclude(ct => ct.TestTypes)
+                .Include(s => s.TestPlans)
+                    .ThenInclude(tp => tp.UniversalTestGroups.Where(utg => utg.IsActive))
+                        .ThenInclude(utg => utg.LaboratoryTest)
+                .Include(s => s.TestPlans)
+                    .ThenInclude(tp => tp.UniversalTestGroups.Where(utg => utg.IsActive))
+                        .ThenInclude(utg => utg.TestMethodSpecification)
+                .Include(s => s.TestPlans)
+                    .ThenInclude(tp => tp.UniversalTestGroups.Where(utg => utg.IsActive))
+                        .ThenInclude(utg => utg.TestExecutions)
                 .AsSplitQuery()
                 .FirstOrDefaultAsync();
 
@@ -878,12 +922,31 @@ namespace LIMSApi.ServiceWORepo
                     }
                 }
 
+                var universalTests = plan.UniversalTestGroups
+                    .Where(utg => utg.IsActive)
+                    .Select(utg => new
+                    {
+                        id = utg.ID,
+                        universalTestGroupId = utg.ID,
+                        branchId = utg.BranchID,
+                        sampleTestPlanId = utg.SampleTestPlanID,
+                        labTestId = utg.LaboratoryTestID,
+                        testName = utg.LaboratoryTest != null ? utg.LaboratoryTest.Name : "Universal Test",
+                        methodId = utg.TestMethodSpecificationID,
+                        methodName = utg.TestMethodSpecification != null ? utg.TestMethodSpecification.Name : null,
+                        status = utg.Status,
+                        latestExecutionId = utg.TestExecutions.OrderByDescending(e => e.ID).Select(e => (long?)e.ID).FirstOrDefault(),
+                        executionStatus = utg.TestExecutions.OrderByDescending(e => e.ID).Select(e => e.Status).FirstOrDefault()
+                    })
+                    .ToList();
+
                 resultPlans.Add(new
                 {
                     planId = plan.ID,
                     sampleNo = plan.SampleNo,
                     generalTests,
-                    chemicalTests
+                    chemicalTests,
+                    universalTests
                 });
             }
 

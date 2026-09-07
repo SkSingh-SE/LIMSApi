@@ -113,7 +113,13 @@ namespace LIMSApi.ServiceWORepo
                 .FirstOrDefaultAsync(h => h.ID == headerId);
 
             if (header == null)
-                throw new Exception($"TestResultHeader {headerId} not found");
+            {
+                return new PriceSummaryDto
+                {
+                    HeaderId = headerId,
+                    Message = $"Test header {headerId} not found."
+                };
+            }
 
             // Get InvoiceCase for this LaboratoryTest, resolved by the sample inward date
             var inwardDate = await ResolveInwardDateAsync(header);

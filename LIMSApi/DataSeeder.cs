@@ -172,6 +172,7 @@ public static class DataSeeder
             -- ══ Level 1: Test ══
             (N'Laboratory Test',           NULL, N'/test',              NULL, N'Test'),
             (N'Test Method Specification', NULL, N'/test-specification', NULL, N'Test'),
+            (N'Test Method Master',        NULL, N'/test-method',        NULL, N'Test'),
             (N'Invoice Case',              NULL, N'/invoice-case',       NULL, N'Test'),
             -- ══ Level 1: Customer ══
             (N'Company Category', NULL, N'/company-category', NULL, N'Customer'),
@@ -509,6 +510,11 @@ public static class DataSeeder
             ('CanReadProductForm','View Product Form','Product Form',NULL,'Read'),
             ('CanReadDimensionalFactors','View Dimensional Factors','Dimensional Factor',NULL,'Read'),
             ('CanReadUniversalCode','View Universal Code','Universal Code Type',NULL,'Read'),
+            ('CanReadConditionMaster','View Condition Master','Condition Master',NULL,'Read'),
+            ('CanCreateConditionMaster','Create Condition Master','Condition Master',NULL,'Create'),
+            ('CanUpdateConditionMaster','Update Condition Master','Condition Master',NULL,'Update'),
+            ('CanDeleteConditionMaster','Delete Condition Master','Condition Master',NULL,'Delete'),
+            ('CanManageConditionMaster','Manage Condition Master','Condition Master',NULL,'Manage'),
 
             -- 'Product Specification' title exists on BOTH folder (202) and leaf (33).
             -- ParentTitle='Product Specification' picks the leaf (33).

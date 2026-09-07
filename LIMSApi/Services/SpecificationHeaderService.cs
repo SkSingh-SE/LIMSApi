@@ -174,6 +174,21 @@ namespace LIMSApi.Services
                 var linesToRemove = existingGrade.SpecificationLines
                     .Where(x => !incomingLineIds.Contains(x.ID)).ToList();
 
+                // Immutability Guard: Check if any lines to remove belong to an Active or Superseded version
+                if (linesToRemove.Any())
+                {
+                    var removeVersionIds = linesToRemove.Select(l => l.SpecificationVersionID).Distinct().ToList();
+                    var lockedRemoveVersions = await _context.SpecificationVersions
+                        .Where(v => removeVersionIds.Contains(v.ID) && v.Status != Helpers.Enums.VersionStatus.Draft)
+                        .Select(v => v.ID)
+                        .ToListAsync();
+
+                    if (lockedRemoveVersions.Any())
+                    {
+                        throw new InvalidOperationException("Cannot remove requirement lines belonging to an Active or Superseded Specification Version. Requirements for Active/Superseded versions are immutable. Please use 'Specification Requirement Configuration' (/specification-requirement) to create a new Draft version.");
+                    }
+                }
+
                 foreach (var lineToRemove in linesToRemove)
                 {
                     existingGrade.SpecificationLines.Remove(lineToRemove);
@@ -189,10 +204,50 @@ namespace LIMSApi.Services
                     {
                         line.ID = 0; // Ensure EF treats as new insert
                         line.SpecificationGradeID = existingGrade.ID;
+
+                        if (line.SpecificationVersionID == 0)
+                        {
+                            var draftVersionId = await _context.SpecificationVersions
+                                .Where(v => v.SpecificationHeaderID == model.ID && v.Status == Helpers.Enums.VersionStatus.Draft)
+                                .Select(v => (long?)v.ID)
+                                .FirstOrDefaultAsync();
+
+                            if (draftVersionId.HasValue)
+                            {
+                                line.SpecificationVersionID = draftVersionId.Value;
+                            }
+                            else
+                            {
+                                throw new InvalidOperationException("Cannot add new requirement lines because there is no Draft Specification Version available. Please use 'Specification Requirement Configuration' (/specification-requirement) to create a new Draft version.");
+                            }
+                        }
+
                         existingGrade.SpecificationLines.Add(line);
                     }
                     else
                     {
+                        // Immutability Guard: Check if modifying line belonging to Active/Superseded version
+                        var lineVersion = await _context.SpecificationVersions
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(v => v.ID == existingLine.SpecificationVersionID);
+
+                        if (lineVersion != null && lineVersion.Status != Helpers.Enums.VersionStatus.Draft)
+                        {
+                            bool hasChanges = existingLine.MinValue != line.MinValue ||
+                                              existingLine.MaxValue != line.MaxValue ||
+                                              existingLine.ParameterID != line.ParameterID ||
+                                              existingLine.Type != line.Type ||
+                                              existingLine.TextValue != line.TextValue ||
+                                              existingLine.LowerLimitValue != line.LowerLimitValue ||
+                                              existingLine.UpperLimitValue != line.UpperLimitValue ||
+                                              existingLine.LowerLimitDecimalValue != line.LowerLimitDecimalValue ||
+                                              existingLine.UpperLimitDecimalValue != line.UpperLimitDecimalValue;
+
+                            if (hasChanges)
+                            {
+                                throw new InvalidOperationException($"Cannot modify requirement line ID {existingLine.ID} belonging to '{lineVersion.Version}' ({lineVersion.Status}). Requirements for Active/Superseded versions are immutable. Please use 'Specification Requirement Configuration' (/specification-requirement) to create a new Draft version.");
+                            }
+                        }
                         // Update existing line
                         existingLine.Type = line.Type;
                         existingLine.ManualSelection = line.ManualSelection;

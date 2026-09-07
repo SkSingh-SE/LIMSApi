@@ -13,6 +13,7 @@ namespace LIMSApi.Models
         [Required]
         public string SampleNo { get; set; } = string.Empty;
         public string Details { get; set; } = string.Empty;
+        public long? DisciplineID { get; set; }
         public long? MetalClassificationID { get; set; }
         public long? ProductConditionID { get; set; }
         public long? ProductMasterID { get; set; }
@@ -56,6 +57,9 @@ namespace LIMSApi.Models
 
         public virtual ICollection<SampleAdditionalDetail> AdditionalDetails { get; set; } = new List<SampleAdditionalDetail>();
         public virtual ICollection<SampleTestPlan> TestPlans { get; set; } = new List<SampleTestPlan>();
+
+        [ForeignKey("DisciplineID")]
+        public virtual DisciplineMaster? Discipline { get; set; }
 
         [ForeignKey("MetalClassificationID")]
         public virtual MetalClassificationMaster? MetalClassification { get; set; }

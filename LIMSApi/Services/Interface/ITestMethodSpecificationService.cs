@@ -24,5 +24,13 @@ namespace LIMSApi.Services.Interface
         Task<List<ImportValidationResultDto>> ValidateImport(List<ImportTestMethodSpecItemDto> items);
         Task<BulkImportResultDto> BulkImport(List<ImportTestMethodSpecItemDto> items);
         Task<List<DropdwonSelector>> GetAllStandardOrganizations();
+
+        // Screen 06: Test Method Master service contracts
+        Task<PagedResponse<TestMethodListItemDto>> FetchTestMethodList(PageFilter filter, string? codeFilter, string? nameFilter, long? techniqueId, string? statusFilter);
+        Task<TestMethodDetailDto> GetTestMethodDetails(long id);
+        Task<long> CreateTestMethod(TestMethodCreateDto dto);
+        Task UpdateTestMethod(TestMethodUpdateDto dto);
+        Task ToggleTestMethodStatus(long id);
+        Task<List<TestMethodDropdownDto>> GetActiveTestMethodDropdown();
     }
 }

@@ -50,11 +50,21 @@ namespace LIMSApi.Services
             if (user is null)
                 throw new UnauthorizedAccessException("Invalid credentials");
 
-            if (user.AccountStatus is "Disabled" or "Locked")
-                throw new UnauthorizedAccessException("Account is not accessible");
+            if (user.AccountStatus is "Disabled" or "Locked" || !user.IsActive)
+                throw new UnauthorizedAccessException("Account is not accessible or inactive");
 
             if (!user.IsLoginEnabled)
                 throw new UnauthorizedAccessException("Login access denied");
+
+            // 🔐 Validate Branch & Organization active status
+            if (user.Branch != null)
+            {
+                if (!user.Branch.IsActive)
+                    throw new UnauthorizedAccessException("Assigned branch is currently inactive. Access denied.");
+
+                if (user.Branch.Organization != null && !user.Branch.Organization.IsActive)
+                    throw new UnauthorizedAccessException("Organization is currently inactive. Access denied.");
+            }
 
             // 🔐 Access policy checks
 
@@ -111,6 +121,28 @@ namespace LIMSApi.Services
 
             await _userRepository.UpdateUser(user);
 
+            var defaultUserBranch = user.UserBranches?.FirstOrDefault(ub => ub.IsDefault && ub.IsActive);
+            var defaultBranchId = defaultUserBranch?.BranchID ?? user.BranchID;
+            var defaultBranchName = defaultUserBranch?.Branch?.Name ?? user.Branch?.Name;
+            var orgId = user.OrganizationID ?? user.Branch?.OrganizationID;
+            var orgName = user.Branch?.Organization?.LabName;
+
+            var branchList = user.UserBranches?
+                .Where(ub => ub.IsActive && ub.Branch != null && ub.Branch.IsActive)
+                .Select(ub => new UserBranchItemDto
+                {
+                    Id = ub.BranchID,
+                    Code = ub.Branch?.Code ?? string.Empty,
+                    Name = ub.Branch?.Name ?? string.Empty,
+                    IsDefault = ub.IsDefault,
+                    CanView = ub.CanView,
+                    CanCreate = ub.CanCreate,
+                    CanEdit = ub.CanEdit,
+                    CanExecute = ub.CanExecute,
+                    CanApprove = ub.CanApprove,
+                    CanDelete = ub.CanDelete
+                }).ToList() ?? new List<UserBranchItemDto>();
+
             var expireHours = Convert.ToInt32(_configuration["Jwt:ExpirationHours"]);
             return new LoginResponseDto
             {
@@ -122,6 +154,13 @@ namespace LIMSApi.Services
                 Email = user.EmailId!,
                 Role = resolvedRoleName!,
                 IsAdmin = resolvedIsAdmin,
+
+                OrganizationId = orgId,
+                OrganizationName = orgName,
+                DefaultBranchId = defaultBranchId,
+                DefaultBranchName = defaultBranchName,
+                CanViewAllBranches = user.CanViewAllBranches,
+                Branches = branchList,
 
                 AccountStatus = string.IsNullOrEmpty(user.AccountStatus) ? user.IsActive ? "Active" : "In-Active" : user.AccountStatus,
                 LastLoginDate = user.LastLoginDate,
@@ -192,6 +231,10 @@ namespace LIMSApi.Services
                 throw new InvalidOperationException("User already exists.");
             }
 
+            var loggedInUser = LoggedInUserProvider.CurrentUser;
+            var orgId = model.OrganizationID ?? (loggedInUser?.OrganizationID > 0 ? loggedInUser.OrganizationID : null);
+            var branchId = model.BranchID ?? (loggedInUser?.BranchID > 0 ? loggedInUser.BranchID : null);
+
             var user = new UserMaster
             {
                 UserName = model.UserName,
@@ -200,11 +243,37 @@ namespace LIMSApi.Services
                 EmployeeID = model.EmployeeID,
                 RoleID = model.RoleID,
                 RoleName = model.RoleName,
-                CompanyCode = model.CompanyCode
+                CompanyCode = model.CompanyCode,
+                OrganizationID = orgId,
+                BranchID = branchId,
+                IsActive = true,
+                CreatedBy = model.CreatedBy,
+                CreatedOn = DateTime.UtcNow
             };
 
+            if (branchId.HasValue && branchId.Value > 0)
+            {
+                user.UserBranches = new List<UserBranch>
+                {
+                    new UserBranch
+                    {
+                        BranchID = branchId.Value,
+                        IsDefault = true,
+                        CanView = true,
+                        CanCreate = true,
+                        CanEdit = true,
+                        CanExecute = true,
+                        CanApprove = false,
+                        CanDelete = false,
+                        IsActive = true,
+                        CreatedBy = model.CreatedBy,
+                        CreatedOn = DateTime.UtcNow
+                    }
+                };
+            }
+
             await _userRepository.AddUser(user);
-            _logger.LogInformation("User {Username} registered successfully", model.UserName);
+            _logger.LogInformation("User {Username} registered successfully with default Branch {BranchId}", model.UserName, branchId);
         }
 
         private string GenerateJwtToken(UserMaster user, string? resolvedRoleName = null, bool resolvedIsAdmin = false)
@@ -213,6 +282,37 @@ namespace LIMSApi.Services
             var expireHours = Convert.ToInt32(_configuration["Jwt:ExpirationHours"]);
             var tokenHandler = new JwtSecurityTokenHandler();
             var key = string.IsNullOrWhiteSpace(_jwtSecret) ? Encoding.UTF8.GetBytes(_configuration["Jwt:Secret"]) : Encoding.UTF8.GetBytes(_jwtSecret);
+
+            var activeUserBranches = user.UserBranches?
+                .Where(ub => ub.IsActive && ub.Branch != null && ub.Branch.IsActive)
+                .Select(ub => new UserBranchPermissionDTO
+                {
+                    BranchID = ub.BranchID,
+                    CanView = ub.CanView,
+                    CanCreate = ub.CanCreate,
+                    CanEdit = ub.CanEdit,
+                    CanExecute = ub.CanExecute,
+                    CanApprove = ub.CanApprove,
+                    CanDelete = ub.CanDelete
+                }).ToList() ?? new List<UserBranchPermissionDTO>();
+
+            if (!activeUserBranches.Any() && user.BranchID.HasValue && user.BranchID.Value > 0)
+            {
+                activeUserBranches.Add(new UserBranchPermissionDTO
+                {
+                    BranchID = user.BranchID.Value,
+                    CanView = true,
+                    CanCreate = true,
+                    CanEdit = true,
+                    CanExecute = true,
+                    CanApprove = false,
+                    CanDelete = false
+                });
+            }
+
+            var branchesJson = System.Text.Json.JsonSerializer.Serialize(activeUserBranches);
+            var defaultBranchId = user.UserBranches?.FirstOrDefault(ub => ub.IsDefault && ub.IsActive)?.BranchID ?? user.BranchID;
+
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(new[]
@@ -223,7 +323,11 @@ namespace LIMSApi.Services
                     new Claim("IsAdmin", resolvedIsAdmin.ToString()),
                     new Claim(ClaimTypes.Email, user.EmailId ?? string.Empty),
                     new Claim("EmployeeID", user.EmployeeID != null ? user.EmployeeID.ToString() : "0"),
-                    new Claim("CompanyCode", user.CompanyCode ?? string.Empty)
+                    new Claim("CompanyCode", user.CompanyCode ?? string.Empty),
+                    new Claim("OrganizationID", user.OrganizationID != null ? user.OrganizationID.ToString() : (user.Branch != null ? user.Branch.OrganizationID.ToString() : "0")),
+                    new Claim("BranchID", defaultBranchId != null ? defaultBranchId.ToString() : "0"),
+                    new Claim("CanViewAllBranches", user.CanViewAllBranches.ToString()),
+                    new Claim("UserBranches", branchesJson)
                 }),
                 Expires = DateTime.UtcNow.AddHours(expireHours),
                 Issuer = _configuration["Jwt:Issuer"],

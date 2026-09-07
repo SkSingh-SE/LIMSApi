@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace LIMSApi.Models
@@ -16,6 +16,10 @@ namespace LIMSApi.Models
 
         [MaxLength(500)]
         public string? ScopeRemarks { get; set; }
+
+        public long? BranchID { get; set; }
+        [ForeignKey("BranchID")]
+        public virtual Branch? Branch { get; set; }
 
         [ForeignKey("LaboratoryTestID")]
         public virtual LaboratoryTest? LaboratoryTest { get; set; }

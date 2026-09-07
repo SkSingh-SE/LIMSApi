@@ -180,6 +180,7 @@ builder.Services.AddSingleton<LoginRateLimiter>();
 // Register AuthService with a parameter from _configuration
 builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
 builder.Services.AddScoped<LoggedInUserProvider>();
+builder.Services.AddScoped<IBranchContext>(provider => provider.GetRequiredService<LoggedInUserProvider>());
 
 
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -195,6 +196,7 @@ builder.Services.AddScoped<ICountryRepository, CountryRepository>();
 builder.Services.AddScoped<ICourierRepository, CourierRepository>();
 builder.Services.AddScoped<IProductSizeMasterRepository, ProductSizeMasterRepository>();
 builder.Services.AddScoped<IAnalysisTechniqueRepository, AnalysisTechniqueRepository>();
+builder.Services.AddScoped<IConditionMasterRepository, ConditionMasterRepository>();
 builder.Services.AddScoped<ICurrencyRepository, CurrencyRepository>();
 builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
 builder.Services.AddScoped<IDepartmentRepository, DepartmentRepository>();
@@ -231,6 +233,8 @@ builder.Services.AddScoped<IRemarkRepository, RemarkRepository>();
 builder.Services.AddScoped<ISiteActivityRepository, SiteActivityRepository>();
 builder.Services.AddScoped<ISiteErrorRepository, SiteErrorRepository>();
 builder.Services.AddScoped<ISpecificationHeaderRepository, SpecificationHeaderRepository>();
+builder.Services.AddScoped<ISpecificationMasterRepository, SpecificationMasterRepository>();
+builder.Services.AddScoped<ISpecificationVersionRepository, SpecificationVersionRepository>();
 builder.Services.AddScoped<ISpecimenOrientationRepository, SpecimenOrientationRepository>();
 builder.Services.AddScoped<ISpecimenTypeRepository, SpecimenTypeRepository>();
 builder.Services.AddScoped<IStandardOrganizationRepository, StandardOrganizationRepository>();
@@ -242,6 +246,7 @@ builder.Services.AddScoped<ITaxRepository, TaxRepository>();
 builder.Services.AddScoped<ITestGroupRepository, TestGroupRepository>();
 builder.Services.AddScoped<ITestMasterRepository, TestMasterRepository>();
 builder.Services.AddScoped<ITestMethodSpecificationRepository, TestMethodSpecificationRepository>();
+builder.Services.AddScoped<ITestMethodVersionRepository, TestMethodVersionRepository>();
 builder.Services.AddScoped<ITPIMasterRepository, TPIMasterRepository>();
 builder.Services.AddScoped<IUniversalCodeTypeRepository, UniversalCodeTypeRepository>();
 builder.Services.AddScoped<IVendorRepository, VendorRepository>();
@@ -274,6 +279,7 @@ builder.Services.AddScoped<ICountryService, CountryService>();
 builder.Services.AddScoped<ICourierService, CourierService>();
 builder.Services.AddScoped<IProductSizeMasterService, ProductSizeMasterService>();
 builder.Services.AddScoped<IAnalysisTechniqueService, AnalysisTechniqueService>();
+builder.Services.AddScoped<IConditionMasterService, ConditionMasterService>();
 builder.Services.AddScoped<ICurrencyService, CurrencyService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IDepartmentService, DepartmentService>();
@@ -312,6 +318,9 @@ builder.Services.AddScoped<IRemarkService, RemarkService>();
 builder.Services.AddScoped<ISiteActivityService, SiteActivityService>();
 builder.Services.AddScoped<ISiteErrorService, SiteErrorService>();
 builder.Services.AddScoped<ISpecificationHeaderService, SpecificationHeaderService>();
+builder.Services.AddScoped<ISpecificationMasterService, SpecificationMasterService>();
+builder.Services.AddScoped<ISpecificationVersionService, SpecificationVersionService>();
+builder.Services.AddScoped<ISpecificationRequirementService, SpecificationRequirementService>();
 builder.Services.AddScoped<ISpecimenOrientationService, SpecimenOrientationService>();
 builder.Services.AddScoped<ISpecimenTypeService, SpecimenTypeService>();
 builder.Services.AddScoped<IStandardOrganizationService, StandardOrganizationService>();
@@ -322,6 +331,7 @@ builder.Services.AddScoped<ISupplierService, SupplierService>();
 builder.Services.AddScoped<ITaxService, TaxService>();
 builder.Services.AddScoped<ITestGroupService, TestGroupService>();
 builder.Services.AddScoped<ITestMethodSpecificationService, TestMethodSpecificationService>();
+builder.Services.AddScoped<ITestMethodVersionService, TestMethodVersionService>();
 builder.Services.AddScoped<ITPIMasterService, TPIMasterService>();
 builder.Services.AddScoped<IUniversalCodeTypeService, UniversalCodeTypeService>();
 builder.Services.AddScoped<IVendorService, VendorService>();
@@ -355,6 +365,9 @@ builder.Services.AddScoped<IPlanExplorerService, PlanExplorerService>();
 builder.Services.AddScoped<IPlanComplianceService, PlanComplianceService>();
 
 //Service without Repo
+builder.Services.AddScoped<IEffectiveConfigurationResolver, EffectiveConfigurationResolver>();
+builder.Services.AddScoped<IUniversalPlanService, UniversalPlanService>();
+builder.Services.AddScoped<IUniversalTestExecutionService, UniversalTestExecutionService>();
 
 builder.Services.AddScoped<ITestResultService, TestResultService>();
 builder.Services.AddScoped<ITestPriceCalculationService, TestPriceCalculationService>();
@@ -444,6 +457,21 @@ app.UseCors("AllowAngular");
 
 app.UseAuthentication();   // MUST exist
 app.UseAuthorization();    // MUST follow authentication
+
+// Initialize Branch & User Security Context per request
+app.Use(async (context, next) =>
+{
+    var userProvider = context.RequestServices.GetService<LoggedInUserProvider>();
+    userProvider?.Initialize();
+    try
+    {
+        await next();
+    }
+    finally
+    {
+        LoggedInUserProvider.ClearUser();
+    }
+});
 // app.UseRateLimiter();   // DISABLED during testing — re-enable for production
 
 // --------------------

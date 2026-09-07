@@ -13,6 +13,8 @@ public partial class SpecificationLine
 
     public long? SpecificationGradeID { get; set; }
 
+    public long SpecificationVersionID { get; set; }
+
     public bool? ManualSelection { get; set; }
 
     public long? ParameterID { get; set; }
@@ -105,7 +107,12 @@ public partial class SpecificationLine
     [ForeignKey("SpecificationGradeID"),JsonIgnore]
     public virtual SpecificationGrade? SpecificationGrade { get; set; }
 
+    [ForeignKey("SpecificationVersionID"), JsonIgnore]
+    public virtual SpecificationVersion? SpecificationVersion { get; set; }
+
     // MS-E: per-parameter test-method mapping (relational).
     public virtual ICollection<SpecificationLineTestMethod> TestMethodMappings { get; set; } = new List<SpecificationLineTestMethod>();
 
+    // Relational dimension conditions
+    public virtual ICollection<SpecificationLineCondition> Conditions { get; set; } = new List<SpecificationLineCondition>();
 }

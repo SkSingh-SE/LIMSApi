@@ -15,6 +15,11 @@ namespace LIMSApi.Models
         public string CaseNo { get; set; } = string.Empty;
 
         [Required]
+        public long BranchID { get; set; }
+        [ForeignKey("BranchID")]
+        public virtual Branch? Branch { get; set; }
+
+        [Required]
         public long CustomerID { get; set; }
 
         [Required, StringLength(200)]

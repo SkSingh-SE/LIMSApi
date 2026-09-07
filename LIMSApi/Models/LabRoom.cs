@@ -12,6 +12,10 @@ namespace LIMSApi.Models
         [Key]
         public long ID { get; set; }
 
+        public long BranchID { get; set; }
+        [ForeignKey("BranchID")]
+        public virtual Branch? Branch { get; set; }
+
         [Required, MaxLength(100)]
         public string Name { get; set; } = string.Empty;
 

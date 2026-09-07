@@ -522,6 +522,13 @@ namespace LIMSApi.Helpers
             if (parentType == typeof(ParameterMaster) && dependentType == typeof(ParameterDropdownOption))
                 return true;
 
+            if (parentType == typeof(LaboratoryTest) &&
+                (dependentType == typeof(LaboratoryTestParameter) ||
+                 dependentType == typeof(LaboratoryTestMethod) ||
+                 dependentType == typeof(LaboratoryTestCondition) ||
+                 dependentType == typeof(LaboratoryTestSubGroup)))
+                return true;
+
             return false;
         }
 

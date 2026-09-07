@@ -27,33 +27,53 @@ namespace LIMSApi.Controllers
 
 
         [HttpGet("details/{id}")]
-        public async Task<ActionResult<ParameterUnitMaster>> GetParameterUnitMaster(long id)
+        public async Task<ActionResult<ParameterUnitDetailDto>> GetParameterUnitMaster(long id)
         {
             var entity = await _ParameterUnitService.GetParameterUnitDetails(id);
-
             return entity == null ? NoContent() : Ok(entity);
         }
 
-
-        [HttpPut("update")]
-        public async Task<IActionResult> PutParameterUnitMaster(ParameterUnitMaster model)
+        [HttpPost("create")]
+        public async Task<IActionResult> PostParameterUnitMaster([FromBody] ParameterUnitCreateDto dto)
         {
-            await _ParameterUnitService.ModifyParameterUnit(model);
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            await _ParameterUnitService.CreateParameterUnit(dto);
             return Ok(new
             {
                 status = "success",
-                message = $"ParameterUnit '{model.Name}' updated successfully."
+                message = $"Parameter Unit '{dto.Name}' ({dto.Code.ToUpper()}) created successfully."
             });
         }
 
-        [HttpPost("create")]
-        public async Task<ActionResult<ParameterUnitMaster>> PostParameterUnitMaster(ParameterUnitMaster model)
+        [HttpPut("update")]
+        public async Task<IActionResult> PutParameterUnitMaster([FromBody] ParameterUnitUpdateDto dto)
         {
-            await _ParameterUnitService.CreateParameterUnit(model);
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            await _ParameterUnitService.ModifyParameterUnit(dto);
             return Ok(new
             {
                 status = "success",
-                message = $"ParameterUnit '{model.Name}' created successfully."
+                message = $"Parameter Unit '{dto.Name}' ({dto.Code.ToUpper()}) updated successfully."
+            });
+        }
+
+        [HttpPost("toggle-status/{id}")]
+        public async Task<IActionResult> ToggleStatus(long id)
+        {
+            var isActive = await _ParameterUnitService.ToggleParameterUnitStatus(id);
+            return Ok(new
+            {
+                status = "success",
+                isActive,
+                message = $"Parameter Unit {(isActive ? "activated" : "deactivated")} successfully."
             });
         }
 
@@ -63,21 +83,27 @@ namespace LIMSApi.Controllers
             var entity = await _ParameterUnitService.GetParameterUnitDetails(id);
             if (entity == null)
             {
-                throw new InvalidOperationException("ParameterUnit not found!");
+                throw new InvalidOperationException("Parameter Unit not found!");
             }
             await _ParameterUnitService.RemoveParameterUnit(id);
             return Ok(new
             {
                 status = "success",
-                message = $"ParameterUnit '{entity.Name}' deleted successfully."
+                message = $"Parameter Unit '{entity.Name}' deleted successfully."
             });
+        }
+
+        [HttpGet("quantity-types")]
+        public async Task<IActionResult> GetQuantityTypes()
+        {
+            return Ok(await _ParameterUnitService.GetQuantityTypes());
         }
 
         [HttpGet("dropdown")]
         public async Task<IActionResult> GetParameterUnitDropdown(string? searchTerm, int pageNo, int pageSize)
         {
             var data = await _ParameterUnitService.GetParameterUnitDropdown(searchTerm, pageNo, pageSize);
-            return data == null ? NoContent(): Ok(data);
+            return data == null ? NoContent() : Ok(data);
         }
 
         [HttpGet("grouped-dropdown")]
@@ -93,6 +119,5 @@ namespace LIMSApi.Controllers
         {
             return Ok(await _ParameterUnitService.GetEquivalentUnits(unitId));
         }
-
     }
 }

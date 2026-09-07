@@ -1,4 +1,5 @@
 using System;
+using System.Text.RegularExpressions;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Helpers.Enums;
@@ -13,14 +14,24 @@ namespace LIMSApi.Services
     public class TestMethodSpecificationService : ITestMethodSpecificationService
     {
         private readonly ITestMethodSpecificationRepository _TestMethodSpecificationRepository;
+        private readonly IAnalysisTechniqueRepository _analysisTechniqueRepository;
         private readonly ILogger<TestMethodSpecificationService> _logger;
         private LoggedInUserDTO loggedInUser;
         private readonly IFileUploadService _uploadService;
         private readonly string _pdfFolderPath;
 
-        public TestMethodSpecificationService(ITestMethodSpecificationRepository TestMethodSpecificationRepo, ILogger<TestMethodSpecificationService> logger, IFileUploadService uploadService, IConfiguration configuration, IWebHostEnvironment env)
+        private static readonly Regex CodePattern = new(@"^[A-Z0-9_]+$", RegexOptions.Compiled);
+
+        public TestMethodSpecificationService(
+            ITestMethodSpecificationRepository TestMethodSpecificationRepo, 
+            IAnalysisTechniqueRepository analysisTechniqueRepository,
+            ILogger<TestMethodSpecificationService> logger, 
+            IFileUploadService uploadService, 
+            IConfiguration configuration, 
+            IWebHostEnvironment env)
         {
             _TestMethodSpecificationRepository = TestMethodSpecificationRepo;
+            _analysisTechniqueRepository = analysisTechniqueRepository;
             _logger = logger;
             loggedInUser = LoggedInUserProvider.CurrentUser;
             _uploadService = uploadService;
@@ -48,7 +59,7 @@ namespace LIMSApi.Services
             if (string.IsNullOrWhiteSpace(model.Name))
                 throw new ArgumentException("TestMethodSpecification name should not be empty!");
 
-            bool exists = await _TestMethodSpecificationRepository.ExistsByOrgAndStandard(model.StandardOrganizationID, model.TestMethodStandard);
+            bool exists = await _TestMethodSpecificationRepository.ExistsByOrgAndStandard(model.StandardOrganizationID.Value, model.TestMethodStandard);
             if (exists)
             {
                 throw new InvalidOperationException($"Test Method Specification for Standard '{model.TestMethodStandard}' under the selected Organization already exists!");
@@ -110,7 +121,7 @@ namespace LIMSApi.Services
             if (string.IsNullOrWhiteSpace(model.TestMethodStandard))
                 throw new ArgumentException("Test Method Standard is required!");
 
-            bool exists = await _TestMethodSpecificationRepository.ExistsByOrgAndStandardAndNotId(model.StandardOrganizationID, model.TestMethodStandard, model.ID);
+            bool exists = await _TestMethodSpecificationRepository.ExistsByOrgAndStandardAndNotId(model.StandardOrganizationID.Value, model.TestMethodStandard, model.ID);
             if (exists)
             {
                 throw new InvalidOperationException($"Test Method Specification for Standard '{model.TestMethodStandard}' under the selected Organization already exists!");
@@ -785,6 +796,182 @@ namespace LIMSApi.Services
         public async Task<List<DropdwonSelector>> GetAllStandardOrganizations()
         {
             return await _TestMethodSpecificationRepository.GetAllStandardOrganizations();
+        }
+
+        // ==========================================
+        // SCREEN 06: Test Method Master Implementations
+        // ==========================================
+
+        private static string NormalizeCode(string rawCode)
+        {
+            if (string.IsNullOrWhiteSpace(rawCode))
+                return string.Empty;
+
+            var upper = rawCode.Trim().ToUpperInvariant();
+            return Regex.Replace(upper, @"\s+", "_");
+        }
+
+        public async Task<PagedResponse<TestMethodListItemDto>> FetchTestMethodList(PageFilter filter, string? codeFilter, string? nameFilter, long? techniqueId, string? statusFilter)
+        {
+            return await _TestMethodSpecificationRepository.GetTestMethodList(filter, codeFilter, nameFilter, techniqueId, statusFilter);
+        }
+
+        public async Task<TestMethodDetailDto> GetTestMethodDetails(long id)
+        {
+            if (id <= 0)
+                throw new ArgumentException("Invalid Test Method ID.");
+
+            var details = await _TestMethodSpecificationRepository.GetTestMethodDetailById(id);
+            if (details == null)
+                throw new KeyNotFoundException($"Test Method with ID {id} not found.");
+
+            return details;
+        }
+
+        public async Task<long> CreateTestMethod(TestMethodCreateDto dto)
+        {
+            if (dto == null)
+                throw new ArgumentNullException(nameof(dto));
+
+            if (string.IsNullOrWhiteSpace(dto.Code))
+                throw new ArgumentException("Test Method Code is required.");
+
+            var normalizedCode = NormalizeCode(dto.Code);
+
+            if (!CodePattern.IsMatch(normalizedCode))
+                throw new ArgumentException("Test Method Code can only contain uppercase letters, numbers, and underscores.");
+
+            if (string.IsNullOrWhiteSpace(dto.Name))
+                throw new ArgumentException("Test Method Name is required.");
+
+            // Permanent code uniqueness check across active and inactive records within tenant
+            if (await _TestMethodSpecificationRepository.ExistsByCode(normalizedCode))
+                throw new InvalidOperationException($"Test Method with Code '{normalizedCode}' already exists.");
+
+            // Technique validation if specified
+            if (dto.AnalysisTechniqueID.HasValue && dto.AnalysisTechniqueID.Value > 0)
+            {
+                var technique = await _analysisTechniqueRepository.GetAnalysisTechniqueById(dto.AnalysisTechniqueID.Value);
+                if (technique == null)
+                    throw new ArgumentException($"Selected Analysis Technique with ID {dto.AnalysisTechniqueID.Value} does not exist.");
+
+                if (!technique.IsActive)
+                    throw new InvalidOperationException("Cannot assign an inactive Analysis Technique.");
+            }
+
+            var entity = new TestMethodSpecification
+            {
+                Code = normalizedCode,
+                Name = dto.Name.Trim(),
+                TestMethodStandard = !string.IsNullOrWhiteSpace(dto.StandardReference) ? dto.StandardReference.Trim() : normalizedCode,
+                AnalysisTechniqueID = dto.AnalysisTechniqueID > 0 ? dto.AnalysisTechniqueID : null,
+                Description = dto.Description?.Trim(),
+                DisplayTitle = !string.IsNullOrWhiteSpace(dto.StandardReference)
+                    ? $"{dto.StandardReference.Trim()} : {dto.Name.Trim()}"
+                    : $"{normalizedCode} : {dto.Name.Trim()}",
+                IsActive = true,
+                IsDisabled = false,
+                CompanyCode = loggedInUser.CompanyCode,
+                CreatedBy = loggedInUser.EmployeeID,
+                CreatedOn = DateTime.UtcNow
+            };
+
+            await _TestMethodSpecificationRepository.AddTestMethodSpecification(entity);
+            _logger.LogInformation("Test Method '{Code}' created successfully by user {User}.", normalizedCode, loggedInUser.EmployeeID);
+            return entity.ID;
+        }
+
+        public async Task UpdateTestMethod(TestMethodUpdateDto dto)
+        {
+            if (dto == null)
+                throw new ArgumentNullException(nameof(dto));
+
+            if (dto.ID <= 0)
+                throw new ArgumentException("Invalid Test Method ID.");
+
+            if (string.IsNullOrWhiteSpace(dto.Code))
+                throw new ArgumentException("Test Method Code is required.");
+
+            var normalizedCode = NormalizeCode(dto.Code);
+
+            if (!CodePattern.IsMatch(normalizedCode))
+                throw new ArgumentException("Test Method Code can only contain uppercase letters, numbers, and underscores.");
+
+            if (string.IsNullOrWhiteSpace(dto.Name))
+                throw new ArgumentException("Test Method Name is required.");
+
+            // Permanent code uniqueness check excluding current record
+            if (await _TestMethodSpecificationRepository.ExistsByCodeAndNotId(normalizedCode, dto.ID))
+                throw new InvalidOperationException($"Test Method with Code '{normalizedCode}' already exists.");
+
+            // Technique validation if specified
+            if (dto.AnalysisTechniqueID.HasValue && dto.AnalysisTechniqueID.Value > 0)
+            {
+                var technique = await _analysisTechniqueRepository.GetAnalysisTechniqueById(dto.AnalysisTechniqueID.Value);
+                if (technique == null)
+                    throw new ArgumentException($"Selected Analysis Technique with ID {dto.AnalysisTechniqueID.Value} does not exist.");
+
+                if (!technique.IsActive)
+                    throw new InvalidOperationException("Cannot assign an inactive Analysis Technique.");
+            }
+
+            var existing = await _TestMethodSpecificationRepository.GetTestMethodEntityById(dto.ID);
+            if (existing == null)
+                throw new KeyNotFoundException($"Test Method with ID {dto.ID} not found.");
+
+            existing.Code = normalizedCode;
+            existing.Name = dto.Name.Trim();
+            if (!string.IsNullOrWhiteSpace(dto.StandardReference))
+            {
+                existing.TestMethodStandard = dto.StandardReference.Trim();
+            }
+            existing.AnalysisTechniqueID = dto.AnalysisTechniqueID > 0 ? dto.AnalysisTechniqueID : null;
+            existing.Description = dto.Description?.Trim();
+            existing.DisplayTitle = !string.IsNullOrWhiteSpace(existing.TestMethodStandard)
+                ? $"{existing.TestMethodStandard} : {existing.Name}"
+                : $"{existing.Code} : {existing.Name}";
+            existing.ModifiedBy = loggedInUser.EmployeeID;
+            existing.ModifiedOn = DateTime.UtcNow;
+
+            await _TestMethodSpecificationRepository.UpdateTestMethodSpecification(existing);
+            _logger.LogInformation("Test Method '{Code}' (ID: {ID}) updated successfully by user {User}.", normalizedCode, dto.ID, loggedInUser.EmployeeID);
+        }
+
+        public async Task ToggleTestMethodStatus(long id)
+        {
+            if (id <= 0)
+                throw new ArgumentException("Invalid Test Method ID.");
+
+            var existing = await _TestMethodSpecificationRepository.GetTestMethodDetailById(id);
+            if (existing == null)
+                throw new KeyNotFoundException($"Test Method with ID {id} not found.");
+
+            if (!existing.IsActive)
+            {
+                // Reactivating: verify code collision
+                if (!string.IsNullOrWhiteSpace(existing.Code) && await _TestMethodSpecificationRepository.ExistsByCodeAndNotId(existing.Code, id))
+                {
+                    throw new InvalidOperationException($"Cannot reactivate Test Method: Code '{existing.Code}' is already in use by another record.");
+                }
+
+                // Verify referenced technique is not inactive if one is linked
+                if (existing.AnalysisTechniqueID.HasValue && existing.AnalysisTechniqueID.Value > 0)
+                {
+                    var technique = await _analysisTechniqueRepository.GetAnalysisTechniqueById(existing.AnalysisTechniqueID.Value);
+                    if (technique != null && !technique.IsActive)
+                    {
+                        throw new InvalidOperationException($"Cannot reactivate Test Method: Linked Analysis Technique '{technique.Name}' is currently Inactive.");
+                    }
+                }
+            }
+
+            await _TestMethodSpecificationRepository.ToggleTestMethodStatus(id);
+            _logger.LogInformation("Test Method {ID} status toggled successfully.", id);
+        }
+
+        public async Task<List<TestMethodDropdownDto>> GetActiveTestMethodDropdown()
+        {
+            return await _TestMethodSpecificationRepository.GetActiveTestMethodDropdown();
         }
     }
 }

@@ -16,6 +16,10 @@ namespace LIMSApi.Repositories.Interface
         Task<List<DropdwonSelector>> GetParameterDropdown(string? searchTerm, int pageNo, int pageSize, string? elementTypes = null);
         Task<List<DropdwonSelector>> GetChemicalParameterDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<List<DropdwonSelector>> GetMechanicalParameterDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<PagedResponse<ParameterListItemDto>> GetAllParametersUnified(PageFilter filter);
+        Task<ParameterDetailDto?> GetParameterDetailById(long id);
+        Task<bool> ExistsByCode(string code);
+        Task<bool> ExistsByCodeAndNotId(string code, long id);
         Task<bool> ExistsByName(string name);
         Task<bool> ExistsByNameAndNotId(string name, long id);
     }

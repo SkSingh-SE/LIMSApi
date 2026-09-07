@@ -1,5 +1,4 @@
 using LIMSApi.Dtos;
-using LIMSApi.Models;
 using LIMSApi.Helpers;
 using LIMSApi.Middleware;
 using LIMSApi.Services.Interface;
@@ -20,50 +19,68 @@ namespace LIMSApi.Controllers
 
         [RequirePermission(Permissions.AnalysisTechnique.Read)]
         [HttpPost("list")]
-        public async Task<IActionResult> AnalysisTechniqueList(PageFilter filter)
+        public async Task<IActionResult> AnalysisTechniqueList([FromBody] PageFilter filter)
         {
             return Ok(await _service.FetchAnalysisTechniqueList(filter));
         }
 
         [RequirePermission(Permissions.AnalysisTechnique.Read)]
         [HttpGet("details/{id}")]
-        public async Task<ActionResult<AnalysisTechniqueMaster>> GetAnalysisTechnique(long id)
+        public async Task<ActionResult<AnalysisTechniqueDetailDto>> GetAnalysisTechnique(long id)
         {
             var entity = await _service.GetAnalysisTechniqueDetails(id);
             return entity == null ? NoContent() : Ok(entity);
         }
 
-        [RequirePermission(Permissions.AnalysisTechnique.Update)]
-        [HttpPut("update")]
-        public async Task<IActionResult> PutAnalysisTechnique(AnalysisTechniqueMaster model)
-        {
-            await _service.ModifyAnalysisTechnique(model);
-            return Ok(new { status = "success", message = $"Analysis Technique '{model.Name}' updated successfully." });
-        }
-
         [RequirePermission(Permissions.AnalysisTechnique.Create)]
         [HttpPost("create")]
-        public async Task<ActionResult<AnalysisTechniqueMaster>> PostAnalysisTechnique(AnalysisTechniqueMaster model)
+        public async Task<IActionResult> PostAnalysisTechnique([FromBody] AnalysisTechniqueCreateDto dto)
         {
-            await _service.CreateAnalysisTechnique(model);
-            return Ok(new { status = "success", message = $"Analysis Technique '{model.Name}' created successfully." });
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            await _service.CreateAnalysisTechnique(dto);
+            return Ok(new
+            {
+                status = "success",
+                message = $"Analysis Technique '{dto.Name}' created successfully."
+            });
         }
 
-        [RequirePermission(Permissions.AnalysisTechnique.Delete)]
-        [HttpDelete("delete/{id}")]
-        public async Task<IActionResult> DeleteAnalysisTechnique(long id)
+        [RequirePermission(Permissions.AnalysisTechnique.Update)]
+        [HttpPut("update")]
+        public async Task<IActionResult> PutAnalysisTechnique([FromBody] AnalysisTechniqueUpdateDto dto)
         {
-            var entity = await _service.GetAnalysisTechniqueDetails(id);
-            if (entity == null)
+            if (!ModelState.IsValid)
             {
-                throw new InvalidOperationException("Analysis Technique not found!");
+                return BadRequest(ModelState);
             }
-            await _service.RemoveAnalysisTechnique(id);
-            return Ok(new { status = "success", message = $"Analysis Technique '{entity.Name}' deleted successfully." });
+
+            await _service.ModifyAnalysisTechnique(dto);
+            return Ok(new
+            {
+                status = "success",
+                message = $"Analysis Technique '{dto.Name}' updated successfully."
+            });
+        }
+
+        [RequirePermission(Permissions.AnalysisTechnique.Update)]
+        [HttpPost("toggle-status/{id}")]
+        public async Task<IActionResult> ToggleStatus(long id)
+        {
+            var isActive = await _service.ToggleAnalysisTechniqueStatus(id);
+            return Ok(new
+            {
+                status = "success",
+                isActive,
+                message = $"Analysis Technique {(isActive ? "activated" : "deactivated")} successfully."
+            });
         }
 
         [HttpGet("dropdown")]
-        public async Task<IActionResult> GetAnalysisTechniqueDropdown(string? searchTerm, int pageNo, int pageSize)
+        public async Task<IActionResult> GetAnalysisTechniqueDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
         {
             var data = await _service.GetAnalysisTechniqueDropdown(searchTerm, pageNo, pageSize);
             return data == null ? NoContent() : Ok(data);
