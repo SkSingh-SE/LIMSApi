@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using LIMSApi.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Helpers
 {
@@ -30,11 +32,13 @@ namespace LIMSApi.Helpers
     public class LoggedInUserProvider : IBranchContext
     {
         private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly LIMSContext _context;
         private static readonly AsyncLocal<LoggedInUserDTO?> _currentUser = new();
 
-        public LoggedInUserProvider(IHttpContextAccessor httpContext)
+        public LoggedInUserProvider(IHttpContextAccessor httpContext, LIMSContext context)
         {
             _httpContextAccessor = httpContext;
+            _context = context;
         }
 
         public long? CurrentOrganizationID => ResolveCurrentUser()?.OrganizationID;
@@ -104,6 +108,73 @@ namespace LIMSApi.Helpers
                 BranchAction.Approve => perm.CanApprove,
                 BranchAction.Delete => perm.CanDelete,
                 _ => false
+            };
+        }
+
+        /// <summary>
+        /// Authoritative tenant resolver. NEVER falls back to a default.
+        /// Returns { OrganizationID, BranchID, CompanyCode } derived from the JWT cross-validated
+        /// against the Branches table for the given execution branch.
+        /// Throws InvalidOperationException if any tenant value cannot be resolved.
+        /// </summary>
+        public TenantContext ResolveTenantContext(long executionBranchId)
+        {
+            if (executionBranchId <= 0)
+            {
+                throw new InvalidOperationException(
+                    "ResolveTenantContext requires a positive executionBranchId. Refusing to silently default to any organization/branch.");
+            }
+
+            var user = ResolveCurrentUser();
+            if (user == null)
+            {
+                throw new InvalidOperationException(
+                    "No authenticated user (JWT) is available to resolve tenant context. Refusing to silently default.");
+            }
+
+            // Pull the canonical branch row.
+            var branch = _context.Branches.AsNoTracking()
+                .FirstOrDefault(b => b.ID == executionBranchId && b.IsActive);
+
+            if (branch == null)
+            {
+                throw new InvalidOperationException(
+                    $"Execution branch {executionBranchId} is not found or is inactive in the Branches table. Refusing to silently default.");
+            }
+
+            // OrganizationID: prefer JWT (authoritative tenant), then cross-validate with branch.OrganizationID.
+            long organizationId;
+            if (user.OrganizationID.HasValue && user.OrganizationID.Value > 0)
+            {
+                organizationId = user.OrganizationID.Value;
+                if (branch.OrganizationID > 0 && branch.OrganizationID != organizationId)
+                {
+                    throw new InvalidOperationException(
+                        $"Cross-tenant integrity violation: JWT OrganizationID={organizationId} does not match Branch {executionBranchId} OrganizationID={branch.OrganizationID}. Refusing to silently default.");
+                }
+            }
+            else if (branch.OrganizationID > 0)
+            {
+                organizationId = branch.OrganizationID;
+            }
+            else
+            {
+                throw new InvalidOperationException(
+                    $"Cannot resolve OrganizationID for execution branch {executionBranchId}. Neither JWT nor Branches table contains a valid value. Refusing to silently default.");
+            }
+
+            // CompanyCode: prefer JWT claim; never invent a value.
+            if (string.IsNullOrWhiteSpace(user.CompanyCode))
+            {
+                throw new InvalidOperationException(
+                    "JWT does not contain a CompanyCode claim. Refusing to silently default to 'LIMS' or any other value.");
+            }
+
+            return new TenantContext
+            {
+                OrganizationID = organizationId,
+                BranchID = executionBranchId,
+                CompanyCode = user.CompanyCode
             };
         }
 

@@ -13,17 +13,20 @@ namespace LIMSApi.Services
         private readonly LIMSContext _context;
         private readonly IEffectiveConfigurationResolver _resolver;
         private readonly IPlanService _planService;
+        private readonly IBranchContext _branchContext;
         private readonly ILogger<UniversalPlanService> _logger;
 
         public UniversalPlanService(
             LIMSContext context,
             IEffectiveConfigurationResolver resolver,
             IPlanService planService,
+            IBranchContext branchContext,
             ILogger<UniversalPlanService> logger)
         {
             _context = context;
             _resolver = resolver;
             _planService = planService;
+            _branchContext = branchContext;
             _logger = logger;
         }
 
@@ -35,7 +38,11 @@ namespace LIMSApi.Services
             }
 
             var loggedInUser = LoggedInUserProvider.CurrentUser;
-            var tenantCompanyCode = loggedInUser.CompanyCode ?? "LIMS";
+            // Screen 14 Part B: CompanyCode is resolved authoritatively from JWT via IBranchContext.
+            // If JWT lacks CompanyCode, ResolveTenantContext() will fail loud when the plan is confirmed.
+            string tenantCompanyCode = !string.IsNullOrWhiteSpace(loggedInUser?.CompanyCode)
+                ? loggedInUser.CompanyCode
+                : string.Empty;
 
             var inward = await _context.SampleInwards
                 .Include(i => i.Customer)
@@ -324,7 +331,10 @@ namespace LIMSApi.Services
         public async Task<UniversalPlanConfirmResultDto> SaveDraftPlanAsync(UniversalPlanSaveDto dto)
         {
             var loggedInUser = LoggedInUserProvider.CurrentUser;
-            var tenantCompanyCode = loggedInUser.CompanyCode ?? "LIMS";
+            // tenantCompanyCode is now resolved per-test via _branchContext.ResolveTenantContext.
+            string tenantCompanyCode = !string.IsNullOrWhiteSpace(loggedInUser?.CompanyCode)
+                ? loggedInUser.CompanyCode
+                : string.Empty;
 
             var plan = await _context.TestPlans
                 .Include(tp => tp.UniversalTestGroups)
@@ -393,10 +403,21 @@ namespace LIMSApi.Services
 
                     // Create new UniversalTestGroup (or legitimate retest)
                     long execBranchId = item.BranchID ?? dto.BranchID;
-                    var execBranch = await _context.Branches.FirstOrDefaultAsync(b => b.ID == execBranchId);
-                    long orgId = (loggedInUser.OrganizationID.HasValue && loggedInUser.OrganizationID.Value > 0)
-                        ? loggedInUser.OrganizationID.Value
-                        : (execBranch?.OrganizationID ?? 7);
+
+                    // Authoritative tenant resolution (Part B). Never defaults to 7 or 1.
+                    TenantContext draftTenant;
+                    try
+                    {
+                        draftTenant = _branchContext.ResolveTenantContext(execBranchId);
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        throw new InvalidOperationException(
+                            $"Cannot save draft UniversalTestGroup for LaboratoryTestID={item.LaboratoryTestID}: {ex.Message}");
+                    }
+
+                    long orgId = draftTenant.OrganizationID;
+                    string companyCode = draftTenant.CompanyCode;
 
                     var newUtg = new UniversalTestGroup
                     {
@@ -413,7 +434,7 @@ namespace LIMSApi.Services
                         IsActive = true,
                         CreatedOn = DateTime.UtcNow,
                         CreatedBy = loggedInUser.EmployeeID,
-                        CompanyCode = tenantCompanyCode
+                        CompanyCode = companyCode
                     };
                     plan.UniversalTestGroups.Add(newUtg);
                 }
@@ -495,7 +516,12 @@ namespace LIMSApi.Services
         public async Task<UniversalPlanConfirmResultDto> CreateTestGroupsAsync(UniversalPlanConfirmDto dto)
         {
             var loggedInUser = LoggedInUserProvider.CurrentUser;
-            var tenantCompanyCode = loggedInUser.CompanyCode ?? "LIMS";
+            // Screen 14 Part B: tenant context must be resolved authoritatively.
+            // Defer the actual ResolveTenantContext call until the BranchID is known
+            // (after the plan is loaded) so we can use the operating branch.
+            string tenantCompanyCode = !string.IsNullOrWhiteSpace(loggedInUser?.CompanyCode)
+                ? loggedInUser.CompanyCode
+                : string.Empty;
 
             var plan = await _context.TestPlans
                 .Include(tp => tp.UniversalTestGroups)
@@ -591,10 +617,21 @@ namespace LIMSApi.Services
                         : (dto.SpecificationVersionID.HasValue && dto.SpecificationVersionID.Value > 0 ? dto.SpecificationVersionID.Value : null);
 
                     long execBranchId = item.BranchID ?? dto.BranchID;
-                    var execBranch = await _context.Branches.FirstOrDefaultAsync(b => b.ID == execBranchId);
-                    long orgId = (loggedInUser.OrganizationID.HasValue && loggedInUser.OrganizationID.Value > 0)
-                        ? loggedInUser.OrganizationID.Value
-                        : (execBranch?.OrganizationID ?? 7);
+
+                    // Authoritative tenant resolution (Part B). Never defaults to 7 or 1.
+                    TenantContext tenantForItem;
+                    try
+                    {
+                        tenantForItem = _branchContext.ResolveTenantContext(execBranchId);
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        throw new InvalidOperationException(
+                            $"Cannot create UniversalTestGroup for LaboratoryTestID={item.LaboratoryTestID}: {ex.Message}");
+                    }
+
+                    long orgId = tenantForItem.OrganizationID;
+                    string companyCode = tenantForItem.CompanyCode;
 
                     var newUtg = new UniversalTestGroup
                     {
@@ -611,7 +648,7 @@ namespace LIMSApi.Services
                         IsActive = true,
                         CreatedOn = DateTime.UtcNow,
                         CreatedBy = loggedInUser.EmployeeID,
-                        CompanyCode = tenantCompanyCode
+                        CompanyCode = companyCode
                     };
                     plan.UniversalTestGroups.Add(newUtg);
                 }
@@ -688,7 +725,10 @@ namespace LIMSApi.Services
         public async Task<UniversalPlanCopyResultDto> CopyPlanToSamplesAsync(UniversalPlanCopyRequestDto dto)
         {
             var loggedInUser = LoggedInUserProvider.CurrentUser;
-            var tenantCompanyCode = loggedInUser.CompanyCode ?? "LIMS";
+            // tenantCompanyCode is now resolved per-target via _branchContext.ResolveTenantContext.
+            string tenantCompanyCode = !string.IsNullOrWhiteSpace(loggedInUser?.CompanyCode)
+                ? loggedInUser.CompanyCode
+                : string.Empty;
 
             var sourceSample = await _context.SampleDetails
                 .Include(s => s.SampleInward)
@@ -766,14 +806,53 @@ namespace LIMSApi.Services
                     }
 
                     int copiedForThisTarget = 0;
-                    long execBranchId = dto.ExecutionBranchID.HasValue && dto.ExecutionBranchID.Value > 0
-                        ? dto.ExecutionBranchID.Value
-                        : (targetSample.SampleInward?.BranchID ?? sourceSample.SampleInward?.BranchID ?? 1);
+                    // Authoritative execution branch resolution (Screen 14 Part B):
+                    // caller ExecutionBranchID > target inward BranchID > source inward BranchID > JWT context.
+                    // NO silent fallback to a hardcoded branch id.
+                    long? execBranchId = null;
+                    if (dto.ExecutionBranchID.HasValue && dto.ExecutionBranchID.Value > 0)
+                    {
+                        execBranchId = dto.ExecutionBranchID.Value;
+                    }
+                    else if (targetSample.SampleInward?.BranchID is long tInwardBranch && tInwardBranch > 0)
+                    {
+                        execBranchId = tInwardBranch;
+                    }
+                    else if (sourceSample.SampleInward?.BranchID is long sInwardBranch && sInwardBranch > 0)
+                    {
+                        execBranchId = sInwardBranch;
+                    }
+                    else if (_branchContext.CurrentBranchID is long ctxBranch && ctxBranch > 0)
+                    {
+                        execBranchId = ctxBranch;
+                    }
 
-                    var execBranch = await _context.Branches.FirstOrDefaultAsync(b => b.ID == execBranchId);
-                    long orgId = (loggedInUser.OrganizationID.HasValue && loggedInUser.OrganizationID.Value > 0)
-                        ? loggedInUser.OrganizationID.Value
-                        : (execBranch?.OrganizationID ?? 7);
+                    if (!execBranchId.HasValue)
+                    {
+                        targetDetail.Success = false;
+                        targetDetail.Message = "Cannot resolve authoritative execution branch for target sample. Refusing to silently default.";
+                        result.Details.Add(targetDetail);
+                        result.FailedCopies++;
+                        continue;
+                    }
+
+                    // Fail-loud tenant resolution (Part B). Never defaults to 7 or 1.
+                    TenantContext tenant;
+                    try
+                    {
+                        tenant = _branchContext.ResolveTenantContext(execBranchId.Value);
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        targetDetail.Success = false;
+                        targetDetail.Message = $"Tenant integrity violation: {ex.Message}";
+                        result.Details.Add(targetDetail);
+                        result.FailedCopies++;
+                        continue;
+                    }
+
+                    long orgId = tenant.OrganizationID;
+                    string companyCode = tenant.CompanyCode;
 
                     foreach (var srcGroup in activeSourceTests)
                     {
@@ -794,7 +873,7 @@ namespace LIMSApi.Services
                             SpecificationHeaderID = targetSample.SpecificationGrade?.SpecificationHeaderID,
                             SpecificationGradeID = targetSample.SpecificationGradeID,
                             SpecificationVersionID = null, // Auto-resolve for target
-                            BranchID = execBranchId,
+                            BranchID = execBranchId.Value,
                             ReferenceDate = targetSample.SampleInward?.CollectionTime
                         };
 
@@ -810,13 +889,13 @@ namespace LIMSApi.Services
                             SpecificationHeaderID = resolvedConfig.SpecificationHeaderID ?? targetSample.SpecificationGrade?.SpecificationHeaderID,
                             SpecificationVersionID = resolvedConfig.SpecificationVersionID > 0 ? resolvedConfig.SpecificationVersionID : (srcGroup.SpecificationVersionID.HasValue && srcGroup.SpecificationVersionID.Value > 0 ? srcGroup.SpecificationVersionID.Value : null),
                             SpecificationGradeID = targetSample.SpecificationGradeID,
-                            BranchID = execBranchId,
+                            BranchID = execBranchId!.Value,
                             OrganizationID = orgId,
                             Status = "Pending",
                             IsActive = true,
                             CreatedBy = loggedInUser.EmployeeID,
                             CreatedOn = DateTime.UtcNow,
-                            CompanyCode = tenantCompanyCode
+                            CompanyCode = companyCode
                         };
 
                         _context.UniversalTestGroups.Add(newTargetGroup);

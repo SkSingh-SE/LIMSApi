@@ -2,6 +2,40 @@ using System.ComponentModel.DataAnnotations;
 
 namespace LIMSApi.Dtos
 {
+    /// <summary>
+    /// Per-parameter specification resolution status (Screen 14 Part C).
+    /// Drives UI badge color and message; never hidden behind a flat "No Spec Requirement" string.
+    /// </summary>
+    public enum SpecificationResolutionStatus
+    {
+        /// <summary>Spec line found for (SpecVersion, SpecGrade, ParameterID). Limits/fomula applied.</summary>
+        RESOLVED = 0,
+
+        /// <summary>Standardless test (Header/Version both NULL). Spec gate is N/A.</summary>
+        SPECIFICATION_NOT_APPLICABLE = 1,
+
+        /// <summary>Spec line absent for this parameter; parameter is optional.</summary>
+        NOT_CONFIGURED = 2,
+
+        /// <summary>Spec line absent for this parameter; parameter is mandatory and blocks planning.</summary>
+        MANDATORY_MISSING = 3,
+
+        /// <summary>Spec line exists for the parameter but a different version was expected.</summary>
+        VERSION_MISMATCH = 4,
+
+        /// <summary>Spec line exists for the parameter but a different grade was expected.</summary>
+        GRADE_MISMATCH = 5,
+
+        /// <summary>Spec line exists for the parameter but for a different test definition.</summary>
+        PARAMETER_MISMATCH = 6,
+
+        /// <summary>Multiple spec lines conflict for the same parameter — ambiguous.</summary>
+        AMBIGUOUS_CONFIGURATION = 7,
+
+        /// <summary>Configuration is structurally invalid (e.g. spec header/grade/version parity broken).</summary>
+        INVALID_CONFIGURATION = 8
+    }
+
     // Workspace Header & Overview
     public class UniversalPlanWorkspaceDto
     {
@@ -144,11 +178,15 @@ namespace LIMSApi.Dtos
 
         public long? SpecificationHeaderID { get; set; }
         public string? SpecificationTitle { get; set; }
+        /// <summary>0 means no spec version resolved (standardless). Use alongside SpecificationHeaderID to determine parity.</summary>
         public long SpecificationVersionID { get; set; }
         public string? SpecificationVersionNumber { get; set; }
         public bool IsSupersededSpecVersion { get; set; }
         public long? SpecificationGradeID { get; set; }
         public string? GradeName { get; set; }
+
+        /// <summary>True when Header/Version parity invariant holds: either both NULL or both non-NULL.</summary>
+        public bool IsStandardlessTest { get; set; }
 
         public long BranchID { get; set; }
         public string? BranchName { get; set; }
@@ -161,6 +199,16 @@ namespace LIMSApi.Dtos
 
         public UniversalPlanValidationSummaryDto ValidationSummary { get; set; } = new();
         public bool IsConfigurationReady { get; set; }
+
+        /// <summary>Authoritative tenant context (organization, branch, company code) — never a hardcoded fallback.</summary>
+        public TenantContextDto? Tenant { get; set; }
+    }
+
+    public class TenantContextDto
+    {
+        public long OrganizationID { get; set; }
+        public long BranchID { get; set; }
+        public string CompanyCode { get; set; } = string.Empty;
     }
 
     public class TestMethodVersionOptionDto
@@ -188,9 +236,25 @@ namespace LIMSApi.Dtos
         public string RequirementText { get; set; } = string.Empty; // e.g. "≥ 205 MPa"
         public decimal? MinValue { get; set; }
         public decimal? MaxValue { get; set; }
+        public decimal? MinTolerance { get; set; }
+        public decimal? MaxTolerance { get; set; }
         public string? AcceptanceCriteria { get; set; }
         public string? Equation { get; set; }
+        public string? Note { get; set; }
         public bool HasRequirement { get; set; }
+
+        /// <summary>Authoritative resolution status (Screen 14 Part C).</summary>
+        public SpecificationResolutionStatus ResolutionStatus { get; set; } = SpecificationResolutionStatus.NOT_CONFIGURED;
+
+        /// <summary>Human-readable reason (e.g. "No requirement configured for UTS + Fe500D + IS1786 Rev 2008").</summary>
+        public string? ResolutionReason { get; set; }
+
+        /// <summary>ID of the resolved SpecificationLine (if any).</summary>
+        public long? SpecificationLineID { get; set; }
+
+        /// <summary>Backing SpecificationVersionID (for traceability).</summary>
+        public long? SourceSpecificationVersionID { get; set; }
+
         public string Status { get; set; } = "Required"; // Required / Optional / Missing
     }
 

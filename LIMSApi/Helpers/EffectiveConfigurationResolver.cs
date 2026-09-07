@@ -11,11 +11,13 @@ namespace LIMSApi.Helpers
     {
         private readonly LIMSContext _context;
         private readonly FormulaEvaluator _formulaEvaluator;
+        private readonly IBranchContext _branchContext;
 
-        public EffectiveConfigurationResolver(LIMSContext context, FormulaEvaluator formulaEvaluator)
+        public EffectiveConfigurationResolver(LIMSContext context, FormulaEvaluator formulaEvaluator, IBranchContext branchContext)
         {
             _context = context;
             _formulaEvaluator = formulaEvaluator;
+            _branchContext = branchContext;
         }
 
         public async Task<UniversalPlanPreviewResponseDto> ResolveEffectiveConfigurationAsync(UniversalPlanPreviewRequestDto request)
@@ -335,48 +337,75 @@ namespace LIMSApi.Helpers
             }
 
             // 5. Branch & Department Routing Gate (BranchID + DisciplineID -> Department)
-            long branchId = request.BranchID > 0 ? request.BranchID : (sample?.SampleInward?.BranchID ?? 1);
-            var branch = await _context.Branches.FirstOrDefaultAsync(b => b.ID == branchId);
+            // Authoritative branch resolution: caller BranchID > Sample.Inward.BranchID.
+            // NO silent fallback to any default branch id.
+            long? resolvedBranchId = null;
+            if (request.BranchID > 0)
+            {
+                resolvedBranchId = request.BranchID;
+            }
+            else if (sample?.SampleInward?.BranchID is long sampleBranchId && sampleBranchId > 0)
+            {
+                resolvedBranchId = sampleBranchId;
+            }
+            else if (_branchContext.CurrentBranchID is long ctxBranchId && ctxBranchId > 0)
+            {
+                resolvedBranchId = ctxBranchId;
+            }
 
-            if (branch == null || !branch.IsActive)
+            if (!resolvedBranchId.HasValue)
             {
                 val.BranchPass = false;
-                val.BranchMessage = $"Execution Branch {branchId} is invalid or inactive.";
+                val.BranchMessage = "No authoritative execution branch could be resolved from the request, sample inward, or authenticated user context.";
                 val.BlockingErrors.Add(val.BranchMessage);
             }
             else
             {
-                val.BranchPass = true;
-                response.BranchID = branch.ID;
-                response.BranchName = branch.Name;
+                long branchId = resolvedBranchId.Value;
+                var branch = await _context.Branches.FirstOrDefaultAsync(b => b.ID == branchId);
 
-                // Department Resolution
-                DepartmentMaster? dept = null;
-                if (test.DisciplineID.HasValue)
+                if (branch == null || !branch.IsActive)
                 {
-                    dept = await _context.DepartmentMasters
-                        .FirstOrDefaultAsync(d => d.BranchID == branch.ID && d.DisciplineID == test.DisciplineID.Value && d.IsActive);
-                }
-
-                dept ??= await _context.DepartmentMasters
-                    .FirstOrDefaultAsync(d => d.BranchID == branch.ID && d.IsActive);
-
-                if (dept != null)
-                {
-                    response.DepartmentID = dept.ID;
-                    response.DepartmentName = dept.Name;
-                    response.DepartmentRoutingSource = $"Resolved from Branch ({branch.Name}) + Discipline ({response.DisciplineName ?? "General"})";
-                    val.DepartmentRoutingPass = true;
+                    val.BranchPass = false;
+                    val.BranchMessage = $"Execution Branch {branchId} is invalid or inactive.";
+                    val.BlockingErrors.Add(val.BranchMessage);
                 }
                 else
                 {
-                    val.DepartmentRoutingPass = false;
-                    val.DepartmentRoutingMessage = $"No active laboratory department found for Branch '{branch.Name}' and Discipline '{response.DisciplineName ?? "General"}'.";
-                    val.BlockingErrors.Add(val.DepartmentRoutingMessage);
+                    val.BranchPass = true;
+                    response.BranchID = branch.ID;
+                    response.BranchName = branch.Name;
+
+                    // Department Resolution
+                    DepartmentMaster? dept = null;
+                    if (test.DisciplineID.HasValue)
+                    {
+                        dept = await _context.DepartmentMasters
+                            .FirstOrDefaultAsync(d => d.BranchID == branch.ID && d.DisciplineID == test.DisciplineID.Value && d.IsActive);
+                    }
+
+                    dept ??= await _context.DepartmentMasters
+                        .FirstOrDefaultAsync(d => d.BranchID == branch.ID && d.IsActive);
+
+                    if (dept != null)
+                    {
+                        response.DepartmentID = dept.ID;
+                        response.DepartmentName = dept.Name;
+                        response.DepartmentRoutingSource = $"Resolved from Branch ({branch.Name}) + Discipline ({response.DisciplineName ?? "General"})";
+                        val.DepartmentRoutingPass = true;
+                    }
+                    else
+                    {
+                        val.DepartmentRoutingPass = false;
+                        val.DepartmentRoutingMessage = $"No active laboratory department found for Branch '{branch.Name}' and Discipline '{response.DisciplineName ?? "General"}'.";
+                        val.BlockingErrors.Add(val.DepartmentRoutingMessage);
+                    }
                 }
             }
 
             // 6. Parameters & Specification Requirements Gate
+            // Screen 14 Part C: classify each parameter as RESOLVED / NOT_CONFIGURED / MANDATORY_MISSING / etc.
+            // Matching is strictly by ParameterID — never by display name, code, or alias.
             List<SpecificationLine> specLines = new();
             if (resolvedSpecVersionId > 0 && gradeId.HasValue)
             {
@@ -390,8 +419,45 @@ namespace LIMSApi.Helpers
                     .ToListAsync();
             }
 
-            var specLinesByParamId = specLines.ToDictionary(l => l.ParameterID, l => l);
+            // Detect ambiguous lines (same parameter appears more than once for the resolved scope)
+            var ambiguousParamIds = specLines
+                .GroupBy(l => l.ParameterID)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToHashSet();
+
+            // Sibling lines for VERSION_MISMATCH / GRADE_MISMATCH diagnostics
+            var anyVersionSpecLines = new Dictionary<long, SpecificationLine>();
+            var anyGradeSpecLines = new Dictionary<long, SpecificationLine>();
+            if (specHeaderId.HasValue && specHeaderId.Value > 0)
+            {
+                var siblingLines = await _context.SpecificationLines
+                    .Include(sl => sl.Parameter)
+                    .Where(sl => sl.SpecificationVersion.SpecificationHeaderID == specHeaderId.Value)
+                    .ToListAsync();
+                foreach (var sl in siblingLines)
+                {
+                    if (!sl.ParameterID.HasValue) continue;
+                    long pid = sl.ParameterID.Value;
+                    if (!anyVersionSpecLines.ContainsKey(pid))
+                    {
+                        anyVersionSpecLines[pid] = sl;
+                    }
+                    if (gradeId.HasValue && sl.SpecificationGradeID != gradeId.Value
+                        && !anyGradeSpecLines.ContainsKey(pid))
+                    {
+                        anyGradeSpecLines[pid] = sl;
+                    }
+                }
+            }
+
+            var specLinesByParamId = specLines
+                .Where(l => l.ParameterID.HasValue)
+                .GroupBy(l => l.ParameterID!.Value)
+                .ToDictionary(g => g.Key, g => g.First());
             bool allMandatoryParamsSatisfied = true;
+            bool isStandardless = !specHeaderId.HasValue || specHeaderId.Value <= 0;
+            response.IsStandardlessTest = isStandardless;
 
             foreach (var tp in test.Parameters.Where(p => p.IsActive).OrderBy(p => p.DisplayOrder))
             {
@@ -403,7 +469,11 @@ namespace LIMSApi.Helpers
                 string reqText = "-";
                 decimal? minVal = specLine?.LowerLimitDecimalValue;
                 decimal? maxVal = specLine?.UpperLimitDecimalValue;
+                decimal? minTol = specLine?.MinTolerance;
+                decimal? maxTol = specLine?.MaxTolerance;
                 string? formula = specLine?.Equation ?? pm.Formula;
+                string? note = specLine?.Notes;
+                string? acceptance = specLine?.TestCondition;
 
                 if (minVal.HasValue && maxVal.HasValue)
                 {
@@ -417,24 +487,72 @@ namespace LIMSApi.Helpers
                 {
                     reqText = $"≤ {maxVal.Value}";
                 }
-                else if (!string.IsNullOrWhiteSpace(specLine?.TestCondition))
+                else if (!string.IsNullOrWhiteSpace(acceptance))
                 {
-                    reqText = specLine.TestCondition;
+                    reqText = acceptance;
                 }
 
-                string unit = specLine?.ParameterUnit?.Symbol ??
-                              specLine?.ParameterUnit?.Name ??
-                              pm.ParameterUnit?.Symbol ??
-                              pm.ParameterUnit?.Name ?? "-";
+                // Unit authority (Screen 14 Part D): SpecLine.ParameterUnit (if set) > ParameterMaster.ParameterUnit.
+                string? unit = null;
+                if (specLine?.ParameterUnit != null)
+                {
+                    unit = !string.IsNullOrWhiteSpace(specLine.ParameterUnit.Symbol)
+                        ? specLine.ParameterUnit.Symbol
+                        : specLine.ParameterUnit.Name;
+                }
+                if (string.IsNullOrWhiteSpace(unit) && pm.ParameterUnit != null)
+                {
+                    unit = !string.IsNullOrWhiteSpace(pm.ParameterUnit.Symbol)
+                        ? pm.ParameterUnit.Symbol
+                        : pm.ParameterUnit.Name;
+                }
 
                 bool hasReq = specLine != null;
-                if (tp.IsMandatory && !hasReq)
+                SpecificationResolutionStatus status;
+                string? reason = null;
+
+                if (isStandardless)
                 {
+                    status = SpecificationResolutionStatus.SPECIFICATION_NOT_APPLICABLE;
+                    reason = "Standardless test (Specification Header/Version are both NULL). Parameter requirements are N/A.";
+                }
+                else if (ambiguousParamIds.Contains(pm.ID))
+                {
+                    status = SpecificationResolutionStatus.AMBIGUOUS_CONFIGURATION;
+                    reason = $"Multiple SpecificationLines reference Parameter {pm.Code} for Specification Grade {gradeId} in Version {response.SpecificationVersionNumber}.";
                     allMandatoryParamsSatisfied = false;
-                    if (specHeaderId.HasValue && specHeaderId.Value > 0)
-                    {
-                        val.Warnings.Add($"Mandatory parameter '{pm.Name}' has no configured requirement in Specification Version {response.SpecificationVersionNumber}.");
-                    }
+                }
+                else if (specLine != null)
+                {
+                    status = SpecificationResolutionStatus.RESOLVED;
+                }
+                else if (anyGradeSpecLines.TryGetValue(pm.ID, out var gradeLine))
+                {
+                    status = SpecificationResolutionStatus.GRADE_MISMATCH;
+                    reason = $"Requirement for '{pm.Code}' is configured for a different grade (GradeID={gradeLine.SpecificationGradeID}) in this specification, not for the current Grade (ID={gradeId}).";
+                    if (tp.IsMandatory) allMandatoryParamsSatisfied = false;
+                }
+                else if (anyVersionSpecLines.TryGetValue(pm.ID, out var versionLine))
+                {
+                    status = SpecificationResolutionStatus.VERSION_MISMATCH;
+                    reason = $"Requirement for '{pm.Code}' exists in another Specification Version (ID={versionLine.SpecificationVersionID}) of the same header, not in Version {response.SpecificationVersionNumber}.";
+                    if (tp.IsMandatory) allMandatoryParamsSatisfied = false;
+                }
+                else if (tp.IsMandatory)
+                {
+                    status = SpecificationResolutionStatus.MANDATORY_MISSING;
+                    reason = $"No requirement configured for {pm.Code} + Grade {response.GradeName} + Spec Version {response.SpecificationVersionNumber}. Mandatory test parameter blocks planning.";
+                    allMandatoryParamsSatisfied = false;
+                }
+                else
+                {
+                    status = SpecificationResolutionStatus.NOT_CONFIGURED;
+                    reason = $"No requirement configured for {pm.Code} + Grade {response.GradeName} + Spec Version {response.SpecificationVersionNumber}. Optional parameter — planning remains valid.";
+                }
+
+                if (tp.IsMandatory && !hasReq && !isStandardless && specHeaderId.HasValue && specHeaderId.Value > 0)
+                {
+                    val.Warnings.Add($"Mandatory parameter '{pm.Name}' has no configured requirement in Specification Version {response.SpecificationVersionNumber}.");
                 }
 
                 response.Parameters.Add(new PreviewParameterDto
@@ -442,21 +560,28 @@ namespace LIMSApi.Helpers
                     ParameterID = pm.ID,
                     ParameterCode = !string.IsNullOrWhiteSpace(pm.Code) ? pm.Code : $"PARAM_{pm.ID}",
                     ParameterName = pm.Name,
-                    ParameterUnit = unit,
+                    ParameterUnit = string.IsNullOrWhiteSpace(unit) ? null : unit,
                     InputType = pm.InputType ?? "Decimal",
                     IsMandatory = tp.IsMandatory,
                     IsReportable = tp.IsReportable,
                     RequirementText = reqText,
                     MinValue = minVal,
                     MaxValue = maxVal,
-                    AcceptanceCriteria = specLine?.TestCondition,
+                    MinTolerance = minTol,
+                    MaxTolerance = maxTol,
+                    AcceptanceCriteria = acceptance,
                     Equation = formula,
+                    Note = note,
                     HasRequirement = hasReq,
+                    ResolutionStatus = status,
+                    ResolutionReason = reason,
+                    SpecificationLineID = specLine?.ID,
+                    SourceSpecificationVersionID = specLine?.SpecificationVersionID,
                     Status = tp.IsMandatory ? "Required" : "Optional"
                 });
             }
 
-            if (!specHeaderId.HasValue || specHeaderId.Value <= 0)
+            if (isStandardless)
             {
                 val.MandatoryParametersPass = true;
                 val.MandatoryParametersMessage = "N/A — Standardless test without specification requirements.";
@@ -466,7 +591,7 @@ namespace LIMSApi.Helpers
                 val.MandatoryParametersPass = allMandatoryParamsSatisfied;
                 if (!allMandatoryParamsSatisfied)
                 {
-                    val.MandatoryParametersMessage = "One or more mandatory test parameters do not have configured specification requirements.";
+                    val.MandatoryParametersMessage = "One or more mandatory test parameters do not have configured specification requirements. See parameter ResolutionReason for details.";
                     val.BlockingErrors.Add(val.MandatoryParametersMessage);
                 }
             }
@@ -540,6 +665,27 @@ namespace LIMSApi.Helpers
             }
 
             response.IsConfigurationReady = val.AllPassed;
+
+            // Attach authoritative tenant context (Part B) — never falls back to a hardcoded value.
+            try
+            {
+                if (response.BranchID > 0)
+                {
+                    var tenant = _branchContext.ResolveTenantContext(response.BranchID);
+                    response.Tenant = new TenantContextDto
+                    {
+                        OrganizationID = tenant.OrganizationID,
+                        BranchID = tenant.BranchID,
+                        CompanyCode = tenant.CompanyCode
+                    };
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                // Resolver must remain a pure configuration resolver; do not throw here.
+                // The tenant integrity error will surface from UniversalPlanService when it attempts to create UTGs.
+            }
+
             return response;
         }
 
@@ -623,21 +769,23 @@ namespace LIMSApi.Helpers
                 });
             }
 
-            // Equipment & Calibration
+            // Equipment & Calibration — match by DepartmentID (authoritative) ONLY.
+            // Removed all name-based string matchers (Casagrande, LaboratoryTestName) per Screen 14 Part F.
             var branchEquipment = await _context.EquipmentMasters
                 .Include(e => e.Calibrations)
                 .Where(e => e.IsActive && e.BranchID == utg.BranchID)
                 .ToListAsync();
 
-            var matchedEquipment = branchEquipment
-                .Where(e => (!string.IsNullOrWhiteSpace(snapshot.LaboratoryTestName) && e.Name.Contains("Casagrande", StringComparison.OrdinalIgnoreCase))
-                         || (preview.DepartmentID.HasValue && e.DepartmentID == preview.DepartmentID.Value)
-                         || e.Name.Contains(snapshot.LaboratoryTestName, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            if (!matchedEquipment.Any() && branchEquipment.Any())
+            List<Models.EquipmentMaster> matchedEquipment;
+            if (preview.DepartmentID.HasValue && preview.DepartmentID.Value > 0)
             {
-                matchedEquipment = branchEquipment.Take(2).ToList();
+                matchedEquipment = branchEquipment
+                    .Where(e => e.DepartmentID == preview.DepartmentID.Value)
+                    .ToList();
+            }
+            else
+            {
+                matchedEquipment = new List<Models.EquipmentMaster>();
             }
 
             foreach (var eq in matchedEquipment)
@@ -654,30 +802,44 @@ namespace LIMSApi.Helpers
                 });
             }
 
-            // Factors & Conversions
-            snapshot.Factors.Add(new SnapshotFactorDto
-            {
-                FactorType = "Multiplication Factor",
-                FactorName = "Standard Testing Factor",
-                Value = 1.00m,
-                AppliedOn = "All Results",
-                Description = "Standard testing / dilution factor"
-            });
+            // Factors & Conversions — not authoritative here.
+            // Per Screen 14 Part F the resolver must not invent values. Snapshot remains empty
+            // until a dedicated Factor Master is wired into the resolution chain.
 
-            // Measurement Uncertainty (MU)
-            var mu = await _context.NablMeasurementUncertainties
-                .Where(u => u.IsActive && (u.TestParameter == snapshot.LaboratoryTestName || (u.TestMethod != null && u.TestMethod == snapshot.TestMethodStandard) || (u.TestParameter != null && u.TestParameter.Contains("Soil"))))
-                .FirstOrDefaultAsync();
-
-            snapshot.MeasurementUncertainty = new SnapshotMeasurementUncertaintyDto
+            // Measurement Uncertainty (MU) — match by TestMethodStandard first (most specific),
+            // then by TestParameter name (legacy compatibility, but never hardcoded aliases like "Soil").
+            NablMeasurementUncertainty? mu = null;
+            if (!string.IsNullOrWhiteSpace(snapshot.TestMethodStandard))
             {
-                UncertaintyType = mu?.UncertaintyType ?? "Expanded Uncertainty (k=2)",
-                Value = mu?.ExpandedUncertainty ?? 2.50m,
-                CoverageFactor = mu?.CoverageFactor ?? 2.0m,
-                Unit = mu?.Unit ?? "%",
-                Basis = "Type B",
-                Remarks = "As per ISO 17025"
-            };
+                mu = await _context.NablMeasurementUncertainties
+                    .Where(u => u.IsActive && u.TestMethod == snapshot.TestMethodStandard)
+                    .FirstOrDefaultAsync();
+            }
+            if (mu == null && !string.IsNullOrWhiteSpace(snapshot.LaboratoryTestName))
+            {
+                mu = await _context.NablMeasurementUncertainties
+                    .Where(u => u.IsActive && u.TestParameter == snapshot.LaboratoryTestName)
+                    .FirstOrDefaultAsync();
+            }
+
+            if (mu != null)
+            {
+                snapshot.MeasurementUncertainty = new SnapshotMeasurementUncertaintyDto
+                {
+                    UncertaintyType = mu.UncertaintyType ?? "Expanded Uncertainty (k=2)",
+                    Value = mu.ExpandedUncertainty ?? 2.50m,
+                    CoverageFactor = mu.CoverageFactor ?? 2.0m,
+                    Unit = mu.Unit ?? "%",
+                    Basis = "Type B",
+                    Remarks = "As per ISO 17025"
+                };
+            }
+            else
+            {
+                // No authoritative MU configured — leave snapshot field as null
+                // so the execution engine can show "Not Configured" rather than fake values.
+                snapshot.MeasurementUncertainty = null;
+            }
 
             // Acceptance Criteria
             var decisionRule = utg.SampleTestPlan?.SampleDetail?.SampleInward?.DecisionRule;
