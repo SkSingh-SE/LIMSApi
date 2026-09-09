@@ -296,12 +296,32 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var search = searchTerm.Trim();
-                query = query.Where(x => (x.TMSName != null && x.TMSName.Contains(search))
-                                      || (x.TMSStandard != null && x.TMSStandard.Contains(search))
-                                      || (x.TMSDisplayTitle != null && x.TMSDisplayTitle.Contains(search))
-                                      || (x.StandardOrgName != null && x.StandardOrgName.Contains(search))
-                                      || (x.VersionName != null && x.VersionName.Contains(search))
-                                      || (x.VersionYear != null && x.VersionYear.Contains(search)));
+                var tokens = search.Split(new[] { ' ', ',', '-', ':', '/' }, StringSplitOptions.RemoveEmptyEntries);
+
+                if (tokens.Length <= 1)
+                {
+                    var token = tokens.Length == 1 ? tokens[0] : search;
+                    query = query.Where(x => (x.TMSName != null && x.TMSName.Contains(token))
+                                          || (x.TMSStandard != null && x.TMSStandard.Contains(token))
+                                          || (x.TMSDisplayTitle != null && x.TMSDisplayTitle.Contains(token))
+                                          || (x.StandardOrgName != null && x.StandardOrgName.Contains(token))
+                                          || (x.VersionName != null && x.VersionName.Contains(token))
+                                          || (x.VersionYear != null && x.VersionYear.Contains(token)));
+                }
+                else
+                {
+                    // Multi-token: all tokens must be present across the record (supports "ASTM 2026", "ASTM 18", etc.)
+                    foreach (var token in tokens)
+                    {
+                        var t = token;
+                        query = query.Where(x => (x.TMSName != null && x.TMSName.Contains(t))
+                                              || (x.TMSStandard != null && x.TMSStandard.Contains(t))
+                                              || (x.TMSDisplayTitle != null && x.TMSDisplayTitle.Contains(t))
+                                              || (x.StandardOrgName != null && x.StandardOrgName.Contains(t))
+                                              || (x.VersionName != null && x.VersionName.Contains(t))
+                                              || (x.VersionYear != null && x.VersionYear.Contains(t)));
+                    }
+                }
             }
 
             var rawData = await query

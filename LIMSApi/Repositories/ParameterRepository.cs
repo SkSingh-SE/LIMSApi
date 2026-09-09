@@ -238,7 +238,18 @@ namespace LIMSApi.Repositories
                 else
                 {
                     var search = searchTerm.Trim();
-                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)) || (x.Code != null && x.Code.Contains(search)));
+                    var tokens = search.Split(new[] { ' ', ',', '-', ':', '/' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (tokens.Length <= 1)
+                    {
+                        var token = tokens.Length == 1 ? tokens[0] : search;
+                        _query = _query.Where(x => (x.Name != null && x.Name.Contains(token)) || (x.Code != null && x.Code.Contains(token)));
+                    }
+                    else
+                    {
+                        var pattern = "%" + string.Join("%", tokens) + "%";
+                        _query = _query.Where(x => (x.Name != null && EF.Functions.Like(x.Name, pattern))
+                                                || (x.Code != null && EF.Functions.Like(x.Code, pattern)));
+                    }
                 }
             }
 
@@ -302,7 +313,18 @@ namespace LIMSApi.Repositories
                 else
                 {
                     var search = searchTerm.Trim();
-                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)) || (x.Code != null && x.Code.Contains(search)));
+                    var tokens = search.Split(new[] { ' ', ',', '-', ':', '/' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (tokens.Length <= 1)
+                    {
+                        var token = tokens.Length == 1 ? tokens[0] : search;
+                        _query = _query.Where(x => (x.Name != null && x.Name.Contains(token)) || (x.Code != null && x.Code.Contains(token)));
+                    }
+                    else
+                    {
+                        var pattern = "%" + string.Join("%", tokens) + "%";
+                        _query = _query.Where(x => (x.Name != null && EF.Functions.Like(x.Name, pattern))
+                                                || (x.Code != null && EF.Functions.Like(x.Code, pattern)));
+                    }
                 }
             }
 
@@ -366,7 +388,18 @@ namespace LIMSApi.Repositories
                 else
                 {
                     var search = searchTerm.Trim();
-                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)) || (x.Code != null && x.Code.Contains(search)));
+                    var tokens = search.Split(new[] { ' ', ',', '-', ':', '/' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (tokens.Length <= 1)
+                    {
+                        var token = tokens.Length == 1 ? tokens[0] : search;
+                        _query = _query.Where(x => (x.Name != null && x.Name.Contains(token)) || (x.Code != null && x.Code.Contains(token)));
+                    }
+                    else
+                    {
+                        var pattern = "%" + string.Join("%", tokens) + "%";
+                        _query = _query.Where(x => (x.Name != null && EF.Functions.Like(x.Name, pattern))
+                                                || (x.Code != null && EF.Functions.Like(x.Code, pattern)));
+                    }
                 }
             }
 
