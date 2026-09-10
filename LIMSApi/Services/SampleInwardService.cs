@@ -2675,6 +2675,12 @@ namespace LIMSApi.Services
                 .Select(tr => new { tr.SampleID, tr.Status })
                 .ToListAsync();
 
+            var preps = await _context.SamplePreparations
+                .AsNoTracking()
+                .Where(sp => sampleIds.Contains(sp.SampleID) && sp.IsActive)
+                .Select(sp => new { sp.SampleID, sp.Status })
+                .ToListAsync();
+
             var reports = await _context.ReportHeaders
                 .AsNoTracking()
                 .Where(r => sampleIds.Contains(r.SampleID) && r.IsActive)
@@ -2714,11 +2720,15 @@ namespace LIMSApi.Services
             {
                 var sTestResult = testResults.FirstOrDefault(tr => tr.SampleID == s.ID);
                 var sReport = reports.FirstOrDefault(r => r.SampleID == s.ID);
+                var sPrep = preps.FirstOrDefault(p => p.SampleID == s.ID);
 
                 int genCount = s.TestPlans.Sum(tp => tp.GeneralTests.Count);
                 int chemCount = s.TestPlans.Sum(tp => tp.ChemicalTests.Count);
                 totalGenTests += genCount;
                 totalChemTests += chemCount;
+
+                bool isPrepReq = s.TestPlans.Any(tp => tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) || tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired)));
+                string prepStatus = isPrepReq ? (sPrep?.Status ?? "Pending") : "Not Required";
 
                 sampleDtos.Add(new LifecycleSampleSummaryDto
                 {
@@ -2728,9 +2738,9 @@ namespace LIMSApi.Services
                     ProductName = s.ProductMaster?.ProductName ?? s.Details ?? "Sample",
                     GradeName = s.SpecificationGrade?.Grade,
                     MetalClassification = s.MetalClassification?.Name,
-                    PreparationRequired = s.TestPlans.Any(tp => tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) || tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired))),
+                    PreparationRequired = isPrepReq,
                     MachiningRequired = false,
-                    PreparationStatus = s.TestPlans.Any(tp => tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) || tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired))) ? (s.IsTestingCompleted ? "Completed" : "Pending") : "Not Required",
+                    PreparationStatus = prepStatus,
                     GeneralTestCount = genCount,
                     ChemicalTestCount = chemCount,
                     TestResultStatus = sTestResult?.Status,
