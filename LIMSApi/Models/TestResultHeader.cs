@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.ComponentModel.DataAnnotations;
 
 namespace LIMSApi.Models
@@ -80,6 +80,13 @@ namespace LIMSApi.Models
 
         // ----- Orientation Deviation -----
         public bool OrientationDeviationAcknowledged { get; set; } = false;
+
+        // ----- Additional Test Information (ISO 17025) -----
+        [MaxLength(100)]
+        public string? TestPurpose { get; set; }
+
+        [MaxLength(1000)]
+        public string? Remarks { get; set; }
 
         // Navigation Properties
         public ICollection<TestResultParameter> Parameters { get; set; } = new List<TestResultParameter>();

@@ -294,6 +294,16 @@ namespace LIMSApi.ServiceWORepo
                     header.EquipmentIdsJson = g.EquipmentIdsJson;
                 }
 
+                if (!string.IsNullOrEmpty(g.TestPurpose))
+                {
+                    header.TestPurpose = g.TestPurpose;
+                }
+
+                if (g.Remarks != null)
+                {
+                    header.Remarks = g.Remarks;
+                }
+
                 // Save parameter values
                 foreach (var p in g.Parameters)
                 {
@@ -614,6 +624,8 @@ namespace LIMSApi.ServiceWORepo
                 .Where(s => s.ID == sampleId && s.SampleInward!.CompanyCode == loggedInUser.CompanyCode)
                 .Include(s => s.SampleInward)
                     .ThenInclude(c => c!.Customer)
+                .Include(s => s.ProductMaster)
+                .Include(s => s.ProductSizeMaster)
                 .Include(s => s.AdditionalDetails)
                 .Include(s => s.ProductCondition)
                     .ThenInclude(pc => pc!.LinkedHeatTreatment)
@@ -627,6 +639,9 @@ namespace LIMSApi.ServiceWORepo
                         .ThenInclude(ct => ct.Elements)
                 .Include(s => s.TestPlans)
                     .ThenInclude(tp => tp.ChemicalTests)
+                        .ThenInclude(ct => ct.Methods)
+                .Include(s => s.TestPlans)
+                    .ThenInclude(tp => tp.ChemicalTests)
                         .ThenInclude(ct => ct.TestTypes)
                 .AsSplitQuery()
                 .FirstOrDefaultAsync();
@@ -634,6 +649,129 @@ namespace LIMSApi.ServiceWORepo
             if (sample == null) return null;
 
             var inward = sample.SampleInward;
+
+            // Resolve real ReportFormat for the sample
+            ReportFormat? resolvedReportFormat = null;
+            var sampleMethodIds = sample.TestPlans
+                .SelectMany(tp => tp.GeneralTests.SelectMany(gt => gt.Methods.Select(m => m.StandardID)))
+                .Concat(sample.TestPlans.SelectMany(tp => tp.ChemicalTests.SelectMany(ct => ct.Methods.Select(m => (long)m.TestMethodSpecificationID))))
+                .Where(id => id > 0)
+                .Distinct()
+                .ToList();
+
+            if (sampleMethodIds.Any())
+            {
+                resolvedReportFormat = await _db.ReportFormatMappings
+                    .Where(m => m.IsActive && m.TestMethodID.HasValue && sampleMethodIds.Contains(m.TestMethodID.Value))
+                    .Select(m => m.ReportFormat)
+                    .FirstOrDefaultAsync(f => f != null && f.IsActive);
+            }
+
+            if (resolvedReportFormat == null)
+            {
+                var sampleLabTestIds = sample.TestPlans
+                    .SelectMany(tp => tp.GeneralTests.SelectMany(gt => gt.Methods.Select(m => m.LaboratoryTestID)))
+                    .Where(id => id > 0)
+                    .Distinct()
+                    .ToList();
+
+                if (sampleLabTestIds.Any())
+                {
+                    resolvedReportFormat = await _db.ReportFormatMappings
+                        .Where(m => m.IsActive && m.LaboratoryTestID.HasValue && sampleLabTestIds.Contains(m.LaboratoryTestID.Value))
+                        .Select(m => m.ReportFormat)
+                        .FirstOrDefaultAsync(f => f != null && f.IsActive);
+                }
+            }
+
+            if (resolvedReportFormat == null)
+            {
+                resolvedReportFormat = await _db.ReportFormats
+                    .FirstOrDefaultAsync(f => f.IsDefault && f.IsActive)
+                    ?? await _db.ReportFormats.FirstOrDefaultAsync(f => f.IsActive);
+            }
+
+            long? resolvedReportFormatId = resolvedReportFormat?.ID;
+            string resolvedReportFormatName = resolvedReportFormat?.FormatName ?? "Standard Laboratory Report";
+
+            // Resolve real Specimen Preparation
+            var prepRecord = await _db.SamplePreparations
+                .FirstOrDefaultAsync(sp => sp.SampleID == sampleId && sp.IsActive);
+
+            string prepDescription;
+            long? prepId = prepRecord?.ID;
+            if (prepRecord != null)
+            {
+                prepDescription = !string.IsNullOrWhiteSpace(prepRecord.PreparationMethod)
+                    ? prepRecord.PreparationMethod
+                    : (prepRecord.Status == "Completed" ? "Preparation Completed" : $"Preparation {prepRecord.Status}");
+            }
+            else
+            {
+                var prepRequired = sample.TestPlans.Any(tp =>
+                    tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) ||
+                    tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired)));
+
+                var hasMachiningOrCutting = await _db.MachiningChargeItems.AnyAsync(m => m.SampleID == sampleId && m.IsActive)
+                    || await _db.CuttingChargeSamples.AnyAsync(s => s.SampleID == sampleId);
+
+                prepDescription = (prepRequired || hasMachiningOrCutting)
+                    ? "Preparation Required"
+                    : "Direct Testing (No Prep Required)";
+            }
+
+            // Resolve truthful Sampling description
+            string samplingDescription;
+            if (!string.IsNullOrWhiteSpace(sample.TestInstructions))
+            {
+                samplingDescription = sample.TestInstructions;
+            }
+            else if (!string.IsNullOrWhiteSpace(inward?.SampleReceiptNote))
+            {
+                samplingDescription = inward.SampleReceiptNote;
+            }
+            else if (!string.IsNullOrWhiteSpace(sample.Specimen))
+            {
+                samplingDescription = sample.Specimen;
+            }
+            else
+            {
+                samplingDescription = "Customer Supplied (As Received)";
+            }
+
+            // Resolve truthful Sample Type (ProductForm -> ProductMaster -> ProductCondition -> Details -> Specimen -> Customer Supplied)
+            string truthfulSampleType = !string.IsNullOrWhiteSpace(sample.ProductForm?.Name)
+                ? sample.ProductForm.Name
+                : (!string.IsNullOrWhiteSpace(sample.ProductMaster?.ProductName)
+                    ? sample.ProductMaster.ProductName
+                    : (!string.IsNullOrWhiteSpace(sample.ProductCondition?.Name)
+                        ? sample.ProductCondition.Name
+                        : (!string.IsNullOrWhiteSpace(sample.Details)
+                            ? sample.Details
+                            : (!string.IsNullOrWhiteSpace(sample.Specimen)
+                                ? sample.Specimen
+                                : "Customer Supplied Sample"))));
+
+            // Pre-load SOP document filepaths for sample test methods
+            var methodSopMap = new Dictionary<long, string?>();
+            if (sampleMethodIds.Any())
+            {
+                var specVersions = await _db.TestMethodSpecificationVersions
+                    .Where(v => sampleMethodIds.Contains(v.TestMethodSpecificationID) || sampleMethodIds.Contains(v.ID))
+                    .Select(v => new { v.TestMethodSpecificationID, v.ID, v.StandardFilePath, v.IsDefault })
+                    .ToListAsync();
+
+                foreach (var mId in sampleMethodIds)
+                {
+                    var match = specVersions.FirstOrDefault(v => v.ID == mId && !string.IsNullOrWhiteSpace(v.StandardFilePath))
+                        ?? specVersions.FirstOrDefault(v => v.TestMethodSpecificationID == mId && v.IsDefault && !string.IsNullOrWhiteSpace(v.StandardFilePath))
+                        ?? specVersions.FirstOrDefault(v => v.TestMethodSpecificationID == mId && !string.IsNullOrWhiteSpace(v.StandardFilePath));
+                    if (match != null)
+                    {
+                        methodSopMap[mId] = match.StandardFilePath;
+                    }
+                }
+            }
 
             var resultPlans = new List<object>();
 
@@ -747,10 +885,7 @@ namespace LIMSApi.ServiceWORepo
                                         standard = method.StandardID,
                                 standardName = method.StandardID > 0
                                     ? (standardNameCache.TryGetValue(method.StandardID, out var sn) ? sn
-                                        : (standardNameCache[method.StandardID] = await _db.StandardOrganizationMasters
-                                            .Where(s => s.ID == method.StandardID)
-                                            .Select(s => s.Name)
-                                            .FirstOrDefaultAsync()))
+                                        : (standardNameCache[method.StandardID] = (await ResolveMethodStandardAsync(null, method.StandardID)).caption))
                                     : null,
                                 reportNo = method.ReportNo,
                                 specification1 = gt.Specification1,
@@ -760,6 +895,22 @@ namespace LIMSApi.ServiceWORepo
                                 testPlanID = plan.ID,
                                 type = "General",
                                 status = header.Status,
+                                isOverallPass = header.IsOverallPass,
+                                discipline = "Mechanical",
+                                analysisTechnique = labTestName,
+                                testPurpose = header.TestPurpose ?? "Material Qualification",
+                                remarks = header.Remarks ?? "",
+                                reportFormatId = resolvedReportFormatId,
+                                reportFormatName = resolvedReportFormatName,
+                                sampleType = truthfulSampleType,
+                                sampling = samplingDescription,
+                                specimenPreparation = prepDescription,
+                                samplePreparationId = prepId,
+                                sopFilePath = method.StandardID > 0 && methodSopMap.TryGetValue(method.StandardID, out var sop) ? sop : null,
+                                isNabl = header.IsNabl,
+                                roomTemperature = header.RoomTemperature,
+                                roomHumidity = header.RoomHumidity,
+                                labRoomId = header.LabRoomId,
                                 // Timing & Equipment
                                 testStartTime = header.TestStartTime ?? header.StartedAt,
                                 testEndTime = header.TestEndTime ?? header.CompletedAt,
@@ -789,7 +940,7 @@ namespace LIMSApi.ServiceWORepo
                                     isStandalone = p.IsStandalone,
                                     sourceTestMethodId = p.SourceTestMethodId,
                                     parameterType = p.ParameterType,
-                                    testMethodUsed = p.TestMethodUsed,
+                                    testMethodUsed = !string.IsNullOrWhiteSpace(p.TestMethodUsed) ? p.TestMethodUsed : (method.StandardID > 0 && standardNameCache.TryGetValue(method.StandardID, out var sn2) ? sn2 : labTestName),
                                     decimalPrecision = p.DecimalPrecision,
                                     conversionFactor = p.ConversionFactor,
                                     convertedValue = p.ConvertedValue,
@@ -831,31 +982,45 @@ namespace LIMSApi.ServiceWORepo
                         // create header for each labTestId
                         foreach (var labTestId in typeLabIds)
                         {
+                            // typeLabIds may hold LaboratoryTestAnalysisType ids (chemical) — resolve
+                            // to the parent LaboratoryTest id for the header FK.
+                            var parentLabTestId = await ResolveChemicalParentLabTestIdAsync(labTestId);
+                            if (parentLabTestId <= 0)
+                                continue;
+
                             var header = await _db.TestResultHeaders
                                 .Include(h => h.Parameters)
                                 .Include(i => i.Images)
                                 .FirstOrDefaultAsync(h =>
                                     h.SampleID == sampleId &&
-                                    h.LaboratoryTestID == labTestId &&
+                                    h.LaboratoryTestID == parentLabTestId &&
                                     h.TestPlanID == plan.ID);
 
                             if (header == null)
                             {
-                                header = await AutoCreateChemicalHeaderAsync(sampleId, plan.ID, ct, labTestId);
+                                header = await AutoCreateChemicalHeaderAsync(sampleId, plan.ID, ct, parentLabTestId);
                             }
                             header.CertificateNo = inward?.CaseNo;
+                            var ctStandardName = await GetChemMethodCaptionAsync(ct);
                             chemicalTests.Add(new
                             {
                                 headerId = header.ID,
                                 chemicalTestId = ct.ID,
                                 labTestId = labTestId,
+                                parentLabTestId = parentLabTestId,
+                                techniqueCodes = ct.TestTypes
+                                    .Where(tt => tt.IsSelected && !tt.LaboratoryTestAnalysisTypeID.HasValue && !tt.LaboratoryTestID.HasValue && !string.IsNullOrWhiteSpace(tt.Name))
+                                    .Select(tt => tt.Name!)
+                                    .Distinct()
+                                    .ToList(),
                                 laboratoryTest = (await _db.LaboratoryTestAnalysisTypes.FindAsync(labTestId))?.Name 
                                               ?? (await _db.LaboratoryTests.FindAsync(labTestId))?.Name 
                                               ?? "Chemical Test",
                                 sequenceNo = 1,
                                 totalSpecimens = 1,
-                                standard = (long?)null,
-                                standardName = (string?)null,
+                                testMethodId = (long?)(ct.Methods?.FirstOrDefault(m => !m.Cancel)?.TestMethodSpecificationID ?? ct.Methods?.FirstOrDefault()?.TestMethodSpecificationID),
+                                standard = (long?)(ct.Methods?.FirstOrDefault(m => !m.Cancel)?.TestMethodSpecificationID ?? ct.Methods?.FirstOrDefault()?.TestMethodSpecificationID),
+                                standardName = ctStandardName,
                                 specification1 = ct.Specification1,
                                 specification2 = ct.Specification2,
                                 specfication1Name = ct.Specification1.HasValue ? await GetSpecificationNameWithGrade(ct.Specification1.Value) : string.Empty,
@@ -864,6 +1029,22 @@ namespace LIMSApi.ServiceWORepo
                                 testPlanID = plan.ID,
                                 type = "Chemical",
                                 status = header.Status,
+                                isOverallPass = header.IsOverallPass,
+                                discipline = "Chemical",
+                                analysisTechnique = ct.TestTypes?.FirstOrDefault(tt => tt.IsSelected)?.Name ?? "OES (Optical Emission Spectroscopy)",
+                                testPurpose = header.TestPurpose ?? "Material Qualification",
+                                remarks = header.Remarks ?? "",
+                                reportFormatId = resolvedReportFormatId,
+                                reportFormatName = resolvedReportFormatName,
+                                sampleType = truthfulSampleType,
+                                sampling = samplingDescription,
+                                specimenPreparation = prepDescription,
+                                samplePreparationId = prepId,
+                                sopFilePath = (ct.Methods?.FirstOrDefault(m => !m.Cancel)?.TestMethodSpecificationID ?? ct.Methods?.FirstOrDefault()?.TestMethodSpecificationID) is long chemMId && chemMId > 0 && methodSopMap.TryGetValue(chemMId, out var sopChem) ? sopChem : null,
+                                isNabl = header.IsNabl,
+                                roomTemperature = header.RoomTemperature,
+                                roomHumidity = header.RoomHumidity,
+                                labRoomId = header.LabRoomId,
                                 // Timing & Equipment
                                 testStartTime = header.TestStartTime ?? header.StartedAt,
                                 testEndTime = header.TestEndTime ?? header.CompletedAt,
@@ -891,7 +1072,7 @@ namespace LIMSApi.ServiceWORepo
                                     isWithinLimit = p.IsWithinLimit,
                                     resultStatus = p.ResultStatus,
                                     parameterType = p.ParameterType,
-                                    testMethodUsed = p.TestMethodUsed,
+                                    testMethodUsed = !string.IsNullOrWhiteSpace(p.TestMethodUsed) ? p.TestMethodUsed : (!string.IsNullOrWhiteSpace(ctStandardName) ? ctStandardName : "OES"),
                                     decimalPrecision = p.DecimalPrecision,
                                     conversionFactor = p.ConversionFactor,
                                     convertedValue = p.ConvertedValue,
@@ -926,7 +1107,8 @@ namespace LIMSApi.ServiceWORepo
                     id = inward?.ID ?? 0,
                     caseNo = inward?.CaseNo,
                     customerID = inward?.CustomerID,
-                    customerName = inward?.Customer?.Name
+                    customerName = inward?.Customer?.Name,
+                    receivedOn = inward?.CollectionTime
                 },
                 sample = new
                 {
@@ -934,6 +1116,17 @@ namespace LIMSApi.ServiceWORepo
                     sampleNo = sample.SampleNo,
                     sampleStatus = sample.SampleStatus,
                     details = sample.Details,
+                    productMasterID = sample.ProductMasterID,
+                    productMasterName = sample.ProductMaster?.ProductName,
+                    productSizeMasterID = sample.ProductSizeMasterID,
+                    productSizeDescription = sample.ProductSizeMaster?.DisplayName,
+                    productSizeFormatted = !string.IsNullOrWhiteSpace(sample.ProductMaster?.ProductName) && !string.IsNullOrWhiteSpace(sample.ProductSizeMaster?.DisplayName)
+                        ? $"{sample.ProductMaster.ProductName} ({sample.ProductSizeMaster.DisplayName})"
+                        : !string.IsNullOrWhiteSpace(sample.ProductMaster?.ProductName)
+                            ? sample.ProductMaster.ProductName
+                            : !string.IsNullOrWhiteSpace(sample.ProductForm?.Name)
+                                ? sample.ProductForm.Name
+                                : "-",
                     metalClassificationID = sample.MetalClassificationID,
                     metalClassification = sample.MetalClassificationID.HasValue ? (await _db.MetalClassificationMasters.FindAsync(sample.MetalClassificationID.Value))?.Name : null,
                     productConditionID = sample.ProductConditionID,
@@ -957,7 +1150,13 @@ namespace LIMSApi.ServiceWORepo
                         : sample.Thickness.HasValue && sample.Width.HasValue && sample.Thickness > 0 && sample.Width > 0
                             ? Math.Round(5.65m * (decimal)Math.Sqrt((double)(sample.Thickness.Value * sample.Width.Value)), 2)
                             : (decimal?)null,
-                    additionalDetails = sample.AdditionalDetails.Select(ad => new { ad.Label, ad.Value })
+                    additionalDetails = sample.AdditionalDetails.Select(ad => new { ad.Label, ad.Value }),
+                    sampleType = truthfulSampleType,
+                    sampling = samplingDescription,
+                    specimenPreparation = prepDescription,
+                    samplePreparationId = prepId,
+                    reportFormatId = resolvedReportFormatId,
+                    reportFormatName = resolvedReportFormatName
                 },
                 plans = resultPlans
             };
@@ -1001,6 +1200,25 @@ namespace LIMSApi.ServiceWORepo
         }
 
         /// <summary>
+        /// Resolve a chemical test-type id to its parent LaboratoryTest id.
+        /// Analysis-type ids live in LaboratoryTestAnalysisTypes, so storing one raw into
+        /// TestResultHeaders.LaboratoryTestID violates FK_TestResultHeaders_LaboratoryTests.
+        /// Map via SubGroup instead. Plain LaboratoryTest ids pass through after existence check.
+        /// Returns 0 when unresolvable.
+        /// </summary>
+        private async Task<long> ResolveChemicalParentLabTestIdAsync(long id)
+        {
+            var analysisType = await _db.LaboratoryTestAnalysisTypes
+                .Include(a => a.SubGroup)
+                .FirstOrDefaultAsync(a => a.ID == id);
+            if (analysisType?.SubGroup != null && analysisType.SubGroup.LaboratoryTestID > 0)
+                return analysisType.SubGroup.LaboratoryTestID;
+            if (await _db.LaboratoryTests.AnyAsync(t => t.ID == id))
+                return id;
+            return 0;
+        }
+
+        /// <summary>
         /// Auto-create header for chemical test: create parameters from ChemicalTest.Elements
         /// and set MinValue/MaxValue from element data. header is linked to a specific laboratory test (labTestId)
         /// </summary>
@@ -1031,15 +1249,17 @@ namespace LIMSApi.ServiceWORepo
             foreach (var el in ct.Elements)
             {
                 // Try to load parameter master to get name/unit (if exists)
-                ParameterMaster pm = null;
+                ParameterMaster? pm = null;
                 if (el.ParameterID > 0)
-                    pm = await _db.ParameterMasters.FindAsync(el.ParameterID);
+                    pm = await _db.ParameterMasters
+                        .Include(p => p.ParameterUnit)
+                        .FirstOrDefaultAsync(p => p.ID == el.ParameterID);
 
                 header.Parameters.Add(new TestResultParameter
                 {
                     ParameterID = el.ParameterID,
                     ParameterName = pm?.Name ?? el.ParameterUnit /* fallback to whatever available */,
-                    Unit = pm?.ParameterUnit?.Name ?? el.ParameterUnit,
+                    Unit = await ResolveElementUnitAsync(el, pm),
                     Value = null,
                     Formula = null,
                     IsCalculated = false,
@@ -1056,6 +1276,178 @@ namespace LIMSApi.ServiceWORepo
             await _db.SaveChangesAsync();
 
             return header;
+        }
+
+        /// <summary>
+        /// Resolve display unit for a chemical element row.
+        /// Priority: explicit element unit text → unit master by ParameterUnitID
+        /// (base or equivalent) → parameter master unit → empty.
+        /// </summary>
+        private async Task<string?> ResolveElementUnitAsync(ChemicalTestElement el, ParameterMaster? pm)
+        {
+            if (!string.IsNullOrWhiteSpace(el.ParameterUnit))
+                return el.ParameterUnit;
+            if (el.ParameterUnitID > 0)
+            {
+                var baseUnit = await _db.ParameterUnitMasters
+                    .FirstOrDefaultAsync(u => u.ID == el.ParameterUnitID);
+                if (!string.IsNullOrWhiteSpace(baseUnit?.Name))
+                    return baseUnit.Name;
+                var equiv = await _db.ParameterUnitEquivalents
+                    .FirstOrDefaultAsync(e => e.ID == el.ParameterUnitID);
+                if (!string.IsNullOrWhiteSpace(equiv?.Name))
+                    return equiv.Name;
+            }
+            return pm?.ParameterUnit?.Name;
+        }
+
+        /// <summary>
+        /// Caption for a chemical test's first active method (TMS id based).
+        /// </summary>
+        private async Task<string> GetChemMethodCaptionAsync(ChemicalTest ct)
+        {
+            var m = ct.Methods?.FirstOrDefault(x => !x.Cancel) ?? ct.Methods?.FirstOrDefault();
+            if (m?.TestMethodSpecificationID == null || m.TestMethodSpecificationID <= 0)
+                return string.Empty;
+            var (_, _, caption) = await ResolveMethodStandardAsync(m.TestMethodSpecificationID, m.TestMethodSpecificationID);
+            return caption;
+        }
+
+        /// <summary>
+        /// Resolve a stored method standard reference to (versionId, tmsId, caption).
+        /// Plans store a VERSION id in StandardID for general methods and a TMS id for
+        /// chemical methods — try version first, then TMS.
+        /// </summary>
+        private async Task<(long? versionId, long? tmsId, string caption)> ResolveMethodStandardAsync(long? tmsId, long? versionOrTmsId)
+        {
+            TestMethodSpecificationVersion? ver = null;
+            if (versionOrTmsId.HasValue && versionOrTmsId.Value > 0)
+                ver = await _db.TestMethodSpecificationVersions
+                    .Include(v => v.TestMethodSpecification)
+                    .FirstOrDefaultAsync(v => v.ID == versionOrTmsId.Value);
+            TestMethodSpecification? spec = ver?.TestMethodSpecification;
+            if (spec == null && tmsId.HasValue && tmsId.Value > 0)
+                spec = await _db.TestMethodSpecifications.FirstOrDefaultAsync(s => s.ID == tmsId.Value);
+            if (spec == null && versionOrTmsId.HasValue && versionOrTmsId.Value > 0)
+                spec = await _db.TestMethodSpecifications.FirstOrDefaultAsync(s => s.ID == versionOrTmsId.Value);
+            if (spec == null) return (ver?.ID, null, string.Empty);
+            var orgName = (await _db.StandardOrganizationMasters.FirstOrDefaultAsync(o => o.ID == spec.StandardOrganizationID))?.Name ?? string.Empty;
+            string caption;
+            if (ver != null)
+            {
+                var part = string.IsNullOrWhiteSpace(spec.Part) ? "" : $" - ({spec.Part})";
+                caption = $"{orgName} {spec.TestMethodStandard}{part} : {ver.Version} {ver.Year}".Trim();
+            }
+            else
+                caption = spec.DisplayTitle ?? $"{orgName} {spec.TestMethodStandard}".Trim();
+            return (ver?.ID, spec.ID, caption.Trim());
+        }
+
+        /// <summary>
+        /// Reselect test method / specification from result entry.
+        /// Updates the underlying plan rows (general method StandardID / chemical method
+        /// TestMethodSpecificationID + Specification1) and syncs the sample grade.
+        /// Blocked once the test is verified / pending verification.
+        /// </summary>
+        public async Task<UpdateResultPlanMethodResult> UpdateResultPlanMethodAsync(UpdateResultPlanMethodDto dto)
+        {
+            var header = await _db.TestResultHeaders.FirstOrDefaultAsync(h => h.ID == dto.HeaderId)
+                ?? throw new KeyNotFoundException($"Test header {dto.HeaderId} not found.");
+            if (header.Status == "Verified" || header.Status == "PendingVerification")
+                throw new InvalidOperationException($"Cannot change method — test is in '{header.Status}' status. Reject verification first to make changes.");
+
+            var plan = await _db.TestPlans
+                .Include(p => p.GeneralTests).ThenInclude(g => g.Methods)
+                .Include(p => p.ChemicalTests).ThenInclude(c => c.Methods)
+                .FirstOrDefaultAsync(p => p.ID == header.TestPlanID)
+                ?? throw new KeyNotFoundException($"Test plan {header.TestPlanID} not found.");
+
+            var result = new UpdateResultPlanMethodResult { HeaderId = header.ID };
+
+            // Resolve method ids (accept version id in either field)
+            long? tmsId = dto.TestMethodSpecificationID;
+            long? verId = dto.TestMethodSpecificationVersionID;
+            if (verId.HasValue && verId.Value > 0)
+            {
+                var ver = await _db.TestMethodSpecificationVersions.FirstOrDefaultAsync(v => v.ID == verId.Value)
+                    ?? throw new KeyNotFoundException($"Method version {verId} not found.");
+                tmsId = ver.TestMethodSpecificationID;
+            }
+            else if (tmsId.HasValue && tmsId.Value > 0)
+            {
+                var verById = await _db.TestMethodSpecificationVersions
+                    .FirstOrDefaultAsync(v => v.ID == tmsId.Value);
+                if (verById != null)
+                {
+                    verId = verById.ID;
+                    tmsId = verById.TestMethodSpecificationID;
+                }
+                else
+                {
+                    var spec = await _db.TestMethodSpecifications.FirstOrDefaultAsync(s => s.ID == tmsId.Value)
+                        ?? throw new KeyNotFoundException($"Test method {tmsId} not found.");
+                    verId = (await _db.TestMethodSpecificationVersions
+                        .Where(v => v.TestMethodSpecificationID == spec.ID)
+                        .OrderByDescending(v => v.IsDefault)
+                        .ThenByDescending(v => v.ID)
+                        .FirstOrDefaultAsync())?.ID;
+                }
+            }
+
+            // Validate + apply specification (grade) change
+            long? gradeId = dto.Specification1;
+            if (gradeId.HasValue && gradeId.Value > 0)
+            {
+                var gradeOk = await _db.SpecificationGrades.AnyAsync(g => g.ID == gradeId.Value);
+                if (!gradeOk)
+                    throw new KeyNotFoundException($"Specification grade {gradeId} not found.");
+            }
+
+            var gen = plan.GeneralTests.FirstOrDefault(g => g.Methods.Any(m => !m.Cancel && m.LaboratoryTestID == header.LaboratoryTestID))
+                ?? plan.GeneralTests.FirstOrDefault();
+            var chem = plan.ChemicalTests.FirstOrDefault();
+
+            if (gen != null && (gen.Methods.Any(m => !m.Cancel && m.LaboratoryTestID == header.LaboratoryTestID) || chem == null))
+            {
+                var targets = gen.Methods.Where(m => !m.Cancel && m.LaboratoryTestID == header.LaboratoryTestID).ToList();
+                if (!targets.Any()) targets = gen.Methods.Where(m => !m.Cancel).ToList();
+                if (verId.HasValue && verId.Value > 0)
+                    foreach (var m in targets) m.StandardID = verId.Value;
+                if (gradeId.HasValue)
+                    gen.Specification1 = gradeId.Value;
+                result.TestMethodSpecificationVersionID = targets.FirstOrDefault()?.StandardID;
+            }
+            else if (chem != null)
+            {
+                if (tmsId.HasValue && tmsId.Value > 0)
+                    foreach (var m in chem.Methods.Where(m => !m.Cancel))
+                        m.TestMethodSpecificationID = tmsId.Value;
+                if (gradeId.HasValue)
+                    chem.Specification1 = gradeId.Value;
+                result.TestMethodSpecificationID = tmsId;
+                result.TestMethodSpecificationVersionID = verId;
+            }
+
+            if (gradeId.HasValue && gradeId.Value > 0)
+            {
+                var sample = await _db.SampleDetails.FirstOrDefaultAsync(s => s.ID == header.SampleID);
+                if (sample != null)
+                    sample.SpecificationGradeID = gradeId.Value;
+                result.Specification1 = gradeId.Value;
+                result.SpecName = await GetSpecificationNameWithGrade(gradeId.Value);
+            }
+
+            await _db.SaveChangesAsync();
+
+            if (tmsId.HasValue && tmsId.Value > 0)
+            {
+                var (_, resolvedTms, caption) = await ResolveMethodStandardAsync(tmsId, verId ?? result.TestMethodSpecificationVersionID);
+                result.TestMethodSpecificationID = resolvedTms ?? tmsId;
+                result.TestMethodSpecificationVersionID = verId ?? result.TestMethodSpecificationVersionID;
+                result.MethodName = caption;
+            }
+
+            return result;
         }
 
         /// <summary>
@@ -1325,6 +1717,24 @@ namespace LIMSApi.ServiceWORepo
                     .Where(id => id > 0)
                     .ToListAsync();
 
+                // Legacy fallback: rows saved before parent resolution carry only the
+                // analysis-type id — resolve those to parent LaboratoryTest ids.
+                if (!labTestIds.Any())
+                {
+                    var legacyTypeIds = await _db.Set<ChemicalTestType>()
+                        .Where(tt => tt.ChemicalTestID == chemTest.ID && tt.IsSelected
+                            && tt.LaboratoryTestAnalysisTypeID.HasValue && tt.LaboratoryTestAnalysisTypeID.Value > 0)
+                        .Select(tt => tt.LaboratoryTestAnalysisTypeID!.Value)
+                        .Distinct()
+                        .ToListAsync();
+                    foreach (var aid in legacyTypeIds)
+                    {
+                        var parent = await ResolveChemicalParentLabTestIdAsync(aid);
+                        if (parent > 0 && !labTestIds.Contains(parent))
+                            labTestIds.Add(parent);
+                    }
+                }
+
                 foreach (var labTestId in labTestIds)
                 {
                     var exists = await _db.TestResultHeaders.AnyAsync(h =>
@@ -1521,6 +1931,104 @@ namespace LIMSApi.ServiceWORepo
         }
 
 
+        public async Task<TestConfigurationValidationResultDto> ValidateTestConfiguration(long headerId)
+        {
+            var result = new TestConfigurationValidationResultDto { IsValid = true };
+            var header = await _db.TestResultHeaders
+                .Include(h => h.Parameters)
+                .FirstOrDefaultAsync(h => h.ID == headerId);
+
+            if (header == null)
+            {
+                result.IsValid = false;
+                result.Errors.Add("Test result header not found.");
+                return result;
+            }
+
+            // 1. Parameter count check
+            if (!header.Parameters.Any())
+            {
+                result.IsValid = false;
+                result.Errors.Add("No parameters configured for this test. Please load or add parameters first.");
+            }
+
+            // 2. Equipment check
+            bool hasEquipment = false;
+            if (!string.IsNullOrWhiteSpace(header.EquipmentIdsJson))
+            {
+                try
+                {
+                    var ids = System.Text.Json.JsonSerializer.Deserialize<List<long>>(header.EquipmentIdsJson);
+                    hasEquipment = ids != null && ids.Any();
+                }
+                catch { }
+            }
+            if (!hasEquipment && header.EquipmentID.HasValue && header.EquipmentID.Value > 0)
+            {
+                hasEquipment = true;
+            }
+
+            if (!hasEquipment)
+            {
+                result.IsValid = false;
+                result.Errors.Add("Equipment has not been assigned for this test. Please select calibrated equipment before starting.");
+            }
+
+            // 3. Preparation prerequisite check
+            var sample = await _db.SampleDetails
+                .Include(s => s.TestPlans)
+                    .ThenInclude(tp => tp.GeneralTests)
+                        .ThenInclude(gt => gt.Methods)
+                .Include(s => s.TestPlans)
+                    .ThenInclude(tp => tp.ChemicalTests)
+                        .ThenInclude(ct => ct.Methods)
+                .FirstOrDefaultAsync(s => s.ID == header.SampleID);
+
+            if (sample != null)
+            {
+                var matchingGeneralMethod = sample.TestPlans
+                    .Where(tp => header.TestPlanID == 0 || tp.ID == header.TestPlanID)
+                    .SelectMany(tp => tp.GeneralTests)
+                    .Where(gt => gt.LaboratoryTestSubGroupID == header.LaboratoryTestID)
+                    .SelectMany(gt => gt.Methods)
+                    .FirstOrDefault(m => !m.Cancel && (header.TestID == null || m.ID == header.TestID.Value || m.LaboratoryTestID == header.LaboratoryTestID));
+
+                var matchingChemMethod = sample.TestPlans
+                    .Where(tp => header.TestPlanID == 0 || tp.ID == header.TestPlanID)
+                    .SelectMany(tp => tp.ChemicalTests)
+                    .Where(ct => ct.LaboratoryTestAnalysisTypeID == header.LaboratoryTestID)
+                    .SelectMany(ct => ct.Methods)
+                    .FirstOrDefault(m => !m.Cancel && (header.TestID == null || m.ID == header.TestID.Value || m.LaboratoryTestAnalysisTypeID == header.LaboratoryTestID));
+
+                bool prepReq = (matchingGeneralMethod != null && matchingGeneralMethod.PreparationRequired)
+                    || (matchingChemMethod != null && matchingChemMethod.PreparationRequired);
+
+                if (prepReq)
+                {
+                    long plannedMethodId = matchingGeneralMethod?.ID ?? matchingChemMethod?.ID ?? 0;
+                    var prepItem = await _db.SamplePreparationTestItems
+                        .FirstOrDefaultAsync(ti => ti.SampleID == header.SampleID
+                            && ti.IsActive
+                            && ((plannedMethodId > 0 && ti.PlannedTestMethodID == plannedMethodId)
+                                || ti.LaboratoryTestID == header.LaboratoryTestID));
+
+                    if (prepItem == null || (prepItem.Status != "Completed" && prepItem.Status != "QCVerified"))
+                    {
+                        result.IsValid = false;
+                        result.Errors.Add($"Sample preparation is required for this test and is currently in '{(prepItem?.Status ?? "Not Initiated")}' status. Preparation must be completed before starting test.");
+                    }
+                }
+            }
+
+            // 4. Environmental monitoring warnings
+            if (!header.RoomTemperature.HasValue || !header.RoomHumidity.HasValue)
+            {
+                result.Warnings.Add("Room temperature / humidity has not been recorded for this test session yet.");
+            }
+
+            return result;
+        }
+
         public async Task<StartTestResponse> StartTest(long Id)
         {
             var header = await _db.TestResultHeaders.FindAsync(Id);
@@ -1672,21 +2180,29 @@ namespace LIMSApi.ServiceWORepo
         public async Task<CompleteTestResponse> CompleteTest(long Id)
         {
             var response = new CompleteTestResponse();
-            // begin transaction
             var trx = await _db.Database.BeginTransactionAsync();
             try
             {
+                var header = await _db.TestResultHeaders
+                    .Include(h => h.Parameters)
+                    .FirstOrDefaultAsync(h => h.ID == Id);
 
-
-                var header = await _db.TestResultHeaders.FindAsync(Id);
                 if (header == null)
                     throw new Exception("Test Result Header not found.");
 
-                // Status guard: only Started tests can be completed
+                // Status guard: only Started or In-Progress tests can be completed
                 if (header.Status != "Started" && header.Status != "In-Progress")
                     throw new InvalidOperationException($"Cannot complete test in '{header.Status}' status. Only 'Started' or 'In-Progress' tests can be completed.");
 
-                // --- Preparation Validation (Phase 5) ---
+                // Validate parameter values completeness
+                var missingValues = header.Parameters.Where(p => p.Value == null).ToList();
+                if (missingValues.Any())
+                {
+                    var missingNames = string.Join(", ", missingValues.Select(p => p.ParameterName));
+                    throw new InvalidOperationException($"Cannot complete test. The following parameters have not been recorded: {missingNames}. All parameters must have recorded values before completing test.");
+                }
+
+                // --- Preparation Validation ---
                 var sampleForPrep = await _db.SampleDetails
                     .Include(s => s.TestPlans)
                         .ThenInclude(tp => tp.GeneralTests)
@@ -1707,9 +2223,11 @@ namespace LIMSApi.ServiceWORepo
                     header.PreparationDataMissing = !prepExists;
                 }
 
-                // Fix 3C — Always mark header Completed; user explicitly submits for verification
-                header.Status = "Completed";
+                // Ensure latest calculations and evaluations are executed
+                await RecalculateAllParameters(header.ID);
+                header.IsOverallPass = EvaluateOverallPass(header);
 
+                header.Status = "Completed";
                 header.CompletedAt = DateTime.UtcNow;
                 header.TestEndTime = DateTime.UtcNow;
                 header.ModifiedBy = loggedInUser.EmployeeID;
@@ -1733,13 +2251,11 @@ namespace LIMSApi.ServiceWORepo
 
                         if (elapsedHours >= ltt.DurationHours)
                         {
-                            // Normal completion
                             ltt.Status = "Completed";
                             ltt.EndedAt = DateTime.UtcNow;
                         }
                         else
                         {
-                            // Early termination (LIMS standard)
                             ltt.Status = "Force Completed";
                             ltt.EndedAt = DateTime.UtcNow;
                         }
@@ -1750,17 +2266,15 @@ namespace LIMSApi.ServiceWORepo
 
                 var completedStatuses = new[] { "Completed", "PendingVerification", "Verified" };
                 bool hasPendingTests = await _db.TestResultHeaders.AnyAsync(h =>
-                h.SampleID == header.SampleID &&
-                h.IsActive &&
-                !completedStatuses.Contains(h.Status));
+                    h.SampleID == header.SampleID &&
+                    h.IsActive &&
+                    !completedStatuses.Contains(h.Status));
 
                 // -----------------------------
-                // 🔹 LAST TEST COMPLETED | No Pending Test
+                // LAST TEST COMPLETED | No Pending Test
                 // -----------------------------
-
                 if (!hasPendingTests)
                 {
-                    // 3️⃣ Mark Sample as testing-completed
                     var sample = await _db.SampleDetails.FindAsync(header.SampleID);
                     if (sample == null)
                         throw new Exception("Sample not found.");
@@ -1770,14 +2284,13 @@ namespace LIMSApi.ServiceWORepo
 
                     await _db.SaveChangesAsync();
 
-                    // Fix 3C — Sample moves to TESTING_COMPLETED; verification is user-triggered
                     await _sampleStatusService.ForceAutoStatusAsync(
-                                sample.ID,
-                                SampleStatus.TESTING_COMPLETED,
-                                loggedInUser.EmployeeID
-                            );
+                        sample.ID,
+                        SampleStatus.TESTING_COMPLETED,
+                        loggedInUser.EmployeeID
+                    );
 
-                    // 4️⃣ Auto-create Report Header (if not exists)
+                    // Auto-create Report Header (if not exists)
                     var existingReport = await _db.ReportHeaders
                         .FirstOrDefaultAsync(r => r.SampleID == sample.ID && r.IsActive);
 
@@ -1795,19 +2308,18 @@ namespace LIMSApi.ServiceWORepo
 
                         _db.ReportHeaders.Add(report);
                         await _db.SaveChangesAsync();
-                        // Fix 3C — Do NOT auto-start Report Review; user triggers it via SubmitForReportReview
                     }
 
-                    // 5️⃣ Check inward-level testing status (informational only - price calculation happens after approval)
                     await CheckAndUpdateInwardTestingStatusAsync(sample.InwardID);
-
                 }
+
                 await trx.CommitAsync();
 
-                // Return timing info
+                // Return timing and pass/fail info
                 response.TestEndTime = header.TestEndTime ?? header.CompletedAt;
                 var employee = await _db.EmployeeMasters.FindAsync(loggedInUser.EmployeeID);
                 response.PerformedByName = employee?.Name ?? "";
+                response.IsOverallPass = header.IsOverallPass;
             }
             catch (Exception)
             {
@@ -2469,16 +2981,211 @@ namespace LIMSApi.ServiceWORepo
         }
 
         // =====================================================================
+        //  GET PARAMETERS FOR TEST METHOD (WITH MATCHED SPEC RANGES)
+        // =====================================================================
+        public async Task<List<MethodParameterForHeaderDto>> GetMethodParametersForHeader(long headerId, long methodOrVersionId)
+        {
+            var header = await _db.TestResultHeaders
+                .Include(h => h.Parameters)
+                .Include(h => h.Sample)
+                .FirstOrDefaultAsync(h => h.ID == headerId);
+
+            if (header == null)
+                throw new KeyNotFoundException($"Test result header with ID {headerId} not found.");
+
+            // 1. Existing parameter IDs in this header to flag duplicates
+            var existingParamIds = header.Parameters != null
+                ? header.Parameters.Select(p => p.ParameterID).ToHashSet()
+                : new HashSet<long>();
+
+            // 2. Candidate Material Specification Grade IDs
+            var candidateSpecGradeIds = new List<long>();
+            if (header.Sample?.SpecificationGradeID.HasValue == true && header.Sample.SpecificationGradeID.Value > 0)
+            {
+                candidateSpecGradeIds.Add(header.Sample.SpecificationGradeID.Value);
+            }
+            if (header.Sample?.AssignedGradeID.HasValue == true && header.Sample.AssignedGradeID.Value > 0 && !candidateSpecGradeIds.Contains(header.Sample.AssignedGradeID.Value))
+            {
+                candidateSpecGradeIds.Add(header.Sample.AssignedGradeID.Value);
+            }
+
+            if (header.TestPlanID > 0)
+            {
+                var plan = await _db.TestPlans
+                    .Include(p => p.GeneralTests)
+                    .Include(p => p.ChemicalTests)
+                    .FirstOrDefaultAsync(p => p.ID == header.TestPlanID);
+
+                if (plan != null)
+                {
+                    var gt = plan.GeneralTests.FirstOrDefault(g => g.LaboratoryTestSubGroupID == header.LaboratoryTestID || g.Methods.Any(m => m.LaboratoryTestID == header.LaboratoryTestID));
+                    if (gt != null)
+                    {
+                        if (gt.Specification1.HasValue && gt.Specification1.Value > 0 && !candidateSpecGradeIds.Contains(gt.Specification1.Value))
+                            candidateSpecGradeIds.Insert(0, gt.Specification1.Value);
+                        if (gt.Specification2.HasValue && gt.Specification2.Value > 0 && !candidateSpecGradeIds.Contains(gt.Specification2.Value))
+                            candidateSpecGradeIds.Add(gt.Specification2.Value);
+                    }
+                    else
+                    {
+                        foreach (var g in plan.GeneralTests)
+                        {
+                            if (g.Specification1.HasValue && g.Specification1.Value > 0 && !candidateSpecGradeIds.Contains(g.Specification1.Value))
+                                candidateSpecGradeIds.Add(g.Specification1.Value);
+                            if (g.Specification2.HasValue && g.Specification2.Value > 0 && !candidateSpecGradeIds.Contains(g.Specification2.Value))
+                                candidateSpecGradeIds.Add(g.Specification2.Value);
+                        }
+                    }
+
+                    var ct = plan.ChemicalTests.FirstOrDefault(c => (c.TestTypes != null && c.TestTypes.Any(tt => tt.LaboratoryTestID == header.LaboratoryTestID)) || (c.LaboratoryTestAnalysisTypeID.HasValue && c.LaboratoryTestAnalysisTypeID.Value == header.LaboratoryTestID));
+                    if (ct != null)
+                    {
+                        if (ct.Specification1.HasValue && ct.Specification1.Value > 0 && !candidateSpecGradeIds.Contains(ct.Specification1.Value))
+                            candidateSpecGradeIds.Insert(0, ct.Specification1.Value);
+                        if (ct.Specification2.HasValue && ct.Specification2.Value > 0 && !candidateSpecGradeIds.Contains(ct.Specification2.Value))
+                            candidateSpecGradeIds.Add(ct.Specification2.Value);
+                    }
+                    else
+                    {
+                        foreach (var c in plan.ChemicalTests)
+                        {
+                            if (c.Specification1.HasValue && c.Specification1.Value > 0 && !candidateSpecGradeIds.Contains(c.Specification1.Value))
+                                candidateSpecGradeIds.Add(c.Specification1.Value);
+                            if (c.Specification2.HasValue && c.Specification2.Value > 0 && !candidateSpecGradeIds.Contains(c.Specification2.Value))
+                                candidateSpecGradeIds.Add(c.Specification2.Value);
+                        }
+                    }
+                }
+            }
+
+            // 3. Resolve TestMethodSpecificationVersion and its Parameters
+            TestMethodSpecificationVersion? version = null;
+            var directVersion = await _db.TestMethodSpecificationVersions
+                .Include(v => v.Parameters).ThenInclude(p => p.Parameter).ThenInclude(pm => pm.ParameterUnit)
+                .Include(v => v.Parameters).ThenInclude(p => p.ParameterUnit)
+                .Include(v => v.TestMethodSpecification)
+                .FirstOrDefaultAsync(v => v.ID == methodOrVersionId);
+
+            if (directVersion != null)
+            {
+                version = directVersion;
+            }
+            else
+            {
+                var spec = await _db.TestMethodSpecifications
+                    .Include(s => s.Versions).ThenInclude(v => v.Parameters).ThenInclude(p => p.Parameter).ThenInclude(pm => pm.ParameterUnit)
+                    .Include(s => s.Versions).ThenInclude(v => v.Parameters).ThenInclude(p => p.ParameterUnit)
+                    .FirstOrDefaultAsync(s => s.ID == methodOrVersionId);
+
+                if (spec != null && spec.Versions.Any())
+                {
+                    version = spec.Versions.FirstOrDefault(v => v.IsDefault && v.Status == VersionStatus.Active)
+                           ?? spec.Versions.FirstOrDefault(v => v.Status == VersionStatus.Active)
+                           ?? spec.Versions.OrderByDescending(v => v.EffectiveDate).FirstOrDefault();
+                }
+            }
+
+            if (version == null)
+            {
+                return new List<MethodParameterForHeaderDto>();
+            }
+
+            // 4. Preload SpecificationLines
+            var specLines = new List<SpecificationLine>();
+            string specName = string.Empty;
+            if (candidateSpecGradeIds.Any())
+            {
+                specLines = await _db.SpecificationLines
+                    .Include(sl => sl.ParameterUnit)
+                    .Include(sl => sl.SpecificationGrade)
+                    .Where(sl => sl.SpecificationGradeID.HasValue
+                              && candidateSpecGradeIds.Contains(sl.SpecificationGradeID.Value)
+                              && sl.ParameterID.HasValue)
+                    .ToListAsync();
+
+                var primaryGradeId = candidateSpecGradeIds.First();
+                var gradeEntity = await _db.SpecificationGrades.FirstOrDefaultAsync(g => g.ID == primaryGradeId);
+                if (gradeEntity != null)
+                {
+                    var headerEntity = await _db.SpecificationHeaders.FirstOrDefaultAsync(h => h.ID == gradeEntity.SpecificationHeaderID);
+                    specName = headerEntity != null ? $"{headerEntity.Standard} {gradeEntity.Grade}".Trim() : gradeEntity.Grade;
+                }
+            }
+
+            // 5. Construct MethodParameterForHeaderDto list
+            var result = new List<MethodParameterForHeaderDto>();
+            var orderedVersionParams = version.Parameters.OrderBy(p => p.SortOrder).ToList();
+
+            foreach (var vp in orderedVersionParams)
+            {
+                var pm = vp.Parameter;
+                if (pm == null) continue;
+
+                SpecificationLine? matchedLine = null;
+                foreach (var gradeId in candidateSpecGradeIds)
+                {
+                    matchedLine = specLines.FirstOrDefault(sl => sl.SpecificationGradeID == gradeId && sl.ParameterID == vp.ParameterID);
+                    if (matchedLine != null) break;
+                }
+
+                if (matchedLine == null && candidateSpecGradeIds.Any())
+                {
+                    matchedLine = specLines.FirstOrDefault(sl => sl.ParameterID == vp.ParameterID);
+                }
+
+                var unit = vp.ParameterUnit?.Name
+                        ?? matchedLine?.ParameterUnit?.Name
+                        ?? pm.ParameterUnit?.Name
+                        ?? string.Empty;
+
+                string? rangeStr = null;
+                if (matchedLine != null)
+                {
+                    if (matchedLine.MinValue.HasValue && matchedLine.MaxValue.HasValue)
+                        rangeStr = $"{matchedLine.MinValue.Value:G29} - {matchedLine.MaxValue.Value:G29}";
+                    else if (matchedLine.MinValue.HasValue)
+                        rangeStr = $">= {matchedLine.MinValue.Value:G29}";
+                    else if (matchedLine.MaxValue.HasValue)
+                        rangeStr = $"<= {matchedLine.MaxValue.Value:G29}";
+                    else if (!string.IsNullOrWhiteSpace(matchedLine.TextValue))
+                        rangeStr = matchedLine.TextValue.Trim();
+                    else if (!string.IsNullOrWhiteSpace(matchedLine.Notes))
+                        rangeStr = matchedLine.Notes.Trim();
+                }
+
+                result.Add(new MethodParameterForHeaderDto
+                {
+                    ParameterID = vp.ParameterID,
+                    ParameterName = pm.Name,
+                    Unit = unit,
+                    MinValue = matchedLine?.MinValue,
+                    MaxValue = matchedLine?.MaxValue,
+                    SpecMinValue = matchedLine?.MinValue,
+                    SpecMaxValue = matchedLine?.MaxValue,
+                    SpecRange = rangeStr,
+                    AcceptanceCriteria = matchedLine?.Notes,
+                    Equation = matchedLine?.Equation ?? pm.Formula,
+                    IsAlreadyAdded = existingParamIds.Contains(vp.ParameterID),
+                    Comment = vp.Comment,
+                    SpecificationName = specName
+                });
+            }
+
+            return result;
+        }
+
+        // =====================================================================
         //  ADD PARAMETER FROM ANOTHER TEST METHOD
         // =====================================================================
         public async Task<object> AddParameterFromMethod(long headerId, AddParameterFromMethodDto dto)
         {
             var header = await _db.TestResultHeaders
                 .Include(h => h.Parameters)
+                .Include(h => h.Sample)
                 .FirstOrDefaultAsync(h => h.ID == headerId);
 
             if (header == null)
-                throw new Exception("TestResultHeader not found.");
+                throw new KeyNotFoundException("TestResultHeader not found.");
 
             // Load the parameter from master
             var masterParam = await _db.ParameterMasters
@@ -2486,27 +3193,134 @@ namespace LIMSApi.ServiceWORepo
                 .FirstOrDefaultAsync(p => p.ID == dto.ParameterID);
 
             if (masterParam == null)
-                throw new Exception($"Parameter with ID {dto.ParameterID} not found in master.");
+                throw new KeyNotFoundException($"Parameter with ID {dto.ParameterID} not found in master.");
 
-            // Check if already added
-            var existing = header.Parameters.FirstOrDefault(p =>
-                p.ParameterID == dto.ParameterID && p.SourceTestMethodId == dto.SourceTestMethodId);
-
+            // STRICT DUPLICATE CHECK: ensure parameter is not already in this header
+            var existing = header.Parameters.FirstOrDefault(p => p.ParameterID == dto.ParameterID);
             if (existing != null)
-                throw new Exception("This parameter from the specified method is already added.");
+                throw new InvalidOperationException($"Parameter '{masterParam.Name}' is already present in this test result.");
+
+            long methodId = dto.TestMethodId.HasValue && dto.TestMethodId.Value > 0
+                ? dto.TestMethodId.Value
+                : dto.SourceTestMethodId;
+
+            string testMethodName = string.Empty;
+            if (methodId > 0)
+            {
+                var version = await _db.TestMethodSpecificationVersions
+                    .Include(v => v.TestMethodSpecification)
+                    .FirstOrDefaultAsync(v => v.ID == methodId);
+
+                if (version != null)
+                {
+                    testMethodName = !string.IsNullOrWhiteSpace(version.TestMethodSpecification?.Name)
+                        ? $"{version.TestMethodSpecification.Name} ({version.Version})"
+                        : version.Version;
+                }
+                else
+                {
+                    var spec = await _db.TestMethodSpecifications.FirstOrDefaultAsync(s => s.ID == methodId);
+                    if (spec != null) testMethodName = spec.Name;
+                }
+            }
+
+            // Resolve Candidate Material Specification Grade IDs to match range
+            var candidateSpecGradeIds = new List<long>();
+            if (header.Sample?.SpecificationGradeID.HasValue == true && header.Sample.SpecificationGradeID.Value > 0)
+                candidateSpecGradeIds.Add(header.Sample.SpecificationGradeID.Value);
+
+            if (header.Sample?.AssignedGradeID.HasValue == true && header.Sample.AssignedGradeID.Value > 0 && !candidateSpecGradeIds.Contains(header.Sample.AssignedGradeID.Value))
+                candidateSpecGradeIds.Add(header.Sample.AssignedGradeID.Value);
+
+            if (header.TestPlanID > 0)
+            {
+                var plan = await _db.TestPlans
+                    .Include(p => p.GeneralTests)
+                    .Include(p => p.ChemicalTests)
+                    .FirstOrDefaultAsync(p => p.ID == header.TestPlanID);
+
+                if (plan != null)
+                {
+                    var gt = plan.GeneralTests.FirstOrDefault(g => g.LaboratoryTestSubGroupID == header.LaboratoryTestID || g.Methods.Any(m => m.LaboratoryTestID == header.LaboratoryTestID));
+                    if (gt != null)
+                    {
+                        if (gt.Specification1.HasValue && gt.Specification1.Value > 0 && !candidateSpecGradeIds.Contains(gt.Specification1.Value))
+                            candidateSpecGradeIds.Insert(0, gt.Specification1.Value);
+                        if (gt.Specification2.HasValue && gt.Specification2.Value > 0 && !candidateSpecGradeIds.Contains(gt.Specification2.Value))
+                            candidateSpecGradeIds.Add(gt.Specification2.Value);
+                    }
+                    else
+                    {
+                        foreach (var g in plan.GeneralTests)
+                        {
+                            if (g.Specification1.HasValue && g.Specification1.Value > 0 && !candidateSpecGradeIds.Contains(g.Specification1.Value))
+                                candidateSpecGradeIds.Add(g.Specification1.Value);
+                        }
+                    }
+
+                    var ct = plan.ChemicalTests.FirstOrDefault(c => (c.TestTypes != null && c.TestTypes.Any(tt => tt.LaboratoryTestID == header.LaboratoryTestID)) || (c.LaboratoryTestAnalysisTypeID.HasValue && c.LaboratoryTestAnalysisTypeID.Value == header.LaboratoryTestID));
+                    if (ct != null)
+                    {
+                        if (ct.Specification1.HasValue && ct.Specification1.Value > 0 && !candidateSpecGradeIds.Contains(ct.Specification1.Value))
+                            candidateSpecGradeIds.Insert(0, ct.Specification1.Value);
+                        if (ct.Specification2.HasValue && ct.Specification2.Value > 0 && !candidateSpecGradeIds.Contains(ct.Specification2.Value))
+                            candidateSpecGradeIds.Add(ct.Specification2.Value);
+                    }
+                    else
+                    {
+                        foreach (var c in plan.ChemicalTests)
+                        {
+                            if (c.Specification1.HasValue && c.Specification1.Value > 0 && !candidateSpecGradeIds.Contains(c.Specification1.Value))
+                                candidateSpecGradeIds.Add(c.Specification1.Value);
+                        }
+                    }
+                }
+            }
+
+            // Find matching SpecificationLine for this parameter
+            SpecificationLine? specLine = null;
+            if (candidateSpecGradeIds.Any())
+            {
+                foreach (var gradeId in candidateSpecGradeIds)
+                {
+                    specLine = await _db.SpecificationLines
+                        .Include(sl => sl.ParameterUnit)
+                        .FirstOrDefaultAsync(sl => sl.SpecificationGradeID == gradeId && sl.ParameterID == dto.ParameterID);
+                    if (specLine != null) break;
+                }
+            }
+
+            var formulaExpr = specLine != null && !string.IsNullOrWhiteSpace(specLine.Equation)
+                ? specLine.Equation.Trim()
+                : masterParam.Formula;
+
+            var isCalc = (specLine != null && !string.IsNullOrWhiteSpace(specLine.Equation))
+                || masterParam.IsCalculated;
+
+            var unit = specLine?.ParameterUnit?.Name
+                ?? masterParam.ParameterUnit?.Name
+                ?? string.Empty;
 
             var param = new TestResultParameter
             {
                 TestResultHeaderID = headerId,
                 ParameterID = masterParam.ID,
                 ParameterName = masterParam.Name,
-                Unit = masterParam.ParameterUnit?.Name ?? string.Empty,
+                Unit = unit,
                 IsAdditional = true,
                 IsStandalone = false,
-                SourceTestMethodId = dto.SourceTestMethodId,
-                Formula = masterParam.Formula,
-                IsCalculated = masterParam.IsCalculated,
-                FormulaExpression = masterParam.Formula
+                SourceTestMethodId = methodId > 0 ? methodId : null,
+                TestMethodUsed = !string.IsNullOrWhiteSpace(testMethodName) ? testMethodName : null,
+                Formula = formulaExpr,
+                IsCalculated = isCalc,
+                FormulaExpression = formulaExpr,
+                MinValue = specLine?.MinValue,
+                MaxValue = specLine?.MaxValue,
+                SpecMinValue = specLine?.MinValue,
+                SpecMaxValue = specLine?.MaxValue,
+                AcceptanceCriteria = specLine?.Notes,
+                SpecificationLineID = specLine?.ID,
+                ParameterType = "Quantitative"
             };
 
             _db.TestResultParameters.Add(param);
@@ -2515,11 +3329,14 @@ namespace LIMSApi.ServiceWORepo
             return new
             {
                 Success = true,
-                Message = "Parameter added from test method successfully.",
+                Message = $"Parameter '{param.ParameterName}' added from test method successfully.",
                 ParameterId = param.ID,
                 param.ParameterName,
                 param.Unit,
-                SourceTestMethodId = dto.SourceTestMethodId
+                param.MinValue,
+                param.MaxValue,
+                SourceTestMethodId = param.SourceTestMethodId,
+                param.TestMethodUsed
             };
         }
 

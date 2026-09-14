@@ -132,15 +132,29 @@ namespace LIMSApi.Services
             existingTestMethodSpecification.ModifiedOn = DateTime.UtcNow;
             existingTestMethodSpecification.ModifiedBy = loggedInUser.EmployeeID;
 
-            // Sync metal classifications (replace set)
-            existingTestMethodSpecification.MetalClassifications.Clear();
+            // Sync metal classifications (diff sync)
+            var incomingMetalIds = model.MetalClassifications.Select(m => m.MetalClassificationID).ToHashSet();
+            var metalsToRemove = existingTestMethodSpecification.MetalClassifications
+                .Where(m => !incomingMetalIds.Contains(m.MetalClassificationID))
+                .ToList();
+            foreach (var item in metalsToRemove)
+            {
+                existingTestMethodSpecification.MetalClassifications.Remove(item);
+            }
+
+            var existingMetalIds = existingTestMethodSpecification.MetalClassifications
+                .Select(m => m.MetalClassificationID)
+                .ToHashSet();
             foreach (var mc in model.MetalClassifications)
             {
-                existingTestMethodSpecification.MetalClassifications.Add(new TestMethodSpecificationMetalClassification
+                if (!existingMetalIds.Contains(mc.MetalClassificationID))
                 {
-                    TestMethodSpecificationID = existingTestMethodSpecification.ID,
-                    MetalClassificationID = mc.MetalClassificationID
-                });
+                    existingTestMethodSpecification.MetalClassifications.Add(new TestMethodSpecificationMetalClassification
+                    {
+                        TestMethodSpecificationID = existingTestMethodSpecification.ID,
+                        MetalClassificationID = mc.MetalClassificationID
+                    });
+                }
             }
 
             var activeCount = model.Versions.Count(v => v.Status == VersionStatus.Active);
@@ -197,10 +211,51 @@ namespace LIMSApi.Services
                     existingVersion.UploadReferenceID = versionModel.UploadReferenceID;
                     existingVersion.IsDefault = versionModel.IsDefault;
 
-                    // Sync this version's parameters (replace set).
-                    existingVersion.Parameters.Clear();
-                    foreach (var p in BuildVersionParameters(versionModel))
-                        existingVersion.Parameters.Add(p);
+                    // Sync this version's parameters (diff sync)
+                    var incomingParams = (versionModel.Parameters ?? new List<TestMethodSpecificationParameter>())
+                        .Where(p => p.ParameterID > 0)
+                        .ToList();
+                    var incomingParamIds = incomingParams.Where(p => p.ID > 0).Select(p => p.ID).ToHashSet();
+
+                    // Remove parameters deleted in UI
+                    var paramsToRemove = existingVersion.Parameters
+                        .Where(p => p.ID > 0 && !incomingParamIds.Contains(p.ID))
+                        .ToList();
+                    foreach (var p in paramsToRemove)
+                    {
+                        existingVersion.Parameters.Remove(p);
+                    }
+
+                    // Update existing parameters or add new parameters
+                    int pIdx = 0;
+                    foreach (var p in incomingParams)
+                    {
+                        pIdx++;
+                        var sort = p.SortOrder != 0 ? p.SortOrder : pIdx;
+                        var existingParam = p.ID > 0
+                            ? existingVersion.Parameters.FirstOrDefault(x => x.ID == p.ID)
+                            : null;
+
+                        if (existingParam != null)
+                        {
+                            existingParam.ParameterID = p.ParameterID;
+                            existingParam.ParameterUnitID = p.ParameterUnitID;
+                            existingParam.ParameterUnitEquivalentID = p.ParameterUnitEquivalentID;
+                            existingParam.Comment = p.Comment;
+                            existingParam.SortOrder = sort;
+                        }
+                        else
+                        {
+                            existingVersion.Parameters.Add(new TestMethodSpecificationParameter
+                            {
+                                ParameterID = p.ParameterID,
+                                ParameterUnitID = p.ParameterUnitID,
+                                ParameterUnitEquivalentID = p.ParameterUnitEquivalentID,
+                                Comment = p.Comment,
+                                SortOrder = sort
+                            });
+                        }
+                    }
                 }
                 else
                 {

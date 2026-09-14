@@ -195,7 +195,11 @@ namespace LIMSApi.Services
                 .Select(m => new DropdwonSelector
                 {
                     Id = m.TestMethodSpecificationID,
-                    Name = m.TestMethodSpecification!.DisplayTitle ?? m.TestMethodSpecification.Name
+                    Name = !string.IsNullOrEmpty(m.TestMethodSpecification!.DisplayTitle)
+                        ? m.TestMethodSpecification.DisplayTitle
+                        : (!string.IsNullOrEmpty(m.TestMethodSpecification.TestMethodStandard)
+                            ? m.TestMethodSpecification.TestMethodStandard
+                            : m.TestMethodSpecification.Name)
                 })
                 .Distinct()
                 .ToListAsync();

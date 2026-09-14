@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Middleware;
 using LIMSApi.Models;
@@ -99,6 +99,17 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> CheckOrientationMismatch(long headerId)
         {
             var result = await _service.CheckOrientationMismatch(headerId);
+            return Ok(result);
+        }
+
+        // =============================================================
+        // Validate Test Configuration
+        // =============================================================
+        [HttpGet("validate-test-configuration/{headerId}")]
+        [RequirePermission(Permissions.Testing.Read)]
+        public async Task<IActionResult> ValidateTestConfiguration(long headerId)
+        {
+            var result = await _service.ValidateTestConfiguration(headerId);
             return Ok(result);
         }
 
@@ -241,6 +252,18 @@ namespace LIMSApi.Controllers
         }
 
         // =============================================================
+        // Reselect plan method / specification from result entry
+        // =============================================================
+        [HttpPut("update-plan-method")]
+        public async Task<IActionResult> UpdatePlanMethod([FromBody] UpdateResultPlanMethodDto dto)
+        {
+            if (dto == null || dto.HeaderId <= 0)
+                return BadRequest("Invalid payload.");
+            var result = await _service.UpdateResultPlanMethodAsync(dto);
+            return Ok(result);
+        }
+
+        // =============================================================
         // Add Standalone Parameter
         // =============================================================
         [HttpPost("add-standalone-parameter/{headerId}")]
@@ -266,6 +289,13 @@ namespace LIMSApi.Controllers
         // =============================================================
         // Add Parameter from Another Test Method
         // =============================================================
+        [HttpGet("method-parameters-for-header/{headerId}/{methodId}")]
+        public async Task<IActionResult> GetMethodParametersForHeader(long headerId, long methodId)
+        {
+            var result = await _service.GetMethodParametersForHeader(headerId, methodId);
+            return Ok(result);
+        }
+
         [HttpPost("add-parameter-from-method/{headerId}")]
         public async Task<IActionResult> AddParameterFromMethod(long headerId, [FromBody] AddParameterFromMethodDto dto)
         {

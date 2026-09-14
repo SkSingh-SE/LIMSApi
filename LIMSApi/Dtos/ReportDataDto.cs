@@ -140,10 +140,13 @@ namespace LIMSApi.Dtos
     {
         public string Name { get; set; } = string.Empty;
         public string Unit { get; set; } = string.Empty;
+        public string? Requirement { get; set; }
         public string? SpecMin { get; set; }
         public string? SpecMax { get; set; }
         public string? Result { get; set; }
         public string Status { get; set; } = string.Empty; // Pass / Fail / N/A
+        public string? MethodUsed { get; set; }
+        public string? Remarks { get; set; }
         public bool? IsWithinNablScope { get; set; }
         public string? NablScopeStatus { get; set; } // WithinScope / OutsideScope / NotAccredited
         public decimal? ExpandedUncertainty { get; set; }
