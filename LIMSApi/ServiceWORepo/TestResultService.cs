@@ -1984,21 +1984,30 @@ namespace LIMSApi.ServiceWORepo
                         .ThenInclude(ct => ct.Methods)
                 .FirstOrDefaultAsync(s => s.ID == header.SampleID);
 
+            // Family IDs: header stores the parent lab test, while plan/methods may reference
+            // subgroup or analysis-type IDs — match across the whole test family
+            var testFamilyIds = new HashSet<long> { header.LaboratoryTestID };
+            foreach (var sgId in await _db.LaboratoryTestSubGroups.Where(sg => sg.LaboratoryTestID == header.LaboratoryTestID).Select(sg => sg.ID).ToListAsync())
+                testFamilyIds.Add(sgId);
+            var famSubIds = testFamilyIds.ToList();
+            foreach (var atId in await _db.LaboratoryTestAnalysisTypes.Where(at => famSubIds.Contains(at.LaboratoryTestSubGroupID)).Select(at => at.ID).ToListAsync())
+                testFamilyIds.Add(atId);
+
             if (sample != null)
             {
                 var matchingGeneralMethod = sample.TestPlans
                     .Where(tp => header.TestPlanID == 0 || tp.ID == header.TestPlanID)
                     .SelectMany(tp => tp.GeneralTests)
-                    .Where(gt => gt.LaboratoryTestSubGroupID == header.LaboratoryTestID)
+                    .Where(gt => (gt.LaboratoryTestSubGroupID.HasValue && testFamilyIds.Contains(gt.LaboratoryTestSubGroupID.Value)) || gt.Methods.Any(m => !m.Cancel && testFamilyIds.Contains(m.LaboratoryTestID)))
                     .SelectMany(gt => gt.Methods)
-                    .FirstOrDefault(m => !m.Cancel && (header.TestID == null || m.ID == header.TestID.Value || m.LaboratoryTestID == header.LaboratoryTestID));
+                    .FirstOrDefault(m => !m.Cancel && (header.TestID == null || m.ID == header.TestID.Value || testFamilyIds.Contains(m.LaboratoryTestID)));
 
                 var matchingChemMethod = sample.TestPlans
                     .Where(tp => header.TestPlanID == 0 || tp.ID == header.TestPlanID)
                     .SelectMany(tp => tp.ChemicalTests)
-                    .Where(ct => ct.LaboratoryTestAnalysisTypeID == header.LaboratoryTestID)
+                    .Where(ct => (ct.LaboratoryTestAnalysisTypeID.HasValue && testFamilyIds.Contains(ct.LaboratoryTestAnalysisTypeID.Value)) || ct.Methods.Any(m => !m.Cancel && testFamilyIds.Contains(m.LaboratoryTestAnalysisTypeID)))
                     .SelectMany(ct => ct.Methods)
-                    .FirstOrDefault(m => !m.Cancel && (header.TestID == null || m.ID == header.TestID.Value || m.LaboratoryTestAnalysisTypeID == header.LaboratoryTestID));
+                    .FirstOrDefault(m => !m.Cancel && (header.TestID == null || m.ID == header.TestID.Value || testFamilyIds.Contains(m.LaboratoryTestAnalysisTypeID)));
 
                 bool prepReq = (matchingGeneralMethod != null && matchingGeneralMethod.PreparationRequired)
                     || (matchingChemMethod != null && matchingChemMethod.PreparationRequired);
@@ -2010,7 +2019,7 @@ namespace LIMSApi.ServiceWORepo
                         .FirstOrDefaultAsync(ti => ti.SampleID == header.SampleID
                             && ti.IsActive
                             && ((plannedMethodId > 0 && ti.PlannedTestMethodID == plannedMethodId)
-                                || ti.LaboratoryTestID == header.LaboratoryTestID));
+                                || testFamilyIds.Contains(ti.LaboratoryTestID)));
 
                     if (prepItem == null || (prepItem.Status != "Completed" && prepItem.Status != "QCVerified"))
                     {
@@ -2048,21 +2057,30 @@ namespace LIMSApi.ServiceWORepo
                 .FirstOrDefaultAsync(s => s.ID == header.SampleID);
 
             // Test-specific preparation execution guard (Phase 7 Mandate)
+            // Family IDs: header stores the parent lab test, while plan/methods may reference
+            // subgroup or analysis-type IDs — match across the whole test family
+            var testFamilyIds = new HashSet<long> { header.LaboratoryTestID };
+            foreach (var sgId in await _db.LaboratoryTestSubGroups.Where(sg => sg.LaboratoryTestID == header.LaboratoryTestID).Select(sg => sg.ID).ToListAsync())
+                testFamilyIds.Add(sgId);
+            var famSubIds = testFamilyIds.ToList();
+            foreach (var atId in await _db.LaboratoryTestAnalysisTypes.Where(at => famSubIds.Contains(at.LaboratoryTestSubGroupID)).Select(at => at.ID).ToListAsync())
+                testFamilyIds.Add(atId);
+
             if (sample != null)
             {
                 var matchingGeneralMethod = sample.TestPlans
                     .Where(tp => header.TestPlanID == 0 || tp.ID == header.TestPlanID)
                     .SelectMany(tp => tp.GeneralTests)
-                    .Where(gt => gt.LaboratoryTestSubGroupID == header.LaboratoryTestID)
+                    .Where(gt => (gt.LaboratoryTestSubGroupID.HasValue && testFamilyIds.Contains(gt.LaboratoryTestSubGroupID.Value)) || gt.Methods.Any(m => !m.Cancel && testFamilyIds.Contains(m.LaboratoryTestID)))
                     .SelectMany(gt => gt.Methods)
-                    .FirstOrDefault(m => !m.Cancel && (header.TestID == null || m.ID == header.TestID.Value || m.LaboratoryTestID == header.LaboratoryTestID));
+                    .FirstOrDefault(m => !m.Cancel && (header.TestID == null || m.ID == header.TestID.Value || testFamilyIds.Contains(m.LaboratoryTestID)));
 
                 var matchingChemMethod = sample.TestPlans
                     .Where(tp => header.TestPlanID == 0 || tp.ID == header.TestPlanID)
                     .SelectMany(tp => tp.ChemicalTests)
-                    .Where(ct => ct.LaboratoryTestAnalysisTypeID == header.LaboratoryTestID)
+                    .Where(ct => (ct.LaboratoryTestAnalysisTypeID.HasValue && testFamilyIds.Contains(ct.LaboratoryTestAnalysisTypeID.Value)) || ct.Methods.Any(m => !m.Cancel && testFamilyIds.Contains(m.LaboratoryTestAnalysisTypeID)))
                     .SelectMany(ct => ct.Methods)
-                    .FirstOrDefault(m => !m.Cancel && (header.TestID == null || m.ID == header.TestID.Value || m.LaboratoryTestAnalysisTypeID == header.LaboratoryTestID));
+                    .FirstOrDefault(m => !m.Cancel && (header.TestID == null || m.ID == header.TestID.Value || testFamilyIds.Contains(m.LaboratoryTestAnalysisTypeID)));
 
                 bool thisTestPrepRequired = (matchingGeneralMethod != null && matchingGeneralMethod.PreparationRequired)
                     || (matchingChemMethod != null && matchingChemMethod.PreparationRequired);
@@ -2075,7 +2093,7 @@ namespace LIMSApi.ServiceWORepo
                         .FirstOrDefaultAsync(ti => ti.SampleID == header.SampleID
                             && ti.IsActive
                             && ((plannedMethodId > 0 && ti.PlannedTestMethodID == plannedMethodId)
-                                || ti.LaboratoryTestID == header.LaboratoryTestID));
+                                || testFamilyIds.Contains(ti.LaboratoryTestID)));
 
                     if (prepItem == null || (prepItem.Status != "Completed" && prepItem.Status != "QCVerified"))
                     {
