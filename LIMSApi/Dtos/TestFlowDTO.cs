@@ -160,6 +160,13 @@ namespace LIMSApi.Dtos
         public long? PerformedById { get; set; }
     }
 
+    public class UpdateEnvironmentDto
+    {
+        public decimal? RoomTemperature { get; set; }
+        public decimal? RoomHumidity { get; set; }
+        public long? LabRoomId { get; set; }
+    }
+
     public class CalculateParametersResultDto
     {
         public bool Success { get; set; }

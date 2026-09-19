@@ -1,3 +1,5 @@
+using LIMSApi.Data;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -5,6 +7,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace LIMSApi.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(LIMSContext))]
+    [Migration("20260911165500_AddTestPurposeAndRemarksToTestResultHeader")]
     public partial class AddTestPurposeAndRemarksToTestResultHeader : Migration
     {
         /// <inheritdoc />

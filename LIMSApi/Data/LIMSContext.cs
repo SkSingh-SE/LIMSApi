@@ -568,6 +568,10 @@ public partial class LIMSContext : DbContext
             .IsUnique()
             .HasDatabaseName("IX_MessageTemplate_TemplateKey_Channel_Version");
 
+        modelBuilder.Entity<TestResultParameter>()
+            .Property(p => p.Unit)
+            .HasDefaultValue("");
+
         // Workflow → Steps (keep cascade)
         modelBuilder.Entity<WorkflowStep>()
             .HasOne(s => s.Workflow)

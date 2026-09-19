@@ -77,9 +77,12 @@ namespace LIMSApi.ServiceWORepo
         Task<object> AddParameterFromMethod(long headerId, AddParameterFromMethodDto dto);
 
         // -------------------------------------------------------------
-        // Environment at Test Time
+        // Environment at Test Time & Lab Room
         // -------------------------------------------------------------
         Task<EnvironmentAtTimeDto> GetEnvironmentAtTime(long headerId);
+        Task<object> UpdateEnvironmentAsync(long headerId, UpdateEnvironmentDto dto);
+        Task<List<object>> GetLabRoomsDropdownAsync();
+        Task<object> GetDailyEnvironmentAsync(long? labRoomId = null);
 
         // -------------------------------------------------------------
         // Load Parameters from Specification into existing header

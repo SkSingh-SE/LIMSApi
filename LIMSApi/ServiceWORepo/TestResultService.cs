@@ -325,7 +325,7 @@ namespace LIMSApi.ServiceWORepo
                     }
 
                     param.ParameterName = p.ParameterName;
-                    param.Unit = p.Unit;
+                    param.Unit = p.Unit ?? string.Empty;
                     param.Remarks = p.Remarks;
                     param.MinValue = p.MinValue;
                     param.MaxValue = p.MaxValue;
@@ -773,6 +773,26 @@ namespace LIMSApi.ServiceWORepo
                 }
             }
 
+            // Pre-load parameter master metadata (InputType, DropdownOptions, DecimalPrecision, Formula)
+            var allHeaderParamIds = await _db.TestResultParameters
+                .Where(p => _db.TestResultHeaders.Any(h => h.SampleID == sampleId && h.ID == p.TestResultHeaderID))
+                .Select(p => p.ParameterID)
+                .Distinct()
+                .ToListAsync();
+
+            var paramMasterDict = await _db.ParameterMasters
+                .Include(pm => pm.DropdownOptions)
+                .Where(pm => allHeaderParamIds.Contains(pm.ID))
+                .ToDictionaryAsync(pm => pm.ID);
+
+            async Task<ParameterMaster?> GetOrFetchParamMaster(long paramId)
+            {
+                if (paramMasterDict.TryGetValue(paramId, out var pm)) return pm;
+                var fetched = await _db.ParameterMasters.Include(p => p.DropdownOptions).FirstOrDefaultAsync(p => p.ID == paramId);
+                if (fetched != null) paramMasterDict[paramId] = fetched;
+                return fetched;
+            }
+
             var resultPlans = new List<object>();
 
             foreach (var plan in sample.TestPlans)
@@ -834,7 +854,7 @@ namespace LIMSApi.ServiceWORepo
                                     {
                                         ParameterID = p.ParameterID,
                                         ParameterName = p.ParameterName,
-                                        Unit = p.Unit,
+                                        Unit = p.Unit ?? string.Empty,
                                         Value = null,
                                         Formula = p.Formula,
                                         IsCalculated = p.IsCalculated,
@@ -873,6 +893,47 @@ namespace LIMSApi.ServiceWORepo
                         foreach (var header in headers)
                         {
                             header.CertificateNo = inward?.CaseNo;
+                            var paramDtos = new List<object>();
+                            foreach (var p in header.Parameters)
+                            {
+                                var pm = await GetOrFetchParamMaster(p.ParameterID);
+                                var isCalc = p.IsCalculated || (pm != null && pm.IsCalculated) || !string.IsNullOrWhiteSpace(p.Formula) || !string.IsNullOrWhiteSpace(pm?.Formula);
+                                var inputType = pm?.InputType ?? (p.ParameterType == "Qualitative" ? "Text" : "Decimal");
+                                var dropdownOpts = pm?.DropdownOptions?.Where(o => o.IsActive).OrderBy(o => o.DisplayOrder).Select(o => new { displayText = o.DisplayText, value = o.Value, isDefault = o.IsDefault }).ToList() ?? new();
+                                var formulaExpr = !string.IsNullOrWhiteSpace(p.Formula) ? p.Formula : pm?.Formula;
+
+                                paramDtos.Add(new
+                                {
+                                    p.ID,
+                                    p.ParameterID,
+                                    p.ParameterName,
+                                    unit = p.Unit,
+                                    value = p.Value,
+                                    minValue = p.MinValue,
+                                    maxValue = p.MaxValue,
+                                    specMinValue = p.SpecMinValue ?? p.MinValue,
+                                    specMaxValue = p.SpecMaxValue ?? p.MaxValue,
+                                    acceptanceCriteria = p.AcceptanceCriteria,
+                                    p.Remarks,
+                                    formulaExpression = formulaExpr,
+                                    isCalculated = isCalc,
+                                    p.SpecificationLineID,
+                                    isBillable = p.IsBillable,
+                                    isWithinLimit = p.IsWithinLimit,
+                                    resultStatus = p.ResultStatus,
+                                    isStandalone = p.IsStandalone,
+                                    sourceTestMethodId = p.SourceTestMethodId,
+                                    parameterType = p.ParameterType ?? pm?.ParameterType ?? "",
+                                    testMethodUsed = !string.IsNullOrWhiteSpace(p.TestMethodUsed) ? p.TestMethodUsed : (method.StandardID > 0 && standardNameCache.TryGetValue(method.StandardID, out var sn2) ? sn2 : labTestName),
+                                    decimalPrecision = pm?.DecimalPrecision ?? p.DecimalPrecision,
+                                    conversionFactor = p.ConversionFactor,
+                                    convertedValue = p.ConvertedValue,
+                                    selectedUnit = p.SelectedUnit,
+                                    inputType = inputType,
+                                    dropdownOptions = dropdownOpts
+                                });
+                            }
+
                             generalTests.Add(new
                             {
                                 headerId = header.ID,
@@ -882,7 +943,7 @@ namespace LIMSApi.ServiceWORepo
                                 laboratoryTest = labTestName,
                                 sequenceNo = header.SequenceNo,
                                 totalSpecimens = totalSpecimens,
-                                        standard = method.StandardID,
+                                standard = method.StandardID,
                                 standardName = method.StandardID > 0
                                     ? (standardNameCache.TryGetValue(method.StandardID, out var sn) ? sn
                                         : (standardNameCache[method.StandardID] = (await ResolveMethodStandardAsync(null, method.StandardID)).caption))
@@ -918,34 +979,7 @@ namespace LIMSApi.ServiceWORepo
                                 equipmentIdsJson = header.EquipmentIdsJson,
                                 equipmentId = header.EquipmentID,
 
-                                parameters = header.Parameters.Select(p => new
-                                {
-                                    p.ID,
-                                    p.ParameterID,
-                                    p.ParameterName,
-                                    unit = p.Unit,
-                                    value = p.Value,
-                                    minValue = p.MinValue,
-                                    maxValue = p.MaxValue,
-                                    specMinValue = p.SpecMinValue ?? p.MinValue,
-                                    specMaxValue = p.SpecMaxValue ?? p.MaxValue,
-                                    acceptanceCriteria = p.AcceptanceCriteria,
-                                    p.Remarks,
-                                    formulaExpression = p.Formula,
-                                    p.IsCalculated,
-                                    p.SpecificationLineID,
-                                    isBillable = p.IsBillable,
-                                    isWithinLimit = p.IsWithinLimit,
-                                    resultStatus = p.ResultStatus,
-                                    isStandalone = p.IsStandalone,
-                                    sourceTestMethodId = p.SourceTestMethodId,
-                                    parameterType = p.ParameterType,
-                                    testMethodUsed = !string.IsNullOrWhiteSpace(p.TestMethodUsed) ? p.TestMethodUsed : (method.StandardID > 0 && standardNameCache.TryGetValue(method.StandardID, out var sn2) ? sn2 : labTestName),
-                                    decimalPrecision = p.DecimalPrecision,
-                                    conversionFactor = p.ConversionFactor,
-                                    convertedValue = p.ConvertedValue,
-                                    selectedUnit = p.SelectedUnit
-                                }).ToList(),
+                                parameters = paramDtos,
 
                                 images = header.Images.Select(img => new
                                 {
@@ -1002,6 +1036,47 @@ namespace LIMSApi.ServiceWORepo
                             }
                             header.CertificateNo = inward?.CaseNo;
                             var ctStandardName = await GetChemMethodCaptionAsync(ct);
+
+                            var chemParamDtos = new List<object>();
+                            foreach (var p in header.Parameters)
+                            {
+                                var pm = await GetOrFetchParamMaster(p.ParameterID);
+                                var isCalc = p.IsCalculated || (pm != null && pm.IsCalculated) || !string.IsNullOrWhiteSpace(p.Formula) || !string.IsNullOrWhiteSpace(pm?.Formula);
+                                var inputType = pm?.InputType ?? (p.ParameterType == "Qualitative" ? "Text" : "Decimal");
+                                var dropdownOpts = pm?.DropdownOptions?.Where(o => o.IsActive).OrderBy(o => o.DisplayOrder).Select(o => new { displayText = o.DisplayText, value = o.Value, isDefault = o.IsDefault }).ToList() ?? new();
+                                var formulaExpr = !string.IsNullOrWhiteSpace(p.Formula) ? p.Formula : pm?.Formula;
+
+                                chemParamDtos.Add(new
+                                {
+                                    p.ID,
+                                    p.ParameterID,
+                                    p.ParameterName,
+                                    unit = p.Unit,
+                                    value = p.Value,
+                                    minValue = p.MinValue,
+                                    maxValue = p.MaxValue,
+                                    specMinValue = p.SpecMinValue ?? p.MinValue,
+                                    specMaxValue = p.SpecMaxValue ?? p.MaxValue,
+                                    acceptanceCriteria = p.AcceptanceCriteria,
+                                    p.Remarks,
+                                    formulaExpression = formulaExpr,
+                                    isCalculated = isCalc,
+                                    p.SpecificationLineID,
+                                    p.IsAdditional,
+                                    isBillable = p.IsBillable,
+                                    isWithinLimit = p.IsWithinLimit,
+                                    resultStatus = p.ResultStatus,
+                                    parameterType = p.ParameterType ?? pm?.ParameterType ?? "",
+                                    testMethodUsed = !string.IsNullOrWhiteSpace(p.TestMethodUsed) ? p.TestMethodUsed : (!string.IsNullOrWhiteSpace(ctStandardName) ? ctStandardName : "OES"),
+                                    decimalPrecision = pm?.DecimalPrecision ?? p.DecimalPrecision,
+                                    conversionFactor = p.ConversionFactor,
+                                    convertedValue = p.ConvertedValue,
+                                    selectedUnit = p.SelectedUnit,
+                                    inputType = inputType,
+                                    dropdownOptions = dropdownOpts
+                                });
+                            }
+
                             chemicalTests.Add(new
                             {
                                 headerId = header.ID,
@@ -1051,33 +1126,7 @@ namespace LIMSApi.ServiceWORepo
                                 performedByName = header.PerformedByName,
                                 equipmentIdsJson = header.EquipmentIdsJson,
                                 equipmentId = header.EquipmentID,
-                                parameters = header.Parameters.Select(p => new
-                                {
-                                    p.ID,
-                                    p.ParameterID,
-                                    p.ParameterName,
-                                    unit = p.Unit,
-                                    value = p.Value,
-                                    minValue = p.MinValue,
-                                    maxValue = p.MaxValue,
-                                    specMinValue = p.SpecMinValue ?? p.MinValue,
-                                    specMaxValue = p.SpecMaxValue ?? p.MaxValue,
-                                    acceptanceCriteria = p.AcceptanceCriteria,
-                                    p.Remarks,
-                                    formulaExpression = p.Formula,
-                                    p.IsCalculated,
-                                    p.SpecificationLineID,
-                                    p.IsAdditional,
-                                    isBillable = p.IsBillable,
-                                    isWithinLimit = p.IsWithinLimit,
-                                    resultStatus = p.ResultStatus,
-                                    parameterType = p.ParameterType,
-                                    testMethodUsed = !string.IsNullOrWhiteSpace(p.TestMethodUsed) ? p.TestMethodUsed : (!string.IsNullOrWhiteSpace(ctStandardName) ? ctStandardName : "OES"),
-                                    decimalPrecision = p.DecimalPrecision,
-                                    conversionFactor = p.ConversionFactor,
-                                    convertedValue = p.ConvertedValue,
-                                    selectedUnit = p.SelectedUnit
-                                }).ToList(),
+                                parameters = chemParamDtos,
 
                                 images = header.Images.Select(img => new
                                 {
@@ -1258,8 +1307,8 @@ namespace LIMSApi.ServiceWORepo
                 header.Parameters.Add(new TestResultParameter
                 {
                     ParameterID = el.ParameterID,
-                    ParameterName = pm?.Name ?? el.ParameterUnit /* fallback to whatever available */,
-                    Unit = await ResolveElementUnitAsync(el, pm),
+                    ParameterName = pm?.Name ?? el.ParameterUnit ?? string.Empty,
+                    Unit = (await ResolveElementUnitAsync(el, pm)) ?? string.Empty,
                     Value = null,
                     Formula = null,
                     IsCalculated = false,
@@ -1563,7 +1612,7 @@ namespace LIMSApi.ServiceWORepo
                             {
                                 ParameterID = pm.ID,
                                 ParameterName = pm.Name,
-                                Unit = pm.ParameterUnit?.Name ?? "",
+                                Unit = pm.ParameterUnit?.Name ?? sl.ParameterUnit?.Name ?? string.Empty,
                                 Value = null,
                                 IsCalculated = isCalc,
                                 Formula = formulaExpr,
@@ -1595,7 +1644,7 @@ namespace LIMSApi.ServiceWORepo
                 {
                     ParameterID = p.ParameterID,
                     ParameterName = p.ParameterName,
-                    Unit = p.Unit,
+                    Unit = p.Unit ?? string.Empty,
                     Value = null,
                     Formula = p.Formula,
                     IsCalculated = p.IsCalculated,
@@ -1686,7 +1735,7 @@ namespace LIMSApi.ServiceWORepo
                             {
                                 ParameterID = p.ParameterID,
                                 ParameterName = p.ParameterName,
-                                Unit = p.Unit,
+                                Unit = p.Unit ?? string.Empty,
                                 Value = null,
                                 Formula = p.Formula,
                                 IsCalculated = p.IsCalculated,
@@ -1777,6 +1826,7 @@ namespace LIMSApi.ServiceWORepo
                 var baseQuery = _db.SpecificationLines
                     .Include(sl => sl.Parameter)
                         .ThenInclude(p => p.ParameterUnit)
+                    .Include(sl => sl.ParameterUnit)
                     .Where(sl => sl.SpecificationGradeID.HasValue
                         && specIds.Contains(sl.SpecificationGradeID.Value)
                         && sl.Type == "mechanical"
@@ -1830,11 +1880,15 @@ namespace LIMSApi.ServiceWORepo
                 var formulaExpr = !string.IsNullOrWhiteSpace(specLine.Equation) ? specLine.Equation.Trim() : pm.Formula;
                 var isCalc = !string.IsNullOrWhiteSpace(specLine.Equation) || pm.IsCalculated;
 
+                var unit = pm.ParameterUnit?.Name
+                    ?? specLine.ParameterUnit?.Name
+                    ?? string.Empty;
+
                 result.Add(new TestResultParameter
                 {
                     ParameterID = pm.ID,
                     ParameterName = pm.Name,
-                    Unit = pm.ParameterUnit?.Name,
+                    Unit = unit,
                     Formula = formulaExpr,
                     FormulaExpression = formulaExpr,
                     IsCalculated = isCalc,
@@ -2976,7 +3030,7 @@ namespace LIMSApi.ServiceWORepo
                 TestResultHeaderID = headerId,
                 ParameterID = 0, // standalone — no master parameter reference
                 ParameterName = dto.ParameterName,
-                Unit = dto.Unit,
+                Unit = dto.Unit ?? string.Empty,
                 IsAdditional = true,
                 IsStandalone = true,
                 FormulaExpression = dto.FormulaExpression,
@@ -4086,6 +4140,140 @@ namespace LIMSApi.ServiceWORepo
 
             result.HasMismatches = result.Warnings.Any();
             return result;
+        }
+
+        // -------------------------------------------------------------
+        // Environment Recording & Lab Rooms
+        // -------------------------------------------------------------
+        public async Task<object> UpdateEnvironmentAsync(long headerId, UpdateEnvironmentDto dto)
+        {
+            var header = await _db.TestResultHeaders.FindAsync(headerId);
+            if (header == null)
+                throw new KeyNotFoundException($"TestResultHeader with ID {headerId} not found");
+
+            header.RoomTemperature = dto.RoomTemperature;
+            header.RoomHumidity = dto.RoomHumidity;
+            header.LabRoomId = dto.LabRoomId;
+            header.ModifiedOn = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync();
+
+            string? roomName = null;
+            if (header.LabRoomId.HasValue)
+            {
+                roomName = await _db.LabRooms
+                    .Where(r => r.ID == header.LabRoomId.Value)
+                    .Select(r => r.Name)
+                    .FirstOrDefaultAsync();
+            }
+
+            return new
+            {
+                headerId = header.ID,
+                roomTemperature = header.RoomTemperature,
+                roomHumidity = header.RoomHumidity,
+                labRoomId = header.LabRoomId,
+                labRoomName = roomName
+            };
+        }
+
+        public async Task<List<object>> GetLabRoomsDropdownAsync()
+        {
+            var list = await _db.LabRooms
+                .Where(r => r.IsActive)
+                .OrderBy(r => r.Name)
+                .Select(r => new
+                {
+                    id = r.ID,
+                    name = r.Name,
+                    code = r.Code,
+                    defaultTempMin = r.DefaultTempMin,
+                    defaultTempMax = r.DefaultTempMax,
+                    defaultHumidityMin = r.DefaultHumidityMin,
+                    defaultHumidityMax = r.DefaultHumidityMax
+                })
+                .ToListAsync();
+
+            return list.Cast<object>().ToList();
+        }
+
+        public async Task<object> GetDailyEnvironmentAsync(long? labRoomId = null)
+        {
+            decimal? temp = null;
+            decimal? humidity = null;
+            long? roomId = labRoomId;
+            string? roomName = null;
+
+            if (labRoomId.HasValue)
+            {
+                var roomEnv = await _db.NablEnvironmentMonitorings
+                    .Where(e => e.IsActive && !e.IsObsolete && e.LabRoomId == labRoomId
+                        && e.MonitoringDate != null && e.MonitoringDate.Value.Date == DateTime.UtcNow.Date)
+                    .OrderByDescending(e => e.MonitoringDate)
+                    .FirstOrDefaultAsync();
+
+                if (roomEnv != null)
+                {
+                    temp = roomEnv.Temperature;
+                    humidity = roomEnv.Humidity;
+                }
+
+                var room = await _db.LabRooms.FindAsync(labRoomId.Value);
+                if (room != null)
+                {
+                    roomName = room.Name;
+                }
+            }
+
+            if (temp == null || humidity == null)
+            {
+                var latestEnv = await _db.NablEnvironmentMonitorings
+                    .Where(e => e.IsActive && !e.IsObsolete && e.MonitoringDate != null
+                        && e.MonitoringDate.Value.Date == DateTime.UtcNow.Date)
+                    .OrderByDescending(e => e.MonitoringDate)
+                    .FirstOrDefaultAsync();
+
+                if (latestEnv != null)
+                {
+                    temp ??= latestEnv.Temperature;
+                    humidity ??= latestEnv.Humidity;
+                    if (!roomId.HasValue && latestEnv.LabRoomId.HasValue)
+                    {
+                        roomId = latestEnv.LabRoomId;
+                        var r = await _db.LabRooms.FindAsync(roomId.Value);
+                        if (r != null) roomName = r.Name;
+                    }
+                }
+            }
+
+            // Fallback: if no monitoring today, get the most recent monitoring record
+            if (temp == null || humidity == null)
+            {
+                var anyLatest = await _db.NablEnvironmentMonitorings
+                    .Where(e => e.IsActive && !e.IsObsolete)
+                    .OrderByDescending(e => e.MonitoringDate)
+                    .FirstOrDefaultAsync();
+
+                if (anyLatest != null)
+                {
+                    temp ??= anyLatest.Temperature;
+                    humidity ??= anyLatest.Humidity;
+                    if (!roomId.HasValue && anyLatest.LabRoomId.HasValue)
+                    {
+                        roomId = anyLatest.LabRoomId;
+                        var r = await _db.LabRooms.FindAsync(roomId.Value);
+                        if (r != null) roomName = r.Name;
+                    }
+                }
+            }
+
+            return new
+            {
+                roomTemperature = temp,
+                roomHumidity = humidity,
+                labRoomId = roomId,
+                labRoomName = roomName
+            };
         }
     }
 }

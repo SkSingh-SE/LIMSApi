@@ -526,5 +526,30 @@ namespace LIMSApi.Controllers
             await _service.DeleteMachiningItem(itemId);
             return NoContent();
         }
+
+        // =============================================================
+        // Environment Recording & Lab Rooms
+        // =============================================================
+        [HttpPost("update-environment/{headerId}")]
+        [RequirePermission(Permissions.Testing.SaveResult)]
+        public async Task<IActionResult> UpdateEnvironment(long headerId, [FromBody] UpdateEnvironmentDto dto)
+        {
+            var result = await _service.UpdateEnvironmentAsync(headerId, dto);
+            return Ok(result);
+        }
+
+        [HttpGet("lab-rooms")]
+        public async Task<IActionResult> GetLabRooms()
+        {
+            var result = await _service.GetLabRoomsDropdownAsync();
+            return Ok(result);
+        }
+
+        [HttpGet("daily-environment")]
+        public async Task<IActionResult> GetDailyEnvironment([FromQuery] long? labRoomId)
+        {
+            var result = await _service.GetDailyEnvironmentAsync(labRoomId);
+            return Ok(result);
+        }
     }
 }
