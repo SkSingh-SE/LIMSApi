@@ -21,13 +21,16 @@ if (Test-Path $WebConfigSrc) {
     Copy-Item $WebConfigSrc $WebConfigDst -Force
 }
 
-# Prepare appsettings.Secrets.json with Production (LimsDbConnection) as DefaultConnection
+# Prepare appsettings.Secrets.json with Production (LimsProdConnection) as DefaultConnection
 $SecretsSrc = Join-Path $PSScriptRoot "LIMSApi\appsettings.Secrets.json"
 $SecretsDst = Join-Path $PSScriptRoot "LIMSApi\bin\Release\net8.0\publish\appsettings.Secrets.json"
 if (Test-Path $SecretsSrc) {
     $secrets = Get-Content $SecretsSrc -Raw | ConvertFrom-Json
-    if ($secrets.ConnectionStrings.LimsDbConnection) {
-        $secrets.ConnectionStrings.DefaultConnection = $secrets.ConnectionStrings.LimsDbConnection
+    $prodCs = $secrets.ConnectionStrings.LimsProdConnection
+    if (-not $prodCs) { $prodCs = $secrets.ConnectionStrings.LimsDbConnection }
+    if ($prodCs) {
+        $secrets.ConnectionStrings.DefaultConnection = $prodCs
+        $secrets.ConnectionStrings.LimsProdConnection = $prodCs
     }
     $secrets | ConvertTo-Json -Depth 10 | Set-Content $SecretsDst -Encoding UTF8
 }
