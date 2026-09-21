@@ -153,11 +153,23 @@ namespace LIMSApi.Services
             if (existing == null)
                 throw new InvalidOperationException("Sub-Group not found!");
 
-            await DeleteValidationHelper.ValidateDeleteAsync<LaboratoryTestSubGroup>(_context, id, "Laboratory Test Sub-Group");
+            await DeleteValidationHelper.ValidateDeleteAsync<LaboratoryTestSubGroup>(_context, id, "Laboratory Test Sub-Group", existing.Name);
 
             existing.IsActive = false;
             existing.ModifiedOn = DateTime.UtcNow;
             existing.ModifiedBy = loggedInUser.EmployeeID;
+
+            // Soft-delete any child AnalysisTypes under this SubGroup
+            var childAnalysisTypes = await _context.LaboratoryTestAnalysisTypes
+                .Where(at => at.LaboratoryTestSubGroupID == id && at.IsActive)
+                .ToListAsync();
+
+            foreach (var at in childAnalysisTypes)
+            {
+                at.IsActive = false;
+                at.ModifiedOn = DateTime.UtcNow;
+                at.ModifiedBy = loggedInUser.EmployeeID;
+            }
 
             await _repository.Update(existing);
             _logger.LogInformation("Sub-Group ID '{Id}' deleted.", id);

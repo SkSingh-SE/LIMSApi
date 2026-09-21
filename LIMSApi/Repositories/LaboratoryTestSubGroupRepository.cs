@@ -35,9 +35,9 @@ namespace LIMSApi.Repositories
         {
             return await _context.LaboratoryTestSubGroups
                 .Include(x => x.MetalClassification)
-                .Include(x => x.AnalysisTypes)
+                .Include(x => x.AnalysisTypes.Where(at => at.IsActive))
                     .ThenInclude(s => s.MetalClassification)
-                .Include(x => x.AnalysisTypes)
+                .Include(x => x.AnalysisTypes.Where(at => at.IsActive))
                     .ThenInclude(s => s.AllowedTechniques)
                         .ThenInclude(t => t.AnalysisTechnique)
                 .Include(x => x.Parameters)
@@ -65,9 +65,9 @@ namespace LIMSApi.Repositories
         {
             return await _context.LaboratoryTestSubGroups
                 .Include(x => x.MetalClassification)
-                .Include(x => x.AnalysisTypes)
+                .Include(x => x.AnalysisTypes.Where(at => at.IsActive))
                     .ThenInclude(s => s.MetalClassification)
-                .Include(x => x.AnalysisTypes)
+                .Include(x => x.AnalysisTypes.Where(at => at.IsActive))
                     .ThenInclude(s => s.AllowedTechniques)
                         .ThenInclude(t => t.AnalysisTechnique)
                 .Include(x => x.Parameters)

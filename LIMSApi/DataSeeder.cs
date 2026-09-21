@@ -1671,6 +1671,12 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
             IF @c = 0 INSERT INTO PriceDimensionTypes
                 (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
                 VALUES (N'Algorithm', NULL, 0, N'UserInput', NULL, N'Custom price formula evaluated at runtime (P3 feature)', 21, 0, GETUTCDATE(), N'LIMS', 1);
+
+            -- ChemicalElement: Unified chemical element pricing (Base tier + Special & Super-special surcharges + element counts)
+            SELECT @c = COUNT(1) FROM PriceDimensionTypes WHERE Name = N'ChemicalElement';
+            IF @c = 0 INSERT INTO PriceDimensionTypes
+                (Name, Unit, IsRange, ValueSource, SampleField, Description, SortOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'ChemicalElement', NULL, 0, N'ParameterMaster', NULL, N'Unified chemical pricing: base tier + special & super-special element surcharges + element count slabs', 22, 0, GETUTCDATE(), N'LIMS', 1);
         ");
     }
 

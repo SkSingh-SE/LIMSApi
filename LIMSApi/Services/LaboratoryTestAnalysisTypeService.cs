@@ -159,7 +159,7 @@ namespace LIMSApi.Services
             if (existing == null)
                 throw new InvalidOperationException("Analysis Type not found!");
 
-            await DeleteValidationHelper.ValidateDeleteAsync<LaboratoryTestAnalysisType>(_context, id, "Laboratory Test Analysis Type");
+            await DeleteValidationHelper.ValidateDeleteAsync<LaboratoryTestAnalysisType>(_context, id, "Laboratory Test Analysis Type", existing.Name);
 
             existing.IsActive = false;
             existing.ModifiedOn = DateTime.UtcNow;

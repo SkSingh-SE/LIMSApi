@@ -40,6 +40,12 @@ namespace LIMSApi.Services
                         throw new ArgumentException("ElementCountFormula: Value must be a valid condition (e.g. <=1, ==2, >3) or 'override' for element overrides.");
                 }
 
+                if (model.SelectionType == "ChemicalElement")
+                {
+                    if (string.IsNullOrWhiteSpace(model.Value))
+                        throw new ArgumentException("ChemicalElement: Value must not be empty (e.g. BASE, SPECIAL, SUPER, or element count like 1, 2, 3).");
+                }
+
                 // Extra-tier SpectroCombination configs require a base "Full" config to exist first
                 if (model.SelectionType == "SpectroCombination" && !model.IsBaseConfig)
                 {
@@ -77,6 +83,12 @@ namespace LIMSApi.Services
 
                     if (!isBaseTier && !isOverride)
                         throw new ArgumentException("ElementCountFormula: Value must be a valid condition (e.g. <=1, ==2, >3) or 'override' for element overrides.");
+                }
+
+                if (model.SelectionType == "ChemicalElement")
+                {
+                    if (string.IsNullOrWhiteSpace(model.Value))
+                        throw new ArgumentException("ChemicalElement: Value must not be empty (e.g. BASE, SPECIAL, SUPER, or element count like 1, 2, 3).");
                 }
 
                 // Extra-tier SpectroCombination configs require a base "Full" config to exist

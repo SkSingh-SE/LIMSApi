@@ -404,6 +404,130 @@ namespace LIMSApi.Helpers
                         return $"Test Results: {count} recorded test result(s)";
                     }
                 }
+
+                // General Tests -> Sample Inwards
+                if (tableName.Equals("GeneralTests", StringComparison.OrdinalIgnoreCase))
+                {
+                    var sql = @"
+                        SELECT DISTINCT TOP 5 COALESCE(i.InwardNo, 'Sample Inward') AS [Value]
+                        FROM dbo.GeneralTests gt
+                        JOIN dbo.SampleTestPlans p ON gt.SampleTestPlanID = p.ID
+                        JOIN dbo.SampleDetails sd ON p.SampleDetailID = sd.ID
+                        JOIN dbo.SampleInwards i ON sd.SampleInwardID = i.ID
+                        WHERE gt." + columnName + " = @p0";
+
+                    var names = await context.Database.SqlQueryRaw<string>(sql, entityId).ToListAsync();
+                    var count = await context.Database.SqlQueryRaw<int>(
+                        "SELECT COUNT(*) AS [Value] FROM dbo.GeneralTests WHERE " + columnName + " = @p0", entityId).FirstOrDefaultAsync();
+
+                    if (count > 0)
+                    {
+                        var more = count > names.Count ? $" (+{count - names.Count} more)" : "";
+                        return $"Sample Inwards / General Tests ({count}): {string.Join(", ", names)}{more}";
+                    }
+                }
+
+                // Chemical Tests -> Sample Inwards
+                if (tableName.Equals("ChemicalTests", StringComparison.OrdinalIgnoreCase))
+                {
+                    var sql = @"
+                        SELECT DISTINCT TOP 5 COALESCE(i.InwardNo, ct.ReportNo, 'Sample Inward') AS [Value]
+                        FROM dbo.ChemicalTests ct
+                        JOIN dbo.SampleTestPlans p ON ct.SampleTestPlanID = p.ID
+                        JOIN dbo.SampleDetails sd ON p.SampleDetailID = sd.ID
+                        JOIN dbo.SampleInwards i ON sd.SampleInwardID = i.ID
+                        WHERE ct." + columnName + " = @p0";
+
+                    var names = await context.Database.SqlQueryRaw<string>(sql, entityId).ToListAsync();
+                    var count = await context.Database.SqlQueryRaw<int>(
+                        "SELECT COUNT(*) AS [Value] FROM dbo.ChemicalTests WHERE " + columnName + " = @p0", entityId).FirstOrDefaultAsync();
+
+                    if (count > 0)
+                    {
+                        var more = count > names.Count ? $" (+{count - names.Count} more)" : "";
+                        return $"Sample Inwards / Chemical Tests ({count}): {string.Join(", ", names)}{more}";
+                    }
+                }
+
+                // Test Result Headers -> Sample Inwards
+                if (tableName.Equals("TestResultHeaders", StringComparison.OrdinalIgnoreCase))
+                {
+                    var sql = @"
+                        SELECT DISTINCT TOP 5 COALESCE(i.InwardNo, h.LabNo, 'Test Result') AS [Value]
+                        FROM dbo.TestResultHeaders h
+                        LEFT JOIN dbo.SampleDetails sd ON h.SampleID = sd.ID
+                        LEFT JOIN dbo.SampleInwards i ON sd.SampleInwardID = i.ID
+                        WHERE h." + columnName + " = @p0 AND h.IsActive = 1";
+
+                    var names = await context.Database.SqlQueryRaw<string>(sql, entityId).ToListAsync();
+                    var count = await context.Database.SqlQueryRaw<int>(
+                        "SELECT COUNT(*) AS [Value] FROM dbo.TestResultHeaders WHERE " + columnName + " = @p0 AND IsActive = 1", entityId).FirstOrDefaultAsync();
+
+                    if (count > 0)
+                    {
+                        var more = count > names.Count ? $" (+{count - names.Count} more)" : "";
+                        return $"Test Results ({count}): {string.Join(", ", names)}{more}";
+                    }
+                }
+
+                // Laboratory Test Sub-Groups -> Laboratory Test
+                if (tableName.Equals("LaboratoryTestSubGroups", StringComparison.OrdinalIgnoreCase))
+                {
+                    var sql = @"
+                        SELECT DISTINCT TOP 5 Name AS [Value]
+                        FROM dbo.LaboratoryTestSubGroups
+                        WHERE " + columnName + " = @p0 AND IsActive = 1";
+
+                    var names = await context.Database.SqlQueryRaw<string>(sql, entityId).ToListAsync();
+                    var count = await context.Database.SqlQueryRaw<int>(
+                        "SELECT COUNT(*) AS [Value] FROM dbo.LaboratoryTestSubGroups WHERE " + columnName + " = @p0 AND IsActive = 1", entityId).FirstOrDefaultAsync();
+
+                    if (count > 0)
+                    {
+                        var more = count > names.Count ? $" (+{count - names.Count} more)" : "";
+                        return $"Laboratory Test Sub-Groups ({count}): {string.Join(", ", names)}{more}";
+                    }
+                }
+
+                // Laboratory Test Analysis Types -> Laboratory Test Sub-Group
+                if (tableName.Equals("LaboratoryTestAnalysisTypes", StringComparison.OrdinalIgnoreCase))
+                {
+                    var sql = @"
+                        SELECT DISTINCT TOP 5 Name AS [Value]
+                        FROM dbo.LaboratoryTestAnalysisTypes
+                        WHERE " + columnName + " = @p0 AND IsActive = 1";
+
+                    var names = await context.Database.SqlQueryRaw<string>(sql, entityId).ToListAsync();
+                    var count = await context.Database.SqlQueryRaw<int>(
+                        "SELECT COUNT(*) AS [Value] FROM dbo.LaboratoryTestAnalysisTypes WHERE " + columnName + " = @p0 AND IsActive = 1", entityId).FirstOrDefaultAsync();
+
+                    if (count > 0)
+                    {
+                        var more = count > names.Count ? $" (+{count - names.Count} more)" : "";
+                        return $"Analysis Types ({count}): {string.Join(", ", names)}{more}";
+                    }
+                }
+
+                // Sample Preparation Test Items -> Sample Inwards
+                if (tableName.Equals("SamplePreparationTestItems", StringComparison.OrdinalIgnoreCase))
+                {
+                    var sql = @"
+                        SELECT DISTINCT TOP 5 COALESCE(i.InwardNo, 'Sample Inward') AS [Value]
+                        FROM dbo.SamplePreparationTestItems ti
+                        LEFT JOIN dbo.SampleDetails sd ON ti.SampleID = sd.ID
+                        LEFT JOIN dbo.SampleInwards i ON sd.SampleInwardID = i.ID
+                        WHERE ti." + columnName + " = @p0 AND ti.IsActive = 1";
+
+                    var names = await context.Database.SqlQueryRaw<string>(sql, entityId).ToListAsync();
+                    var count = await context.Database.SqlQueryRaw<int>(
+                        "SELECT COUNT(*) AS [Value] FROM dbo.SamplePreparationTestItems WHERE " + columnName + " = @p0 AND IsActive = 1", entityId).FirstOrDefaultAsync();
+
+                    if (count > 0)
+                    {
+                        var more = count > names.Count ? $" (+{count - names.Count} more)" : "";
+                        return $"Sample Preparation Test Items ({count}): {string.Join(", ", names)}{more}";
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -521,6 +645,23 @@ namespace LIMSApi.Helpers
         {
             if (parentType == typeof(ParameterMaster) && dependentType == typeof(ParameterDropdownOption))
                 return true;
+
+            if (parentType == typeof(LaboratoryTestSubGroup) && (
+                dependentType == typeof(LaboratoryTestSubGroupMethod) ||
+                dependentType == typeof(LaboratoryTestSubGroupParameter) ||
+                dependentType == typeof(LaboratoryTestSubGroupEquipment) ||
+                dependentType == typeof(LaboratoryTestSubGroupSpecification) ||
+                dependentType == typeof(LaboratoryTestSubGroupInvoiceCase)
+            )) return true;
+
+            if (parentType == typeof(LaboratoryTestAnalysisType) && (
+                dependentType == typeof(LaboratoryTestAnalysisTypeMethod) ||
+                dependentType == typeof(LaboratoryTestAnalysisTypeParameter) ||
+                dependentType == typeof(LaboratoryTestAnalysisTypeEquipment) ||
+                dependentType == typeof(LaboratoryTestAnalysisTypeSpecification) ||
+                dependentType == typeof(LaboratoryTestAnalysisTypeInvoiceCase) ||
+                dependentType == typeof(LaboratoryTestAnalysisTypeTechnique)
+            )) return true;
 
             return false;
         }

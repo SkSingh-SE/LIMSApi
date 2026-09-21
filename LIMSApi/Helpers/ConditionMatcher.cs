@@ -22,11 +22,13 @@ namespace LIMSApi.Helpers
         }
 
         /// <summary>
-        /// Returns true if the configuration Value is the override sentinel string.
+        /// Returns true if the configuration Value is an override or surcharge sentinel string (e.g. 'OVERRIDE', 'SPECIAL', 'SUPER').
         /// </summary>
-        public static bool IsOverride(string value)
+        public static bool IsOverride(string? value)
         {
-            return value == "override";
+            if (string.IsNullOrWhiteSpace(value)) return false;
+            var v = value.Trim().ToLowerInvariant();
+            return v == "override" || v == "special" || v == "super";
         }
 
         /// <summary>

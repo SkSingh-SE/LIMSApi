@@ -664,7 +664,8 @@ namespace LIMSApi.Repositories
                         ConfigValue          = c.Value,
                         GroupName            = at.Name,
                         GroupType            = "AnalysisType",
-                        IsOverride           = c.Value == "OVERRIDE",
+                        IsOverride           = c.Value == "OVERRIDE" || c.Value == "SPECIAL" || c.Value == "SUPER" || c.Value == "override",
+                        IsBaseConfig         = c.IsBaseConfig,
                         OverrideParameterIDs = c.OverrideParameterIDs
                     }
                 ).ToListAsync();
@@ -685,7 +686,8 @@ namespace LIMSApi.Repositories
                         ConfigValue          = c.Value,
                         GroupName            = sg.Name,
                         GroupType            = "SubGroup",
-                        IsOverride           = c.Value == "OVERRIDE",
+                        IsOverride           = c.Value == "OVERRIDE" || c.Value == "SPECIAL" || c.Value == "SUPER" || c.Value == "override",
+                        IsBaseConfig         = c.IsBaseConfig,
                         OverrideParameterIDs = c.OverrideParameterIDs
                     }
                 ).ToListAsync();

@@ -340,6 +340,9 @@ namespace LIMSApi.ServiceWORepo
 
             var filtered = pricingType switch
             {
+                "ChemicalElement" => allPrices
+                    .Where(p => p.Configuration != null &&
+                        string.Equals(p.Configuration.SelectionType, "ChemicalElement", StringComparison.OrdinalIgnoreCase)).ToList(),
                 "Element" => allPrices
                     .Where(p => p.Configuration != null &&
                         string.Equals(p.Configuration.SelectionType, "Element", StringComparison.OrdinalIgnoreCase)).ToList(),
@@ -446,6 +449,11 @@ namespace LIMSApi.ServiceWORepo
 
             switch (pricingType)
             {
+                case "ChemicalElement":
+                    var chemCount = billableParams.Count;
+                    if (chemCount > 0) { score += 50; reasons.Add($"{chemCount} chemical elements"); rec.AutoDetectedValue = chemCount; rec.ValueSource = "Chemical elements"; }
+                    break;
+
                 case "Element":
                     var count = billableParams.Count;
                     if (count > 0) { score += 30; reasons.Add($"{count} billable parameters"); rec.AutoDetectedValue = count; rec.ValueSource = "Parameter count"; }
@@ -557,6 +565,7 @@ namespace LIMSApi.ServiceWORepo
 
         private static string GetDisplayName(string? type) => type switch
         {
+            "ChemicalElement" => "Chemical Analysis",
             "Element" => "Parameter Count",
             "Hours" => "Hours", "HoursRange" => "Hours Range",
             "Size" => "Size", "SizeRange" => "Size Range",
@@ -633,7 +642,145 @@ namespace LIMSApi.ServiceWORepo
                 return breakdown;
             }
 
-            // GROUP 1: Element count pricing (auto-detect for chemical tests)
+            // GROUP 1: Unified ChemicalElement Pricing (Base Tier + Special & Super Special Surcharges)
+            var chemPrices = prices.Where(p =>
+                p.Configuration != null &&
+                string.Equals(p.Configuration.SelectionType, "ChemicalElement", StringComparison.OrdinalIgnoreCase)).ToList();
+
+            if (chemPrices.Any())
+            {
+                var specialPrices = chemPrices.Where(p =>
+                    string.Equals(p.Configuration!.Value, "SPECIAL", StringComparison.OrdinalIgnoreCase) ||
+                    (p.Configuration!.Name != null && p.Configuration!.Name.StartsWith("Special Elements", StringComparison.OrdinalIgnoreCase))).ToList();
+
+                var superPrices = chemPrices.Where(p =>
+                    string.Equals(p.Configuration!.Value, "SUPER", StringComparison.OrdinalIgnoreCase) ||
+                    (p.Configuration!.Name != null && p.Configuration!.Name.StartsWith("Super Special", StringComparison.OrdinalIgnoreCase))).ToList();
+
+                var specialParamIdSet = new HashSet<long>();
+                foreach (var sp in specialPrices)
+                {
+                    if (!string.IsNullOrWhiteSpace(sp.Configuration!.OverrideParameterIDs))
+                    {
+                        foreach (var id in ParseLinkedIds(sp.Configuration!.OverrideParameterIDs))
+                            specialParamIdSet.Add(id);
+                    }
+                }
+                if (paramDetailsDict != null)
+                {
+                    foreach (var kv in paramDetailsDict.Where(k => string.Equals(k.Value, "special", StringComparison.OrdinalIgnoreCase)))
+                        specialParamIdSet.Add(kv.Key);
+                }
+
+                var superParamIdSet = new HashSet<long>();
+                foreach (var sup in superPrices)
+                {
+                    if (!string.IsNullOrWhiteSpace(sup.Configuration!.OverrideParameterIDs))
+                    {
+                        foreach (var id in ParseLinkedIds(sup.Configuration!.OverrideParameterIDs))
+                            superParamIdSet.Add(id);
+                    }
+                }
+                if (paramDetailsDict != null)
+                {
+                    foreach (var kv in paramDetailsDict.Where(k => string.Equals(k.Value, "super", StringComparison.OrdinalIgnoreCase)))
+                        superParamIdSet.Add(kv.Key);
+                }
+
+                var matchedSpecialParams = billableParams.Where(p => specialParamIdSet.Contains(p.ParameterID)).ToList();
+                var matchedSuperParams = billableParams.Where(p => superParamIdSet.Contains(p.ParameterID)).ToList();
+                var totalCount = billableParams.Count;
+
+                // Base Tier Selection:
+                var basePrice = chemPrices.FirstOrDefault(p =>
+                    p.Configuration!.IsBaseConfig ||
+                    string.Equals(p.Configuration!.Value, "BASE", StringComparison.OrdinalIgnoreCase));
+
+                // Check for partial element count slab (e.g. "<=2", "2", etc.)
+                var partialSlab = chemPrices
+                    .Where(p => !p.Configuration!.IsBaseConfig &&
+                                !string.Equals(p.Configuration!.Value, "SPECIAL", StringComparison.OrdinalIgnoreCase) &&
+                                !string.Equals(p.Configuration!.Value, "SUPER", StringComparison.OrdinalIgnoreCase) &&
+                                decimal.TryParse(p.Configuration!.Value?.TrimStart('<', '='), out var v) &&
+                                totalCount <= v)
+                    .OrderBy(p => decimal.Parse(p.Configuration!.Value!.TrimStart('<', '=')))
+                    .FirstOrDefault();
+
+                InvoiceCasePrice? appliedBase = (totalCount <= 2 && partialSlab != null) ? partialSlab : (basePrice ?? partialSlab);
+
+                if (appliedBase != null)
+                {
+                    breakdown.Add(new PriceBreakdownDto
+                    {
+                        ParameterId = 0,
+                        ParameterName = appliedBase.Name ?? appliedBase.Configuration!.Name ?? "Base Spectro Chemical Analysis",
+                        UnitPrice = appliedBase.Price,
+                        Quantity = 1,
+                        Amount = appliedBase.Price
+                    });
+                }
+
+                // Special Elements Surcharges:
+                var specialConfigPrice = specialPrices.FirstOrDefault();
+                if (specialConfigPrice != null && matchedSpecialParams.Any())
+                {
+                    Dictionary<string, decimal>? elPricesDict = null;
+                    if (!string.IsNullOrWhiteSpace(specialConfigPrice.ElementPrices))
+                    {
+                        try { elPricesDict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, decimal>>(specialConfigPrice.ElementPrices); }
+                        catch { }
+                    }
+
+                    foreach (var sp in matchedSpecialParams)
+                    {
+                        decimal itemPrice = specialConfigPrice.Price;
+                        if (elPricesDict != null && elPricesDict.TryGetValue(sp.ParameterID.ToString(), out var overrideP))
+                            itemPrice = overrideP;
+
+                        breakdown.Add(new PriceBreakdownDto
+                        {
+                            ParameterId = sp.ParameterID,
+                            ParameterName = $"{sp.ParameterName ?? "Special Element"} (Special Element Surcharge)",
+                            UnitPrice = itemPrice,
+                            Quantity = 1,
+                            Amount = itemPrice
+                        });
+                    }
+                }
+
+                // Super Special Elements Surcharges:
+                var superConfigPrice = superPrices.FirstOrDefault();
+                if (superConfigPrice != null && matchedSuperParams.Any())
+                {
+                    Dictionary<string, decimal>? elPricesDict = null;
+                    if (!string.IsNullOrWhiteSpace(superConfigPrice.ElementPrices))
+                    {
+                        try { elPricesDict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, decimal>>(superConfigPrice.ElementPrices); }
+                        catch { }
+                    }
+
+                    foreach (var sup in matchedSuperParams)
+                    {
+                        decimal itemPrice = superConfigPrice.Price;
+                        if (elPricesDict != null && elPricesDict.TryGetValue(sup.ParameterID.ToString(), out var overrideP))
+                            itemPrice = overrideP;
+
+                        breakdown.Add(new PriceBreakdownDto
+                        {
+                            ParameterId = sup.ParameterID,
+                            ParameterName = $"{sup.ParameterName ?? "Super Special Element"} (Super Special Surcharge)",
+                            UnitPrice = itemPrice,
+                            Quantity = 1,
+                            Amount = itemPrice
+                        });
+                    }
+                }
+
+                if (breakdown.Any())
+                    return breakdown;
+            }
+
+            // GROUP 1c: Legacy Element count pricing (auto-detect for chemical tests)
             var elementPrices = prices.Where(p =>
                 p.Configuration != null &&
                 string.Equals(p.Configuration.SelectionType, "Element", StringComparison.OrdinalIgnoreCase)).ToList();
