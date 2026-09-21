@@ -72,6 +72,17 @@ namespace LIMSApi.Dtos
         public decimal OtherChargesTotal { get; set; }
         public decimal TotalCharges => CuttingChargesTotal + MachiningChargesTotal + OtherChargesTotal;
 
+        // Cutting parameters
+        public int? NumberOfCuts { get; set; }
+        public decimal? CutThickness { get; set; }
+        public decimal? WaterJetCuttingMins { get; set; }
+        public string? EdmCutting { get; set; }
+        public decimal EdmCuttingCharge { get; set; } = 0;
+        public string? GasCutting { get; set; }
+        public decimal GasCuttingCharge { get; set; } = 0;
+        public string? SpecialCutting { get; set; }
+        public decimal SpecialCuttingCharge { get; set; } = 0;
+
         // Sample info for context
         public decimal? Thickness { get; set; }
         public decimal? Diameter { get; set; }
@@ -87,6 +98,9 @@ namespace LIMSApi.Dtos
         public decimal OtherPreparationCharge { get; set; }
         public string? Specimen { get; set; }
         public string? TestInstructions { get; set; }
+
+        // Test-wise preparation items
+        public List<SamplePreparationTestItemDto> Items { get; set; } = new();
     }
 
     public class SamplePreparationCreateDto
@@ -115,6 +129,18 @@ namespace LIMSApi.Dtos
         public string? PreConditionNotes { get; set; }
         public string? PostConditionNotes { get; set; }
         public string? VerificationRemarks { get; set; }
+
+        // Cutting parameters
+        public int? NumberOfCuts { get; set; }
+        public decimal? CutThickness { get; set; }
+        public decimal? WaterJetCuttingMins { get; set; }
+        public string? EdmCutting { get; set; }
+        public decimal? EdmCuttingCharge { get; set; }
+        public string? GasCutting { get; set; }
+        public decimal? GasCuttingCharge { get; set; }
+        public string? SpecialCutting { get; set; }
+        public decimal? SpecialCuttingCharge { get; set; }
+        public List<SamplePreparationTestItemDto>? Items { get; set; }
     }
 
     public class SamplePreparationStatusDto
@@ -122,4 +148,47 @@ namespace LIMSApi.Dtos
         public string Status { get; set; } = string.Empty;
         public string? Remarks { get; set; }
     }
+
+    public class SamplePreparationTestItemDto
+    {
+        public long Id { get; set; }
+        public long SamplePreparationID { get; set; }
+        public long SampleID { get; set; }
+        public long? TestPlanID { get; set; }
+        public string PlannedTestType { get; set; } = "General";
+        public long PlannedTestMethodID { get; set; }
+        public long LaboratoryTestID { get; set; }
+        public string? LaboratoryTestName { get; set; }
+        public long? TestMethodSpecificationID { get; set; }
+        public string? TestMethodName { get; set; }
+        public long? SpecimenPreparationMasterID { get; set; }
+        public string SpecimenSize { get; set; } = string.Empty;
+        public string? SpecimenRawMaterialSize { get; set; }
+        public int Quantity { get; set; } = 1;
+        public bool CuttingRequired { get; set; } = true;
+        public bool MachiningRequired { get; set; } = true;
+        public bool NoTesting { get; set; } = false;
+        public string? PreparationType { get; set; } = "Machining";
+        public string? PreparationMethod { get; set; }
+        public string Status { get; set; } = "Required";
+        public DateTime? CompletedOn { get; set; }
+        public long? CompletedByEmployeeID { get; set; }
+        public string? CompletedByName { get; set; }
+        public string? Remarks { get; set; }
+        public decimal ResolvedCuttingRate { get; set; } = 0;
+        public decimal ResolvedMachiningRate { get; set; } = 0;
+        public decimal CuttingTotal { get; set; } = 0;
+        public decimal MachiningTotal { get; set; } = 0;
+    }
+
+    public class SamplePreparationItemUpdateDto
+    {
+        public long Id { get; set; }
+        public string Status { get; set; } = "Completed";
+        public string? PreparationType { get; set; }
+        public string? PreparationMethod { get; set; }
+        public string? Remarks { get; set; }
+        public long? CompletedByEmployeeID { get; set; }
+    }
 }
+

@@ -40,25 +40,16 @@ namespace LIMSApi.Repositories
         public async Task<LaboratoryTest?> GetTestMethodById(long id)
         {
             var test = await _context.LaboratoryTests
-                .Include(y => y.SubGroups)
+                .Include(y => y.SubGroups.Where(sg => sg.IsActive))
                     .ThenInclude(g => g.MetalClassification)
-                .Include(y => y.SubGroups)
-                    .ThenInclude(g => g.AnalysisTypes)
+                .Include(y => y.SubGroups.Where(sg => sg.IsActive))
+                    .ThenInclude(g => g.AnalysisTypes.Where(at => at.IsActive))
                         .ThenInclude(s => s.MetalClassification)
-                .Include(y => y.SubGroups)
-                    .ThenInclude(g => g.AnalysisTypes)
+                .Include(y => y.SubGroups.Where(sg => sg.IsActive))
+                    .ThenInclude(g => g.AnalysisTypes.Where(at => at.IsActive))
                         .ThenInclude(s => s.AllowedTechniques)
                             .ThenInclude(t => t.AnalysisTechnique)
                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
-
-            if (test != null)
-            {
-                test.SubGroups = test.SubGroups.Where(sg => sg.IsActive).ToList();
-                foreach (var sg in test.SubGroups)
-                {
-                    sg.AnalysisTypes = sg.AnalysisTypes.Where(at => at.IsActive).ToList();
-                }
-            }
 
             return test;
         }
@@ -673,7 +664,8 @@ namespace LIMSApi.Repositories
                         ConfigValue          = c.Value,
                         GroupName            = at.Name,
                         GroupType            = "AnalysisType",
-                        IsOverride           = c.Value == "OVERRIDE",
+                        IsOverride           = c.Value == "OVERRIDE" || c.Value == "SPECIAL" || c.Value == "SUPER" || c.Value == "override",
+                        IsBaseConfig         = c.IsBaseConfig,
                         OverrideParameterIDs = c.OverrideParameterIDs
                     }
                 ).ToListAsync();
@@ -694,7 +686,8 @@ namespace LIMSApi.Repositories
                         ConfigValue          = c.Value,
                         GroupName            = sg.Name,
                         GroupType            = "SubGroup",
-                        IsOverride           = c.Value == "OVERRIDE",
+                        IsOverride           = c.Value == "OVERRIDE" || c.Value == "SPECIAL" || c.Value == "SUPER" || c.Value == "override",
+                        IsBaseConfig         = c.IsBaseConfig,
                         OverrideParameterIDs = c.OverrideParameterIDs
                     }
                 ).ToListAsync();

@@ -221,6 +221,7 @@ namespace LIMSApi.Dtos
         public long? Specification2 { get; set; }
         public long? LaboratoryTestSubGroupID { get; set; }
         public string? SubGroupName { get; set; }
+        public string? LaboratoryTestName { get; set; }
         public List<GeneralTestMethodDto> Methods { get; set; } = new();
     }
 
@@ -237,6 +238,8 @@ namespace LIMSApi.Dtos
         public bool PreparationRequired { get; set; }
         public long? StandardID { get; set; }
         public string? StandardName { get; set; }
+        public string? LaboratoryTestName { get; set; }
+        public string? TestMethodName { get; set; }
     }
 
     public class ChemicalTestMethodDto
@@ -246,6 +249,8 @@ namespace LIMSApi.Dtos
         public long? TestMethodID { get; set; }
         public long? LaboratoryTestAnalysisTypeID { get; set; }
         public string? AnalysisTypeName { get; set; }
+        public string? LaboratoryTestName { get; set; }
+        public string? TestMethodName { get; set; }
         public List<string> TechniqueCodes { get; set; } = new();
         public List<string> TechniqueNames { get; set; } = new();
         public long? TestMethodSpecificationID { get; set; }

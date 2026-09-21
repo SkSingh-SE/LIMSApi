@@ -9,6 +9,7 @@ namespace LIMSApi.Dtos
         public string GroupName { get; set; } = string.Empty;       // SubGroup or AnalysisType name
         public string GroupType { get; set; } = string.Empty;       // "SubGroup" | "AnalysisType"
         public bool IsOverride { get; set; }                        // true when ConfigValue == "OVERRIDE"
+        public bool IsBaseConfig { get; set; }                      // true when configuration is base tier
         public string? OverrideParameterIDs { get; set; }           // null = wildcard, "12,15" = specific
         public string? OverrideParameterNames { get; set; }         // resolved parameter names
     }

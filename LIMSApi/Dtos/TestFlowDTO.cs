@@ -1,4 +1,4 @@
-﻿namespace LIMSApi.Dtos
+namespace LIMSApi.Dtos
 {
     public class TestFlowDTO
     {
@@ -37,6 +37,10 @@
 
         // Equipment tracking (ISO 17025)
         public string? EquipmentIdsJson { get; set; }
+
+        // Additional Test Information
+        public string? TestPurpose { get; set; }
+        public string? Remarks { get; set; }
 
         public List<TestResultParameterDto> Parameters { get; set; } = new();
     }
@@ -122,7 +126,25 @@
     public class AddParameterFromMethodDto
     {
         public long SourceTestMethodId { get; set; }
+        public long? TestMethodId { get; set; }
         public long ParameterID { get; set; }
+    }
+
+    public class MethodParameterForHeaderDto
+    {
+        public long ParameterID { get; set; }
+        public string ParameterName { get; set; } = string.Empty;
+        public string Unit { get; set; } = string.Empty;
+        public decimal? MinValue { get; set; }
+        public decimal? MaxValue { get; set; }
+        public decimal? SpecMinValue { get; set; }
+        public decimal? SpecMaxValue { get; set; }
+        public string? SpecRange { get; set; }
+        public string? AcceptanceCriteria { get; set; }
+        public string? Equation { get; set; }
+        public bool IsAlreadyAdded { get; set; }
+        public string? Comment { get; set; }
+        public string? SpecificationName { get; set; }
     }
 
     public class EnvironmentAtTimeDto
@@ -136,6 +158,13 @@
         public DateTime? TestEndTime { get; set; }
         public string? PerformedByName { get; set; }
         public long? PerformedById { get; set; }
+    }
+
+    public class UpdateEnvironmentDto
+    {
+        public decimal? RoomTemperature { get; set; }
+        public decimal? RoomHumidity { get; set; }
+        public long? LabRoomId { get; set; }
     }
 
     public class CalculateParametersResultDto
@@ -176,6 +205,15 @@
         public string Message { get; set; } = "Test completed";
         public DateTime? TestEndTime { get; set; }
         public string? PerformedByName { get; set; }
+        public bool? IsOverallPass { get; set; }
+        public string OverallResult => IsOverallPass == true ? "PASS" : (IsOverallPass == false ? "FAIL" : "INCOMPLETE");
+    }
+
+    public class TestConfigurationValidationResultDto
+    {
+        public bool IsValid { get; set; } = true;
+        public List<string> Errors { get; set; } = new();
+        public List<string> Warnings { get; set; } = new();
     }
 
     // Auto-create headers response with warnings

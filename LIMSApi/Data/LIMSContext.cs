@@ -568,6 +568,10 @@ public partial class LIMSContext : DbContext
             .IsUnique()
             .HasDatabaseName("IX_MessageTemplate_TemplateKey_Channel_Version");
 
+        modelBuilder.Entity<TestResultParameter>()
+            .Property(p => p.Unit)
+            .HasDefaultValue("");
+
         // Workflow → Steps (keep cascade)
         modelBuilder.Entity<WorkflowStep>()
             .HasOne(s => s.Workflow)
@@ -1100,10 +1104,9 @@ public partial class LIMSContext : DbContext
             .IsRequired(false)
             .OnDelete(DeleteBehavior.NoAction);
 
-        // One InvoiceCase price version per effective date per LaboratoryTest
-        // (LaboratoryTest acts as the master; each InvoiceCase row is a date-effective version)
+        // One InvoiceCase price version per effective date per LaboratoryTest / AnalysisType
         modelBuilder.Entity<InvoiceCase>()
-            .HasIndex(x => new { x.LaboratoryTestID, x.EffectiveFrom })
+            .HasIndex(x => new { x.LaboratoryTestID, x.AnalysisTypeID, x.EffectiveFrom })
             .IsUnique()
             .HasFilter("[IsActive] = 1");
 

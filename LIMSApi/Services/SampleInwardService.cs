@@ -1053,11 +1053,17 @@ namespace LIMSApi.Services
                             var labTest = await _context.LaboratoryTests
                                 .FirstOrDefaultAsync(x => x.ID == labTestId);
                             var analysisType = await _context.LaboratoryTestAnalysisTypes
+                                .Include(a => a.SubGroup)
                                 .FirstOrDefaultAsync(x => x.ID == labTestId);
+
+                            // ChemicalTestType.LaboratoryTestID must reference LaboratoryTests (FK).
+                            // An analysis-type id lives in LaboratoryTestAnalysisTypes, so resolve
+                            // the parent LaboratoryTest via SubGroup instead of storing the raw id.
+                            long? parentLabTestId = labTest != null ? labTestId : analysisType?.SubGroup?.LaboratoryTestID;
 
                             chem.TestTypes.Add(new ChemicalTestType
                             {
-                                LaboratoryTestID = labTest != null ? labTestId : null,
+                                LaboratoryTestID = parentLabTestId,
                                 LaboratoryTestAnalysisTypeID = analysisType != null ? labTestId : null,
                                 Name = analysisType?.Name ?? labTest?.Name ?? "",
                                 IsSelected = true
@@ -1503,21 +1509,74 @@ namespace LIMSApi.Services
             var standardMap = standardIds.Count > 0
                 ? await _context.TestMethodSpecifications
                     .Where(s => standardIds.Contains(s.ID))
-                    .ToDictionaryAsync(s => s.ID, s => s.Name ?? string.Empty)
+                    .ToDictionaryAsync(s => s.ID, s => !string.IsNullOrEmpty(s.DisplayTitle) ? s.DisplayTitle : (!string.IsNullOrEmpty(s.TestMethodStandard) ? s.TestMethodStandard : (s.Name ?? string.Empty)))
                 : new Dictionary<long, string>();
 
-            var subGroupIds = sampleInward.SampleDetails
+            var sampleIds = sampleInward.SampleDetails.Select(s => s.ID).ToList();
+            var prepMap = await _context.SamplePreparations
+                .Include(sp => sp.TestItems.Where(ti => ti.IsActive))
+                .Where(sp => sampleIds.Contains(sp.SampleID) && sp.IsActive)
+                .ToDictionaryAsync(sp => sp.SampleID, sp => sp);
+
+            var allLabOrSubGroupIds = sampleInward.SampleDetails
                 .SelectMany(s => s.TestPlans)
                 .SelectMany(tp => tp.GeneralTests)
-                .Where(gt => gt.LaboratoryTestSubGroupID.HasValue && gt.LaboratoryTestSubGroupID.Value > 0)
-                .Select(gt => gt.LaboratoryTestSubGroupID!.Value)
+                .SelectMany(gt => gt.Methods.Select(m => m.LaboratoryTestID)
+                    .Concat(gt.LaboratoryTestSubGroupID.HasValue ? new[] { gt.LaboratoryTestSubGroupID.Value } : Enumerable.Empty<long>()))
+                .Concat(
+                    prepMap.Values
+                        .SelectMany(p => p.TestItems)
+                        .Select(ti => ti.LaboratoryTestID)
+                )
+                .Where(id => id > 0)
                 .Distinct()
                 .ToList();
-            var subGroupMap = subGroupIds.Count > 0
+
+            var subGroups = allLabOrSubGroupIds.Count > 0
                 ? await _context.LaboratoryTestSubGroups
-                    .Where(sg => subGroupIds.Contains(sg.ID))
-                    .ToDictionaryAsync(sg => sg.ID, sg => sg.ReportTestName ?? sg.Name)
+                    .Include(sg => sg.LaboratoryTest)
+                    .Where(sg => allLabOrSubGroupIds.Contains(sg.ID))
+                    .ToListAsync()
+                : new List<LaboratoryTestSubGroup>();
+
+            var subGroupDict = subGroups.ToDictionary(sg => sg.ID, sg => sg);
+
+            var directLabTests = allLabOrSubGroupIds.Count > 0
+                ? await _context.LaboratoryTests
+                    .Where(lt => allLabOrSubGroupIds.Contains(lt.ID))
+                    .ToDictionaryAsync(lt => lt.ID, lt => lt.Name)
                 : new Dictionary<long, string>();
+
+            string ResolveLabTestName(long id)
+            {
+                if (id <= 0) return string.Empty;
+                if (subGroupDict.TryGetValue(id, out var sg))
+                {
+                    if (sg.LaboratoryTest != null && !string.IsNullOrWhiteSpace(sg.LaboratoryTest.Name))
+                        return sg.LaboratoryTest.Name;
+                    if (!string.IsNullOrWhiteSpace(sg.ReportTestName))
+                        return sg.ReportTestName;
+                    if (!string.IsNullOrWhiteSpace(sg.Name))
+                        return sg.Name;
+                }
+                if (directLabTests.TryGetValue(id, out var directName) && !string.IsNullOrWhiteSpace(directName))
+                {
+                    return directName;
+                }
+                return string.Empty;
+            }
+
+            string ResolveSubGroupName(long id)
+            {
+                if (id <= 0) return string.Empty;
+                if (subGroupDict.TryGetValue(id, out var sg))
+                {
+                    return !string.IsNullOrWhiteSpace(sg.ReportTestName) ? sg.ReportTestName : sg.Name;
+                }
+                return string.Empty;
+            }
+
+            var subGroupMap = subGroupDict.ToDictionary(kvp => kvp.Key, kvp => !string.IsNullOrWhiteSpace(kvp.Value.ReportTestName) ? kvp.Value.ReportTestName : kvp.Value.Name);
 
             var stdIds = sampleInward.SampleDetails
                 .SelectMany(s => s.TestPlans)
@@ -1611,11 +1670,6 @@ namespace LIMSApi.Services
                     .ToDictionaryAsync(p => p.ID, p => p.Name)
                 : new Dictionary<long, string>();
 
-            var sampleIds = sampleInward.SampleDetails.Select(s => s.ID).ToList();
-            var prepMap = await _context.SamplePreparations
-                .Include(sp => sp.TestItems.Where(ti => ti.IsActive))
-                .Where(sp => sampleIds.Contains(sp.SampleID) && sp.IsActive)
-                .ToDictionaryAsync(sp => sp.SampleID, sp => sp);
 
             var dto = new SampleInwardDto
             {
@@ -1782,28 +1836,37 @@ namespace LIMSApi.Services
                             MachiningChargesTotal = prep.MachiningChargesTotal,
                             CuttingChargesTotal = prep.CuttingChargesTotal,
                             OtherChargesTotal = prep.OtherChargesTotal,
-                            Tests = prep.TestItems.Where(ti => ti.IsActive).Select(ti => new SampleTestPrepItemDto
+                            Tests = prep.TestItems.Where(ti => ti.IsActive).Select(ti =>
                             {
-                                ID = ti.ID,
-                                TestId = ti.LaboratoryTestID,
-                                PlannedTestMethodID = ti.PlannedTestMethodID,
-                                PlannedTestType = ti.PlannedTestType,
-                                StandardId = ti.TestMethodSpecificationID,
-                                SpecimenPreparationMasterID = ti.SpecimenPreparationMasterID,
-                                SpecimenSize = ti.SpecimenSize,
-                                SpecimenRawMaterialSize = ti.SpecimenRawMaterialSize,
-                                DrawingFilePath = ti.DrawingFilePath,
-                                FileName = ti.FileName,
-                                Quantity = ti.Quantity,
-                                CuttingRate = ti.ResolvedCuttingRate,
-                                MachiningRate = ti.ResolvedMachiningRate,
-                                CuttingTotal = ti.CuttingTotal,
-                                MachiningTotal = ti.MachiningTotal,
-                                RequiresCutting = ti.CuttingRequired,
-                                RequiresMachining = ti.MachiningRequired,
-                                NoTesting = ti.NoTesting,
-                                Remarks = ti.Remarks,
-                                Status = ti.Status
+                                var resolvedName = ResolveLabTestName(ti.LaboratoryTestID);
+                                if (string.IsNullOrWhiteSpace(resolvedName))
+                                {
+                                    resolvedName = ResolveSubGroupName(ti.LaboratoryTestID);
+                                }
+                                return new SampleTestPrepItemDto
+                                {
+                                    ID = ti.ID,
+                                    TestId = ti.LaboratoryTestID,
+                                    PlannedTestMethodID = ti.PlannedTestMethodID,
+                                    PlannedTestType = ti.PlannedTestType,
+                                    TestName = !string.IsNullOrWhiteSpace(resolvedName) ? resolvedName : "Laboratory Test",
+                                    StandardId = ti.TestMethodSpecificationID,
+                                    SpecimenPreparationMasterID = ti.SpecimenPreparationMasterID,
+                                    SpecimenSize = ti.SpecimenSize,
+                                    SpecimenRawMaterialSize = ti.SpecimenRawMaterialSize,
+                                    DrawingFilePath = ti.DrawingFilePath,
+                                    FileName = ti.FileName,
+                                    Quantity = ti.Quantity,
+                                    CuttingRate = ti.ResolvedCuttingRate,
+                                    MachiningRate = ti.ResolvedMachiningRate,
+                                    CuttingTotal = ti.CuttingTotal,
+                                    MachiningTotal = ti.MachiningTotal,
+                                    RequiresCutting = ti.CuttingRequired,
+                                    RequiresMachining = ti.MachiningRequired,
+                                    NoTesting = ti.NoTesting,
+                                    Remarks = ti.Remarks,
+                                    Status = ti.Status
+                                };
                             }).ToList()
                         } : null
                     }).ToList(),
@@ -1854,19 +1917,27 @@ namespace LIMSApi.Services
                             Specification2 = gt.Specification2,
                             LaboratoryTestSubGroupID = gt.LaboratoryTestSubGroupID,
                             SubGroupName = gt.LaboratoryTestSubGroupID.HasValue && subGroupMap.ContainsKey(gt.LaboratoryTestSubGroupID.Value) ? subGroupMap[gt.LaboratoryTestSubGroupID.Value] : null,
-                            Methods = gt.Methods.Select(m => new GeneralTestMethodDto
-                            {
-                                ID = m.ID,
-                                GeneralTestID = m.GeneralTestID,
-                                TestMethodID = m.LaboratoryTestID,
-                                TestCaseID = m.TestCaseID,
-                                Quantity = m.Quantity,
-                                ReportNo = m.ReportNo,
-                                UlrNo = m.UlrNo,
-                                Cancel = m.Cancel,
-                                PreparationRequired = m.PreparationRequired,
-                                StandardID = m.StandardID != 0 ? m.StandardID : null,
-                                StandardName = m.StandardID != 0 && standardMap.ContainsKey(m.StandardID) ? standardMap[m.StandardID] : null
+                            LaboratoryTestName = gt.LaboratoryTestSubGroupID.HasValue ? ResolveLabTestName(gt.LaboratoryTestSubGroupID.Value) : null,
+                            Methods = gt.Methods.Select(m => {
+                                var labName = ResolveLabTestName(m.LaboratoryTestID);
+                                var subName = ResolveSubGroupName(m.LaboratoryTestID);
+                                var resolvedMethodName = !string.IsNullOrWhiteSpace(labName) ? labName : (!string.IsNullOrWhiteSpace(subName) ? subName : null);
+                                return new GeneralTestMethodDto
+                                {
+                                    ID = m.ID,
+                                    GeneralTestID = m.GeneralTestID,
+                                    TestMethodID = m.LaboratoryTestID,
+                                    TestCaseID = m.TestCaseID,
+                                    Quantity = m.Quantity,
+                                    ReportNo = m.ReportNo,
+                                    UlrNo = m.UlrNo,
+                                    Cancel = m.Cancel,
+                                    PreparationRequired = m.PreparationRequired,
+                                    StandardID = m.StandardID != 0 ? m.StandardID : null,
+                                    StandardName = m.StandardID != 0 && standardMap.ContainsKey(m.StandardID) ? standardMap[m.StandardID] : null,
+                                    LaboratoryTestName = resolvedMethodName,
+                                    TestMethodName = resolvedMethodName
+                                };
                             }).ToList()
                         }).ToList(),
                         ChemicalTests = tp.ChemicalTests.Select(ct => {
@@ -2675,6 +2746,12 @@ namespace LIMSApi.Services
                 .Select(tr => new { tr.SampleID, tr.Status })
                 .ToListAsync();
 
+            var preps = await _context.SamplePreparations
+                .AsNoTracking()
+                .Where(sp => sampleIds.Contains(sp.SampleID) && sp.IsActive)
+                .Select(sp => new { sp.SampleID, sp.Status })
+                .ToListAsync();
+
             var reports = await _context.ReportHeaders
                 .AsNoTracking()
                 .Where(r => sampleIds.Contains(r.SampleID) && r.IsActive)
@@ -2714,11 +2791,15 @@ namespace LIMSApi.Services
             {
                 var sTestResult = testResults.FirstOrDefault(tr => tr.SampleID == s.ID);
                 var sReport = reports.FirstOrDefault(r => r.SampleID == s.ID);
+                var sPrep = preps.FirstOrDefault(p => p.SampleID == s.ID);
 
                 int genCount = s.TestPlans.Sum(tp => tp.GeneralTests.Count);
                 int chemCount = s.TestPlans.Sum(tp => tp.ChemicalTests.Count);
                 totalGenTests += genCount;
                 totalChemTests += chemCount;
+
+                bool isPrepReq = s.TestPlans.Any(tp => tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) || tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired)));
+                string prepStatus = isPrepReq ? (sPrep?.Status ?? "Pending") : "Not Required";
 
                 sampleDtos.Add(new LifecycleSampleSummaryDto
                 {
@@ -2728,9 +2809,9 @@ namespace LIMSApi.Services
                     ProductName = s.ProductMaster?.ProductName ?? s.Details ?? "Sample",
                     GradeName = s.SpecificationGrade?.Grade,
                     MetalClassification = s.MetalClassification?.Name,
-                    PreparationRequired = s.TestPlans.Any(tp => tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) || tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired))),
+                    PreparationRequired = isPrepReq,
                     MachiningRequired = false,
-                    PreparationStatus = s.TestPlans.Any(tp => tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) || tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired))) ? (s.IsTestingCompleted ? "Completed" : "Pending") : "Not Required",
+                    PreparationStatus = prepStatus,
                     GeneralTestCount = genCount,
                     ChemicalTestCount = chemCount,
                     TestResultStatus = sTestResult?.Status,

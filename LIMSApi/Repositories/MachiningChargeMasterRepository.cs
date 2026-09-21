@@ -181,7 +181,9 @@ namespace LIMSApi.Repositories
                 .Where(x => (x.LaboratoryTestID == labTestId
                              || _context.LaboratoryTestSubGroups.Any(sg => sg.ID == labTestId && sg.LaboratoryTestID == x.LaboratoryTestID)
                              || _context.LaboratoryTestAnalysisTypes.Any(at => at.ID == labTestId && at.SubGroup != null && at.SubGroup.LaboratoryTestID == x.LaboratoryTestID))
-                    && (x.TestMethodStandardID == standardId
+                    && (standardId == 0
+                        || x.TestMethodStandardID == 0
+                        || x.TestMethodStandardID == standardId
                         || _context.TestMethodSpecificationVersions.Any(v => v.ID == standardId && v.TestMethodSpecificationID == x.TestMethodStandardID))
                     && x.IsActive
                     && x.CompanyCode == loggedInUser.CompanyCode)

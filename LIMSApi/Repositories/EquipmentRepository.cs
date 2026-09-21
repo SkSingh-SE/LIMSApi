@@ -107,37 +107,84 @@ namespace LIMSApi.Repositories
         {
             var _query = _context.EquipmentMasters.Where(x => x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
 
-            var targetEquipmentIds = new List<long>();
+            bool hasFilter = false;
+            var targetEquipmentIds = new HashSet<long>();
+
             if (analysisTypeId.HasValue && analysisTypeId.Value > 0)
             {
-                targetEquipmentIds = await _context.LaboratoryTestAnalysisTypeEquipments
+                hasFilter = true;
+                var eqIds = await _context.LaboratoryTestAnalysisTypeEquipments
                     .Where(e => e.LaboratoryTestAnalysisTypeID == analysisTypeId.Value)
                     .Select(e => e.EquipmentID)
                     .ToListAsync();
+                foreach (var id in eqIds) targetEquipmentIds.Add(id);
+
+                var parentSubGroupId = await _context.LaboratoryTestAnalysisTypes
+                    .Where(at => at.ID == analysisTypeId.Value)
+                    .Select(at => at.LaboratoryTestSubGroupID)
+                    .FirstOrDefaultAsync();
+                if (parentSubGroupId > 0)
+                {
+                    var subEq = await _context.LaboratoryTestSubGroupEquipments
+                        .Where(e => e.LaboratoryTestSubGroupID == parentSubGroupId)
+                        .Select(e => e.EquipmentID)
+                        .ToListAsync();
+                    foreach (var id in subEq) targetEquipmentIds.Add(id);
+                }
             }
             else if (subGroupId.HasValue && subGroupId.Value > 0)
             {
-                targetEquipmentIds = await _context.LaboratoryTestSubGroupEquipments
+                hasFilter = true;
+                var eqIds = await _context.LaboratoryTestSubGroupEquipments
                     .Where(e => e.LaboratoryTestSubGroupID == subGroupId.Value)
                     .Select(e => e.EquipmentID)
                     .ToListAsync();
+                foreach (var id in eqIds) targetEquipmentIds.Add(id);
+
+                var atIds = await _context.LaboratoryTestAnalysisTypes
+                    .Where(at => at.LaboratoryTestSubGroupID == subGroupId.Value)
+                    .Select(at => at.ID)
+                    .ToListAsync();
+                if (atIds.Any())
+                {
+                    var atEq = await _context.LaboratoryTestAnalysisTypeEquipments
+                        .Where(e => atIds.Contains(e.LaboratoryTestAnalysisTypeID))
+                        .Select(e => e.EquipmentID)
+                        .ToListAsync();
+                    foreach (var id in atEq) targetEquipmentIds.Add(id);
+                }
             }
             else if (labTestId.HasValue && labTestId.Value > 0)
             {
+                hasFilter = true;
                 var subGroupIds = await _context.LaboratoryTestSubGroups
-                    .Where(sg => sg.LaboratoryTestID == labTestId.Value)
+                    .Where(sg => sg.LaboratoryTestID == labTestId.Value || sg.ID == labTestId.Value)
                     .Select(sg => sg.ID)
                     .ToListAsync();
                 if (subGroupIds.Any())
                 {
-                    targetEquipmentIds = await _context.LaboratoryTestSubGroupEquipments
+                    var eqIds = await _context.LaboratoryTestSubGroupEquipments
                         .Where(e => subGroupIds.Contains(e.LaboratoryTestSubGroupID))
                         .Select(e => e.EquipmentID)
                         .ToListAsync();
+                    foreach (var id in eqIds) targetEquipmentIds.Add(id);
+
+                    var atIds = await _context.LaboratoryTestAnalysisTypes
+                        .Where(at => subGroupIds.Contains(at.LaboratoryTestSubGroupID))
+                        .Select(at => at.ID)
+                        .ToListAsync();
+                    if (atIds.Any())
+                    {
+                        var atEq = await _context.LaboratoryTestAnalysisTypeEquipments
+                            .Where(e => atIds.Contains(e.LaboratoryTestAnalysisTypeID))
+                            .Select(e => e.EquipmentID)
+                            .ToListAsync();
+                        foreach (var id in atEq) targetEquipmentIds.Add(id);
+                    }
                 }
             }
 
-            if (targetEquipmentIds.Any())
+            if (hasFilter)
             {
                 _query = _query.Where(x => targetEquipmentIds.Contains(x.ID));
             }

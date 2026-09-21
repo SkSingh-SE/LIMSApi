@@ -60,6 +60,13 @@ namespace LIMSApi.Controllers
             return Ok(new { message = $"Status updated to '{dto.Status}' successfully." });
         }
 
+        [HttpPut("item-status/{itemId}")]
+        public async Task<IActionResult> UpdateItemStatus(long itemId, [FromBody] SamplePreparationItemUpdateDto dto)
+        {
+            await _service.UpdateItemStatusAsync(itemId, dto);
+            return Ok(new { message = $"Item status updated to '{dto.Status}' successfully." });
+        }
+
         [HttpPost("refresh-charges/{sampleId}")]
         public async Task<IActionResult> RefreshCharges(long sampleId)
         {

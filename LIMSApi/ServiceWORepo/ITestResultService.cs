@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using Microsoft.AspNetCore.Mvc;
 
@@ -30,6 +30,11 @@ namespace LIMSApi.ServiceWORepo
         // Update Single Parameter (Inline update)
         // -------------------------------------------------------------
         Task<object> UpdateParameterAsync(long headerId, long paramId, TestResultParameterDto dto);
+
+        // -------------------------------------------------------------
+        // Validate Test Configuration
+        // -------------------------------------------------------------
+        Task<TestConfigurationValidationResultDto> ValidateTestConfiguration(long headerId);
 
         // -------------------------------------------------------------
         // Start Test
@@ -68,12 +73,16 @@ namespace LIMSApi.ServiceWORepo
         // -------------------------------------------------------------
         // Add Parameter from Another Test Method
         // -------------------------------------------------------------
+        Task<List<MethodParameterForHeaderDto>> GetMethodParametersForHeader(long headerId, long methodOrVersionId);
         Task<object> AddParameterFromMethod(long headerId, AddParameterFromMethodDto dto);
 
         // -------------------------------------------------------------
-        // Environment at Test Time
+        // Environment at Test Time & Lab Room
         // -------------------------------------------------------------
         Task<EnvironmentAtTimeDto> GetEnvironmentAtTime(long headerId);
+        Task<object> UpdateEnvironmentAsync(long headerId, UpdateEnvironmentDto dto);
+        Task<List<object>> GetLabRoomsDropdownAsync();
+        Task<object> GetDailyEnvironmentAsync(long? labRoomId = null);
 
         // -------------------------------------------------------------
         // Load Parameters from Specification into existing header
@@ -85,6 +94,11 @@ namespace LIMSApi.ServiceWORepo
         // Auto-create TestResultHeaders from approved plan
         // -------------------------------------------------------------
         Task<AutoCreateHeadersResponse> AutoCreateHeadersFromPlanAsync(long planId);
+
+        // -------------------------------------------------------------
+        // Update plan method / specification from result entry (reselect)
+        // -------------------------------------------------------------
+        Task<UpdateResultPlanMethodResult> UpdateResultPlanMethodAsync(UpdateResultPlanMethodDto dto);
 
         // -------------------------------------------------------------
         // Phase 5: Test Verification Workflow

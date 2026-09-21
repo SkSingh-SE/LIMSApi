@@ -1555,12 +1555,23 @@ namespace LIMSApi.ServiceWORepo
                         {
                             Name = p.ParameterName,
                             Unit = p.Unit,
+                            Requirement = !string.IsNullOrWhiteSpace(p.AcceptanceCriteria)
+                                ? p.AcceptanceCriteria
+                                : (p.SpecMinValue.HasValue && p.SpecMaxValue.HasValue
+                                    ? $"{FormatDecimal(p.SpecMinValue, p.DecimalPrecision)} – {FormatDecimal(p.SpecMaxValue, p.DecimalPrecision)}"
+                                    : (p.SpecMinValue.HasValue
+                                        ? $"≥ {FormatDecimal(p.SpecMinValue, p.DecimalPrecision)}"
+                                        : (p.SpecMaxValue.HasValue
+                                            ? $"≤ {FormatDecimal(p.SpecMaxValue, p.DecimalPrecision)}"
+                                            : "-"))),
                             SpecMin = FormatDecimal(p.SpecMinValue ?? p.MinValue, p.DecimalPrecision),
                             SpecMax = FormatDecimal(p.SpecMaxValue ?? p.MaxValue, p.DecimalPrecision),
                             Result = FormatDecimal(p.Value, p.DecimalPrecision),
                             Status = p.IsWithinLimit == true ? "Pass"
                                    : p.IsWithinLimit == false ? "Fail"
                                    : "N/A",
+                            MethodUsed = p.TestMethodUsed ?? (header.LaboratoryTest?.Name),
+                            Remarks = p.Remarks,
                             IsWithinNablScope = p.IsWithinNablScope,
                             NablScopeStatus = p.NablScopeStatus,
                             ExpandedUncertainty = p.ExpandedUncertainty,

@@ -10,6 +10,7 @@ namespace LIMSApi.Services.Interface
         Task<SamplePreparationDetailDto> CreateAsync(SamplePreparationCreateDto dto);
         Task<SamplePreparationDetailDto> UpdateAsync(SamplePreparationUpdateDto dto);
         Task UpdateStatusAsync(long id, SamplePreparationStatusDto dto);
+        Task UpdateItemStatusAsync(long itemId, SamplePreparationItemUpdateDto dto);
         Task RefreshChargeTotalsAsync(long sampleId);
     }
 }

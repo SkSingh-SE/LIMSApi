@@ -41,9 +41,25 @@ namespace LIMSApi.Repositories
         public async Task<TestMethodSpecification?> GetTestMethodSpecificationById(long id)
         {
             var spec = await _context.TestMethodSpecifications
-                .Include(x => x.Versions).ThenInclude(v => v.Parameters).ThenInclude(p => p.Parameter)
+                .Include(x => x.Versions).ThenInclude(v => v.Parameters).ThenInclude(p => p.Parameter).ThenInclude(pm => pm.ParameterUnit)
+                .Include(x => x.Versions).ThenInclude(v => v.Parameters).ThenInclude(p => p.ParameterUnit)
                 .Include(x => x.MetalClassifications).ThenInclude(m => m.MetalClassification)
                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+
+            // Fallback: if not found by specification ID, check if id is a TestMethodSpecificationVersion ID
+            if (spec == null && id > 0)
+            {
+                var ver = await _context.TestMethodSpecificationVersions
+                    .FirstOrDefaultAsync(v => v.ID == id);
+                if (ver != null)
+                {
+                    spec = await _context.TestMethodSpecifications
+                        .Include(x => x.Versions).ThenInclude(v => v.Parameters).ThenInclude(p => p.Parameter).ThenInclude(pm => pm.ParameterUnit)
+                        .Include(x => x.Versions).ThenInclude(v => v.Parameters).ThenInclude(p => p.ParameterUnit)
+                        .Include(x => x.MetalClassifications).ThenInclude(m => m.MetalClassification)
+                        .FirstOrDefaultAsync(x => x.ID == ver.TestMethodSpecificationID && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+                }
+            }
 
             if (spec != null)
             {
@@ -74,8 +90,11 @@ namespace LIMSApi.Repositories
                     .ExecuteUpdateAsync(s => s.SetProperty(v => v.IsDefault, false));
             }
 
-            // Now update the specification and its versions
-            _context.TestMethodSpecifications.Update(model);
+            // Only attach/update if detached. If already tracked, mutations are tracked automatically.
+            if (_context.Entry(model).State == EntityState.Detached)
+            {
+                _context.TestMethodSpecifications.Update(model);
+            }
             await _context.SaveChangesAsync();
         }
 
@@ -134,7 +153,7 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(org) && org != "Other Standards")
                 parts.Add(org.Trim());
 
-            var stdPart = !string.IsNullOrWhiteSpace(part) ? $"{standard?.Trim()} - {part.Trim()}" : (standard?.Trim() ?? "");
+            var stdPart = !string.IsNullOrWhiteSpace(part) ? $"{standard?.Trim()} ({part.Trim()})" : (standard?.Trim() ?? "");
             if (!string.IsNullOrWhiteSpace(stdPart))
                 parts.Add(stdPart);
 
@@ -142,7 +161,7 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(version))
                 caption += $" : {version.Trim()}";
 
-            if (!string.IsNullOrWhiteSpace(year))
+            if (!string.IsNullOrWhiteSpace(year) && !caption.Contains(year.Trim()))
                 caption += $" {year.Trim()}";
 
             if (isDefault)
@@ -190,11 +209,6 @@ namespace LIMSApi.Repositories
 
                 if (exactVersionRaw != null)
                 {
-                    var versionLabel = exactVersionRaw.Version 
-                        + (!string.IsNullOrEmpty(exactVersionRaw.Year) ? $" - {exactVersionRaw.Year}" : "") 
-                        + (exactVersionRaw.IsDefault ? " ★" : "")
-                        + (exactVersionRaw.Status == VersionStatus.Superseded ? " [Superseded]" : "");
-
                     var fullDisplayName = BuildVersionCaption(
                         exactVersionRaw.StandardOrgName,
                         exactVersionRaw.TestMethodStandard,
@@ -207,7 +221,7 @@ namespace LIMSApi.Repositories
                     var exactVersionMatch = new DropdwonSelector
                     {
                         Id = exactVersionRaw.ID,
-                        Name = versionLabel,
+                        Name = fullDisplayName,
                         Level = 2,
                         Selectable = true,
                         NodeType = "Version",
@@ -348,7 +362,9 @@ namespace LIMSApi.Repositories
                         x.TMSPart,
                         DisplayTitle = !string.IsNullOrEmpty(x.TMSDisplayTitle)
                             ? x.TMSDisplayTitle
-                            : (!string.IsNullOrEmpty(x.TMSStandard) ? (x.TMSName + " (" + x.TMSStandard + ")") : x.TMSName)
+                            : (!string.IsNullOrEmpty(x.TMSStandard)
+                                ? (!string.IsNullOrEmpty(x.TMSPart) ? $"{x.TMSStandard} ({x.TMSPart})" : x.TMSStandard)
+                                : x.TMSName)
                     });
 
                     foreach (var specGroup in specGroups)
@@ -405,11 +421,6 @@ namespace LIMSApi.Repositories
                             // 3. Level 2: Versions (Selectable Leaf - Active and Superseded)
                             foreach (var v in versions)
                             {
-                                var versionLabel = v.VersionName 
-                                    + (!string.IsNullOrEmpty(v.VersionYear) ? $" - {v.VersionYear}" : "") 
-                                    + (v.IsDefault ? " ★" : "")
-                                    + (v.VersionStatus == VersionStatus.Superseded ? " [Superseded]" : "");
-
                                 var fullDisplayName = BuildVersionCaption(
                                     orgGroup.Key.StandardOrgName,
                                     specGroup.Key.TMSStandard,
@@ -422,7 +433,7 @@ namespace LIMSApi.Repositories
                                 result.Add(new DropdwonSelector
                                 {
                                     Id = v.VersionID!.Value,
-                                    Name = versionLabel,
+                                    Name = fullDisplayName,
                                     Level = 2,
                                     Selectable = true,
                                     NodeType = "Version",
@@ -473,7 +484,7 @@ namespace LIMSApi.Repositories
                          select new DropdwonSelector
                          {
                              Id = a.ID,
-                             Name = a.Name,
+                             Name = a.DisplayTitle ?? (!string.IsNullOrEmpty(a.TestMethodStandard) ? a.TestMethodStandard : a.Name),
                          };
             return _query.ToListAsync();
         }
@@ -498,25 +509,44 @@ namespace LIMSApi.Repositories
 
         public async Task<List<DropdwonSelector>> GetVersionsBySpecId(long specId, bool includeAll = false)
         {
+            var spec = await _context.TestMethodSpecifications
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.ID == specId);
+
+            string? orgName = null;
+            if (spec != null && spec.StandardOrganizationID > 0)
+            {
+                orgName = await _context.StandardOrganizationMasters
+                    .Where(o => o.ID == spec.StandardOrganizationID)
+                    .Select(o => o.Name)
+                    .FirstOrDefaultAsync();
+            }
+
             var query = _context.TestMethodSpecificationVersions
                 .Where(v => v.TestMethodSpecificationID == specId);
 
             if (!includeAll)
                 query = query.Where(v => v.Status == VersionStatus.Active);
 
-            return await query
+            var list = await query
                 .OrderBy(v => v.IsDefault ? 0 :
                               v.Status == VersionStatus.Active ? 1 :
                               v.Status == VersionStatus.Draft ? 2 :
                               v.Status == VersionStatus.Superseded ? 3 : 4)
-                .Select(v => new DropdwonSelector
-                {
-                    Id = v.ID,
-                    Name = v.Version + (v.Year != null ? " (" + v.Year + ")" : "")
-                         + (v.IsDefault ? " ★" : "")
-                         + (v.Status != VersionStatus.Active ? " [" + v.Status + "]" : ""),
-                })
                 .ToListAsync();
+
+            return list.Select(v => new DropdwonSelector
+            {
+                Id = v.ID,
+                Name = BuildVersionCaption(
+                    orgName,
+                    spec?.TestMethodStandard,
+                    spec?.Part,
+                    v.Version,
+                    v.Year,
+                    v.Status,
+                    v.IsDefault)
+            }).ToList();
         }
 
         public async Task<bool> ExistsByOrgAndStandard(long orgId, string testMethodStandard)
@@ -605,14 +635,9 @@ namespace LIMSApi.Repositories
                 {
                     var dispTitle = !string.IsNullOrEmpty(exactRaw.DisplayTitle)
                         ? exactRaw.DisplayTitle
-                        : (!string.IsNullOrEmpty(exactRaw.Part)
-                            ? $"{exactRaw.TestMethodStandard} ({exactRaw.Part}) : {exactRaw.SpecName}"
-                            : $"{exactRaw.TestMethodStandard} : {exactRaw.SpecName}");
-
-                    var versionLabel = exactRaw.Version 
-                        + (!string.IsNullOrEmpty(exactRaw.Year) ? $" ({exactRaw.Year})" : "")
-                        + (exactRaw.IsDefault ? " ★" : "")
-                        + (exactRaw.Status == VersionStatus.Superseded ? " [Superseded]" : "");
+                        : (!string.IsNullOrEmpty(exactRaw.TestMethodStandard)
+                            ? (!string.IsNullOrEmpty(exactRaw.Part) ? $"{exactRaw.TestMethodStandard} ({exactRaw.Part})" : exactRaw.TestMethodStandard)
+                            : exactRaw.SpecName);
 
                     var fullDisplayName = BuildVersionCaption(
                         exactRaw.StandardOrgName,
@@ -626,7 +651,7 @@ namespace LIMSApi.Repositories
                     var exactMatch = new DropdwonSelector
                     {
                         Id = exactRaw.ID,
-                        Name = versionLabel,
+                        Name = fullDisplayName,
                         Level = 2,
                         Selectable = true,
                         NodeType = "Version",
@@ -742,8 +767,8 @@ namespace LIMSApi.Repositories
                         DisplayTitle = !string.IsNullOrEmpty(x.SpecDisplayTitle)
                             ? x.SpecDisplayTitle
                             : (!string.IsNullOrEmpty(x.SpecPart)
-                                ? $"{x.TestMethodStandard} ({x.SpecPart}) : {x.SpecName}"
-                                : $"{x.TestMethodStandard} : {x.SpecName}")
+                                ? $"{x.TestMethodStandard} ({x.SpecPart})"
+                                : $"{x.TestMethodStandard}")
                     });
 
                     foreach (var specGroup in specGroups)
@@ -788,7 +813,7 @@ namespace LIMSApi.Repositories
                             result.Add(new DropdwonSelector
                             {
                                 Id = v.VersionID,
-                                Name = versionLabel,
+                                Name = fullDisplayName,
                                 Level = 2,
                                 Selectable = true,
                                 NodeType = "Version",

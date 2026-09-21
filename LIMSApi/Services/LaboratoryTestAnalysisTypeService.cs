@@ -159,7 +159,7 @@ namespace LIMSApi.Services
             if (existing == null)
                 throw new InvalidOperationException("Analysis Type not found!");
 
-            await DeleteValidationHelper.ValidateDeleteAsync<LaboratoryTestAnalysisType>(_context, id, "Laboratory Test Analysis Type");
+            await DeleteValidationHelper.ValidateDeleteAsync<LaboratoryTestAnalysisType>(_context, id, "Laboratory Test Analysis Type", existing.Name);
 
             existing.IsActive = false;
             existing.ModifiedOn = DateTime.UtcNow;
@@ -201,7 +201,11 @@ namespace LIMSApi.Services
                 .Select(m => new DropdwonSelector
                 {
                     Id = m.TestMethodSpecificationID,
-                    Name = m.TestMethodSpecification!.DisplayTitle ?? m.TestMethodSpecification.Name
+                    Name = !string.IsNullOrEmpty(m.TestMethodSpecification!.DisplayTitle)
+                        ? m.TestMethodSpecification.DisplayTitle
+                        : (!string.IsNullOrEmpty(m.TestMethodSpecification.TestMethodStandard)
+                            ? m.TestMethodSpecification.TestMethodStandard
+                            : m.TestMethodSpecification.Name)
                 })
                 .Distinct()
                 .ToListAsync();
