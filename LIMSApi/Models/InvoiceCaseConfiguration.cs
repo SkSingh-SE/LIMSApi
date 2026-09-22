@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Models
 {
-    [Index(nameof(Name), nameof(SelectionType), IsUnique = true)]
+    // Unique index on (Name, SelectionType) where [IsActive] = 1 is configured in LIMSContext.OnModelCreating
     public class InvoiceCaseConfiguration : AuditProperty
 
     {

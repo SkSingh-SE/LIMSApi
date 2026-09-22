@@ -20,6 +20,8 @@ namespace LIMSApi.Repositories.Interface
         Task<List<TestMethodSpecificationVersion>> GetVersionsDueForReview(DateTime cutoffDate);
         Task<List<DropdwonSelector>> GetVersionsBySpecId(long specId, bool includeAll = false);
         Task<List<DropdwonSelector>> GetTestMethodSpecificationVersionDropdown(string? searchTerm, int pageNo, int pageSize, long metalId = 0);
+        Task<bool> ExistsByOrgStandardAndPart(long orgId, string testMethodStandard, string? part);
+        Task<bool> ExistsByOrgStandardAndPartAndNotId(long orgId, string testMethodStandard, string? part, long excludeId);
         Task<bool> ExistsByOrgAndStandard(long orgId, string testMethodStandard);
         Task<bool> ExistsByOrgAndStandardAndNotId(long orgId, string testMethodStandard, long excludeId);
         Task<List<DropdwonSelector>> GetAllStandardOrganizations();
