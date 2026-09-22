@@ -1110,6 +1110,12 @@ public partial class LIMSContext : DbContext
             .IsUnique()
             .HasFilter("[IsActive] = 1");
 
+        // One active InvoiceCaseConfiguration per Name + SelectionType (filtered by IsActive = 1 for NABL audit compliance)
+        modelBuilder.Entity<InvoiceCaseConfiguration>()
+            .HasIndex(x => new { x.Name, x.SelectionType })
+            .IsUnique()
+            .HasFilter("[IsActive] = 1");
+
         // EquipmentReferenceMaterial → EquipmentMaster (no cascade)
         modelBuilder.Entity<EquipmentReferenceMaterial>()
             .HasOne(x => x.Equipment)

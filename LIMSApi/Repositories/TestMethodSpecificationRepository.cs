@@ -549,27 +549,41 @@ namespace LIMSApi.Repositories
             }).ToList();
         }
 
-        public async Task<bool> ExistsByOrgAndStandard(long orgId, string testMethodStandard)
+        public async Task<bool> ExistsByOrgStandardAndPart(long orgId, string testMethodStandard, string? part)
         {
             var std = (testMethodStandard ?? "").Trim().ToLower();
+            var p = (part ?? "").Trim().ToLower();
 
             return await _context.TestMethodSpecifications
                 .AnyAsync(x => x.IsActive
                             && x.CompanyCode == loggedInUser.CompanyCode
                             && x.StandardOrganizationID == orgId
-                            && x.TestMethodStandard.Trim().ToLower() == std);
+                            && x.TestMethodStandard.Trim().ToLower() == std
+                            && (x.Part ?? "").Trim().ToLower() == p);
         }
 
-        public async Task<bool> ExistsByOrgAndStandardAndNotId(long orgId, string testMethodStandard, long excludeId)
+        public async Task<bool> ExistsByOrgStandardAndPartAndNotId(long orgId, string testMethodStandard, string? part, long excludeId)
         {
             var std = (testMethodStandard ?? "").Trim().ToLower();
+            var p = (part ?? "").Trim().ToLower();
 
             return await _context.TestMethodSpecifications
                 .AnyAsync(x => x.IsActive
                             && x.ID != excludeId
                             && x.CompanyCode == loggedInUser.CompanyCode
                             && x.StandardOrganizationID == orgId
-                            && x.TestMethodStandard.Trim().ToLower() == std);
+                            && x.TestMethodStandard.Trim().ToLower() == std
+                            && (x.Part ?? "").Trim().ToLower() == p);
+        }
+
+        public async Task<bool> ExistsByOrgAndStandard(long orgId, string testMethodStandard)
+        {
+            return await ExistsByOrgStandardAndPart(orgId, testMethodStandard, null);
+        }
+
+        public async Task<bool> ExistsByOrgAndStandardAndNotId(long orgId, string testMethodStandard, long excludeId)
+        {
+            return await ExistsByOrgStandardAndPartAndNotId(orgId, testMethodStandard, null, excludeId);
         }
 
         public async Task<List<DropdwonSelector>> GetAllStandardOrganizations()

@@ -48,10 +48,11 @@ namespace LIMSApi.Services
             if (string.IsNullOrWhiteSpace(model.Name))
                 throw new ArgumentException("TestMethodSpecification name should not be empty!");
 
-            bool exists = await _TestMethodSpecificationRepository.ExistsByOrgAndStandard(model.StandardOrganizationID, model.TestMethodStandard);
+            bool exists = await _TestMethodSpecificationRepository.ExistsByOrgStandardAndPart(model.StandardOrganizationID, model.TestMethodStandard, model.Part);
             if (exists)
             {
-                throw new InvalidOperationException($"Test Method Specification for Standard '{model.TestMethodStandard}' under the selected Organization already exists!");
+                var partSuffix = string.IsNullOrWhiteSpace(model.Part) ? "" : $" ({model.Part.Trim()})";
+                throw new InvalidOperationException($"Test Method Specification for Standard '{model.TestMethodStandard}'{partSuffix} under the selected Organization already exists!");
             }
 
             model.CreatedOn = DateTime.UtcNow;
@@ -110,10 +111,11 @@ namespace LIMSApi.Services
             if (string.IsNullOrWhiteSpace(model.TestMethodStandard))
                 throw new ArgumentException("Test Method Standard is required!");
 
-            bool exists = await _TestMethodSpecificationRepository.ExistsByOrgAndStandardAndNotId(model.StandardOrganizationID, model.TestMethodStandard, model.ID);
+            bool exists = await _TestMethodSpecificationRepository.ExistsByOrgStandardAndPartAndNotId(model.StandardOrganizationID, model.TestMethodStandard, model.Part, model.ID);
             if (exists)
             {
-                throw new InvalidOperationException($"Test Method Specification for Standard '{model.TestMethodStandard}' under the selected Organization already exists!");
+                var partSuffix = string.IsNullOrWhiteSpace(model.Part) ? "" : $" ({model.Part.Trim()})";
+                throw new InvalidOperationException($"Test Method Specification for Standard '{model.TestMethodStandard}'{partSuffix} under the selected Organization already exists!");
             }
 
             var existingTestMethodSpecification = await _TestMethodSpecificationRepository.GetTestMethodSpecificationById(model.ID);
@@ -631,13 +633,14 @@ namespace LIMSApi.Services
 
                 if (r.StandardOrganizationID > 0 && !string.IsNullOrWhiteSpace(item.TestMethodStandard))
                 {
-                    var exists = await _TestMethodSpecificationRepository.ExistsByOrgAndStandard(
-                        r.StandardOrganizationID.Value, item.TestMethodStandard.Trim());
+                    var exists = await _TestMethodSpecificationRepository.ExistsByOrgStandardAndPart(
+                        r.StandardOrganizationID.Value, item.TestMethodStandard.Trim(), item.Part?.Trim());
                     r.Exists = exists;
                     if (exists)
                     {
                         r.Status = "error";
-                        r.Messages.Add($"Already exists: '{item.StandardOrganization} {item.TestMethodStandard}'.");
+                        var partSuffix = string.IsNullOrWhiteSpace(item.Part) ? "" : $" {item.Part.Trim()}";
+                        r.Messages.Add($"Already exists: '{item.StandardOrganization} {item.TestMethodStandard}{partSuffix}'.");
                     }
                 }
 
@@ -697,12 +700,13 @@ namespace LIMSApi.Services
                     continue;
                 }
 
-                var exists = await _TestMethodSpecificationRepository.ExistsByOrgAndStandard(
-                    orgId, item.TestMethodStandard.Trim());
+                var exists = await _TestMethodSpecificationRepository.ExistsByOrgStandardAndPart(
+                    orgId, item.TestMethodStandard.Trim(), item.Part?.Trim());
                 if (exists)
                 {
                     skipped++;
-                    errors.Add($"Row {item.RowNumber}: '{item.StandardOrganization} {item.TestMethodStandard}' already exists.");
+                    var partSuffix = string.IsNullOrWhiteSpace(item.Part) ? "" : $" {item.Part.Trim()}";
+                    errors.Add($"Row {item.RowNumber}: '{item.StandardOrganization} {item.TestMethodStandard}{partSuffix}' already exists.");
                     continue;
                 }
 
