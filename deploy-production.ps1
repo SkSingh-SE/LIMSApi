@@ -57,7 +57,7 @@ for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
     Write-Host "Deployment Attempt $attempt of $maxAttempts..." -ForegroundColor Cyan
 
     & $MSDeployPath -verb:sync `
-        -source:contentPath="$SourcePath" `
+        "-source:contentPath=`"$SourcePath`"" `
         -dest:contentPath="dmspl91-001-site3",wmsvc="https://win6046.site4now.net:8172/MsDeploy.axd?site=dmspl91-001-site3",userName="dmspl91-001",password="$Password",authtype="Basic" `
         -enableRule:AppOffline `
         -skip:objectName=dirPath,absolutePath=".*\\logs" `
