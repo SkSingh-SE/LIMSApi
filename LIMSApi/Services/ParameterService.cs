@@ -175,8 +175,8 @@ namespace LIMSApi.Services
         public async Task<List<DropdwonSelector>> GetParameterDropdown(string? searchTerm, int pageNo, int pageSize, string? elementTypes = null)
             => await _parameterRepository.GetParameterDropdown(searchTerm, pageNo, pageSize, elementTypes);
 
-        public async Task<List<DropdwonSelector>> GetChemicalParameterDropdown(string? searchTerm, int pageNo, int pageSize)
-            => await _parameterRepository.GetChemicalParameterDropdown(searchTerm, pageNo, pageSize);
+        public async Task<List<DropdwonSelector>> GetChemicalParameterDropdown(string? searchTerm, int pageNo, int pageSize, string? elementTypes = null)
+            => await _parameterRepository.GetChemicalParameterDropdown(searchTerm, pageNo, pageSize, elementTypes);
 
         public async Task<List<DropdwonSelector>> GetMechanicalParameterDropdown(string? searchTerm, int pageNo, int pageSize)
             => await _parameterRepository.GetMechanicalParameterDropdown(searchTerm, pageNo, pageSize);

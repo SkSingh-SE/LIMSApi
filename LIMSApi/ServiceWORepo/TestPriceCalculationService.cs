@@ -780,41 +780,106 @@ namespace LIMSApi.ServiceWORepo
                     return breakdown;
             }
 
-            // GROUP 1c: Legacy Element count pricing (auto-detect for chemical tests)
+            // GROUP 1c: Element pricing (specific element match, count slabs, and override surcharges)
             var elementPrices = prices.Where(p =>
                 p.Configuration != null &&
                 string.Equals(p.Configuration.SelectionType, "Element", StringComparison.OrdinalIgnoreCase)).ToList();
 
             if (elementPrices.Any())
             {
-                var elementCount = billableParams.Count;
-                // Slab match: find nearest slab >= elementCount
-                var matched = elementPrices
-                    .Where(p => decimal.TryParse(p.Configuration!.Value, out var v) && v >= elementCount)
-                    .OrderBy(p => decimal.Parse(p.Configuration!.Value))
-                    .FirstOrDefault();
+                var remainingParams = new List<TestResultParameter>(billableParams);
+                var elementSurchargeBreakdown = new List<PriceBreakdownDto>();
 
-                // If exact slab not found, use the highest available slab
-                if (matched == null)
-                {
-                    matched = elementPrices
-                        .Where(p => decimal.TryParse(p.Configuration!.Value, out _))
-                        .OrderByDescending(p => decimal.Parse(p.Configuration!.Value))
-                        .FirstOrDefault();
-                }
+                // 1. Check override / linked parameter surcharges
+                var overridePrices = elementPrices.Where(p =>
+                    string.Equals(p.Configuration!.Value, "OVERRIDE", StringComparison.OrdinalIgnoreCase) ||
+                    !string.IsNullOrWhiteSpace(p.Configuration!.OverrideParameterIDs)).ToList();
 
-                if (matched != null)
+                foreach (var op in overridePrices)
                 {
-                    breakdown.Add(new PriceBreakdownDto
+                    if (!string.IsNullOrWhiteSpace(op.Configuration!.OverrideParameterIDs))
                     {
-                        ParameterId = 0,
-                        ParameterName = $"{testName} ({elementCount} parameters)",
-                        UnitPrice = matched.Price,
-                        Quantity = 1,
-                        Amount = matched.Price
-                    });
-                    return breakdown;
+                        var linkedIds = ParseLinkedIds(op.Configuration!.OverrideParameterIDs);
+                        var matchedLinked = remainingParams.Where(p => linkedIds.Contains(p.ParameterID)).ToList();
+                        foreach (var mp in matchedLinked)
+                        {
+                            elementSurchargeBreakdown.Add(new PriceBreakdownDto
+                            {
+                                ParameterId = mp.ParameterID,
+                                ParameterName = $"{mp.ParameterName ?? "Element"} ({op.Name ?? "Surcharge"})",
+                                UnitPrice = op.Price,
+                                Quantity = 1,
+                                Amount = op.Price
+                            });
+                            remainingParams.Remove(mp);
+                        }
+                    }
                 }
+
+                // 2. Check specific element name or symbol match (e.g. Value = "Ag", "Fe", "Gold")
+                var specificNamedPrices = elementPrices.Where(p =>
+                    !decimal.TryParse(p.Configuration!.Value?.TrimStart('<', '='), out _) &&
+                    !string.Equals(p.Configuration!.Value, "OVERRIDE", StringComparison.OrdinalIgnoreCase)).ToList();
+
+                foreach (var sp in specificNamedPrices)
+                {
+                    var val = sp.Configuration!.Value?.Trim();
+                    if (!string.IsNullOrEmpty(val))
+                    {
+                        var matchedParam = remainingParams.FirstOrDefault(p =>
+                            string.Equals(p.ParameterName, val, StringComparison.OrdinalIgnoreCase) ||
+                            (paramDetailsDict != null && paramDetailsDict.TryGetValue(p.ParameterID, out var sym) && string.Equals(sym, val, StringComparison.OrdinalIgnoreCase)));
+
+                        if (matchedParam != null)
+                        {
+                            elementSurchargeBreakdown.Add(new PriceBreakdownDto
+                            {
+                                ParameterId = matchedParam.ParameterID,
+                                ParameterName = $"{matchedParam.ParameterName ?? val} ({sp.Name ?? "Element Charge"})",
+                                UnitPrice = sp.Price,
+                                Quantity = 1,
+                                Amount = sp.Price
+                            });
+                            remainingParams.Remove(matchedParam);
+                        }
+                    }
+                }
+
+                // 3. Count slab match for remaining elements
+                var slabPrices = elementPrices.Where(p =>
+                    decimal.TryParse(p.Configuration!.Value?.TrimStart('<', '='), out _)).ToList();
+
+                if (slabPrices.Any() && remainingParams.Any())
+                {
+                    var count = remainingParams.Count;
+                    var matchedSlab = slabPrices
+                        .Where(p => decimal.TryParse(p.Configuration!.Value?.TrimStart('<', '='), out var v) && v >= count)
+                        .OrderBy(p => decimal.Parse(p.Configuration!.Value!.TrimStart('<', '=')))
+                        .FirstOrDefault()
+                        ?? slabPrices
+                        .OrderByDescending(p => decimal.Parse(p.Configuration!.Value!.TrimStart('<', '=')))
+                        .FirstOrDefault();
+
+                    if (matchedSlab != null)
+                    {
+                        breakdown.Add(new PriceBreakdownDto
+                        {
+                            ParameterId = 0,
+                            ParameterName = matchedSlab.Name ?? $"{testName} ({count} parameters)",
+                            UnitPrice = matchedSlab.Price,
+                            Quantity = 1,
+                            Amount = matchedSlab.Price
+                        });
+                    }
+                }
+
+                if (elementSurchargeBreakdown.Any())
+                {
+                    breakdown.AddRange(elementSurchargeBreakdown);
+                }
+
+                if (breakdown.Any())
+                    return breakdown;
             }
 
             // GROUP 2: Dimensional pricing (prices with Config that has a SelectionType)
