@@ -267,7 +267,7 @@ namespace LIMSApi.Repositories
         }
 
         // ─── Dropdown: Chemical ───────────────────────────
-        public async Task<List<DropdwonSelector>> GetChemicalParameterDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> GetChemicalParameterDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20, string? elementTypes = null)
         {
             if (pageNo < 0) pageNo = 0;
 
@@ -291,6 +291,24 @@ namespace LIMSApi.Repositories
                              unit = u != null ? u.Name : "",
                               DropdownOptions = a.DropdownOptions.Where(o => o.IsActive).OrderBy(o => o.DisplayOrder).Select(o => new { o.DisplayText, o.Value, o.IsDefault })
                           };
+
+            if (!string.IsNullOrWhiteSpace(elementTypes))
+            {
+                var typesList = elementTypes.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                                           .Select(t => t.Trim().ToLower())
+                                           .ToList();
+                if (typesList.Any())
+                {
+                    if (typesList.Contains("normal"))
+                    {
+                        _query = _query.Where(x => x.ElementType == null || x.ElementType == "" || typesList.Contains(x.ElementType.ToLower()));
+                    }
+                    else
+                    {
+                        _query = _query.Where(x => x.ElementType != null && typesList.Contains(x.ElementType.ToLower()));
+                    }
+                }
+            }
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {

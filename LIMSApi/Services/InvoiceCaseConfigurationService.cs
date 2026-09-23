@@ -31,26 +31,10 @@ namespace LIMSApi.Services
                 if (await _InvoiceCaseConfigurationRepository.ExistsByNameAndSelectionType(model.Name, model.SelectionType))
                     throw new InvalidOperationException("Same InvoiceCaseConfiguration already exists!");
 
-                if (model.SelectionType == "ElementCountFormula")
-                {
-                    bool isBaseTier = Helpers.ConditionMatcher.IsBaseTier(model.Value);
-                    bool isOverride = Helpers.ConditionMatcher.IsOverride(model.Value);
-
-                    if (!isBaseTier && !isOverride)
-                        throw new ArgumentException("ElementCountFormula: Value must be a valid condition (e.g. <=1, ==2, >3) or 'override' for element overrides.");
-                }
-
                 if (model.SelectionType == "ChemicalElement")
                 {
                     if (string.IsNullOrWhiteSpace(model.Value))
                         throw new ArgumentException("ChemicalElement: Value must not be empty (e.g. BASE, SPECIAL, SUPER, or element count like 1, 2, 3).");
-                }
-
-                // Extra-tier SpectroCombination configs require a base "Full" config to exist first
-                if (model.SelectionType == "SpectroCombination" && !model.IsBaseConfig)
-                {
-                    if (!await _InvoiceCaseConfigurationRepository.ExistsBaseSpectroConfig())
-                        throw new InvalidOperationException("Please create the base 'Full' configuration (with 'Base Configuration' enabled) before adding extra-element combinations.");
                 }
 
                 model.CreatedOn = DateTime.UtcNow;
@@ -76,26 +60,10 @@ namespace LIMSApi.Services
                 if (await _InvoiceCaseConfigurationRepository.ExistsByNameAndSelectionTypeAndNotId(model.Name, model.SelectionType, model.ID))
                     throw new InvalidOperationException("Same InvoiceCaseConfiguration already exists!");
 
-                if (model.SelectionType == "ElementCountFormula")
-                {
-                    bool isBaseTier = Helpers.ConditionMatcher.IsBaseTier(model.Value);
-                    bool isOverride = Helpers.ConditionMatcher.IsOverride(model.Value);
-
-                    if (!isBaseTier && !isOverride)
-                        throw new ArgumentException("ElementCountFormula: Value must be a valid condition (e.g. <=1, ==2, >3) or 'override' for element overrides.");
-                }
-
                 if (model.SelectionType == "ChemicalElement")
                 {
                     if (string.IsNullOrWhiteSpace(model.Value))
                         throw new ArgumentException("ChemicalElement: Value must not be empty (e.g. BASE, SPECIAL, SUPER, or element count like 1, 2, 3).");
-                }
-
-                // Extra-tier SpectroCombination configs require a base "Full" config to exist
-                if (model.SelectionType == "SpectroCombination" && !model.IsBaseConfig)
-                {
-                    if (!await _InvoiceCaseConfigurationRepository.ExistsBaseSpectroConfig())
-                        throw new InvalidOperationException("Please create the base 'Full' configuration (with 'Base Configuration' enabled) before adding extra-element combinations.");
                 }
 
                 var existingInvoiceCaseConfiguration = await _InvoiceCaseConfigurationRepository.GetInvoiceCaseConfigurationById(model.ID);

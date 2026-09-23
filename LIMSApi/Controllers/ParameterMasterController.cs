@@ -91,9 +91,9 @@ namespace LIMSApi.Controllers
         }
 
         [HttpGet("chemical-dropdown")]
-        public async Task<IActionResult> GetChemicalParameterDropdown(string? searchTerm, int pageNo, int pageSize)
+        public async Task<IActionResult> GetChemicalParameterDropdown(string? searchTerm, int pageNo, int pageSize, [FromQuery] string? elementTypes = null)
         {
-            var data = await _parameterService.GetChemicalParameterDropdown(searchTerm, pageNo, pageSize);
+            var data = await _parameterService.GetChemicalParameterDropdown(searchTerm, pageNo, pageSize, elementTypes);
             return data == null ? NoContent() : Ok(data);
         }
 
