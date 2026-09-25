@@ -1194,11 +1194,15 @@ namespace LIMSApi.Services
             try
             {
                 await ModifySamplePlan(model);
-                var entity = await _SampleInwardRepository.GetSampleInwardWithPlans(model.ID);
+                var entity = await _context.SampleInwards
+                    .Include(i => i.SampleDetails.Where(sd => sd.IsActive))
+                        .ThenInclude(sd => sd.TestPlans)
+                    .FirstOrDefaultAsync(x => x.ID == model.ID && x.IsActive);
                 if (entity == null)
                     throw new Exception("Sample Inward not found");
 
                 entity.ReviewStatus = "Pending for Approval";
+                entity.ModifiedOn = DateTime.UtcNow;
                 //entity.ReviewedBy = loggedInUser.EmployeeID;
                 //entity.ReviewedOn = DateTime.UtcNow;
 
@@ -1225,8 +1229,6 @@ namespace LIMSApi.Services
                 await _context.SaveChangesAsync();
 
                 await _workflowService.StartWorkflow(entity.ID, WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Request_Review));
-
-                await _SampleInwardRepository.UpdateSampleInward(entity);
 
                 // Re-read the inward status after StartWorkflow — self-approval may have already
                 // advanced the inward to REVIEW_COMPLETED. Only push statuses if still UNDER_PLANNING.

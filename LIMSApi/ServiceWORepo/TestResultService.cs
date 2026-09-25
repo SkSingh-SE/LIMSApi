@@ -1402,8 +1402,8 @@ namespace LIMSApi.ServiceWORepo
         {
             var header = await _db.TestResultHeaders.FirstOrDefaultAsync(h => h.ID == dto.HeaderId)
                 ?? throw new KeyNotFoundException($"Test header {dto.HeaderId} not found.");
-            if (header.Status == "Verified" || header.Status == "PendingVerification")
-                throw new InvalidOperationException($"Cannot change method — test is in '{header.Status}' status. Reject verification first to make changes.");
+            if (header.Status != "Pending" && header.Status != "VerificationRejected")
+                throw new InvalidOperationException($"Cannot change method or specification — test configuration is locked in '{header.Status}' status.");
 
             var plan = await _db.TestPlans
                 .Include(p => p.GeneralTests).ThenInclude(g => g.Methods)
@@ -1512,6 +1512,9 @@ namespace LIMSApi.ServiceWORepo
                 .Include(h => h.Parameters)
                 .FirstOrDefaultAsync(h => h.ID == headerId)
                 ?? throw new KeyNotFoundException("Test header not found.");
+
+            if (header.Status != "Pending" && header.Status != "VerificationRejected")
+                throw new InvalidOperationException($"Cannot reload parameters — test configuration is locked in '{header.Status}' status.");
 
             var plan = await _db.TestPlans
                 .Include(p => p.GeneralTests)
@@ -3006,8 +3009,8 @@ namespace LIMSApi.ServiceWORepo
             if (param == null) throw new KeyNotFoundException("Parameter not found.");
 
             var header = await _db.TestResultHeaders.FindAsync(param.TestResultHeaderID);
-            if (header != null && (header.Status == "Verified" || header.Status == "PendingVerification"))
-                throw new InvalidOperationException("Cannot delete parameter from a verified or pending verification test.");
+            if (header != null && header.Status != "Pending" && header.Status != "VerificationRejected")
+                throw new InvalidOperationException($"Cannot delete parameter — test configuration is locked in '{header.Status}' status.");
 
             _db.TestResultParameters.Remove(param);
             await _db.SaveChangesAsync();
@@ -3024,6 +3027,9 @@ namespace LIMSApi.ServiceWORepo
 
             if (header == null)
                 throw new Exception("TestResultHeader not found.");
+
+            if (header.Status != "Pending" && header.Status != "VerificationRejected")
+                throw new InvalidOperationException($"Cannot add parameter — test configuration is locked in '{header.Status}' status.");
 
             var param = new TestResultParameter
             {
@@ -3258,6 +3264,9 @@ namespace LIMSApi.ServiceWORepo
 
             if (header == null)
                 throw new KeyNotFoundException("TestResultHeader not found.");
+
+            if (header.Status != "Pending" && header.Status != "VerificationRejected")
+                throw new InvalidOperationException($"Cannot add parameter — test configuration is locked in '{header.Status}' status.");
 
             // Load the parameter from master
             var masterParam = await _db.ParameterMasters
@@ -3568,8 +3577,26 @@ namespace LIMSApi.ServiceWORepo
                     "Cannot submit for report review: No 'Report Review' workflow is configured. Contact administrator.");
 
             var report = await _db.ReportHeaders
-                .FirstOrDefaultAsync(r => r.SampleID == sampleId && r.IsActive)
-                ?? throw new InvalidOperationException("Report not found. Complete all tests first.");
+                .FirstOrDefaultAsync(r => r.SampleID == sampleId && r.IsActive);
+
+            if (report == null)
+            {
+                var anyHeader = await _db.TestResultHeaders
+                    .FirstOrDefaultAsync(h => h.SampleID == sampleId && h.IsActive);
+
+                report = new ReportHeader
+                {
+                    SampleID = sampleId,
+                    CertificateNo = anyHeader?.CertificateNo,
+                    Status = "Pending",
+                    CreatedOn = DateTime.UtcNow,
+                    CreatedBy = loggedInUser.EmployeeID,
+                    IsActive = true
+                };
+
+                _db.ReportHeaders.Add(report);
+                await _db.SaveChangesAsync();
+            }
 
             if (report.Status != "Pending")
                 throw new InvalidOperationException($"Report is already in '{report.Status}' state.");
