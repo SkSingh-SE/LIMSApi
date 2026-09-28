@@ -164,9 +164,7 @@ namespace LIMSApi.Services
 
                 // Update existing grade
                 existingGrade.Grade = grade.Grade;
-                existingGrade.IsUNS = grade.IsUNS;
-                existingGrade.UNSSteelNumber = grade.UNSSteelNumber;
-                existingGrade.MetalClassificationID = grade.MetalClassificationID;
+                existingGrade.Remarks = grade.Remarks;
                 existingGrade.IdentifierValuesJson = grade.IdentifierValuesJson;
 
                 // Remove missing lines (only check lines with real IDs from payload, ignore new lines with ID=0)
@@ -338,9 +336,8 @@ namespace LIMSApi.Services
                 {
                     ID = 0,
                     Grade = g.Grade,
-                    IsUNS = g.IsUNS,
-                    UNSSteelNumber = g.UNSSteelNumber,
-                    MetalClassificationID = g.MetalClassificationID,
+                    Remarks = g.Remarks,
+                    IsActive = g.IsActive,
                     IdentifierValuesJson = g.IdentifierValuesJson,
                     SpecificationLines = g.SpecificationLines.Select(l => new SpecificationLine
                     {
@@ -426,13 +423,13 @@ namespace LIMSApi.Services
         {
             return await _specificationRepo.GetSpecificationHeaderDropdown(searchTerm, pageNo, pageSize);
         }
-        public async Task<List<DropdwonSelector>> GetGradeDropdown(string? searchTerm, int pageNo, int pageSize)
+        public async Task<List<DropdwonSelector>> GetGradeDropdown(string? searchTerm, int pageNo, int pageSize, long specHeaderId = 0, long productMasterId = 0)
         {
-            return await _specificationRepo.GetGradeDropdown(searchTerm, pageNo, pageSize);
+            return await _specificationRepo.GetGradeDropdown(searchTerm, pageNo, pageSize, specHeaderId, productMasterId);
         }
-        public async Task<List<DropdwonSelector>> GetGradeDropdownMetalWise(string? searchTerm, int pageNo, int pageSize, long metalId)
+        public async Task<List<DropdwonSelector>> GetGradeDropdownMetalWise(string? searchTerm, int pageNo, int pageSize, long metalId, long specHeaderId = 0, long productMasterId = 0)
         {
-            return await _specificationRepo.GetGradeDropdownMetalWise(searchTerm, pageNo, pageSize, metalId);
+            return await _specificationRepo.GetGradeDropdownMetalWise(searchTerm, pageNo, pageSize, metalId, specHeaderId, productMasterId);
         }
         public async Task<List<DropdwonSelector>> GetDefaultStandardForSpecification(long gradeId)
         {

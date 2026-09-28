@@ -77,6 +77,7 @@ namespace LIMSApi.Jobs
             {
                 // Find all inwards for this customer with PRICE_SNAPSHOT status that don't have an invoice yet
                 var pendingInwards = await _db.SampleInwards
+                    .IgnoreQueryFilters()
                     .Where(i => i.CustomerID == customerId
                         && i.IsActive
                         && i.BillingStatus == "PRICE_SNAPSHOT"

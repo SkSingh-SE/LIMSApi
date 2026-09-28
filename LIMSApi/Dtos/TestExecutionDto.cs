@@ -40,6 +40,10 @@ namespace LIMSApi.Dtos
         public string? TestMethodVersion { get; set; }
         public string? SpecificationTitle { get; set; }
         public string? GradeName { get; set; }
+        public string? ActualConditionsJson { get; set; }
+        public string? ActualEquipmentJson { get; set; }
+        public List<ActualConditionEntryDto> ActualConditions { get; set; } = new();
+        public List<ActualEquipmentEntryDto> ActualEquipment { get; set; } = new();
     }
 
     public class TestSpecimenDto
@@ -80,6 +84,47 @@ namespace LIMSApi.Dtos
     {
         public List<TestSpecimenSaveDto> Specimens { get; set; } = new();
         public List<SnapshotConditionSaveDto>? Conditions { get; set; }
+        public List<ActualConditionEntryDto>? ActualConditions { get; set; }
+        public List<ActualEquipmentEntryDto>? ActualEquipment { get; set; }
+        public string? Remarks { get; set; }
+        public string? ExecutionRemarks { get; set; }
+    }
+
+    public class ActualConditionEntryDto
+    {
+        public long? ConditionMasterID { get; set; }
+        public long? ConditionDimensionID { get => ConditionMasterID; set => ConditionMasterID = value; }
+        public string? DimensionName { get; set; }
+        public string? DimensionCode { get; set; }
+        public string? ConfiguredValue { get; set; }
+        public string? ActualValue { get; set; }
+        public string? SelectedExecutionValue { get => ActualValue; set => ActualValue = value; }
+        public string? ActualExecutionValue { get => ActualValue; set => ActualValue = value; }
+        public string? Unit { get; set; }
+        public string? Remarks { get; set; }
+        public DateTime ObservedOnUtc { get; set; } = DateTime.UtcNow;
+        public long? AnalystID { get; set; }
+    }
+
+    public class ActualEquipmentEntryDto
+    {
+        public long EquipmentID { get => EquipmentMasterID ?? 0; set => EquipmentMasterID = value; }
+        public long? EquipmentRequirementMasterID { get; set; }
+        public long? EquipmentRequirementID { get => EquipmentRequirementMasterID; set => EquipmentRequirementMasterID = value; }
+        public long? EquipmentMasterID { get; set; }
+        public string? EquipmentCode { get; set; }
+        public string? EquipmentName { get; set; }
+        public string? Name { get => EquipmentName; set => EquipmentName = value; }
+        public string? Model { get; set; }
+        public string? EquipmentType { get; set; }
+        public string? CalibrationCertificateNo { get; set; }
+        public string? CalibrationNo { get => CalibrationCertificateNo; set => CalibrationCertificateNo = value; }
+        public string? CalibrationDueDate { get; set; }
+        public DateTime? CalibratedOn { get; set; }
+        public DateTime? ValidUpto { get; set; }
+        public string? CalibrationStatus { get; set; }
+        public string? ReadinessStatus { get; set; }
+        public string? Remarks { get; set; }
     }
 
     public class TestSpecimenSaveDto
@@ -96,6 +141,7 @@ namespace LIMSApi.Dtos
         public long? ID { get; set; } // 0 or null for new observation
         public int ReadingNo { get; set; }
         public List<ParameterObservationResultSaveDto> ParameterResults { get; set; } = new();
+        public List<ParameterObservationResultSaveDto> Results { get => ParameterResults; set => ParameterResults = value; }
     }
 
     public class ParameterObservationResultSaveDto
@@ -113,7 +159,12 @@ namespace LIMSApi.Dtos
     {
         public long? ConditionDimensionID { get; set; }
         public string? DimensionName { get; set; }
+        public string? DimensionCode { get; set; }
+        public string? Unit { get; set; }
+        public string? ConfiguredValue { get; set; }
         public string? SelectedExecutionValue { get; set; }
+        public string? ActualExecutionValue { get => SelectedExecutionValue; set => SelectedExecutionValue = value; }
+        public string? Remarks { get; set; }
     }
 
     public class ExecutionActionDto
@@ -203,5 +254,11 @@ namespace LIMSApi.Dtos
         public string? FileType { get; set; } = "PDF";
         public string? FileUrl { get; set; }
         public long? FileSizeBytes { get; set; }
+    }
+
+    public class RetestRequestDto
+    {
+        public string ReasonCode { get; set; } = string.Empty;
+        public string Justification { get; set; } = string.Empty;
     }
 }

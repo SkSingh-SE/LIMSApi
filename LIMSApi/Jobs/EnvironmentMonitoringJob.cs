@@ -28,6 +28,7 @@ namespace LIMSApi.Jobs
 
             // Get all active lab rooms with monitoring enabled
             var labRooms = await _db.LabRooms
+                .IgnoreQueryFilters()
                 .Where(r => r.IsActive && r.MonitoringEnabled)
                 .ToListAsync();
 

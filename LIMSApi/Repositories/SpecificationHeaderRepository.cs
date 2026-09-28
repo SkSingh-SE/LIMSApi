@@ -46,8 +46,6 @@ namespace LIMSApi.Repositories
             return await _context.SpecificationHeaders
                  .AsSplitQuery()
                  .Include(x => x.Grades)
-                     .ThenInclude(g => g.MetalClassification)
-                 .Include(x => x.Grades)
                      .ThenInclude(sl => sl.SpecificationLines)
                          .ThenInclude(l => l.Parameter)
                  .Include(x => x.Grades)
@@ -286,12 +284,12 @@ namespace LIMSApi.Repositories
             return result;
         }
 
-        public async Task<List<DropdwonSelector>> GetGradeDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> GetGradeDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20, long specHeaderId = 0, long productMasterId = 0)
         {
-            return await GetGradeDropdownMetalWise(searchTerm, pageNo, pageSize, 0);
+            return await GetGradeDropdownMetalWise(searchTerm, pageNo, pageSize, 0, specHeaderId, productMasterId);
         }
 
-        public async Task<List<DropdwonSelector>> GetGradeDropdownMetalWise(string? searchTerm, int pageNo = 0, int pageSize = 20, long metalId = 0)
+        public async Task<List<DropdwonSelector>> GetGradeDropdownMetalWise(string? searchTerm, int pageNo = 0, int pageSize = 20, long metalId = 0, long specHeaderId = 0, long productMasterId = 0)
         {
             if (pageNo < 0) pageNo = 0;
 
@@ -302,8 +300,6 @@ namespace LIMSApi.Repositories
                                         join h in _context.SpecificationHeaders on g.SpecificationHeaderID equals h.ID
                                         join so in _context.StandardOrganizationMasters on h.StandardOrganizationID equals so.ID into soGroup
                                         from so in soGroup.DefaultIfEmpty()
-                                        join mc in _context.MetalClassificationMasters on g.MetalClassificationID equals mc.ID into mcGroup
-                                        from mc in mcGroup.DefaultIfEmpty()
                                         where g.ID == exactId && h.IsActive
                                         select new DropdwonSelector
                                         {
@@ -320,13 +316,12 @@ namespace LIMSApi.Repositories
                                                 { "materialSpecificationId", h.ID },
                                                 { "materialSpecificationName", h.AliasName },
                                                 { "specificationNo", h.SpecificationNo ?? h.AliasName },
-                                                { "displayTitle", h.DisplayTitle ?? h.AliasName },
+                                                { "specDisplayTitle", h.DisplayTitle ?? h.AliasName },
                                                 { "standardOrgId", so != null ? so.ID : 0 },
                                                 { "standardOrgName", so != null ? so.Name : "" },
                                                 { "gradeId", g.ID },
                                                 { "gradeName", g.Grade },
-                                                { "metalClassificationId", g.MetalClassificationID ?? 0 },
-                                                { "metalClassificationName", mc != null ? mc.Name : "" }
+                                                { "remarks", g.Remarks ?? "" }
                                             }
                                         }).FirstOrDefaultAsync();
 
@@ -341,15 +336,12 @@ namespace LIMSApi.Repositories
                         join h in _context.SpecificationHeaders on g.SpecificationHeaderID equals h.ID
                         join so in _context.StandardOrganizationMasters on h.StandardOrganizationID equals so.ID into soGroup
                         from so in soGroup.DefaultIfEmpty()
-                        join mc in _context.MetalClassificationMasters on g.MetalClassificationID equals mc.ID into mcGroup
-                        from mc in mcGroup.DefaultIfEmpty()
-                        where h.IsActive
+                        where h.IsActive && g.IsActive
                         select new
                         {
                             GradeID = g.ID,
                             GradeName = g.Grade,
-                            MetalClassificationID = g.MetalClassificationID,
-                            MetalClassificationName = mc != null ? mc.Name : null,
+                            Remarks = g.Remarks,
                             SpecHeaderID = h.ID,
                             SpecAliasName = h.AliasName,
                             SpecNo = h.SpecificationNo,
@@ -368,9 +360,26 @@ namespace LIMSApi.Repositories
                                       || (x.StandardOrgName != null && x.StandardOrgName.Contains(search)));
             }
 
+            // Screen 14 cascade: constrain grades to the selected specification header.
+            if (specHeaderId > 0)
+            {
+                query = query.Where(x => x.SpecHeaderID == specHeaderId);
+            }
+
+            // Grade is NOT product-dependent as a gate, but filtered when product is selected (Issue #1).
+            // When product blank → all grades. When product selected → only grades mapped to that product.
+            if (productMasterId > 0)
+            {
+                query = query.Where(x => _context.ProductMasterVersionGrades.Any(pvg =>
+                    pvg.SpecificationGradeID == x.GradeID
+                    && pvg.IsActive
+                    && pvg.ProductMasterVersion != null
+                    && pvg.ProductMasterVersion.ProductMasterID == productMasterId
+                    && pvg.ProductMasterVersion.IsActive));
+            }
+
             var rawData = await query
-                .OrderBy(x => metalId > 0 ? (x.MetalClassificationID == metalId ? 0 : 1) : 0)
-                .ThenBy(x => x.StandardOrgName)
+                .OrderBy(x => x.StandardOrgName)
                 .ThenBy(x => x.SpecAliasName)
                 .ThenBy(x => x.GradeName)
                 .ToListAsync();
@@ -434,7 +443,7 @@ namespace LIMSApi.Repositories
                             }
                         });
 
-                        // 3. Level 2: Specification Grade Leaf (Selectable)
+                        // 3. Level 2: Specification Grade Leaf (Selectable) — child grade must render as grade, not parent spec
                         foreach (var g in specGroup)
                         {
                             result.Add(new DropdwonSelector
@@ -452,13 +461,12 @@ namespace LIMSApi.Repositories
                                     { "materialSpecificationId", specGroup.Key.SpecHeaderID },
                                     { "materialSpecificationName", specGroup.Key.SpecAliasName },
                                     { "specificationNo", specGroup.Key.SpecNo ?? specGroup.Key.SpecAliasName },
-                                    { "displayTitle", specGroup.Key.DisplayTitle },
+                                    { "specDisplayTitle", specGroup.Key.DisplayTitle },
                                     { "standardOrgId", orgGroup.Key.StandardOrgID },
                                     { "standardOrgName", orgGroup.Key.StandardOrgName },
                                     { "gradeId", g.GradeID },
                                     { "gradeName", g.GradeName },
-                                    { "metalClassificationId", g.MetalClassificationID ?? 0 },
-                                    { "metalClassificationName", g.MetalClassificationName ?? "" }
+                                    { "remarks", g.Remarks ?? "" }
                                 }
                             });
                         }

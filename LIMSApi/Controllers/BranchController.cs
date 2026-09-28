@@ -44,11 +44,20 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> GetUserBranches()
         {
             var user = LoggedInUserProvider.CurrentUser;
-            if (user == null || !user.OrganizationID.HasValue)
+            if (user == null)
                 return Unauthorized();
 
+            var orgId = user.OrganizationID;
+            if (!orgId.HasValue || orgId.Value <= 0)
+            {
+                orgId = await _context.Branches.Where(b => b.IsActive).Select(b => (long?)b.OrganizationID).FirstOrDefaultAsync();
+            }
+
+            if (!orgId.HasValue || orgId.Value <= 0)
+                return Ok(new List<object>());
+
             var query = _context.Branches
-                .Where(b => b.IsActive && b.OrganizationID == user.OrganizationID.Value);
+                .Where(b => b.IsActive && b.OrganizationID == orgId.Value);
 
             if (!user.CanViewAllBranches)
             {
@@ -65,6 +74,7 @@ namespace LIMSApi.Controllers
                     b.Name,
                     b.Address,
                     b.IsHeadOffice,
+                    IsDefault = user.BranchID.HasValue && b.ID == user.BranchID.Value,
                     IsCurrent = user.BranchID.HasValue && b.ID == user.BranchID.Value
                 })
                 .ToListAsync();

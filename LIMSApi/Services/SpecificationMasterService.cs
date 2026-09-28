@@ -182,6 +182,152 @@ namespace LIMSApi.Services
             return await _repository.GetStandardOrganizationsDropdown();
         }
 
+        public async Task<List<SpecificationGradeDto>> GetGradesBySpecification(long specId, bool includeInactive = false)
+        {
+            var grades = await _repository.GetGradesBySpecificationIdAsync(specId, includeInactive);
+            var result = new List<SpecificationGradeDto>();
+
+            foreach (var g in grades)
+            {
+                int reqCount = await _repository.GetGradeRequirementCountAsync(g.ID);
+                result.Add(new SpecificationGradeDto
+                {
+                    ID = g.ID,
+                    SpecificationHeaderID = g.SpecificationHeaderID,
+                    Grade = g.Grade,
+                    Remarks = g.Remarks,
+                    IdentifierValuesJson = g.IdentifierValuesJson,
+                    IsActive = g.IsActive,
+                    CreatedOn = g.CreatedOn,
+                    CreatedBy = g.CreatedBy,
+                    ModifiedOn = g.ModifiedOn,
+                    ModifiedBy = g.ModifiedBy,
+                    RequirementCount = reqCount
+                });
+            }
+
+            return result;
+        }
+
+        public async Task<SpecificationGradeDto> GetGradeById(long gradeId)
+        {
+            var g = await _repository.GetGradeByIdAsync(gradeId)
+                ?? throw new KeyNotFoundException($"Specification Grade with ID {gradeId} not found.");
+
+            int reqCount = await _repository.GetGradeRequirementCountAsync(g.ID);
+            return new SpecificationGradeDto
+            {
+                ID = g.ID,
+                SpecificationHeaderID = g.SpecificationHeaderID,
+                Grade = g.Grade,
+                Remarks = g.Remarks,
+                IdentifierValuesJson = g.IdentifierValuesJson,
+                IsActive = g.IsActive,
+                CreatedOn = g.CreatedOn,
+                CreatedBy = g.CreatedBy,
+                ModifiedOn = g.ModifiedOn,
+                ModifiedBy = g.ModifiedBy,
+                RequirementCount = reqCount
+            };
+        }
+
+        public async Task<long> CreateGrade(long specId, SpecificationGradeCreateDto dto)
+        {
+            if (specId <= 0)
+                throw new ArgumentException("Specification ID is invalid.");
+
+            var spec = await _repository.GetSpecificationMasterById(specId, CurrentCompanyCode)
+                ?? throw new KeyNotFoundException($"Specification with ID {specId} not found.");
+
+            var trimmedGrade = ValidateGradeName(dto.Grade);
+
+            if (await _repository.GradeExistsAsync(specId, trimmedGrade))
+                throw new InvalidOperationException($"Grade '{trimmedGrade}' already exists under specification '{spec.AliasName}'.");
+
+            var entity = new SpecificationGrade
+            {
+                SpecificationHeaderID = specId,
+                Grade = trimmedGrade,
+                Remarks = string.IsNullOrWhiteSpace(dto.Remarks) ? null : dto.Remarks.Trim(),
+                IdentifierValuesJson = string.IsNullOrWhiteSpace(dto.IdentifierValuesJson) ? null : dto.IdentifierValuesJson.Trim(),
+                IsActive = dto.IsActive,
+                CreatedBy = CurrentEmployeeId,
+                CreatedOn = DateTime.UtcNow
+            };
+
+            await _repository.AddGradeAsync(entity);
+            _logger.LogInformation("Grade '{Grade}' (ID: {ID}) created under Specification {SpecID}.", entity.Grade, entity.ID, specId);
+            return entity.ID;
+        }
+
+        public async Task ModifyGrade(long gradeId, SpecificationGradeUpdateDto dto)
+        {
+            if (gradeId <= 0)
+                throw new ArgumentException("Grade ID is invalid.");
+
+            var existing = await _repository.GetGradeByIdAsync(gradeId)
+                ?? throw new KeyNotFoundException($"Specification Grade with ID {gradeId} not found.");
+
+            // Enforce tenant authorization
+            var spec = await _repository.GetSpecificationMasterById(existing.SpecificationHeaderID, CurrentCompanyCode)
+                ?? throw new UnauthorizedAccessException("Access denied for specification belonging to another organization.");
+
+            var trimmedGrade = ValidateGradeName(dto.Grade);
+
+            if (await _repository.GradeExistsAsync(existing.SpecificationHeaderID, trimmedGrade, gradeId))
+                throw new InvalidOperationException($"Grade '{trimmedGrade}' already exists under this specification.");
+
+            existing.Grade = trimmedGrade;
+            existing.Remarks = string.IsNullOrWhiteSpace(dto.Remarks) ? null : dto.Remarks.Trim();
+            existing.IdentifierValuesJson = string.IsNullOrWhiteSpace(dto.IdentifierValuesJson) ? null : dto.IdentifierValuesJson.Trim();
+            existing.IsActive = dto.IsActive;
+            existing.ModifiedBy = CurrentEmployeeId;
+            existing.ModifiedOn = DateTime.UtcNow;
+
+            await _repository.UpdateGradeAsync(existing);
+            _logger.LogInformation("Grade '{Grade}' (ID: {ID}) updated successfully.", existing.Grade, existing.ID);
+        }
+
+        public async Task<bool> ToggleGradeStatus(long gradeId)
+        {
+            if (gradeId <= 0)
+                throw new ArgumentException("Grade ID is invalid.");
+
+            var existing = await _repository.GetGradeByIdAsync(gradeId)
+                ?? throw new KeyNotFoundException($"Specification Grade with ID {gradeId} not found.");
+
+            // Enforce tenant authorization
+            var spec = await _repository.GetSpecificationMasterById(existing.SpecificationHeaderID, CurrentCompanyCode)
+                ?? throw new UnauthorizedAccessException("Access denied for specification belonging to another organization.");
+
+            if (!existing.IsActive)
+            {
+                // Reactivation check: ensure no active grade with the same name exists
+                if (await _repository.GradeExistsAsync(existing.SpecificationHeaderID, existing.Grade, gradeId))
+                    throw new InvalidOperationException($"Cannot reactivate: Grade '{existing.Grade}' is already in use by another active grade.");
+            }
+
+            existing.IsActive = !existing.IsActive;
+            existing.ModifiedBy = CurrentEmployeeId;
+            existing.ModifiedOn = DateTime.UtcNow;
+
+            await _repository.UpdateGradeAsync(existing);
+            _logger.LogInformation("Grade '{Grade}' (ID: {ID}) status toggled to {Status}.", existing.Grade, existing.ID, existing.IsActive ? "Active" : "Inactive");
+            return existing.IsActive;
+        }
+
+        private static string ValidateGradeName(string? grade)
+        {
+            if (string.IsNullOrWhiteSpace(grade))
+                throw new ArgumentException("Grade name is required.");
+
+            var trimmed = grade.Trim();
+            if (trimmed.Length > 100)
+                throw new ArgumentException("Grade name cannot exceed 100 characters.");
+
+            return trimmed;
+        }
+
         private static string NormalizeAndValidateCode(string? code)
         {
             if (string.IsNullOrWhiteSpace(code))

@@ -33,7 +33,7 @@ namespace LIMSApi.Reporting
         public DocumentMetadata GetMetadata() => new()
         {
             Title = _report.ReportNo,
-            Author = "Divine Metallurgical Services Pvt. Ltd."
+            Author = "LIMS Report Engine"
         };
 
         // ====================== GLOBAL STYLES ======================
@@ -112,22 +112,19 @@ namespace LIMSApi.Reporting
 
                 row.RelativeItem(2).PaddingLeft(6).Column(col =>
                 {
-                    col.Item().Text("DIVINE METALLURGICAL SERVICES PVT. LTD.")
+                    col.Item().Text("Laboratory Test Facility")
                         .Bold().FontSize(9);
 
-                    col.Item().Text("CIN: U74900GJ2012PTC069436")
+                    col.Item().Text("ISO/IEC 17025:2017 Accredited Laboratory")
                         .FontSize(6);
                 });
 
                 row.RelativeItem(3).PaddingLeft(6).Column(col =>
                 {
-                    col.Item().Text("14, Gopal Industrial Estate, Vallabhnagar\nBRTS, Odhav, Ahmedabad – 382415")
+                    col.Item().Text("Laboratory Testing & Analytical Services")
                         .FontSize(6);
 
-                    col.Item().Text("Ph: +91 79 2289 2804 / 1013 | +91 92272 20993")
-                        .FontSize(6);
-
-                    col.Item().Text("Email: divinelab_nhp@rediffmail.com\naccounts@divinelaboratory.com")
+                    col.Item().Text("Central Testing Laboratory")
                         .FontSize(6);
                 });
 

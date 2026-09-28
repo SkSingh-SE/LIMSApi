@@ -15,5 +15,14 @@ namespace LIMSApi.Repositories.Interface
         Task<List<DropdwonSelector>> GetStandardOrganizationsDropdown();
         Task<int> GetVersionCount(long id);
         Task<bool> HasDownstreamReferences(long id);
+
+        // Grade Management
+        Task<List<SpecificationGrade>> GetGradesBySpecificationIdAsync(long specificationHeaderId, bool includeInactive = false);
+        Task<SpecificationGrade?> GetGradeByIdAsync(long gradeId);
+        Task<bool> GradeExistsAsync(long specificationHeaderId, string grade, long excludeGradeId = 0);
+        Task AddGradeAsync(SpecificationGrade grade);
+        Task UpdateGradeAsync(SpecificationGrade grade);
+        Task<int> GetGradeRequirementCountAsync(long gradeId);
+        Task<bool> GradeHasDownstreamReferencesAsync(long gradeId);
     }
 }

@@ -106,15 +106,15 @@ namespace LIMSApi.Controllers
         }
 
         [HttpGet("grade-dropdown")]
-        public async Task<IActionResult> GetGradeDropdown(string? searchTerm, int pageNo, int pageSize)
+        public async Task<IActionResult> GetGradeDropdown(string? searchTerm, int pageNo, int pageSize, [FromQuery] long specHeaderId = 0, [FromQuery] long productMasterId = 0)
         {
-            var data = await _service.GetGradeDropdown(searchTerm, pageNo, pageSize);
+            var data = await _service.GetGradeDropdown(searchTerm, pageNo, pageSize, specHeaderId, productMasterId);
             return data == null ? NoContent() : Ok(data);
         }
         [HttpGet("grade-dropdown-metal-wise")]
-        public async Task<IActionResult> GetGradeDropdownMetalWise( string? searchTerm, int pageNo, int pageSize, long metalId)
+        public async Task<IActionResult> GetGradeDropdownMetalWise( string? searchTerm, int pageNo, int pageSize, long metalId, [FromQuery] long specHeaderId = 0, [FromQuery] long productMasterId = 0)
         {
-            var data = await _service.GetGradeDropdownMetalWise(searchTerm, pageNo, pageSize,metalId);
+            var data = await _service.GetGradeDropdownMetalWise(searchTerm, pageNo, pageSize,metalId, specHeaderId, productMasterId);
             return data == null ? NoContent() : Ok(data);
         }
 

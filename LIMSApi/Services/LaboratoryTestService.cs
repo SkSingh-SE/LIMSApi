@@ -1,6 +1,7 @@
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
+using LIMSApi.Helpers.Enums;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
@@ -202,25 +203,39 @@ namespace LIMSApi.Services
             if (existingActiveParams.Count != paramIds.Count)
                 throw new InvalidOperationException("One or more selected parameters are invalid, inactive, or belong to another organization.");
 
-            // Method validation
+            // Method validation — version implies standard (select versionId; standard derives from version's spec)
             var activeMethods = methods.Where(m => m.IsActive).ToList();
             if (activeMethods.Count == 0)
                 throw new InvalidOperationException("At least one active test method must be defined to activate a Laboratory Test.");
 
-            if (activeMethods.Select(m => m.TestMethodSpecificationID).Distinct().Count() != activeMethods.Count)
-                throw new InvalidOperationException("Duplicate test methods detected. Each method specification can only be added once.");
+            var methodKeys = activeMethods.Select(m => m.TestMethodSpecificationVersionID.HasValue && m.TestMethodSpecificationVersionID.Value > 0
+                ? $"V:{m.TestMethodSpecificationVersionID.Value}"
+                : $"S:{m.TestMethodSpecificationID}").ToList();
+            if (methodKeys.Distinct().Count() != methodKeys.Count)
+                throw new InvalidOperationException("Duplicate test methods detected. Each test method version can only be added once.");
 
             var defaultMethods = activeMethods.Where(m => m.IsDefault).ToList();
             if (defaultMethods.Count != 1)
                 throw new InvalidOperationException("Exactly one test method must be designated as the default method.");
 
-            var methodIds = activeMethods.Select(m => m.TestMethodSpecificationID).ToList();
+            var specIds = activeMethods.Select(m => m.TestMethodSpecificationID).Distinct().ToList();
             var existingActiveMethods = await _context.TestMethodSpecifications.AsNoTracking()
-                .Where(m => methodIds.Contains(m.ID) && m.IsActive && m.CompanyCode == loggedInUser.CompanyCode)
+                .Where(m => specIds.Contains(m.ID) && m.IsActive && m.CompanyCode == loggedInUser.CompanyCode)
                 .Select(m => m.ID)
                 .ToListAsync();
-            if (existingActiveMethods.Count != methodIds.Count)
+            if (existingActiveMethods.Count != specIds.Count)
                 throw new InvalidOperationException("One or more selected test methods are invalid, inactive, or belong to another organization.");
+
+            var versionIds = activeMethods.Where(m => m.TestMethodSpecificationVersionID.HasValue && m.TestMethodSpecificationVersionID.Value > 0)
+                .Select(m => m.TestMethodSpecificationVersionID!.Value).Distinct().ToList();
+            if (versionIds.Any())
+            {
+                var existingVersions = await _context.TestMethodSpecificationVersions.AsNoTracking()
+                    .Where(v => versionIds.Contains(v.ID) && (v.Status == VersionStatus.Active || v.Status == VersionStatus.Superseded))
+                    .Select(v => v.ID).ToListAsync();
+                if (existingVersions.Count != versionIds.Count)
+                    throw new InvalidOperationException("One or more selected test method versions are invalid or inactive.");
+            }
 
             // Condition validation (optional)
             var activeConditions = conditions.Where(c => c.IsActive).ToList();

@@ -1,6 +1,9 @@
 ﻿using LIMSApi.Dtos;
+using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,6 +11,7 @@ namespace LIMSApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class EquipmentTypeMasterController : ControllerBase
     {
         private readonly IEquipmentTypeService _equipmentTypeService;
@@ -17,6 +21,7 @@ namespace LIMSApi.Controllers
             _equipmentTypeService = equipmentTypeServce;
         }
 
+        [RequirePermission(Permissions.EquipmentType.Read)]
         [HttpPost("list")]
         public async Task<IActionResult> EquipmentTypeList(PageFilter filter)
         {
@@ -24,6 +29,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.EquipmentType.Read)]
         [HttpGet("details/{id}")]
         public async Task<ActionResult<EquipmentTypeMaster>> GetEquipmentTypeMaster(long id)
         {
@@ -33,6 +39,7 @@ namespace LIMSApi.Controllers
         }
 
 
+        [RequirePermission(Permissions.EquipmentType.Update)]
         [HttpPut("update")]
         public async Task<IActionResult> PutEquipmentTypeMaster(EquipmentTypeMaster model)
         {
@@ -40,6 +47,7 @@ namespace LIMSApi.Controllers
             return Ok($"EquipmentType '{model.Name}' updated successfully.");
         }
 
+        [RequirePermission(Permissions.EquipmentType.Create)]
         [HttpPost("create")]
         public async Task<ActionResult<EquipmentTypeMaster>> PostEquipmentTypeMaster(EquipmentTypeMaster model)
         {
@@ -47,6 +55,7 @@ namespace LIMSApi.Controllers
             return Ok($"EquipmentType '{model.Name}' created successfully");
         }
 
+        [RequirePermission(Permissions.EquipmentType.Delete)]
         [HttpDelete("delete/{id}")]
         public async Task<IActionResult> DeleteEquipmentTypeMaster(long id)
         {
@@ -55,7 +64,8 @@ namespace LIMSApi.Controllers
             {
                 throw new InvalidOperationException("EquipmentType not found!");
             }
-            return Ok($"EquipmentType '{entity.Name}' created successfully");
+            await _equipmentTypeService.RemoveEquipmentType(id);
+            return Ok($"EquipmentType '{entity.Name}' deleted successfully");
         }
 
         [HttpGet("dropdown")]

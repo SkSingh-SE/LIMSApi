@@ -288,6 +288,55 @@ namespace LIMSApi.Services
                         _context.TestPlans.AddRange(draftPlans);
                         await _context.SaveChangesAsync();
                         _logger.LogInformation("Atomically created {Count} initial Draft TestPlans for Case '{Case}'.", draftPlans.Count, entity.CaseNo);
+
+                        // Persist UniversalTestGroup for requested laboratory tests selected at Inward
+                        var initialUtgs = new List<UniversalTestGroup>();
+                        var detailsList = entity.SampleDetails.ToList();
+                        var orgId = _branchContext.CurrentOrganizationID ?? loggedInUser.OrganizationID ?? 1;
+                        for (int i = 0; i < detailsList.Count; i++)
+                        {
+                            var sd = detailsList[i];
+                            var plan = draftPlans[i];
+                            var detailDto = model.SampleDetails.ElementAtOrDefault(i);
+                            if (detailDto?.SelectedLaboratoryTestIDs != null && detailDto.SelectedLaboratoryTestIDs.Any())
+                            {
+                                if (!sd.DisciplineID.HasValue || sd.DisciplineID.Value <= 0)
+                                {
+                                    var sampleLabel = sd.SampleNo ?? $"Sample #{i + 1}";
+                                    throw new InvalidOperationException($"Please select Discipline for '{sampleLabel}' before selecting requested laboratory tests.");
+                                }
+
+                                foreach (var testId in detailDto.SelectedLaboratoryTestIDs.Distinct())
+                                {
+                                    var labTest = await _context.LaboratoryTests.AsNoTracking().FirstOrDefaultAsync(t => t.ID == testId);
+                                    if (labTest != null && labTest.DisciplineID.HasValue && sd.DisciplineID.HasValue && labTest.DisciplineID != sd.DisciplineID)
+                                    {
+                                        var sampleLabel = sd.SampleNo ?? $"Sample #{i + 1}";
+                                        throw new InvalidOperationException($"Cannot add requested test '{labTest.Name}' to sample '{sampleLabel}': test does not belong to the selected discipline.");
+                                    }
+
+                                    initialUtgs.Add(new UniversalTestGroup
+                                    {
+                                        SampleTestPlanID = plan.ID,
+                                        LaboratoryTestID = testId,
+                                        SpecificationGradeID = sd.SpecificationGradeID,
+                                        BranchID = entity.BranchID > 0 ? entity.BranchID : branchId,
+                                        OrganizationID = orgId,
+                                        CompanyCode = loggedInUser.CompanyCode,
+                                        Status = "Pending",
+                                        IsActive = true,
+                                        CreatedOn = DateTime.UtcNow,
+                                        CreatedBy = loggedInUser.EmployeeID
+                                    });
+                                }
+                            }
+                        }
+                        if (initialUtgs.Any())
+                        {
+                            _context.UniversalTestGroups.AddRange(initialUtgs);
+                            await _context.SaveChangesAsync();
+                            _logger.LogInformation("Atomically created {Count} UniversalTestGroups for Case '{Case}'.", initialUtgs.Count, entity.CaseNo);
+                        }
                     }
 
                     // Process queued jobs
@@ -731,6 +780,104 @@ namespace LIMSApi.Services
                         _context.TestPlans.AddRange(missingPlans);
                         await _context.SaveChangesAsync();
                         _logger.LogInformation("Atomically created {Count} missing Draft TestPlans for Case '{Case}'.", missingPlans.Count, entity.CaseNo);
+                    }
+
+                    // Synchronize UniversalTestGroups for requested tests selected at Inward
+                    if (model.SampleDetails != null && model.SampleDetails.Any())
+                    {
+                        var allPlans = await _context.TestPlans
+                            .Include(tp => tp.UniversalTestGroups)
+                                .ThenInclude(u => u.TestExecutions)
+                            .Include(tp => tp.UniversalTestGroups)
+                                .ThenInclude(u => u.LaboratoryTest)
+                            .Where(tp => sampleIds.Contains(tp.SampleID))
+                            .ToListAsync();
+
+                        var branchIdForUtg = entity.BranchID > 0 ? entity.BranchID : (_branchContext.CurrentBranchID ?? loggedInUser.BranchID ?? 1);
+                        var orgId = _branchContext.CurrentOrganizationID ?? loggedInUser.OrganizationID ?? 1;
+
+                        foreach (var detailDto in model.SampleDetails.Where(d => d.SelectedLaboratoryTestIDs != null))
+                        {
+                            var matchingSample = entity.SampleDetails.FirstOrDefault(sd =>
+                                (detailDto.ID > 0 && sd.ID == detailDto.ID) ||
+                                (!string.IsNullOrEmpty(detailDto.SampleNo) && sd.SampleNo == detailDto.SampleNo));
+
+                            if (matchingSample == null) continue;
+
+                            var plan = allPlans.FirstOrDefault(p => p.SampleID == matchingSample.ID);
+                            if (plan == null) continue;
+
+                            var requestedTestIds = detailDto.SelectedLaboratoryTestIDs.Distinct().ToList();
+                            var existingUtgs = plan.UniversalTestGroups.Where(u => u.IsActive).ToList();
+
+                            // 1. Add newly selected tests (ensuring discipline is selected and matches test discipline)
+                            foreach (var testId in requestedTestIds)
+                            {
+                                if (!existingUtgs.Any(u => u.LaboratoryTestID == testId))
+                                {
+                                    if (!matchingSample.DisciplineID.HasValue || matchingSample.DisciplineID.Value <= 0)
+                                    {
+                                        var sampleLabel = matchingSample.SampleNo ?? $"Sample #{matchingSample.ID}";
+                                        throw new InvalidOperationException($"Please select Discipline for '{sampleLabel}' before selecting requested laboratory tests.");
+                                    }
+
+                                    var labTest = await _context.LaboratoryTests.AsNoTracking().FirstOrDefaultAsync(t => t.ID == testId);
+                                    if (labTest != null && labTest.DisciplineID.HasValue && matchingSample.DisciplineID.HasValue && labTest.DisciplineID != matchingSample.DisciplineID)
+                                    {
+                                        var sampleLabel = matchingSample.SampleNo ?? $"Sample #{matchingSample.ID}";
+                                        throw new InvalidOperationException($"Cannot add requested test '{labTest.Name}' to sample '{sampleLabel}': test does not belong to the selected discipline.");
+                                    }
+
+                                    _context.UniversalTestGroups.Add(new UniversalTestGroup
+                                    {
+                                        SampleTestPlanID = plan.ID,
+                                        LaboratoryTestID = testId,
+                                        SpecificationGradeID = matchingSample.SpecificationGradeID,
+                                        BranchID = branchIdForUtg,
+                                        OrganizationID = orgId,
+                                        CompanyCode = loggedInUser.CompanyCode,
+                                        Status = "Pending",
+                                        IsActive = true,
+                                        CreatedOn = DateTime.UtcNow,
+                                        CreatedBy = loggedInUser.EmployeeID
+                                    });
+                                }
+                            }
+
+                            // 2. Validate and deactivate deselected tests with downstream lifecycle protection
+                            foreach (var utg in existingUtgs)
+                            {
+                                if (!requestedTestIds.Contains(utg.LaboratoryTestID))
+                                {
+                                    bool hasExecutions = utg.TestExecutions != null && utg.TestExecutions.Any();
+                                    bool hasAdvancedStatus = !string.Equals(utg.Status, "Pending", StringComparison.OrdinalIgnoreCase);
+                                    bool hasTechnicalConfig = utg.SpecificationHeaderID.HasValue ||
+                                                              utg.TestMethodSpecificationID.HasValue ||
+                                                              utg.ExecutionLayoutID.HasValue ||
+                                                              utg.DepartmentID.HasValue;
+
+                                    if (hasExecutions || hasAdvancedStatus || hasTechnicalConfig)
+                                    {
+                                        var testName = utg.LaboratoryTest?.Name ?? $"Test #{utg.LaboratoryTestID}";
+                                        var sampleName = matchingSample.SampleNo ?? $"Sample #{matchingSample.ID}";
+                                        var reason = hasExecutions
+                                            ? "test executions already exist"
+                                            : (hasAdvancedStatus
+                                                ? $"test status is '{utg.Status}'"
+                                                : "technical specification or test method has already been planned");
+
+                                        throw new InvalidOperationException(
+                                            $"Cannot remove requested test '{testName}' from sample '{sampleName}': {reason}. Downstream laboratory records cannot be deleted.");
+                                    }
+
+                                    // Clean unconfigured Pending shell with 0 executions: safe to deactivate
+                                    utg.IsActive = false;
+                                    utg.ModifiedOn = DateTime.UtcNow;
+                                    utg.ModifiedBy = loggedInUser.EmployeeID;
+                                }
+                            }
+                        }
+                        await _context.SaveChangesAsync();
                     }
 
                     foreach (var job in statusJobs)
@@ -1679,6 +1826,21 @@ namespace LIMSApi.Services
                         Diameter = s.Diameter,
                         Width = s.Width,
                         Length = s.Length,
+                        SelectedLaboratoryTestIDs = s.TestPlans
+                            .SelectMany(tp => tp.UniversalTestGroups.Where(utg => utg.IsActive).Select(utg => utg.LaboratoryTestID))
+                            .Distinct()
+                            .ToList(),
+                        SelectedLaboratoryTests = s.TestPlans
+                            .SelectMany(tp => tp.UniversalTestGroups.Where(utg => utg.IsActive).Select(utg => new UniversalTestSummaryDto
+                            {
+                                UniversalTestGroupID = utg.ID,
+                                LaboratoryTestID = utg.LaboratoryTestID,
+                                LaboratoryTestCode = utg.LaboratoryTest != null ? utg.LaboratoryTest.Code : string.Empty,
+                                LaboratoryTestName = utg.LaboratoryTest != null ? utg.LaboratoryTest.Name : "Universal Test",
+                                DisciplineName = utg.LaboratoryTest != null && utg.LaboratoryTest.Discipline != null ? utg.LaboratoryTest.Discipline.Name : null,
+                                Status = utg.Status
+                            }))
+                            .ToList(),
                         TestPlans = s.TestPlans.Select(tp => new SampleTestPlanDto
                         {
                             ID = tp.ID,
@@ -2067,6 +2229,21 @@ namespace LIMSApi.Services
                         Diameter = s.Diameter,
                         Width = s.Width,
                         Length = s.Length,
+                        SelectedLaboratoryTestIDs = s.TestPlans
+                            .SelectMany(tp => tp.UniversalTestGroups.Where(utg => utg.IsActive).Select(utg => utg.LaboratoryTestID))
+                            .Distinct()
+                            .ToList(),
+                        SelectedLaboratoryTests = s.TestPlans
+                            .SelectMany(tp => tp.UniversalTestGroups.Where(utg => utg.IsActive).Select(utg => new UniversalTestSummaryDto
+                            {
+                                UniversalTestGroupID = utg.ID,
+                                LaboratoryTestID = utg.LaboratoryTestID,
+                                LaboratoryTestCode = utg.LaboratoryTest != null ? utg.LaboratoryTest.Code : string.Empty,
+                                LaboratoryTestName = utg.LaboratoryTest != null ? utg.LaboratoryTest.Name : "Universal Test",
+                                DisciplineName = utg.LaboratoryTest != null && utg.LaboratoryTest.Discipline != null ? utg.LaboratoryTest.Discipline.Name : null,
+                                Status = utg.Status
+                            }))
+                            .ToList(),
                         TestPlans = s.TestPlans.Select(tp => new SampleTestPlanDto
                         {
                             ID = tp.ID,

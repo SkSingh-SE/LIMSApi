@@ -79,11 +79,17 @@ namespace LIMSApi.Services
 
             if (metal == null) return null;
 
-            var grades = await _context.SpecificationGrades
-                .AsNoTracking()
-                .Where(g => g.MetalClassificationID == metalClassificationId)
-                .Take(20)
-                .ToListAsync();
+            var grades = await (from pmc in _context.ProductMasterMetalClassifications
+                                join pm in _context.ProductMasters on pmc.ProductMasterID equals pm.ID
+                                join pv in _context.ProductMasterVersions on pm.ID equals pv.ProductMasterID
+                                join pvg in _context.ProductMasterVersionGrades on pv.ID equals pvg.ProductMasterVersionID
+                                join g in _context.SpecificationGrades on pvg.SpecificationGradeID equals g.ID
+                                where pmc.MetalClassificationID == metalClassificationId && pv.IsActiveVersion && pvg.IsActive
+                                select g)
+                                .Distinct()
+                                .AsNoTracking()
+                                .Take(20)
+                                .ToListAsync();
 
             var configuredGrades = new List<ConfiguredGradeDto>();
 

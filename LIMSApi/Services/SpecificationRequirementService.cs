@@ -50,7 +50,6 @@ namespace LIMSApi.Services
             }
 
             var grade = await _context.SpecificationGrades
-                .Include(g => g.MetalClassification)
                 .AsNoTracking()
                 .FirstOrDefaultAsync(g => g.ID == gradeId && g.SpecificationHeaderID == specId);
 
@@ -78,7 +77,7 @@ namespace LIMSApi.Services
 
                 SpecificationGradeID = grade.ID,
                 GradeName = grade.Grade,
-                MetalClassificationName = grade.MetalClassification?.Name,
+                MetalClassificationName = null,
 
                 TotalRequirementsCount = count
             };

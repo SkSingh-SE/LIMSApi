@@ -1112,11 +1112,8 @@ namespace LIMSApi.ServiceWORepo
                 
                 var auditActivities = await _context.SiteActivities
                     .Where(sa => sa.ModifiedOn >= sevenDaysAgo &&
-                                (sa.Action!.Contains("Export", StringComparison.OrdinalIgnoreCase) ||
-                                 sa.Action!.Contains("Download", StringComparison.OrdinalIgnoreCase) ||
-                                 sa.Action!.Contains("Delete", StringComparison.OrdinalIgnoreCase) ||
-                                 sa.ModuleName!.Contains("Admin", StringComparison.OrdinalIgnoreCase) ||
-                                 sa.ModuleName!.Contains("User", StringComparison.OrdinalIgnoreCase)))
+                                ((sa.Action != null && (sa.Action.Contains("Export") || sa.Action.Contains("Download") || sa.Action.Contains("Delete"))) ||
+                                 (sa.ModuleName != null && (sa.ModuleName.Contains("Admin") || sa.ModuleName.Contains("User")))))
                     .OrderByDescending(sa => sa.ModifiedOn)
                     .Take(20) // Limit to recent 20 activities
                     .ToListAsync();

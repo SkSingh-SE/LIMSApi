@@ -931,7 +931,7 @@ namespace LIMSApi.Repositories
             }
 
             var totalCount = await query.CountAsync();
-            var pagedData = await query.Skip(filter.PageNumber * filter.PageSize).Take(filter.PageSize).ToListAsync();
+            var pagedData = await query.Skip((filter.PageNumber - 1) * filter.PageSize).Take(filter.PageSize).ToListAsync();
 
             return new PagedResponse<TestMethodListItemDto>(pagedData, totalCount, filter.PageNumber, filter.PageSize);
         }

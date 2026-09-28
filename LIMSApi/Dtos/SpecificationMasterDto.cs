@@ -94,4 +94,48 @@ namespace LIMSApi.Dtos
         public long? StandardOrganizationID { get; set; }
         public string? Status { get; set; } // "all", "active", "inactive"
     }
+
+    public class SpecificationGradeDto
+    {
+        public long ID { get; set; }
+        public long SpecificationHeaderID { get; set; }
+        public string Grade { get; set; } = string.Empty;
+        public string? Remarks { get; set; }
+        public string? IdentifierValuesJson { get; set; }
+        public bool IsActive { get; set; }
+        public DateTime CreatedOn { get; set; }
+        public long? CreatedBy { get; set; }
+        public DateTime? ModifiedOn { get; set; }
+        public long? ModifiedBy { get; set; }
+        public int RequirementCount { get; set; }
+    }
+
+    public class SpecificationGradeCreateDto
+    {
+        [Required(ErrorMessage = "Grade name is required.")]
+        [StringLength(100, ErrorMessage = "Grade name cannot exceed 100 characters.")]
+        public string Grade { get; set; } = string.Empty;
+
+        [StringLength(500, ErrorMessage = "Remarks cannot exceed 500 characters.")]
+        public string? Remarks { get; set; }
+
+        public string? IdentifierValuesJson { get; set; }
+        public bool IsActive { get; set; } = true;
+    }
+
+    public class SpecificationGradeUpdateDto
+    {
+        [Required(ErrorMessage = "Grade ID is required.")]
+        public long ID { get; set; }
+
+        [Required(ErrorMessage = "Grade name is required.")]
+        [StringLength(100, ErrorMessage = "Grade name cannot exceed 100 characters.")]
+        public string Grade { get; set; } = string.Empty;
+
+        [StringLength(500, ErrorMessage = "Remarks cannot exceed 500 characters.")]
+        public string? Remarks { get; set; }
+
+        public string? IdentifierValuesJson { get; set; }
+        public bool IsActive { get; set; } = true;
+    }
 }

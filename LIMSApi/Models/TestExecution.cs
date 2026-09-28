@@ -41,6 +41,10 @@ namespace LIMSApi.Models
 
         public long? ExecutionConfigSnapshotID { get; set; }
 
+        public string? ActualConditionsJson { get; set; }
+
+        public string? ActualEquipmentJson { get; set; }
+
         [ForeignKey("BranchID")]
         public virtual Branch? Branch { get; set; }
 

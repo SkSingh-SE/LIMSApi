@@ -201,5 +201,68 @@ namespace LIMSApi.Repositories
 
             return false;
         }
+
+        public async Task<List<SpecificationGrade>> GetGradesBySpecificationIdAsync(long specificationHeaderId, bool includeInactive = false)
+        {
+            var query = _context.SpecificationGrades
+                .Where(g => g.SpecificationHeaderID == specificationHeaderId);
+
+            if (!includeInactive)
+            {
+                query = query.Where(g => g.IsActive);
+            }
+
+            return await query.OrderBy(g => g.Grade).ToListAsync();
+        }
+
+        public async Task<SpecificationGrade?> GetGradeByIdAsync(long gradeId)
+        {
+            return await _context.SpecificationGrades
+                .FirstOrDefaultAsync(g => g.ID == gradeId);
+        }
+
+        public async Task<bool> GradeExistsAsync(long specificationHeaderId, string grade, long excludeGradeId = 0)
+        {
+            var normalized = grade.Trim().ToLower();
+            return await _context.SpecificationGrades
+                .AnyAsync(g => g.SpecificationHeaderID == specificationHeaderId 
+                            && g.ID != excludeGradeId 
+                            && g.Grade.ToLower() == normalized);
+        }
+
+        public async Task AddGradeAsync(SpecificationGrade grade)
+        {
+            await _context.SpecificationGrades.AddAsync(grade);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task UpdateGradeAsync(SpecificationGrade grade)
+        {
+            _context.SpecificationGrades.Update(grade);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<int> GetGradeRequirementCountAsync(long gradeId)
+        {
+            return await _context.SpecificationLines
+                .CountAsync(sl => sl.SpecificationGradeID == gradeId);
+        }
+
+        public async Task<bool> GradeHasDownstreamReferencesAsync(long gradeId)
+        {
+            if (await _context.SpecificationLines.AnyAsync(sl => sl.SpecificationGradeID == gradeId))
+                return true;
+
+            if (await _context.ProductMasterVersionGrades.AnyAsync(p => p.SpecificationGradeID == gradeId))
+                return true;
+
+            if (await _context.SampleDetails.AnyAsync(s => s.SpecificationGradeID == gradeId || s.AssignedGradeID == gradeId))
+                return true;
+
+            if (await _context.UniversalTestGroups.AnyAsync(u => u.SpecificationGradeID == gradeId))
+                return true;
+
+            return false;
+        }
     }
 }

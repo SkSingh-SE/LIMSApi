@@ -46,7 +46,7 @@ namespace LIMSApi.Reporting
         public DocumentMetadata GetMetadata() => new()
         {
             Title = Data.ReportNo,
-            Author = "Divine Metallurgical Services Pvt. Ltd.",
+            Author = string.IsNullOrWhiteSpace(Data.LabName) ? "LIMS Report Engine" : Data.LabName,
             Creator = "LIMS Report Engine"
         };
 
@@ -77,12 +77,19 @@ namespace LIMSApi.Reporting
 
                         row.ConstantItem(6);
 
-                        // Company info
+                        // Laboratory info (frozen display copy from report data — never hardcoded)
                         row.RelativeItem().AlignMiddle().Column(center =>
                         {
-                            center.Item().Text("DIVINE METALLURGICAL SERVICES PVT. LTD.").Style(TitleStyle);
-                            center.Item().Text("14, Gopal Industrial Estate, Vallabhnagar, BRTS, Odhav, Ahmedabad - 382415")
-                                .FontSize(6.5f).FontColor(Colors.Grey.Darken2);
+                            center.Item().Text(string.IsNullOrWhiteSpace(Data.LabName) ? "Laboratory" : Data.LabName).Style(TitleStyle);
+                            var addressLine = string.IsNullOrWhiteSpace(Data.LabAddress) ? null : Data.LabAddress;
+                            if (!string.IsNullOrWhiteSpace(addressLine))
+                                center.Item().Text(addressLine!)
+                                    .FontSize(6.5f).FontColor(Colors.Grey.Darken2);
+                            var contactLine = string.Join(" | ", new[] { Data.LabPhone, Data.LabEmail }
+                                .Where(s => !string.IsNullOrWhiteSpace(s)));
+                            if (!string.IsNullOrWhiteSpace(contactLine))
+                                center.Item().Text(contactLine)
+                                    .FontSize(6.5f).FontColor(Colors.Grey.Darken2);
                         });
 
                         // NABL logo (conditional)
@@ -94,6 +101,12 @@ namespace LIMSApi.Reporting
                                 if (File.Exists(nablPath))
                                 {
                                     right.Item().Height(30).AlignCenter().Image(nablPath).FitArea();
+                                }
+                                else
+                                {
+                                    right.Item().Height(22).AlignCenter().AlignMiddle()
+                                        .Border(0.5f).BorderColor(Colors.Grey.Medium)
+                                        .Padding(2).Text("NABL ACCREDITED").FontSize(5.5f).Bold().FontColor(PrimaryColor);
                                 }
 
                                 if (!string.IsNullOrWhiteSpace(Data.NablCertNo))
@@ -110,7 +123,18 @@ namespace LIMSApi.Reporting
                 col.Item().PaddingTop(3).Row(row =>
                 {
                     row.RelativeItem().Text($"Report No: {Data.ReportNo}").Style(SubTitleStyle);
-                    row.RelativeItem().AlignCenter().Text($"Certificate No: {Data.CertificateNo ?? "N/A"}").Style(SubTitleStyle);
+                    if (!string.IsNullOrWhiteSpace(Data.UlrNo))
+                    {
+                        row.RelativeItem().AlignCenter().Text($"ULR: {Data.UlrNo}").Style(SubTitleStyle);
+                    }
+                    else if (!string.IsNullOrWhiteSpace(Data.CertificateNo) && Data.CertificateNo != "N/A")
+                    {
+                        row.RelativeItem().AlignCenter().Text($"Certificate No: {Data.CertificateNo}").Style(SubTitleStyle);
+                    }
+                    else
+                    {
+                        row.RelativeItem().AlignCenter().Text(" ").Style(SubTitleStyle);
+                    }
                     row.RelativeItem().AlignRight().Text($"Date: {Data.ReportDate:dd-MM-yyyy}").Style(SubTitleStyle);
                 });
             });
@@ -119,7 +143,7 @@ namespace LIMSApi.Reporting
         /// <summary>
         /// Standard page footer with page numbers.
         /// </summary>
-        protected void ComposeStandardFooter(IContainer container)
+        protected virtual void ComposeStandardFooter(IContainer container)
         {
             container.Column(col =>
             {
@@ -141,6 +165,9 @@ namespace LIMSApi.Reporting
                         text.TotalPages().FontSize(6);
                     });
                 });
+                var identityLine = $"Report No: {Data.ReportNo}"
+                    + (string.IsNullOrWhiteSpace(Data.UlrNo) ? "" : $"  |  ULR: {Data.UlrNo}");
+                col.Item().PaddingTop(1).AlignCenter().Text(identityLine).Style(SmallStyle);
             });
         }
 
@@ -152,8 +179,9 @@ namespace LIMSApi.Reporting
             if (string.IsNullOrWhiteSpace(WatermarkText)) return;
 
             container.AlignCenter().AlignMiddle()
+                .Rotate(-45)
                 .Text(WatermarkText)
-                .FontSize(60)
+                .FontSize(44)
                 .Bold()
                 .FontColor(Colors.Grey.Lighten3);
         }
@@ -180,7 +208,7 @@ namespace LIMSApi.Reporting
         /// <summary>
         /// Signature block with 3 signatories.
         /// </summary>
-        protected void ComposeSignatures(IContainer container)
+        protected virtual void ComposeSignatures(IContainer container)
         {
             container.PaddingTop(20).Row(row =>
             {

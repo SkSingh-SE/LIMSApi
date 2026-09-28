@@ -193,6 +193,21 @@ namespace LIMSApi.Services
 
             if (sample != null)
             {
+                // Cross-Specification Protection: Validate that assigned grade belongs to same SpecificationHeader
+                if (sample.SpecificationGradeID.HasValue && sample.SpecificationGradeID.Value > 0)
+                {
+                    var declaredGrade = await _context.SpecificationGrades
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(g => g.ID == sample.SpecificationGradeID.Value);
+
+                    if (declaredGrade != null && declaredGrade.SpecificationHeaderID != specGrade.SpecificationHeaderID)
+                    {
+                        throw new InvalidOperationException(
+                            $"Cross-specification mismatch: Cannot assign Grade '{specGrade.Grade}' (Specification ID: {specGrade.SpecificationHeaderID}) " +
+                            $"to a sample declared under Specification ID {declaredGrade.SpecificationHeaderID}.");
+                    }
+                }
+
                 sample.AssignedGradeID = dto.SpecificationGradeID;
                 sample.AssignedGradeNote = dto.Notes;
                 sample.IsUnknownSample = false;

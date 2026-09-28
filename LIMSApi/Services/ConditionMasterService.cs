@@ -208,7 +208,7 @@ namespace LIMSApi.Services
             if (string.IsNullOrWhiteSpace(code))
                 throw new ArgumentException("Condition Code is required.");
 
-            var normalized = code.Trim().ToUpperInvariant();
+            var normalized = Regex.Replace(code.Trim().ToUpperInvariant(), @"[\s\-]+", "_");
             if (normalized.Length < 2 || normalized.Length > 50)
                 throw new ArgumentException("Condition Code must be between 2 and 50 characters.");
 

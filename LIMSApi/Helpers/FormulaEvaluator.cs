@@ -175,6 +175,7 @@ namespace LIMSApi.Helpers
             return type switch
             {
                 "AVERAGE" or "AVG" or "MEAN" => valList.Average(),
+                "MEDIAN" => CalculateMedian(valList),
                 "MIN" => valList.Min(),
                 "MAX" => valList.Max(),
                 "SUM" => valList.Sum(),
@@ -184,6 +185,16 @@ namespace LIMSApi.Helpers
                 "FIRST" => valList.FirstOrDefault(),
                 _ => valList.Average()
             };
+        }
+
+        private static double? CalculateMedian(List<double> values)
+        {
+            if (!values.Any()) return null;
+            var sorted = values.OrderBy(v => v).ToList();
+            int count = sorted.Count;
+            if (count % 2 == 1)
+                return sorted[count / 2];
+            return (sorted[(count / 2) - 1] + sorted[count / 2]) / 2.0;
         }
 
         // ──────────────────────────────────────────────────
@@ -283,18 +294,6 @@ namespace LIMSApi.Helpers
             bool withinMax = !hasMax || value <= specMax;
             if (!withinMin || !withinMax) return "Fail";
 
-            if (hasMin && hasMax)
-            {
-                decimal range = specMax.Value - specMin.Value;
-                if (range > 0)
-                {
-                    decimal marginThreshold = range * 0.05m;
-                    bool nearMin = (value.Value - specMin.Value) <= marginThreshold;
-                    bool nearMax = (specMax.Value - value.Value) <= marginThreshold;
-                    if (nearMin || nearMax) return "Marginal";
-                }
-            }
-
             return "Pass";
         }
 
@@ -364,9 +363,12 @@ namespace LIMSApi.Helpers
 
                 foreach (var argName in argNames)
                 {
-                    if (variables.TryGetValue(argName, out double val))
+                    // Phase 7 fix: NCalc-converted tokens arrive bracketed ("[CBR_2_5]");
+                    // strip brackets so parameter references resolve instead of degrading to 0.
+                    var key = argName.Trim().Trim('[', ']', ' ', '\t');
+                    if (variables.TryGetValue(key, out double val))
                         values.Add(val);
-                    else if (double.TryParse(argName,
+                    else if (double.TryParse(key,
                              System.Globalization.NumberStyles.Any,
                              System.Globalization.CultureInfo.InvariantCulture,
                              out double literal))

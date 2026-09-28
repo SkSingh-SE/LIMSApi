@@ -63,6 +63,11 @@ namespace LIMSApi.Repositories
                                     .ThenInclude(sd => sd.SpecimenOrientation)
                                 .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
                                     .ThenInclude(sd => sd.ProductForm)
+                                .Include(x => x.SampleDetails.Where(sd => sd.IsActive))
+                                    .ThenInclude(sd => sd.TestPlans)
+                                        .ThenInclude(tp => tp.UniversalTestGroups.Where(utg => utg.IsActive))
+                                            .ThenInclude(utg => utg.LaboratoryTest)
+                                                .ThenInclude(lt => lt.Discipline)
                                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
             return sampleInward;
         }
@@ -190,14 +195,9 @@ namespace LIMSApi.Repositories
         }
         public async Task<PagedResponse<object>> GetPlanList(PageFilter filter)
         {
-           var allowedStatuses = new List<InwardStatus>
-            {
-                InwardStatus.UNDER_PLANNING,
-                InwardStatus.UNDER_REVIEW
-            };
             var baseQuery = _context.SampleInwards
                 .Where(c => c.IsActive && c.CompanyCode == loggedInUser.CompanyCode)
-                .Where(c => c.InwardStatus == InwardStatus.UNDER_PLANNING.ToString() || c.InwardStatus == InwardStatus.UNDER_REVIEW.ToString()|| c.InwardStatus == InwardStatus.INWARD_COMPLETED.ToString() );
+                .Where(c => c.InwardStatus != InwardStatus.CANCELLED.ToString() && c.InwardStatus != InwardStatus.REJECTED.ToString());
 
             if (!loggedInUser.CanViewAllBranches && loggedInUser.BranchID.HasValue)
             {
@@ -215,7 +215,35 @@ namespace LIMSApi.Repositories
                     ContactEmail = c.Contacts.OrderBy(x => x.ID).Select(x => x.EmailId).FirstOrDefault(),
                     ContactPhone = c.Contacts.OrderBy(x => x.ID).Select(x => x.MobileNo).FirstOrDefault(),
                     c.CollectionTime,
-                    PlanStatus = c.InwardStatus,
+                    FirstSampleID = c.SampleDetails.Where(s => s.IsActive).OrderBy(s => s.ID).Select(s => (long?)s.ID).FirstOrDefault(),
+                    PlanStatus = 
+                        _context.UniversalTestGroups.Any(u => u.IsActive && u.SampleTestPlan.SampleDetail.InwardID == c.ID)
+                            ? (
+                                _context.UniversalTestGroups.Where(u => u.IsActive && u.SampleTestPlan.SampleDetail.InwardID == c.ID).All(u => u.Status == "Approved")
+                                    ? "Approved"
+                                    : (
+                                        _context.UniversalTestGroups.Where(u => u.IsActive && u.SampleTestPlan.SampleDetail.InwardID == c.ID).All(u => u.Status == "Verified" || u.Status == "Approved")
+                                            ? "Verified"
+                                            : (
+                                                _context.UniversalTestGroups.Where(u => u.IsActive && u.SampleTestPlan.SampleDetail.InwardID == c.ID).All(u => u.Status == "Completed" || u.Status == "Verified" || u.Status == "Approved")
+                                                    ? "Completed"
+                                                    : (
+                                                        _context.UniversalTestGroups.Any(u => u.IsActive && u.SampleTestPlan.SampleDetail.InwardID == c.ID && (u.Status == "InProgress" || u.Status == "Started"))
+                                                            ? "InProgress"
+                                                            : "Submitted"
+                                                      )
+                                              )
+                                      )
+                              )
+                            : (
+                                _context.TestPlans.Any(p => p.SampleDetail.InwardID == c.ID && p.PlanStatus == "Submitted")
+                                    ? "Submitted"
+                                    : (
+                                        _context.TestPlans.Any(p => p.SampleDetail.InwardID == c.ID && p.PlanStatus == "Draft")
+                                            ? "UNDER_PLANNING"
+                                            : c.InwardStatus
+                                      )
+                              ),
                     CurrentStageStatus = c.InwardStatus,
                     ActionStatus = ActionStatusResolver.Resolve(WorkflowListType.Planning, c.InwardStatus).ToString(),
                     ModifiedOn = c.ModifiedOn,

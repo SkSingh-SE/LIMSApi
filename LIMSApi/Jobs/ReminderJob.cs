@@ -1,4 +1,4 @@
-﻿
+
 using Hangfire;
 using LIMSApi.Data;
 using LIMSApi.Helpers;
@@ -44,6 +44,7 @@ namespace LIMSApi.Jobs
                 var cutoffTime = DateTime.UtcNow.AddHours(-12);
 
 var casesNeedingReminder = await _dbContext.SampleInwards
+    .IgnoreQueryFilters()
     .Include(i => i.Customer)
     .Include(i => i.Contacts)
     .Where(i => i.IsActive &&

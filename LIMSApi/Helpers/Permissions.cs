@@ -310,6 +310,24 @@ namespace LIMSApi.Helpers
             public const string Import = "CanImportTestMethodSpecification";
         }
 
+        public static class TestGroup
+        {
+            public const string Read   = "CanReadTestGroup";
+            public const string Create = "CanCreateTestGroup";
+            public const string Update = "CanUpdateTestGroup";
+            public const string Delete = "CanDeleteTestGroup";
+            public const string Manage = "CanManageTestGroup";
+        }
+
+        public static class ConfigurationAdjustment
+        {
+            public const string View    = "CanViewConfigurationAdjustment";
+            public const string Read    = "CanViewConfigurationAdjustment";
+            public const string Create  = "CanCreateConfigurationAdjustment";
+            public const string Apply   = "CanApplyConfigurationAdjustment";
+            public const string Approve = "CanApproveConfigurationAdjustment";
+        }
+
         public static class TestMethodStandard
         {
             public const string Read   = "CanReadTestMethodStandard";
@@ -355,6 +373,24 @@ namespace LIMSApi.Helpers
             public const string Update = "CanUpdateMetalClassification";
             public const string Delete = "CanDeleteMetalClassification";
             public const string Manage = "CanManageMetalClassification";
+        }
+
+        public static class Classification
+        {
+            public const string Read   = "CanReadClassification";
+            public const string Create = "CanCreateClassification";
+            public const string Update = "CanUpdateClassification";
+            public const string Delete = "CanDeleteClassification";
+            public const string Manage = "CanManageClassification";
+        }
+
+        public static class AcceptanceCriteria
+        {
+            public const string Read   = "CanReadAcceptanceCriteria";
+            public const string Create = "CanCreateAcceptanceCriteria";
+            public const string Update = "CanUpdateAcceptanceCriteria";
+            public const string Delete = "CanDeleteAcceptanceCriteria";
+            public const string Manage = "CanManageAcceptanceCriteria";
         }
 
         public static class HeatTreatment
@@ -436,6 +472,42 @@ namespace LIMSApi.Helpers
             public const string Update = "CanUpdateConditionMaster";
             public const string Delete = "CanDeleteConditionMaster";
             public const string Manage = "CanManageConditionMaster";
+        }
+
+        public static class EquipmentRequirement
+        {
+            public const string Read   = "CanReadEquipmentRequirement";
+            public const string Create = "CanCreateEquipmentRequirement";
+            public const string Update = "CanUpdateEquipmentRequirement";
+            public const string Delete = "CanDeleteEquipmentRequirement";
+            public const string Manage = "CanManageEquipmentRequirement";
+        }
+
+        public static class FactorConversion
+        {
+            public const string Read   = "CanReadFactorConversion";
+            public const string Create = "CanCreateFactorConversion";
+            public const string Update = "CanUpdateFactorConversion";
+            public const string Delete = "CanDeleteFactorConversion";
+            public const string Manage = "CanManageFactorConversion";
+        }
+
+        public static class MeasurementUncertainty
+        {
+            public const string Read   = "CanReadMeasurementUncertainty";
+            public const string Create = "CanCreateMeasurementUncertainty";
+            public const string Update = "CanUpdateMeasurementUncertainty";
+            public const string Delete = "CanDeleteMeasurementUncertainty";
+            public const string Manage = "CanManageMeasurementUncertainty";
+        }
+
+        public static class ExecutionLayout
+        {
+            public const string Read   = "CanReadExecutionLayout";
+            public const string Create = "CanCreateExecutionLayout";
+            public const string Update = "CanUpdateExecutionLayout";
+            public const string Delete = "CanDeleteExecutionLayout";
+            public const string Manage = "CanManageExecutionLayout";
         }
 
         public static class SpecimenOrientation
@@ -558,15 +630,6 @@ namespace LIMSApi.Helpers
             public const string Manage = "CanManageTestMaster";
         }
 
-        public static class TestGroup
-        {
-            public const string Read   = "CanReadTestGroup";
-            public const string Create = "CanCreateTestGroup";
-            public const string Update = "CanUpdateTestGroup";
-            public const string Delete = "CanDeleteTestGroup";
-            public const string Manage = "CanManageTestGroup";
-        }
-
         public static class ProductTestGroup
         {
             public const string Read   = "CanReadProductTestGroup";
@@ -632,6 +695,30 @@ namespace LIMSApi.Helpers
             public const string SaveResult    = "TEST_RESULT_SAVE";
             public const string VerifyResult  = "TEST_RESULT_VERIFY";
             public const string PriceOverride = "TEST_PRICE_OVERRIDE";
+        }
+
+        public static class UniversalResult
+        {
+            public const string Read     = "CanReadUniversalResult";
+            public const string Evaluate = "CanEvaluateUniversalResult";
+            public const string Finalize = "CanFinalizeUniversalResult";
+            public const string Rework   = "CanReworkUniversalResult";
+        }
+
+        public static class UniversalReview
+        {
+            public const string Read    = "CanReadUniversalReview";
+            public const string Review  = "CanReviewUniversalResult";
+            public const string Verify  = "CanVerifyUniversalResult";
+            public const string Approve = "CanApproveUniversalResult";
+        }
+
+        public static class UniversalReport
+        {
+            public const string Read     = "CanReadUniversalReport";
+            public const string Generate = "CanGenerateUniversalReport";
+            public const string Release  = "CanReleaseUniversalReport";
+            public const string Reissue  = "CanReissueUniversalReport";
         }
 
         public static class TpiInspection

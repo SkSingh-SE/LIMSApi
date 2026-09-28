@@ -29,6 +29,14 @@ namespace LIMSApi.Models
         [StringLength(50)]
         public string Status { get; set; } = "Pending";
 
+        public long? ExecutionLayoutID { get; set; }
+
+        public long? DepartmentID { get; set; }
+
+        public string? PlannedConfigurationJson { get; set; }
+
+        public int ExecutionCount { get; set; } = 0;
+
         [ForeignKey("BranchID")]
         public virtual Branch? Branch { get; set; }
 
@@ -37,6 +45,12 @@ namespace LIMSApi.Models
 
         [ForeignKey("LaboratoryTestID")]
         public virtual LaboratoryTest LaboratoryTest { get; set; } = null!;
+
+        [ForeignKey("ExecutionLayoutID")]
+        public virtual ExecutionLayoutMaster? ExecutionLayout { get; set; }
+
+        [ForeignKey("DepartmentID")]
+        public virtual DepartmentMaster? Department { get; set; }
 
         [ForeignKey("TestMethodSpecificationID")]
         public virtual TestMethodSpecification? TestMethodSpecification { get; set; }

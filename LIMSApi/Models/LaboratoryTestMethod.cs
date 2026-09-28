@@ -14,6 +14,8 @@ namespace LIMSApi.Models
         [Required]
         public long TestMethodSpecificationID { get; set; }
 
+        public long? TestMethodSpecificationVersionID { get; set; }
+
         public bool IsDefault { get; set; } = false;
 
         public int DisplayOrder { get; set; } = 0;
@@ -23,5 +25,8 @@ namespace LIMSApi.Models
 
         [ForeignKey(nameof(TestMethodSpecificationID))]
         public virtual TestMethodSpecification? TestMethodSpecification { get; set; }
+
+        [ForeignKey(nameof(TestMethodSpecificationVersionID))]
+        public virtual TestMethodSpecificationVersion? TestMethodSpecificationVersion { get; set; }
     }
 }

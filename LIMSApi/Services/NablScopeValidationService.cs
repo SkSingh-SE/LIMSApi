@@ -18,46 +18,85 @@ namespace LIMSApi.Services
             _loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
-        public async Task<NablScopeCheckResult> CheckParameterScope(long laboratoryTestId, long parameterId, decimal value)
+        public Task<NablScopeCheckResult> CheckParameterScope(long laboratoryTestId, long parameterId, decimal value)
+            => CheckParameterScope(laboratoryTestId, parameterId, value, null, null);
+
+        private static bool IsScopeEffective(LabScopeMaster labScope, long? branchId, DateTime referenceDateUtc)
         {
-            // G15: Add CompanyCode filter for multi-tenant safety
-            var labScope = await _db.LabScopeMasters
+            if (branchId.HasValue && labScope.BranchID.HasValue && labScope.BranchID.Value != branchId.Value)
+                return false;
+            if (labScope.ValidFrom.HasValue && referenceDateUtc < labScope.ValidFrom.Value)
+                return false;
+            if (labScope.ValidUntil.HasValue && referenceDateUtc > labScope.ValidUntil.Value)
+                return false;
+            return true;
+        }
+
+        public async Task<NablScopeCheckResult> CheckParameterScope(long laboratoryTestId, long parameterId, decimal value, long? branchId, DateTime? referenceDateUtc, long? testMethodId = null, long? testMethodVersionId = null)
+        {
+            var refDate = referenceDateUtc ?? DateTime.UtcNow;
+            
+            var query = _db.LabScopeMasters
                 .Include(ls => ls.Specifications)
                     .ThenInclude(s => s.Parameters)
                 .Where(ls => ls.LaboratoryTestID == laboratoryTestId && ls.IsActive
-                    && ls.CompanyCode == _loggedInUser.CompanyCode)
-                .OrderByDescending(ls => ls.Specifications.SelectMany(s => s.Parameters).Count())
-                .FirstOrDefaultAsync();
+                    && ls.CompanyCode == _loggedInUser.CompanyCode);
 
-            if (labScope == null)
+            var candidates = await query.ToListAsync();
+            candidates = candidates.Where(ls => IsScopeEffective(ls, branchId, refDate)).ToList();
+
+            if (!candidates.Any())
             {
                 // Hierarchical fallback: if laboratoryTestId is a SubGroup or AnalysisType, check parent Master LaboratoryTestID
                 var subGroup = await _db.LaboratoryTestSubGroups.FirstOrDefaultAsync(sg => sg.ID == laboratoryTestId);
                 if (subGroup != null)
                 {
-                    labScope = await _db.LabScopeMasters
+                    candidates = await _db.LabScopeMasters
                         .Include(ls => ls.Specifications)
                             .ThenInclude(s => s.Parameters)
                         .Where(ls => ls.LaboratoryTestID == subGroup.LaboratoryTestID && ls.IsActive
                             && ls.CompanyCode == _loggedInUser.CompanyCode)
-                        .OrderByDescending(ls => ls.Specifications.SelectMany(s => s.Parameters).Count())
-                        .FirstOrDefaultAsync();
+                        .ToListAsync();
+                    candidates = candidates.Where(ls => IsScopeEffective(ls, branchId, refDate)).ToList();
                 }
                 else
                 {
                     var analysisType = await _db.LaboratoryTestAnalysisTypes.Include(at => at.SubGroup).FirstOrDefaultAsync(at => at.ID == laboratoryTestId);
                     if (analysisType?.SubGroup != null)
                     {
-                        labScope = await _db.LabScopeMasters
+                        candidates = await _db.LabScopeMasters
                             .Include(ls => ls.Specifications)
                                 .ThenInclude(s => s.Parameters)
                             .Where(ls => ls.LaboratoryTestID == analysisType.SubGroup.LaboratoryTestID && ls.IsActive
                                 && ls.CompanyCode == _loggedInUser.CompanyCode)
-                            .OrderByDescending(ls => ls.Specifications.SelectMany(s => s.Parameters).Count())
-                            .FirstOrDefaultAsync();
+                            .ToListAsync();
+                        candidates = candidates.Where(ls => IsScopeEffective(ls, branchId, refDate)).ToList();
                     }
                 }
             }
+
+            if (!candidates.Any())
+            {
+                return new NablScopeCheckResult
+                {
+                    ParameterId = parameterId,
+                    Value = value,
+                    ScopeStatus = "NotAccredited"
+                };
+            }
+
+            // Deterministic Scope Precedence
+            var branchSpecific = candidates.Where(ls => ls.BranchID.HasValue && ls.BranchID.Value == branchId).ToList();
+            var globalSpecific = candidates.Where(ls => !ls.BranchID.HasValue).ToList();
+
+            List<LabScopeMaster> effectiveCandidates = branchSpecific.Any() ? branchSpecific : globalSpecific;
+
+            if (effectiveCandidates.Count > 1)
+            {
+                throw new InvalidOperationException($"Ambiguous Lab Scope: Found {effectiveCandidates.Count} active effective scopes for LaboratoryTestID {laboratoryTestId}. Please deactivate overlapping scopes.");
+            }
+
+            var labScope = effectiveCandidates.FirstOrDefault();
 
             if (labScope == null)
             {
@@ -69,8 +108,20 @@ namespace LIMSApi.Services
                 };
             }
 
+            var specsQuery = labScope.Specifications.AsEnumerable();
+
+            if (testMethodId.HasValue && testMethodId.Value > 0)
+            {
+                specsQuery = specsQuery.Where(s => s.TestMethodSpecificationID == testMethodId.Value);
+            }
+
+            if (testMethodVersionId.HasValue && testMethodVersionId.Value > 0)
+            {
+                specsQuery = specsQuery.Where(s => s.TestMethodSpecificationVersionID == testMethodVersionId.Value || !s.TestMethodSpecificationVersionID.HasValue);
+            }
+
             // G7: Sort specs so version-matched ones are checked first (prefer specific version over generic)
-            var sortedSpecs = labScope.Specifications
+            var sortedSpecs = specsQuery
                 .OrderByDescending(s => s.TestMethodSpecificationVersionID.HasValue)
                 .ToList();
 
@@ -150,7 +201,10 @@ namespace LIMSApi.Services
             };
         }
 
-        public async Task<List<NablScopeCheckResult>> CheckAllParameters(long testResultHeaderId)
+        public Task<List<NablScopeCheckResult>> CheckAllParameters(long testResultHeaderId)
+            => CheckAllParameters(testResultHeaderId, null, null);
+
+        public async Task<List<NablScopeCheckResult>> CheckAllParameters(long testResultHeaderId, long? branchId, DateTime? referenceDateUtc)
         {
             var header = await _db.TestResultHeaders
                 .Include(h => h.Parameters)
@@ -164,7 +218,7 @@ namespace LIMSApi.Services
             {
                 if (param.Value.HasValue)
                 {
-                    var result = await CheckParameterScope(header.LaboratoryTestID, param.ParameterID, param.Value.Value);
+                    var result = await CheckParameterScope(header.LaboratoryTestID, param.ParameterID, param.Value.Value, branchId, referenceDateUtc);
                     result.ParameterName = param.ParameterName;
                     results.Add(result);
                 }
@@ -172,7 +226,7 @@ namespace LIMSApi.Services
                 {
                     // No value entered yet — still check if this test+parameter combo
                     // exists in LabScopeMaster so we show scope coverage correctly
-                    bool scopeExists = await CheckParameterScopeExists(header.LaboratoryTestID, param.ParameterID);
+                    bool scopeExists = await CheckParameterScopeExists(header.LaboratoryTestID, param.ParameterID, branchId, referenceDateUtc);
                     results.Add(new NablScopeCheckResult
                     {
                         ParameterId = param.ParameterID,
@@ -253,41 +307,70 @@ namespace LIMSApi.Services
         /// Checks whether a LabScopeSpecificationParameter record exists for the given
         /// laboratoryTestId + parameterId combination, without checking value ranges.
         /// </summary>
-        public async Task<bool> CheckParameterScopeExists(long laboratoryTestId, long parameterId)
-        {
-            var exists = await _db.LabScopeMasters
-                .Where(ls => ls.LaboratoryTestID == laboratoryTestId && ls.IsActive
-                    && ls.CompanyCode == _loggedInUser.CompanyCode)
-                .SelectMany(ls => ls.Specifications)
-                .SelectMany(s => s.Parameters)
-                .AnyAsync(p => p.ParameterID == parameterId);
+        public Task<bool> CheckParameterScopeExists(long laboratoryTestId, long parameterId)
+            => CheckParameterScopeExists(laboratoryTestId, parameterId, null, null);
 
-            if (!exists)
+        public async Task<bool> CheckParameterScopeExists(long laboratoryTestId, long parameterId, long? branchId, DateTime? referenceDateUtc, long? testMethodId = null, long? testMethodVersionId = null)
+        {
+            var refDate = referenceDateUtc ?? DateTime.UtcNow;
+            var query = _db.LabScopeMasters
+                .Where(ls => ls.LaboratoryTestID == laboratoryTestId && ls.IsActive
+                    && ls.CompanyCode == _loggedInUser.CompanyCode
+                    && (!branchId.HasValue || ls.BranchID == null || ls.BranchID == branchId.Value)
+                    && (ls.ValidFrom == null || refDate >= ls.ValidFrom)
+                    && (ls.ValidUntil == null || refDate <= ls.ValidUntil));
+
+            var candidates = await query.ToListAsync();
+
+            if (!candidates.Any())
             {
                 var subGroup = await _db.LaboratoryTestSubGroups.FirstOrDefaultAsync(sg => sg.ID == laboratoryTestId);
-                if (subGroup != null)
-                {
-                    exists = await _db.LabScopeMasters
-                        .Where(ls => ls.LaboratoryTestID == subGroup.LaboratoryTestID && ls.IsActive
-                            && ls.CompanyCode == _loggedInUser.CompanyCode)
-                        .SelectMany(ls => ls.Specifications)
-                        .SelectMany(s => s.Parameters)
-                        .AnyAsync(p => p.ParameterID == parameterId);
-                }
-                else
+                long? parentTestId = subGroup?.LaboratoryTestID;
+                if (!parentTestId.HasValue)
                 {
                     var analysisType = await _db.LaboratoryTestAnalysisTypes.Include(at => at.SubGroup).FirstOrDefaultAsync(at => at.ID == laboratoryTestId);
-                    if (analysisType?.SubGroup != null)
-                    {
-                        exists = await _db.LabScopeMasters
-                            .Where(ls => ls.LaboratoryTestID == analysisType.SubGroup.LaboratoryTestID && ls.IsActive
-                                && ls.CompanyCode == _loggedInUser.CompanyCode)
-                            .SelectMany(ls => ls.Specifications)
-                            .SelectMany(s => s.Parameters)
-                            .AnyAsync(p => p.ParameterID == parameterId);
-                    }
+                    parentTestId = analysisType?.SubGroup?.LaboratoryTestID;
+                }
+                if (parentTestId.HasValue)
+                {
+                    candidates = await _db.LabScopeMasters
+                        .Where(ls => ls.LaboratoryTestID == parentTestId.Value && ls.IsActive
+                            && ls.CompanyCode == _loggedInUser.CompanyCode
+                            && (!branchId.HasValue || ls.BranchID == null || ls.BranchID == branchId.Value)
+                            && (ls.ValidFrom == null || refDate >= ls.ValidFrom)
+                            && (ls.ValidUntil == null || refDate <= ls.ValidUntil))
+                        .ToListAsync();
                 }
             }
+
+            if (!candidates.Any()) return false;
+
+            // Deterministic Scope Precedence
+            var branchSpecific = candidates.Where(ls => ls.BranchID.HasValue && ls.BranchID.Value == branchId).ToList();
+            var globalSpecific = candidates.Where(ls => !ls.BranchID.HasValue).ToList();
+
+            List<LabScopeMaster> effectiveCandidates = branchSpecific.Any() ? branchSpecific : globalSpecific;
+
+            if (effectiveCandidates.Count > 1) return false; // Ambiguous
+
+            var labScope = effectiveCandidates.FirstOrDefault();
+            if (labScope == null) return false;
+
+            var specsQuery = _db.LabScopeSpecifications.Where(s => s.LabScopeID == labScope.ID);
+
+            if (testMethodId.HasValue && testMethodId.Value > 0)
+            {
+                specsQuery = specsQuery.Where(s => s.TestMethodSpecificationID == testMethodId.Value);
+            }
+
+            if (testMethodVersionId.HasValue && testMethodVersionId.Value > 0)
+            {
+                specsQuery = specsQuery.Where(s => s.TestMethodSpecificationVersionID == testMethodVersionId.Value || s.TestMethodSpecificationVersionID == null);
+            }
+
+            var exists = await specsQuery
+                .SelectMany(s => s.Parameters)
+                .AnyAsync(p => p.ParameterID == parameterId);
 
             return exists;
         }

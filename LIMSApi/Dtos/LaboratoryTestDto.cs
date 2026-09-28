@@ -47,6 +47,7 @@ namespace LIMSApi.Dtos
         public List<LaboratoryTestParameterItemDto> Parameters { get; set; } = new();
         public List<LaboratoryTestMethodItemDto> Methods { get; set; } = new();
         public List<LaboratoryTestConditionItemDto> Conditions { get; set; } = new();
+        public List<LaboratoryTestLayoutItemDto> Layouts { get; set; } = new();
     }
 
     public class LaboratoryTestParameterItemDto
@@ -69,6 +70,9 @@ namespace LIMSApi.Dtos
         public long ID { get; set; }
         public long LaboratoryTestID { get; set; }
         public long TestMethodSpecificationID { get; set; }
+        public long? TestMethodSpecificationVersionID { get; set; }
+        public string? MethodVersion { get; set; }
+        public bool IsSupersededVersion { get; set; } = false;
         public string MethodCode { get; set; } = string.Empty;
         public string MethodName { get; set; } = string.Empty;
         public string DisplayTitle { get; set; } = string.Empty;
@@ -158,5 +162,53 @@ namespace LIMSApi.Dtos
         public string Name { get; set; } = string.Empty;
         public long? DisciplineID { get; set; }
         public string? DisciplineName { get; set; }
+    }
+
+    public class LaboratoryTestLayoutItemDto
+    {
+        public long ID { get; set; }
+        public long LaboratoryTestID { get; set; }
+        public long ExecutionLayoutID { get; set; }
+        public string LayoutCode { get; set; } = string.Empty;
+        public string LayoutName { get; set; } = string.Empty;
+        public string? RendererType { get; set; }
+        public long? TestMethodSpecificationID { get; set; }
+        public string? MethodName { get; set; }
+        public long? TestMethodSpecificationVersionID { get; set; }
+        public string? VersionName { get; set; }
+        public int Priority { get; set; } = 0;
+        public bool IsDefault { get; set; } = false;
+        public bool IsActive { get; set; } = true;
+    }
+
+    public class LaboratoryTestLayoutCreateDto
+    {
+        public long ExecutionLayoutID { get; set; }
+        public long? TestMethodSpecificationID { get; set; }
+        public long? TestMethodSpecificationVersionID { get; set; }
+        public int Priority { get; set; } = 0;
+        public bool IsDefault { get; set; } = false;
+    }
+
+    public class LaboratoryTestLayoutUpdateDto
+    {
+        public long ID { get; set; }
+        public long ExecutionLayoutID { get; set; }
+        public long? TestMethodSpecificationID { get; set; }
+        public long? TestMethodSpecificationVersionID { get; set; }
+        public int Priority { get; set; } = 0;
+        public bool IsDefault { get; set; } = false;
+    }
+
+    public class EffectiveLayoutResponseDto
+    {
+        public long? AssignmentID { get; set; }
+        public long? ExecutionLayoutID { get; set; }
+        public string? LayoutCode { get; set; }
+        public string? LayoutName { get; set; }
+        public string? RendererType { get; set; }
+        public string ResolutionLevel { get; set; } = "Unassigned";
+        public string Reason { get; set; } = string.Empty;
+        public int Priority { get; set; }
     }
 }

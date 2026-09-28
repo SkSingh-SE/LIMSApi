@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using LIMSApi.Helpers.Enums;
 
 namespace LIMSApi.Helpers.StatusFlow
@@ -11,16 +11,13 @@ namespace LIMSApi.Helpers.StatusFlow
     {
         public static ActionStatus Resolve(WorkflowListType listType, string currentStatus)
         {
-            if (!Enum.TryParse<SampleStatus>(currentStatus, out var status))
-                return ActionStatus.NOT_REACHED;
-
             return listType switch
             {
                 WorkflowListType.Inward => ResolveInward(currentStatus),
                 WorkflowListType.Planning => ResolvePlanning(currentStatus),
                 WorkflowListType.Review => ResolveReview(currentStatus),
-                WorkflowListType.Testing => ResolveTesting(status),
-                WorkflowListType.Reporting => ResolveReporting(status),
+                WorkflowListType.Testing => Enum.TryParse<SampleStatus>(currentStatus, out var ts) ? ResolveTesting(ts) : ActionStatus.NOT_REACHED,
+                WorkflowListType.Reporting => Enum.TryParse<SampleStatus>(currentStatus, out var rs) ? ResolveReporting(rs) : ActionStatus.NOT_REACHED,
 
                 _ => ActionStatus.NOT_REACHED
             };
@@ -63,20 +60,22 @@ namespace LIMSApi.Helpers.StatusFlow
         private static ActionStatus ResolvePlanning(string inwardStatus)
         {
             if (!Enum.TryParse<InwardStatus>(inwardStatus, out var status))
-                return ActionStatus.NOT_REACHED;
+                return ActionStatus.PENDING;
 
             return status switch
             {
                 InwardStatus.INWARD_REGISTERED
                 or InwardStatus.INWARD_COMPLETED
-                    => ActionStatus.PENDING, // edit inward
+                or InwardStatus.UNDER_PLANNING
+                or InwardStatus.IN_PROGRESS
+                or InwardStatus.PARTIALLY_COMPLETED
+                    => ActionStatus.PENDING,
 
-                InwardStatus.UNDER_PLANNING
-                    => ActionStatus.PENDING, // planning enabled
+                InwardStatus.COMPLETED
+                    => ActionStatus.COMPLETED,
 
-                InwardStatus.UNDER_REVIEW
-                or InwardStatus.COMPLETED
-                    => ActionStatus.COMPLETED, // locked
+                InwardStatus.REJECTED
+                    => ActionStatus.REJECTED,
 
                 _ => ActionStatus.PENDING
             };

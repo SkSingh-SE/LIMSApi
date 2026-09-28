@@ -170,8 +170,22 @@ namespace LIMSApi.Dtos
         public string? AssignedGradeName { get; set; }
         public string? AssignedGradeNote { get; set; }
 
+        // Selected Universal Laboratory Tests requested at Inward
+        public List<long> SelectedLaboratoryTestIDs { get; set; } = new();
+        public List<UniversalTestSummaryDto> SelectedLaboratoryTests { get; set; } = new();
+
         public ICollection<SampleAdditionalDetailDto> AdditionalDetails { get; set; } = new List<SampleAdditionalDetailDto>();
         public ICollection<SampleTestPlanDto> TestPlans { get; set; } = new List<SampleTestPlanDto>();
+    }
+
+    public class UniversalTestSummaryDto
+    {
+        public long UniversalTestGroupID { get; set; }
+        public long LaboratoryTestID { get; set; }
+        public string LaboratoryTestCode { get; set; } = string.Empty;
+        public string LaboratoryTestName { get; set; } = string.Empty;
+        public string? DisciplineName { get; set; }
+        public string Status { get; set; } = "Pending";
     }
 
     public class SampleAdditionalDetailDto

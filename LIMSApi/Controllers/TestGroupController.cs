@@ -1,69 +1,77 @@
-﻿using LIMSApi.Dtos;
-using LIMSApi.Models;
+﻿using LIMSApi.Helpers;
+using LIMSApi.Middleware;
 using LIMSApi.Services.Interface;
-using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LIMSApi.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class TestGroupController : ControllerBase
     {
-        private readonly ITestGroupService _testMethodService;
+        private readonly IUniversalTestGroupService _service;
 
-        public TestGroupController(ITestGroupService testMethodService)
+        public TestGroupController(IUniversalTestGroupService service)
         {
-            _testMethodService = testMethodService;
+            _service = service;
         }
 
-        [HttpPost("list")]
-        public async Task<IActionResult> TestGroupList(PageFilter filter)
+        [HttpGet("list")]
+        [RequirePermission(Permissions.TestGroup.Read)]
+        public async Task<IActionResult> GetAll()
         {
-            return Ok(await _testMethodService.FetchTestGroupList(filter));
+            var result = await _service.GetAllForCurrentUserAsync();
+            return Ok(result);
         }
 
-
-        [HttpGet("details/{id}")]
-        public async Task<ActionResult<TestGroup>> GetTestGroupMaster(long id)
+        [HttpGet("list/by-inward/{inwardId:long}")]
+        [RequirePermission(Permissions.TestGroup.Read)]
+        public async Task<IActionResult> GetByInward(long inwardId)
         {
-            var entity = await _testMethodService.GetTestGroupDetails(id);
-
-            return entity == null ? NoContent() : Ok(entity);
+            var result = await _service.GetTestGroupsForInwardAsync(inwardId);
+            return Ok(result);
         }
 
-
-        [HttpPut("update")]
-        public async Task<IActionResult> PutTestGroupMaster(TestGroup model)
+        [HttpGet("list/by-sample/{sampleId:long}")]
+        [RequirePermission(Permissions.TestGroup.Read)]
+        public async Task<IActionResult> GetBySample(long sampleId)
         {
-            await _testMethodService.ModifyTestGroup(model);
-            return Ok($"TestGroup '{model.Name}' updated successfully.");
+            var result = await _service.GetTestGroupsForSampleAsync(sampleId);
+            return Ok(result);
         }
 
-        [HttpPost("create")]
-        public async Task<ActionResult<TestGroup>> PostTestGroupMaster(TestGroup model)
+        [HttpGet("list/by-plan/{planId:long}")]
+        [RequirePermission(Permissions.TestGroup.Read)]
+        public async Task<IActionResult> GetByPlan(long planId)
         {
-            await _testMethodService.CreateTestGroup(model);
-            return Ok($"TestGroup '{model.Name}' created successfully");
+            var result = await _service.GetTestGroupsForPlanAsync(planId);
+            return Ok(result);
         }
 
-        [HttpDelete("delete/{id}")]
-        public async Task<IActionResult> DeleteTestGroupMaster(long id)
+        [HttpGet("details/{id:long}")]
+        [RequirePermission(Permissions.TestGroup.Read)]
+        public async Task<IActionResult> GetDetails(long id)
         {
-            var entity = await _testMethodService.GetTestGroupDetails(id);
-            if (entity == null)
-            {
-                throw new InvalidOperationException("TestGroup not found!");
-            }
-            return Ok($"TestGroup '{entity.Name}' created successfully");
+            var result = await _service.GetTestGroupDetailAsync(id);
+            return Ok(result);
         }
 
-        [HttpGet("dropdown")]
-        public async Task<IActionResult> GetTestGroupDropdown(string? searchTerm, int pageNo, int pageSize)
+        [HttpGet("effective-configuration/{id:long}")]
+        [RequirePermission(Permissions.TestGroup.Read)]
+        public async Task<IActionResult> GetEffectiveConfiguration(long id)
         {
-            var data = await _testMethodService.GetTestGroupDropdown(searchTerm, pageNo, pageSize);
-            return data == null ? NoContent(): Ok(data);
+            var result = await _service.GetEffectiveConfigurationAsync(id);
+            return Ok(result);
         }
 
+        [HttpGet("validation/{id:long}")]
+        [RequirePermission(Permissions.TestGroup.Read)]
+        public async Task<IActionResult> GetValidation(long id)
+        {
+            var result = await _service.GetValidationAsync(id);
+            return Ok(result);
+        }
     }
 }

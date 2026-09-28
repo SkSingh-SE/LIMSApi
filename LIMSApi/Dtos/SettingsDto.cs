@@ -1,4 +1,4 @@
-﻿using LIMSApi.Models;
+using LIMSApi.Models;
 
 namespace LIMSApi.Dtos
 {
@@ -26,6 +26,10 @@ namespace LIMSApi.Dtos
         public string? NablTcNumber { get; set; }
         public string? NablCertificate { get; set; }
         public string? NablLogo { get; set; }
+        public DateTime? IssueDate { get; set; }
+        public DateTime? ExpiryDate { get; set; }
+        public long? BranchId { get; set; }
+        public bool IsActive { get; set; } = true;
     }
     public sealed class NumberingDto
     {

@@ -121,11 +121,12 @@ namespace LIMSApi.Services
 
             await _userRepository.UpdateUser(user);
 
-            var defaultUserBranch = user.UserBranches?.FirstOrDefault(ub => ub.IsDefault && ub.IsActive);
-            var defaultBranchId = defaultUserBranch?.BranchID ?? user.BranchID;
-            var defaultBranchName = defaultUserBranch?.Branch?.Name ?? user.Branch?.Name;
-            var orgId = user.OrganizationID ?? user.Branch?.OrganizationID;
-            var orgName = user.Branch?.Organization?.LabName;
+            var defaultUserBranch = user.UserBranches?.FirstOrDefault(ub => ub.IsDefault && ub.IsActive)
+                ?? user.UserBranches?.FirstOrDefault(ub => ub.IsActive);
+            var defaultBranchId = user.BranchID ?? defaultUserBranch?.BranchID;
+            var defaultBranchName = user.Branch?.Name ?? defaultUserBranch?.Branch?.Name;
+            var orgId = user.OrganizationID ?? user.Branch?.OrganizationID ?? defaultUserBranch?.Branch?.OrganizationID;
+            var orgName = user.Branch?.Organization?.LabName ?? defaultUserBranch?.Branch?.Organization?.LabName;
 
             var branchList = user.UserBranches?
                 .Where(ub => ub.IsActive && ub.Branch != null && ub.Branch.IsActive)
@@ -311,7 +312,10 @@ namespace LIMSApi.Services
             }
 
             var branchesJson = System.Text.Json.JsonSerializer.Serialize(activeUserBranches);
-            var defaultBranchId = user.UserBranches?.FirstOrDefault(ub => ub.IsDefault && ub.IsActive)?.BranchID ?? user.BranchID;
+            var defaultUserBranch = user.UserBranches?.FirstOrDefault(ub => ub.IsDefault && ub.IsActive)
+                ?? user.UserBranches?.FirstOrDefault(ub => ub.IsActive);
+            var defaultBranchId = user.BranchID ?? defaultUserBranch?.BranchID;
+            var orgId = user.OrganizationID ?? user.Branch?.OrganizationID ?? defaultUserBranch?.Branch?.OrganizationID;
 
             var tokenDescriptor = new SecurityTokenDescriptor
             {
@@ -324,7 +328,7 @@ namespace LIMSApi.Services
                     new Claim(ClaimTypes.Email, user.EmailId ?? string.Empty),
                     new Claim("EmployeeID", user.EmployeeID != null ? user.EmployeeID.ToString() : "0"),
                     new Claim("CompanyCode", user.CompanyCode ?? string.Empty),
-                    new Claim("OrganizationID", user.OrganizationID != null ? user.OrganizationID.ToString() : (user.Branch != null ? user.Branch.OrganizationID.ToString() : "0")),
+                    new Claim("OrganizationID", orgId != null ? orgId.ToString() : "0"),
                     new Claim("BranchID", defaultBranchId != null ? defaultBranchId.ToString() : "0"),
                     new Claim("CanViewAllBranches", user.CanViewAllBranches.ToString()),
                     new Claim("UserBranches", branchesJson)

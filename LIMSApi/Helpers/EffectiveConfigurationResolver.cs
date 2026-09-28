@@ -3,6 +3,7 @@ using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers.Enums;
 using LIMSApi.Models;
+using LIMSApi.Services.Interface;
 using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Helpers
@@ -12,12 +13,21 @@ namespace LIMSApi.Helpers
         private readonly LIMSContext _context;
         private readonly FormulaEvaluator _formulaEvaluator;
         private readonly IBranchContext _branchContext;
+        private readonly ILaboratoryTestLayoutService _layoutService;
+        private readonly IExecutionLayoutService _executionLayoutService;
 
-        public EffectiveConfigurationResolver(LIMSContext context, FormulaEvaluator formulaEvaluator, IBranchContext branchContext)
+        public EffectiveConfigurationResolver(
+            LIMSContext context,
+            FormulaEvaluator formulaEvaluator,
+            IBranchContext branchContext,
+            ILaboratoryTestLayoutService layoutService,
+            IExecutionLayoutService executionLayoutService)
         {
             _context = context;
             _formulaEvaluator = formulaEvaluator;
             _branchContext = branchContext;
+            _layoutService = layoutService;
+            _executionLayoutService = executionLayoutService;
         }
 
         public async Task<UniversalPlanPreviewResponseDto> ResolveEffectiveConfigurationAsync(UniversalPlanPreviewRequestDto request)
@@ -50,6 +60,12 @@ namespace LIMSApi.Helpers
                 refDate = sample.SampleInward?.CollectionTime ?? sample.SampleInward?.CreatedOn ?? refDate;
             }
 
+            // Authoritative Specification Policy Gate:
+            // Standardless execution is allowed ONLY if the Laboratory Test has an explicit authoritative STANDARDLESS policy.
+            // Unknown Sample (SampleDetail.IsUnknownSample) is sample identity/context only and MUST NOT grant Standardless execution.
+            // By default, ISO 17025 laboratory testing requires an authoritative specification (SPECIFICATION_REQUIRED).
+            bool isExplicitlyStandardless = false;
+
             // Product & Grade
             long? gradeId = request.SpecificationGradeID ?? sample?.SpecificationGradeID;
             long? specHeaderId = request.SpecificationHeaderID;
@@ -74,28 +90,49 @@ namespace LIMSApi.Helpers
                     val.BlockingErrors.Add(val.ProductGradeMessage);
                 }
             }
+            else if (isExplicitlyStandardless)
+            {
+                val.ProductGradePass = true;
+                val.ProductGradeMessage = "N/A — No Product Grade linked (Explicitly Standardless / Unknown Sample).";
+            }
             else if (!specHeaderId.HasValue || specHeaderId.Value == 0)
             {
-                // Configuration-driven: N/A for standardless/ad-hoc testing without specification grade
-                val.ProductGradePass = true;
-                val.ProductGradeMessage = "N/A — No Product Grade linked (Standardless / Ad-hoc Testing).";
+                val.ProductGradePass = false;
+                val.ProductGradeMessage = "SPECIFICATION_REQUIRED: Valid specification and applicable Product Grade are required before test execution.";
+                val.BlockingErrors.Add(val.ProductGradeMessage);
             }
             else
             {
-                val.ProductGradePass = false;
-                val.ProductGradeMessage = "Applicable Product Grade is required for specification-driven test planning.";
-                val.BlockingErrors.Add(val.ProductGradeMessage);
+                // Check if the specification has grades configured
+                bool specHasGrades = await _context.SpecificationGrades.AnyAsync(g => g.SpecificationHeaderID == specHeaderId.Value);
+                if (specHasGrades)
+                {
+                    val.ProductGradePass = false;
+                    val.ProductGradeMessage = "Applicable Product Grade is required for this specification before test execution.";
+                    val.BlockingErrors.Add(val.ProductGradeMessage);
+                }
+                else
+                {
+                    val.ProductGradePass = true;
+                    val.ProductGradeMessage = "Specification has no grade breakdown (General / Ungraded Specification).";
+                }
             }
 
             // Specification Header
             if (specHeaderId.HasValue && specHeaderId.Value > 0)
             {
                 var header = await _context.SpecificationHeaders.FirstOrDefaultAsync(h => h.ID == specHeaderId.Value);
-                if (header != null)
+                if (header != null && header.IsActive)
                 {
                     response.SpecificationHeaderID = header.ID;
                     response.SpecificationTitle = header.DisplayTitle ?? header.AliasName ?? header.Code;
                     val.SpecificationPass = true;
+                }
+                else if (header != null && !header.IsActive)
+                {
+                    val.SpecificationPass = false;
+                    val.SpecificationMessage = $"Specification Header '{header.Code}' ({header.ID}) is inactive.";
+                    val.BlockingErrors.Add(val.SpecificationMessage);
                 }
                 else
                 {
@@ -104,11 +141,16 @@ namespace LIMSApi.Helpers
                     val.BlockingErrors.Add(val.SpecificationMessage);
                 }
             }
+            else if (isExplicitlyStandardless)
+            {
+                val.SpecificationPass = true;
+                val.SpecificationMessage = "N/A — Explicitly Standardless / Unknown Sample.";
+            }
             else
             {
-                // Configuration-driven: N/A when specification is not applicable (Ad-hoc / standardless testing)
-                val.SpecificationPass = true;
-                val.SpecificationMessage = "N/A — No Specification Header linked (Ad-hoc / Standardless Test).";
+                val.SpecificationPass = false;
+                val.SpecificationMessage = "SPECIFICATION_REQUIRED: Valid specification is required before test execution.";
+                val.BlockingErrors.Add(val.SpecificationMessage);
             }
 
             // 2. Specification Version Gate (Strict Fail Loud on zero / ambiguity; explicit superseded override permitted)
@@ -183,11 +225,16 @@ namespace LIMSApi.Helpers
                     }
                 }
             }
+            else if (isExplicitlyStandardless)
+            {
+                val.SpecificationVersionPass = true;
+                val.SpecificationVersionMessage = "N/A — Specification Version not required for explicitly standardless test.";
+            }
             else
             {
-                // Configuration-driven: N/A when specification version is not required
-                val.SpecificationVersionPass = true;
-                val.SpecificationVersionMessage = "N/A — Specification Version not required for standardless test.";
+                val.SpecificationVersionPass = false;
+                val.SpecificationVersionMessage = "SPECIFICATION_REQUIRED: Valid active specification version is required before test execution.";
+                val.BlockingErrors.Add(val.SpecificationVersionMessage);
             }
 
             // 3. Laboratory Test Definition Gate (Screen 13 Direct Mappings Only)
@@ -252,6 +299,7 @@ namespace LIMSApi.Helpers
             {
                 val.TestMethodPass = true;
                 response.TestMethodSpecificationID = selectedMethodMapping.TestMethodSpecificationID;
+                response.TestMethodCode = selectedMethodMapping.TestMethodSpecification?.Code;
                 response.TestMethodName = selectedMethodMapping.TestMethodSpecification?.Name;
                 response.TestMethodStandard = selectedMethodMapping.TestMethodSpecification?.TestMethodStandard;
 
@@ -376,16 +424,29 @@ namespace LIMSApi.Helpers
                     response.BranchID = branch.ID;
                     response.BranchName = branch.Name;
 
-                    // Department Resolution
+                    // Resolve tenant context authoritatively
+                    try
+                    {
+                        var tenant = _branchContext.ResolveTenantContext(branch.ID);
+                        response.Tenant = new TenantContextDto
+                        {
+                            OrganizationID = tenant.OrganizationID,
+                            BranchID = tenant.BranchID,
+                            CompanyCode = tenant.CompanyCode
+                        };
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Resolver must remain a pure configuration resolver; do not throw here.
+                    }
+
+                    // Department Resolution — Strict match on BranchID and DisciplineID only (Correction 10)
                     DepartmentMaster? dept = null;
                     if (test.DisciplineID.HasValue)
                     {
                         dept = await _context.DepartmentMasters
                             .FirstOrDefaultAsync(d => d.BranchID == branch.ID && d.DisciplineID == test.DisciplineID.Value && d.IsActive);
                     }
-
-                    dept ??= await _context.DepartmentMasters
-                        .FirstOrDefaultAsync(d => d.BranchID == branch.ID && d.IsActive);
 
                     if (dept != null)
                     {
@@ -397,10 +458,54 @@ namespace LIMSApi.Helpers
                     else
                     {
                         val.DepartmentRoutingPass = false;
-                        val.DepartmentRoutingMessage = $"No active laboratory department found for Branch '{branch.Name}' and Discipline '{response.DisciplineName ?? "General"}'.";
+                        val.DepartmentRoutingMessage = $"No active laboratory department found for Branch '{branch.Name}' and Discipline '{response.DisciplineName ?? "General"}'. Strict department discipline routing is required.";
                         val.BlockingErrors.Add(val.DepartmentRoutingMessage);
                     }
                 }
+            }
+
+            // Layout Resolution Gate (Phase 2 -> Phase 3)
+            try
+            {
+                var layoutRes = await _layoutService.ResolveEffectiveLayoutAsync(
+                    test.ID,
+                    response.TestMethodSpecificationID,
+                    response.TestMethodSpecificationVersionID);
+
+                if (layoutRes != null && layoutRes.ResolutionLevel != "Unassigned")
+                {
+                    response.ExecutionLayoutID = layoutRes.ExecutionLayoutID;
+                    response.ExecutionLayoutCode = layoutRes.LayoutCode;
+                    response.ExecutionLayoutName = layoutRes.LayoutName;
+                    response.RendererType = layoutRes.RendererType;
+                    response.LayoutResolutionLevel = layoutRes.ResolutionLevel;
+
+                    if (layoutRes.ExecutionLayoutID.HasValue)
+                    {
+                        try
+                        {
+                            response.ExecutionLayout = await _executionLayoutService.GetLayoutDetails(layoutRes.ExecutionLayoutID.Value);
+                        }
+                        catch (Exception ex)
+                        {
+                            val.Warnings.Add($"Failed to load execution layout details: {ex.Message}");
+                        }
+                    }
+                }
+                else
+                {
+                    response.ExecutionLayoutID = null;
+                    response.ExecutionLayoutCode = null;
+                    response.ExecutionLayoutName = null;
+                    response.RendererType = null;
+                    response.LayoutResolutionLevel = "Unassigned";
+                    response.ExecutionLayout = null;
+                }
+            }
+            catch (InvalidOperationException ex)
+            {
+                // Ambiguous layout configuration blocks planning
+                val.BlockingErrors.Add(ex.Message);
             }
 
             // 6. Parameters & Specification Requirements Gate
@@ -456,7 +561,7 @@ namespace LIMSApi.Helpers
                 .GroupBy(l => l.ParameterID!.Value)
                 .ToDictionary(g => g.Key, g => g.First());
             bool allMandatoryParamsSatisfied = true;
-            bool isStandardless = !specHeaderId.HasValue || specHeaderId.Value <= 0;
+            bool isStandardless = isExplicitlyStandardless;
             response.IsStandardlessTest = isStandardless;
 
             foreach (var tp in test.Parameters.Where(p => p.IsActive).OrderBy(p => p.DisplayOrder))
@@ -467,8 +572,8 @@ namespace LIMSApi.Helpers
                 specLinesByParamId.TryGetValue(pm.ID, out var specLine);
 
                 string reqText = "-";
-                decimal? minVal = specLine?.LowerLimitDecimalValue;
-                decimal? maxVal = specLine?.UpperLimitDecimalValue;
+                decimal? minVal = specLine?.LowerLimitDecimalValue ?? specLine?.MinValue;
+                decimal? maxVal = specLine?.UpperLimitDecimalValue ?? specLine?.MaxValue;
                 decimal? minTol = specLine?.MinTolerance;
                 decimal? maxTol = specLine?.MaxTolerance;
                 string? formula = specLine?.Equation ?? pm.Formula;
@@ -664,26 +769,185 @@ namespace LIMSApi.Helpers
                 }
             }
 
-            response.IsConfigurationReady = val.AllPassed;
+            // 8. Equipment Requirements & Calibration Gate (Gate 12)
+            string tenantCo = response.Tenant?.CompanyCode ?? string.Empty;
+            var activeRequirements = await _context.EquipmentRequirementMasters
+                .Include(r => r.EquipmentType)
+                .AsNoTracking()
+                .Where(r => r.IsActive
+                    && (string.IsNullOrEmpty(tenantCo) || r.CompanyCode == tenantCo)
+                    && r.LaboratoryTestID == test.ID
+                    && (r.TestMethodSpecificationID == null || r.TestMethodSpecificationID == response.TestMethodSpecificationID))
+                .OrderBy(r => r.DisplayOrder).ThenBy(r => r.Code)
+                .ToListAsync();
 
-            // Attach authoritative tenant context (Part B) — never falls back to a hardcoded value.
-            try
+            if (activeRequirements.Any())
             {
-                if (response.BranchID > 0)
+                var branchEquipments = await _context.EquipmentMasters
+                    .Include(e => e.Calibrations)
+                    .Include(e => e.EquipmentType)
+                    .AsNoTracking()
+                    .Where(e => e.IsActive && e.BranchID == response.BranchID && (string.IsNullOrEmpty(tenantCo) || e.CompanyCode == tenantCo))
+                    .ToListAsync();
+
+                bool allMandatoryEquipValid = true;
+                var now = DateTime.UtcNow;
+
+                foreach (var req in activeRequirements)
                 {
-                    var tenant = _branchContext.ResolveTenantContext(response.BranchID);
-                    response.Tenant = new TenantContextDto
+                    var matchingEqList = branchEquipments
+                        .Where(e => e.EquipmentTypeID == req.EquipmentTypeID)
+                        .ToList();
+
+                    if (req.EquipmentID.HasValue)
                     {
-                        OrganizationID = tenant.OrganizationID,
-                        BranchID = tenant.BranchID,
-                        CompanyCode = tenant.CompanyCode
-                    };
+                        matchingEqList = matchingEqList.Where(e => e.ID == req.EquipmentID.Value).ToList();
+                    }
+
+                    Models.EquipmentMaster? validSelected = null;
+                    string bestStatus = "Not Configured";
+                    DateTime? bestDue = null;
+                    string? blockReason = null;
+
+                    var evaluatedEqList = new List<(Models.EquipmentMaster Eq, string CalStatus, DateTime? DueDate, bool IsValid, string? Reason)>();
+
+                    foreach (var eq in matchingEqList)
+                    {
+                        var latestCal = eq.Calibrations?.OrderByDescending(c => c.CalibrationDate).FirstOrDefault();
+                        var dueDate = latestCal?.CalibrationDueDate ?? eq.NextCalibrationDueDate;
+                        string calStatus;
+                        bool isValid = true;
+                        string? reason = null;
+
+                        if (!eq.CalibrationRequired)
+                        {
+                            calStatus = "Not Required";
+                        }
+                        else if (!dueDate.HasValue)
+                        {
+                            calStatus = "Not Configured";
+                            isValid = false;
+                            reason = "Calibration validity is not configured for this equipment.";
+                        }
+                        else if (dueDate.Value < now)
+                        {
+                            calStatus = "Expired";
+                            isValid = false;
+                            reason = $"Calibration expired on {dueDate.Value:dd MMM yyyy}.";
+                        }
+                        else
+                        {
+                            calStatus = "Valid";
+                        }
+
+                        evaluatedEqList.Add((eq, calStatus, dueDate, isValid, reason));
+                    }
+
+                    var validCandidate = evaluatedEqList.FirstOrDefault(x => x.IsValid);
+                    if (validCandidate.Eq != null)
+                    {
+                        validSelected = validCandidate.Eq;
+                        bestStatus = validCandidate.CalStatus;
+                        bestDue = validCandidate.DueDate;
+                    }
+                    else if (evaluatedEqList.Any())
+                    {
+                        var first = evaluatedEqList[0];
+                        validSelected = first.Eq;
+                        bestStatus = first.CalStatus;
+                        bestDue = first.DueDate;
+                        blockReason = first.Reason;
+                    }
+                    else
+                    {
+                        bestStatus = "Not Configured";
+                        blockReason = $"No active equipment of type '{req.EquipmentType?.Name ?? req.Code}' found in Branch '{response.BranchName}'.";
+                    }
+
+                    bool reqPassed = validCandidate.Eq != null;
+                    if (req.IsMandatory && !reqPassed)
+                    {
+                        allMandatoryEquipValid = false;
+                    }
+
+                    response.Equipment.Add(new PreviewEquipmentDto
+                    {
+                        EquipmentRequirementMasterID = req.ID,
+                        RequirementName = req.Name,
+                        EquipmentTypeID = req.EquipmentTypeID,
+                        EquipmentTypeName = req.EquipmentType?.Name,
+                        IsMandatory = req.IsMandatory,
+                        EquipmentID = validSelected?.ID,
+                        EquipmentName = validSelected?.Name,
+                        EquipmentCode = validSelected?.EquipmentNo,
+                        SerialNumber = validSelected?.ModelNo,
+                        CalibrationStatus = bestStatus,
+                        CalibrationDueDate = bestDue,
+                        IsValidForExecution = reqPassed,
+                        Message = blockReason
+                    });
+                }
+
+                val.EquipmentPass = allMandatoryEquipValid;
+                if (!allMandatoryEquipValid)
+                {
+                    val.EquipmentMessage = "One or more mandatory equipment requirements lack valid calibrated instruments in the operating branch.";
+                    val.BlockingErrors.Add(val.EquipmentMessage);
                 }
             }
-            catch (InvalidOperationException)
+            else
             {
-                // Resolver must remain a pure configuration resolver; do not throw here.
-                // The tenant integrity error will surface from UniversalPlanService when it attempts to create UTGs.
+                val.EquipmentPass = true;
+                val.EquipmentMessage = "N/A — No equipment requirements configured for this test.";
+            }
+
+            response.IsConfigurationReady = val.AllPassed;
+
+            // Planning-time NABL scope coverage (same LabScopeMaster semantics as execution;
+            // no observed values yet → coverage only: WithinScope / NotAccredited).
+            if (!isStandardless && response.Tenant != null)
+            {
+                var effectiveScopeIds = await _context.LabScopeMasters
+                    .Where(ls => ls.IsActive && ls.CompanyCode == response.Tenant.CompanyCode
+                        && ls.LaboratoryTestID == request.LaboratoryTestID
+                        && (ls.BranchID == null || ls.BranchID == response.BranchID)
+                        && (ls.ValidFrom == null || refDate >= ls.ValidFrom)
+                        && (ls.ValidUntil == null || refDate <= ls.ValidUntil))
+                    .Select(ls => ls.ID)
+                    .ToListAsync();
+                HashSet<long> coveredParamIds = new();
+                if (effectiveScopeIds.Any())
+                {
+                    coveredParamIds = (await _context.LabScopeSpecifications
+                        .Where(s => effectiveScopeIds.Contains(s.LabScopeID))
+                        .SelectMany(s => s.Parameters)
+                        .Select(p => p.ParameterID)
+                        .ToListAsync()).ToHashSet();
+                }
+                foreach (var pp in response.Parameters)
+                    pp.ScopeStatus = coveredParamIds.Contains(pp.ParameterID) ? "WithinScope" : "NotAccredited";
+            }
+
+            // Option C Fallback: Unmapped Parameters (Screen 14 / ISO 17025 execution layout)
+            if (response.ExecutionLayout != null && response.ExecutionLayout.Sections.Any())
+            {
+                var referencedParamIds = response.ExecutionLayout.Sections
+                    .SelectMany(s => s.Items)
+                    .Where(it => (string.Equals(it.ReferenceType, "ParameterMaster", StringComparison.OrdinalIgnoreCase)
+                               || string.Equals(it.ReferenceType, "GraphXAxis", StringComparison.OrdinalIgnoreCase)
+                               || string.Equals(it.ReferenceType, "GraphYAxis", StringComparison.OrdinalIgnoreCase)
+                               || string.Equals(it.ReferenceType, "GraphSeries", StringComparison.OrdinalIgnoreCase))
+                               && it.ReferenceID.HasValue)
+                    .Select(it => it.ReferenceID!.Value)
+                    .ToHashSet();
+
+                response.UnmappedParameters = response.Parameters
+                    .Where(p => !referencedParamIds.Contains(p.ParameterID))
+                    .ToList();
+            }
+            else
+            {
+                response.UnmappedParameters = response.Parameters.ToList();
             }
 
             return response;
@@ -725,24 +989,190 @@ namespace LIMSApi.Helpers
             };
 
             int order = 1;
+            // Preload ParameterMasters for precision and dropdown options
+            var paramIds = preview.Parameters.Select(pp => pp.ParameterID).ToList();
+            var paramMasters = await _context.ParameterMasters
+                .Include(pm => pm.ParameterUnit)
+                .Include(pm => pm.DropdownOptions.Where(o => o.IsActive))
+                .Where(pm => paramIds.Contains(pm.ID))
+                .ToDictionaryAsync(pm => pm.ID);
+
+            // Preload Parameter-level Measurement Uncertainty (ISO 17025 Parameter MU)
+            var muTenant = preview.Tenant?.CompanyCode ?? utg.CompanyCode;
+            var paramMuMasters = await _context.MeasurementUncertaintyMasters
+                .Include(mu => mu.ParameterUnit)
+                .AsNoTracking()
+                .Where(mu => mu.IsActive
+                    && (string.IsNullOrEmpty(muTenant) || mu.CompanyCode == muTenant)
+                    && mu.ParameterID != null
+                    && paramIds.Contains(mu.ParameterID.Value)
+                    && (mu.LaboratoryTestID == null || mu.LaboratoryTestID == utg.LaboratoryTestID)
+                    && (mu.TestMethodSpecificationID == null || mu.TestMethodSpecificationID == preview.TestMethodSpecificationID)
+                    && (mu.TestMethodSpecificationVersionID == null || mu.TestMethodSpecificationVersionID == preview.TestMethodSpecificationVersionID))
+                .OrderByDescending(mu => (mu.LaboratoryTestID != null ? 1 : 0)
+                    + (mu.TestMethodSpecificationID != null ? 1 : 0)
+                    + (mu.TestMethodSpecificationVersionID != null ? 1 : 0))
+                .ThenBy(mu => mu.DisplayOrder)
+                .ThenBy(mu => mu.Code)
+                .ToListAsync();
+
+            var paramMuByParamId = paramMuMasters
+                .GroupBy(mu => mu.ParameterID!.Value)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            // Preload ToleranceMasters for parameters lacking explicit SpecificationLine tolerance
+            var candidateToleranceMasters = await _context.ToleranceMasters
+                .AsNoTracking()
+                .Where(t => t.IsActive
+                    && (string.IsNullOrEmpty(muTenant) || t.CompanyCode == muTenant)
+                    && t.ParameterID != null
+                    && paramIds.Contains(t.ParameterID.Value)
+                    && (t.SpecificationHeaderID == null || t.SpecificationHeaderID == preview.SpecificationHeaderID))
+                .ToListAsync();
+
             foreach (var p in preview.Parameters)
             {
+                paramMasters.TryGetValue(p.ParameterID, out var pmMaster);
+                var dropdownOpts = pmMaster?.DropdownOptions
+                    .OrderBy(o => o.DisplayOrder)
+                    .Select(o => new SnapshotDropdownOptionDto
+                    {
+                        ID = o.ID,
+                        DisplayText = o.DisplayText,
+                        Value = o.Value ?? o.DisplayText,
+                        IsDefault = o.IsDefault,
+                        DisplayOrder = o.DisplayOrder
+                    }).ToList() ?? new List<SnapshotDropdownOptionDto>();
+
+                // Deterministic Tolerance Resolution
+                decimal? effMinTol = p.MinTolerance;
+                decimal? effMaxTol = p.MaxTolerance;
+                string tolSource = "NONE";
+                string tolType = "Absolute";
+                long? tolMasterId = null;
+                decimal? appliedTol = null;
+
+                if (effMinTol.HasValue || effMaxTol.HasValue)
+                {
+                    tolSource = "SPECIFICATION_LINE";
+                    appliedTol = effMaxTol ?? effMinTol;
+                }
+                else
+                {
+                    decimal? nominal = p.MinValue.HasValue && p.MaxValue.HasValue ? (p.MinValue.Value + p.MaxValue.Value) / 2m
+                        : p.MinValue ?? p.MaxValue;
+
+                    var matchedTols = candidateToleranceMasters
+                        .Where(t => t.ParameterID == p.ParameterID
+                            && (!t.SpecificationHeaderID.HasValue || t.SpecificationHeaderID == preview.SpecificationHeaderID)
+                            && (!t.ValueRangeStart.HasValue || !nominal.HasValue || nominal.Value >= t.ValueRangeStart.Value)
+                            && (!t.ValueRangeEnd.HasValue || !nominal.HasValue || nominal.Value <= t.ValueRangeEnd.Value))
+                        .OrderByDescending(t => t.SpecificationHeaderID.HasValue ? 2 : 1)
+                        .ToList();
+
+                    var topGroup = matchedTols
+                        .GroupBy(t => t.SpecificationHeaderID.HasValue ? 2 : 1)
+                        .OrderByDescending(g => g.Key)
+                        .FirstOrDefault()?.ToList();
+
+                    if (topGroup != null && topGroup.Count > 1)
+                    {
+                        var distinctTols = topGroup.Select(t => (t.Tolerance, t.ToleranceType)).Distinct().Count();
+                        if (distinctTols > 1)
+                        {
+                            throw new InvalidOperationException($"Ambiguous tolerance configuration for parameter '{p.ParameterName}' ({p.ParameterCode}): Multiple conflicting ToleranceMaster records match nominal {nominal}. Resolve tolerance master overlap before execution.");
+                        }
+                    }
+
+                    var chosenTol = topGroup?.FirstOrDefault();
+                    if (chosenTol != null)
+                    {
+                        tolSource = "TOLERANCE_MASTER";
+                        tolMasterId = chosenTol.ID;
+                        tolType = chosenTol.ToleranceType ?? "Absolute";
+                        decimal tolVal = Math.Abs(chosenTol.Tolerance);
+                        if (string.Equals(tolType, "Percentage", StringComparison.OrdinalIgnoreCase) && nominal.HasValue)
+                        {
+                            tolVal = Math.Abs(nominal.Value * (tolVal / 100m));
+                        }
+                        effMinTol = tolVal;
+                        effMaxTol = tolVal;
+                        appliedTol = tolVal;
+                    }
+                }
+
+                // Requirement Pattern Effective Limit Computation with Sign Normalization
+                decimal? effectiveMin = null;
+                decimal? effectiveMax = null;
+
+                decimal absLowerTol = effMinTol.HasValue ? Math.Abs(effMinTol.Value) : 0m;
+                decimal absUpperTol = effMaxTol.HasValue ? Math.Abs(effMaxTol.Value) : 0m;
+
+                if (p.MinValue.HasValue && p.MaxValue.HasValue)
+                {
+                    effectiveMin = p.MinValue.Value - absLowerTol;
+                    effectiveMax = p.MaxValue.Value + absUpperTol;
+                }
+                else if (p.MinValue.HasValue)
+                {
+                    effectiveMin = p.MinValue.Value - absLowerTol;
+                    effectiveMax = null;
+                }
+                else if (p.MaxValue.HasValue)
+                {
+                    effectiveMin = null;
+                    effectiveMax = p.MaxValue.Value + absUpperTol;
+                }
+
+                // Parameter-Level Measurement Uncertainty (ISO 17025)
+                decimal? paramCombinedUncertainty = null;
+                decimal? paramExpandedUncertainty = null;
+                decimal? paramCoverageFactor = null;
+                long? muMasterId = null;
+                string muSource = "NONE";
+
+                if (paramMuByParamId.TryGetValue(p.ParameterID, out var pMu))
+                {
+                    paramCombinedUncertainty = pMu.CombinedUncertainty;
+                    paramExpandedUncertainty = pMu.ExpandedUncertainty ?? (pMu.CombinedUncertainty.HasValue ? pMu.CombinedUncertainty.Value * pMu.CoverageFactor : null);
+                    paramCoverageFactor = pMu.CoverageFactor;
+                    muMasterId = pMu.ID;
+                    muSource = "PARAMETER_MASTER";
+                }
+
                 var paramDto = new SnapshotParameterDto
                 {
                     ParameterMasterID = p.ParameterID,
                     Code = p.ParameterCode,
                     Name = p.ParameterName,
                     Unit = p.ParameterUnit ?? "Unitless",
-                    InputType = p.InputType ?? "Decimal",
-                    DecimalPrecision = 2,
-                    IsCalculated = !string.IsNullOrWhiteSpace(p.Equation),
-                    Formula = p.Equation,
+                    Symbol = pmMaster?.Symbol,
+                    InputType = pmMaster?.InputType ?? p.InputType ?? "Decimal",
+                    DecimalPrecision = pmMaster?.DecimalPrecision ?? 2,
+                    ParameterType = pmMaster?.CalculationRole ?? (!string.IsNullOrWhiteSpace(p.Equation) ? "Calculated" : "Input"),
+                    IsCalculated = !string.IsNullOrWhiteSpace(p.Equation) || pmMaster?.IsCalculated == true,
+                    Formula = p.Equation ?? pmMaster?.Formula,
                     SpecMin = p.MinValue,
                     SpecMax = p.MaxValue,
+                    MinTolerance = effMinTol,
+                    MaxTolerance = effMaxTol,
+                    EffectiveMin = effectiveMin,
+                    EffectiveMax = effectiveMax,
+                    ToleranceSource = tolSource,
+                    ToleranceType = tolType,
+                    ToleranceMasterID = tolMasterId,
+                    AppliedTolerance = appliedTol,
+                    ParameterCombinedUncertainty = paramCombinedUncertainty,
+                    ParameterExpandedUncertainty = paramExpandedUncertainty,
+                    ParameterCoverageFactor = paramCoverageFactor,
+                    MeasurementUncertaintyMasterID = muMasterId,
+                    MUSource = muSource,
                     AcceptanceCriteria = p.AcceptanceCriteria ?? "Within specification range",
                     DisplayOrder = order++,
                     IsRequired = p.IsMandatory,
-                    AggregateType = "Average"
+                    IsReportable = p.IsReportable,
+                    AggregateType = "Average",
+                    DropdownOptions = dropdownOpts
                 };
 
                 if (!string.IsNullOrWhiteSpace(paramDto.Formula))
@@ -771,6 +1201,9 @@ namespace LIMSApi.Helpers
 
             // Equipment & Calibration — match by DepartmentID (authoritative) ONLY.
             // Removed all name-based string matchers (Casagrande, LaboratoryTestName) per Screen 14 Part F.
+            // Phase 1D: active EquipmentRequirementMasters for (test, method) attach frozen
+            // requirement references to matching type rows; dept listing is preserved when
+            // no requirement is configured (zero regression for unconfigured tests).
             var branchEquipment = await _context.EquipmentMasters
                 .Include(e => e.Calibrations)
                 .Where(e => e.IsActive && e.BranchID == utg.BranchID)
@@ -788,9 +1221,19 @@ namespace LIMSApi.Helpers
                 matchedEquipment = new List<Models.EquipmentMaster>();
             }
 
+            var activeRequirements = await _context.EquipmentRequirementMasters
+                .AsNoTracking()
+                .Where(r => r.IsActive
+                    && r.CompanyCode == utg.CompanyCode
+                    && r.LaboratoryTestID == utg.LaboratoryTestID
+                    && (r.TestMethodSpecificationID == null || r.TestMethodSpecificationID == utg.TestMethodSpecificationID))
+                .OrderBy(r => r.DisplayOrder).ThenBy(r => r.Code)
+                .ToListAsync();
+
             foreach (var eq in matchedEquipment)
             {
                 var latestCal = eq.Calibrations.OrderByDescending(cal => cal.CalibrationDate).FirstOrDefault();
+                var req = activeRequirements.FirstOrDefault(r => r.EquipmentTypeID == eq.EquipmentTypeID);
                 snapshot.Equipment.Add(new SnapshotEquipmentDto
                 {
                     EquipmentID = eq.ID,
@@ -798,61 +1241,284 @@ namespace LIMSApi.Helpers
                     Model = eq.ModelNo,
                     CalibrationNo = latestCal?.Certificate ?? eq.EquipmentNo,
                     CalibratedOn = latestCal?.CalibrationDate,
-                    ValidUpto = latestCal?.CalibrationDueDate
+                    ValidUpto = latestCal?.CalibrationDueDate,
+                    EquipmentRequirementID = req?.ID,
+                    RequirementCode = req?.Code,
+                    IsMandatory = req?.IsMandatory ?? true
                 });
             }
 
-            // Factors & Conversions — not authoritative here.
-            // Per Screen 14 Part F the resolver must not invent values. Snapshot remains empty
-            // until a dedicated Factor Master is wired into the resolution chain.
+            // Factors & Conversions — Phase 1E: resolve from FactorConversionMasters.
+            // Scope: active enterprise factors whose input parameter participates in this test
+            // and whose (test, method) applicability matches (null = global). Unit conversions
+            // (ParameterUnitMaster/Equivalents) and formulas (FormulaEvaluator/SpecificationLine)
+            // are owned elsewhere and never duplicated here. Zero configured factors →
+            // snapshot list stays empty (identical legacy behavior).
+            var snapshotParamIds = snapshot.Parameters.Select(p => p.ParameterMasterID).ToList();
+            if (snapshotParamIds.Any())
+            {
+                var activeFactors = await _context.FactorConversionMasters
+                    .AsNoTracking()
+                    .Where(f => f.IsActive
+                        && f.CompanyCode == utg.CompanyCode
+                        && snapshotParamIds.Contains(f.InputParameterID)
+                        && (f.LaboratoryTestID == null || f.LaboratoryTestID == utg.LaboratoryTestID)
+                        && (f.TestMethodSpecificationID == null || f.TestMethodSpecificationID == utg.TestMethodSpecificationID)
+                        && (f.TestMethodSpecificationVersionID == null || f.TestMethodSpecificationVersionID == utg.TestMethodSpecificationVersionID))
+                    .OrderBy(f => f.DisplayOrder).ThenBy(f => f.Code)
+                    .ToListAsync();
 
-            // Measurement Uncertainty (MU) — match by TestMethodStandard first (most specific),
-            // then by TestParameter name (legacy compatibility, but never hardcoded aliases like "Soil").
-            NablMeasurementUncertainty? mu = null;
-            if (!string.IsNullOrWhiteSpace(snapshot.TestMethodStandard))
-            {
-                mu = await _context.NablMeasurementUncertainties
-                    .Where(u => u.IsActive && u.TestMethod == snapshot.TestMethodStandard)
-                    .FirstOrDefaultAsync();
-            }
-            if (mu == null && !string.IsNullOrWhiteSpace(snapshot.LaboratoryTestName))
-            {
-                mu = await _context.NablMeasurementUncertainties
-                    .Where(u => u.IsActive && u.TestParameter == snapshot.LaboratoryTestName)
-                    .FirstOrDefaultAsync();
-            }
+                // Review rule: never auto-apply multiple matching factors to one parameter.
+                // Most-specific-wins per input parameter: version-scoped > method-scoped
+                // > test-scoped > global. Broader records coexist but lose to narrower ones.
+                var winningFactors = activeFactors
+                    .GroupBy(f => f.InputParameterID)
+                    .Select(g => g
+                        .OrderByDescending(f =>
+                            f.TestMethodSpecificationVersionID != null ? 3 :
+                            f.TestMethodSpecificationID != null ? 2 :
+                            f.LaboratoryTestID != null ? 1 : 0)
+                        .ThenBy(f => f.DisplayOrder)
+                        .ThenBy(f => f.Code)
+                        .First())
+                    .OrderBy(f => f.DisplayOrder).ThenBy(f => f.Code)
+                    .ToList();
 
-            if (mu != null)
-            {
-                snapshot.MeasurementUncertainty = new SnapshotMeasurementUncertaintyDto
+                foreach (var fc in winningFactors)
                 {
-                    UncertaintyType = mu.UncertaintyType ?? "Expanded Uncertainty (k=2)",
-                    Value = mu.ExpandedUncertainty ?? 2.50m,
-                    CoverageFactor = mu.CoverageFactor ?? 2.0m,
-                    Unit = mu.Unit ?? "%",
-                    Basis = "Type B",
-                    Remarks = "As per ISO 17025"
-                };
+                    snapshot.Factors.Add(new SnapshotFactorDto
+                    {
+                        FactorType = fc.FactorType switch
+                        {
+                            "DIVISION" => "Division Factor",
+                            "ADDITIVE_OFFSET" => "Additive Offset",
+                            "SUBTRACTIVE_OFFSET" => "Subtractive Offset",
+                            _ => "Multiplication Factor"
+                        },
+                        FactorName = fc.Name,
+                        Value = fc.FactorValue,
+                        AppliedOn = fc.AppliedOn,
+                        Description = fc.Description,
+                        FactorConversionID = fc.ID,
+                        FactorCode = fc.Code,
+                        InputParameterID = fc.InputParameterID,
+                        OutputParameterID = fc.OutputParameterID,
+                        IsMandatory = fc.IsMandatory
+                    });
+                }
+            }
+
+            // Measurement Uncertainty (MU) — Phase 1F: fresh master first (FK-precise,
+            // CompanyCode-scoped, most-specific-wins), legacy NABL string-match as fallback.
+            // Snapshot holds test/method-level configuration only; parameter-specific rows are
+            // consumed per-parameter at result/report time (Phase 5/6), never in this singular slot.
+            SnapshotMeasurementUncertaintyDto? frozenMu = null;
+            muTenant = preview.Tenant?.CompanyCode ?? utg.CompanyCode;
+            if (!string.IsNullOrWhiteSpace(muTenant))
+            {
+                var methodIdForMu = snapshot.TestMethodSpecificationID;
+                long? versionIdForMu = null;
+                var candidates = await _context.MeasurementUncertaintyMasters
+                    .Include(x => x.ParameterUnit)
+                    .Where(x => x.IsActive
+                        && x.CompanyCode == muTenant
+                        && x.ParameterID == null
+                        && (x.LaboratoryTestID == null || x.LaboratoryTestID == utg.LaboratoryTestID)
+                        && (x.TestMethodSpecificationID == null || x.TestMethodSpecificationID == methodIdForMu)
+                        && (x.TestMethodSpecificationVersionID == null || x.TestMethodSpecificationVersionID == versionIdForMu))
+                    .OrderByDescending(x => (x.LaboratoryTestID != null ? 1 : 0)
+                        + (x.TestMethodSpecificationID != null ? 1 : 0)
+                        + (x.TestMethodSpecificationVersionID != null ? 1 : 0))
+                    .ThenBy(x => x.DisplayOrder)
+                    .ThenBy(x => x.Code)
+                    .ToListAsync();
+
+                var best = candidates.FirstOrDefault();
+                if (best != null)
+                {
+                    frozenMu = new SnapshotMeasurementUncertaintyDto
+                    {
+                        UncertaintyType = best.UncertaintyType == "EXPANDED" ? "Expanded Uncertainty (k=2)"
+                            : best.UncertaintyType == "COMBINED" ? "Combined Uncertainty"
+                            : "Standard Uncertainty",
+                        Value = best.ExpandedUncertainty ?? (best.CombinedUncertainty.HasValue
+                            ? Math.Round(best.CombinedUncertainty.Value * best.CoverageFactor, 6)
+                            : null),
+                        CoverageFactor = best.CoverageFactor,
+                        Unit = best.ParameterUnit != null ? best.ParameterUnit.Symbol : null,
+                        Basis = best.Basis,
+                        Remarks = "As per ISO 17025",
+                        MeasurementUncertaintyMasterID = best.ID,
+                        MasterCode = best.Code
+                    };
+                }
+            }
+
+            if (frozenMu != null)
+            {
+                snapshot.MeasurementUncertainty = frozenMu;
             }
             else
             {
-                // No authoritative MU configured — leave snapshot field as null
-                // so the execution engine can show "Not Configured" rather than fake values.
-                snapshot.MeasurementUncertainty = null;
+                // Legacy fallback (preserved): NABL per-study rows matched by method/test strings.
+                NablMeasurementUncertainty? mu = null;
+                if (!string.IsNullOrWhiteSpace(snapshot.TestMethodStandard))
+                {
+                    mu = await _context.NablMeasurementUncertainties
+                        .Where(u => u.IsActive && u.TestMethod == snapshot.TestMethodStandard)
+                        .FirstOrDefaultAsync();
+                }
+                if (mu == null && !string.IsNullOrWhiteSpace(snapshot.LaboratoryTestName))
+                {
+                    mu = await _context.NablMeasurementUncertainties
+                        .Where(u => u.IsActive && u.TestParameter == snapshot.LaboratoryTestName)
+                        .FirstOrDefaultAsync();
+                }
+
+                if (mu != null)
+                {
+                    snapshot.MeasurementUncertainty = new SnapshotMeasurementUncertaintyDto
+                    {
+                        UncertaintyType = mu.UncertaintyType ?? "Expanded Uncertainty (k=2)",
+                        Value = mu.ExpandedUncertainty ?? 2.50m,
+                        CoverageFactor = mu.CoverageFactor ?? 2.0m,
+                        Unit = mu.Unit ?? "%",
+                        Basis = "Type B",
+                        Remarks = "As per ISO 17025",
+                        MeasurementUncertaintyMasterID = null,
+                        MasterCode = null
+                    };
+                }
+                else
+                {
+                    // No authoritative MU configured — leave snapshot field as null
+                    // so the execution engine can show "Not Configured" rather than fake values.
+                    snapshot.MeasurementUncertainty = null;
+                }
             }
 
-            // Acceptance Criteria
+            // Acceptance Criteria (Phase 1B precedence — behavior unchanged):
+            // Master default (AcceptanceCriteriaMaster, via test configuration link in Phase 2)
+            //   -> Case-specific override (SampleInward.DecisionRule, backward compatible)
+            //   -> Built-in default ("All Parameters Must Pass").
+            // Frozen master reference fields stay null until Phase 2 links test configuration
+            // to AcceptanceCriteriaMaster; historical snapshots must keep whatever is frozen here.
             var decisionRule = utg.SampleTestPlan?.SampleDetail?.SampleInward?.DecisionRule;
             snapshot.AcceptanceCriteria = new SnapshotAcceptanceCriteriaDto
             {
                 DecisionRule = !string.IsNullOrWhiteSpace(decisionRule) ? decisionRule : "All Parameters Must Pass",
                 OverallDecision = "Pass if all parameters within spec range",
                 RoundingRule = "Round to nearest",
-                RoundingPrecision = 0.01m
+                RoundingPrecision = 0.01m,
+                AcceptanceCriteriaID = null,
+                AcceptanceCriteriaCode = null,
+                AcceptanceCriteriaName = null
             };
 
-            // Execution Layout
-            snapshot.RendererType = "ObservationMatrix";
+            // Lab Scope freeze reference (Phase 1C): record WHICH scope applied at planning time.
+            // Execution-time verdict freeze belongs to Phase 5/6 — never re-resolve live scope for history.
+            if (preview.Tenant != null)
+            {
+                var scopeRefDate = DateTime.UtcNow;
+                var candidates = await _context.LabScopeMasters
+                    .Where(ls => ls.IsActive && ls.CompanyCode == preview.Tenant.CompanyCode
+                        && ls.LaboratoryTestID == preview.LaboratoryTestID
+                        && (ls.BranchID == null || ls.BranchID == preview.BranchID)
+                        && (ls.ValidFrom == null || scopeRefDate >= ls.ValidFrom)
+                        && (ls.ValidUntil == null || scopeRefDate <= ls.ValidUntil))
+                    .ToListAsync();
+                    
+                var branchSpecific = candidates.Where(ls => ls.BranchID.HasValue && ls.BranchID.Value == preview.BranchID).ToList();
+                var globalSpecific = candidates.Where(ls => !ls.BranchID.HasValue).ToList();
+                var effectiveCandidates = branchSpecific.Any() ? branchSpecific : globalSpecific;
+                
+                long? effectiveScopeId = null;
+                if (effectiveCandidates.Count == 1)
+                {
+                    effectiveScopeId = effectiveCandidates.First().ID;
+                }
+                
+                snapshot.Scope = new SnapshotScopeDto
+                {
+                    LabScopeID = effectiveScopeId,
+                    ScopeStatus = effectiveScopeId.HasValue ? "Referenced" : "NoEffectiveScope",
+                    CheckedOnUtc = scopeRefDate,
+                    Note = effectiveCandidates.Count > 1 
+                        ? "Ambiguous scopes found at planning; NoEffectiveScope applied." 
+                        : "Planning-time scope reference; execution verdict freeze is Phase 5/6."
+                };
+
+                // Phase 1C: Freeze Parameter-Level Scope
+                if (effectiveScopeId.HasValue)
+                {
+                    var specsQuery = _context.LabScopeSpecifications
+                        .Include(s => s.Parameters)
+                        .Where(s => s.LabScopeID == effectiveScopeId.Value);
+
+                    if (preview.TestMethodSpecificationID.HasValue && preview.TestMethodSpecificationID.Value > 0)
+                    {
+                        specsQuery = specsQuery.Where(s => s.TestMethodSpecificationID == preview.TestMethodSpecificationID.Value);
+                    }
+
+                    if (preview.TestMethodSpecificationVersionID.HasValue && preview.TestMethodSpecificationVersionID.Value > 0)
+                    {
+                        specsQuery = specsQuery.Where(s => s.TestMethodSpecificationVersionID == preview.TestMethodSpecificationVersionID.Value || s.TestMethodSpecificationVersionID == null);
+                    }
+
+                    var sortedSpecs = await specsQuery.ToListAsync();
+                    sortedSpecs = sortedSpecs.OrderByDescending(s => s.TestMethodSpecificationVersionID.HasValue).ToList();
+
+                    foreach (var param in snapshot.Parameters)
+                    {
+                        foreach (var spec in sortedSpecs)
+                        {
+                            var scopeParam = spec.Parameters.FirstOrDefault(p => p.ParameterID == param.ParameterMasterID);
+                            if (scopeParam != null)
+                            {
+                                param.NablScopeLowerLimit = scopeParam.LowerLimitValue ?? (decimal.TryParse(scopeParam.LowerLimit?.Trim(), out var l) ? l : null);
+                                param.NablScopeUpperLimit = scopeParam.UpperLimitValue ?? (decimal.TryParse(scopeParam.UpperLimit?.Trim(), out var u) ? u : null);
+                                param.IsUnderISO = scopeParam.IsUnderISO;
+                                param.LabScopeSpecParamId = scopeParam.ID;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                // Phase 1C: Freeze Accreditation
+                var cert = await _context.NablAccreditations
+                    .Where(n => n.IsActive && n.CompanyCode == preview.Tenant.CompanyCode
+                        && n.OrganizationId == preview.Tenant.OrganizationID
+                        && (n.BranchID == null || n.BranchID == preview.BranchID))
+                    .OrderByDescending(n => n.BranchID.HasValue ? 1 : 0)
+                    .ThenByDescending(n => n.ExpiryDate)
+                    .FirstOrDefaultAsync();
+
+                if (cert != null)
+                {
+                    snapshot.Accreditation = new SnapshotAccreditationDto
+                    {
+                        AccreditationID = cert.Id,
+                        CertificateNumber = cert.CertificateNumber,
+                        ValidFrom = cert.IssueDate,
+                        ValidTo = cert.ExpiryDate,
+                        BranchID = cert.BranchID,
+                        LogoPath = cert.LogoPath,
+                        AccreditationStatus = (cert.IssueDate == default || cert.IssueDate <= scopeRefDate) &&
+                                              (cert.ExpiryDate == default || cert.ExpiryDate >= scopeRefDate) 
+                                              ? "Active" : "Expired"
+                    };
+                }
+            }
+
+            // Execution Layout Freeze (Phase B.1 / Phase B.3 — ISO 17025 layout contract)
+            snapshot.ExecutionLayoutID = preview.ExecutionLayoutID;
+            snapshot.ExecutionLayoutCode = preview.ExecutionLayoutCode;
+            snapshot.ExecutionLayoutName = preview.ExecutionLayoutName;
+            snapshot.RendererType = preview.RendererType ?? "ObservationMatrix";
+            snapshot.LayoutResolutionLevel = preview.LayoutResolutionLevel;
+            snapshot.ExecutionLayout = preview.ExecutionLayout;
+            snapshot.UnmappedParameterIDs = preview.UnmappedParameters.Select(p => p.ParameterID).ToList();
             snapshot.SpecimenMode = "Single";
             snapshot.ObservationMode = "Multiple";
             snapshot.ConfiguredReadingCount = 1;

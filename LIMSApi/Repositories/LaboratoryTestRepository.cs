@@ -2,6 +2,7 @@ using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
+using LIMSApi.Helpers.Enums;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using Microsoft.EntityFrameworkCore;
@@ -249,6 +250,8 @@ namespace LIMSApi.Repositories
                                   join tms in _context.TestMethodSpecifications on m.TestMethodSpecificationID equals tms.ID
                                   join at in _context.AnalysisTechniqueMasters on tms.AnalysisTechniqueID equals at.ID into atJoin
                                   from tech in atJoin.DefaultIfEmpty()
+                                  join ver in _context.TestMethodSpecificationVersions on m.TestMethodSpecificationVersionID equals ver.ID into verJoin
+                                  from ver in verJoin.DefaultIfEmpty()
                                   where m.LaboratoryTestID == id && m.IsActive
                                   orderby m.DisplayOrder, m.ID
                                   select new LaboratoryTestMethodItemDto
@@ -256,9 +259,12 @@ namespace LIMSApi.Repositories
                                       ID = m.ID,
                                       LaboratoryTestID = m.LaboratoryTestID,
                                       TestMethodSpecificationID = m.TestMethodSpecificationID,
+                                      TestMethodSpecificationVersionID = m.TestMethodSpecificationVersionID,
+                                      MethodVersion = ver != null ? ver.Version : null,
+                                      IsSupersededVersion = ver != null && ver.Status == VersionStatus.Superseded,
                                       MethodCode = tms.Code ?? string.Empty,
                                       MethodName = tms.Name,
-                                      DisplayTitle = !string.IsNullOrEmpty(tms.DisplayTitle) ? tms.DisplayTitle : (!string.IsNullOrEmpty(tms.Name) ? tms.Name : (tms.Code ?? string.Empty)),
+                                      DisplayTitle = ver != null ? $"{tms.DisplayTitle ?? tms.Name} : {ver.Version} {(ver.Year != null ? ver.Year : "")}".Trim() : (!string.IsNullOrEmpty(tms.DisplayTitle) ? tms.DisplayTitle : (!string.IsNullOrEmpty(tms.Name) ? tms.Name : (tms.Code ?? string.Empty))),
                                       StandardReference = tms.TestMethodStandard,
                                       AnalysisTechniqueName = tech != null ? tech.Name : null,
                                       IsDefault = m.IsDefault,
@@ -286,6 +292,31 @@ namespace LIMSApi.Repositories
                                          DisplayOrder = c.DisplayOrder,
                                          IsActive = c.IsActive
                                      }).ToListAsync();
+
+            test.Layouts = await (from l in _context.LaboratoryTestLayouts
+                                  join e in _context.ExecutionLayoutMasters on l.ExecutionLayoutID equals e.ID
+                                  join tm in _context.TestMethodSpecifications on l.TestMethodSpecificationID equals tm.ID into tmJoin
+                                  from m in tmJoin.DefaultIfEmpty()
+                                  join tv in _context.TestMethodSpecificationVersions on l.TestMethodSpecificationVersionID equals tv.ID into tvJoin
+                                  from v in tvJoin.DefaultIfEmpty()
+                                  where l.LaboratoryTestID == id && l.IsActive
+                                  orderby l.Priority, l.ID
+                                  select new LaboratoryTestLayoutItemDto
+                                  {
+                                      ID = l.ID,
+                                      LaboratoryTestID = l.LaboratoryTestID,
+                                      ExecutionLayoutID = l.ExecutionLayoutID,
+                                      LayoutCode = e.Code,
+                                      LayoutName = e.Name,
+                                      RendererType = e.RendererType,
+                                      TestMethodSpecificationID = l.TestMethodSpecificationID,
+                                      MethodName = m != null ? m.Name : null,
+                                      TestMethodSpecificationVersionID = l.TestMethodSpecificationVersionID,
+                                      VersionName = v != null ? v.Version : null,
+                                      Priority = l.Priority,
+                                      IsDefault = l.IsDefault,
+                                      IsActive = l.IsActive
+                                  }).ToListAsync();
 
             return test;
         }
@@ -398,15 +429,37 @@ namespace LIMSApi.Repositories
                 .Where(m => m.LaboratoryTestID == testId)
                 .ToListAsync();
 
-            var incomingMethodIds = incomingList.Select(i => i.TestMethodSpecificationID).ToHashSet();
+            // Resolve specId from version when only version was sent (version leaf stores versionId as key)
+            foreach (var it in incomingList)
+            {
+                if (it.TestMethodSpecificationVersionID.HasValue && it.TestMethodSpecificationVersionID.Value > 0)
+                {
+                    var ver = await _context.TestMethodSpecificationVersions.AsNoTracking()
+                        .FirstOrDefaultAsync(v => v.ID == it.TestMethodSpecificationVersionID.Value);
+                    if (ver != null)
+                    {
+                        it.TestMethodSpecificationID = ver.TestMethodSpecificationID;
+                    }
+                }
+            }
 
-            // 1. Process incoming items (Add or Reactivate)
+            var incomingMethodKeys = incomingList.Select(i => i.TestMethodSpecificationVersionID.HasValue && i.TestMethodSpecificationVersionID.Value > 0
+                ? $"V:{i.TestMethodSpecificationVersionID.Value}"
+                : $"S:{i.TestMethodSpecificationID}").ToHashSet();
+
+            // 1. Process incoming items (Add or Reactivate) — version implies standard
             foreach (var item in incomingList)
             {
-                var existing = existingRows.FirstOrDefault(r => r.TestMethodSpecificationID == item.TestMethodSpecificationID);
+                LaboratoryTestMethod? existing = null;
+                if (item.TestMethodSpecificationVersionID.HasValue && item.TestMethodSpecificationVersionID.Value > 0)
+                    existing = existingRows.FirstOrDefault(r => r.TestMethodSpecificationVersionID == item.TestMethodSpecificationVersionID.Value);
+                else
+                    existing = existingRows.FirstOrDefault(r => r.TestMethodSpecificationID == item.TestMethodSpecificationID && r.TestMethodSpecificationVersionID == null);
+
                 if (existing != null)
                 {
                     existing.IsActive = true;
+                    existing.TestMethodSpecificationVersionID = item.TestMethodSpecificationVersionID;
                     existing.IsDefault = item.IsDefault;
                     existing.DisplayOrder = item.DisplayOrder;
                     existing.ModifiedOn = DateTime.UtcNow;
@@ -419,6 +472,7 @@ namespace LIMSApi.Repositories
                     {
                         LaboratoryTestID = testId,
                         TestMethodSpecificationID = item.TestMethodSpecificationID,
+                        TestMethodSpecificationVersionID = item.TestMethodSpecificationVersionID,
                         IsDefault = item.IsDefault,
                         DisplayOrder = item.DisplayOrder,
                         IsActive = true,
@@ -433,7 +487,10 @@ namespace LIMSApi.Repositories
             // 2. Deactivate any existing rows not in incoming list
             foreach (var existing in existingRows)
             {
-                if (!incomingMethodIds.Contains(existing.TestMethodSpecificationID) && existing.IsActive)
+                var key = existing.TestMethodSpecificationVersionID.HasValue && existing.TestMethodSpecificationVersionID.Value > 0
+                    ? $"V:{existing.TestMethodSpecificationVersionID.Value}"
+                    : $"S:{existing.TestMethodSpecificationID}";
+                if (!incomingMethodKeys.Contains(key) && existing.IsActive)
                 {
                     existing.IsActive = false;
                     existing.IsDefault = false;

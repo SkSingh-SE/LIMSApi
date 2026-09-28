@@ -20,54 +20,66 @@ public static class DataSeeder
 
         try
         {
-            // Quick check: if Admin role exists, first-time seeding was already done
-            var alreadySeeded = await db.Database
-                .SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM RoleMasters WHERE Name = N'Admin' AND IsActive = 1")
-                .FirstAsync();
+            // 1. Repair empty Hangfire schema table if Hangfire objects already exist from backup/restore
+            await RepairHangfireSchemaAsync(db, logger);
 
-            if (alreadySeeded == 0)
-            {
-                logger.LogInformation("DataSeeder: first-time deployment detected — seeding core data...");
+            // 2. Ensure all incremental schema tables, columns, indexes and constraints exist (idempotent DDLs)
+            await EnsureDatabaseSchemaAsync(db, logger);
 
-                await SeedRolesAsync(db);
-                await SeedConfigurationsAsync(db);
-                await SeedCurrenciesAsync(db);
-                await SeedDispatchModesAsync(db);
-                await SeedAdminUserAsync(db, logger);
+            // 3. Align tenant codes across all tables (LIMS01 / NULL -> LIMS)
+            await AlignTenantCodesAsync(db, logger);
 
-                logger.LogInformation("DataSeeder: core seeding complete.");
-            }
-            else
-            {
-                logger.LogInformation("DataSeeder: core seed data already present — skipping core.");
-            }
+            // 4. Ensure Organization and Branches exist and are linked
+            await SeedOrganizationAndBranchesAsync(db);
 
-            // Always ensure admin user exists (idempotent — checks before creating)
+            // 5. Ensure Admin & SuperAdmin users exist and are synchronized
             await SeedAdminUserAsync(db, logger);
 
+            // 6. Ensure Roles exist
+            await SeedRolesAsync(db);
 
+            // 7. Core configurations, currencies, dispatch modes
+            await SeedConfigurationsAsync(db);
+            await SeedCurrenciesAsync(db);
+            await SeedDispatchModesAsync(db);
 
-            // Menus — always runs via usp_SeedMenus (title-based, NOT EXISTS duplicate guard)
+            // 8. Menus, RoleMenuMappings, Permissions, RolePermissionDefaults
             await SeedMenusAsync(db);
-
-            // Role-menu mappings — always runs (Admin → all active menus, NOT EXISTS guard)
+            await SeedPhase1MenuFixupsAsync(db);
             await SeedRoleMenuMappingsAsync(db);
-
-            // Permissions — always runs so new permissions are picked up on every deployment
-            // Uses usp_SeedPermissions SP (title-based lookup, no hardcoded MenuIDs)
             await SeedPermissionsAsync(db);
+            await SeedRolePermissionDefaultsAsync(db, logger);
 
-            // Master data (ProductForm, SpecimenType, etc.) always runs — idempotent with IF NOT EXISTS checks
+            // 9. Master Data, Acceptance Criteria, Execution Layouts, Versions
             await SeedMasterDataAsync(db);
+            await SeedAcceptanceCriteriaAsync(db);
+            await SeedExecutionLayoutsAsync(db);
+            await SeedSpecificationAndMethodVersionsAsync(db);
             await SeedPriceDimensionTypesAsync(db);
             await SeedFinancialYearsAsync(db);
             await BackfillFinancialYearIdsAsync(db, logger);
             await FixMachiningChargeMasterConstraintsAsync(db, logger);
 
-            // Role-Permission defaults — idempotent, runs every startup to pick up new permissions
-            await SeedRolePermissionDefaultsAsync(db, logger);
+            // Versioned Seeding Guard: Stamp CurrentSeedVersion in Configurations
+            const string CurrentSeedVersion = "2026.09.21.02";
+            var dbSeedVersion = await db.Database
+                .SqlQueryRaw<string>("SELECT TOP 1 [Value] AS [Value] FROM Configurations WHERE KeyName = N'SEED_VERSION' AND CompanyCode = N'LIMS'")
+                .FirstOrDefaultAsync();
 
-            logger.LogInformation("DataSeeder: master data seed complete.");
+            if (!string.Equals(dbSeedVersion, CurrentSeedVersion, StringComparison.OrdinalIgnoreCase))
+            {
+                logger.LogInformation("DataSeeder: new seed version detected ({Current} vs DB {DbVersion}). Updating seed version...", CurrentSeedVersion, dbSeedVersion ?? "NONE");
+
+                await db.Database.ExecuteSqlRawAsync($@"
+                    IF EXISTS (SELECT 1 FROM Configurations WHERE KeyName = N'SEED_VERSION' AND CompanyCode = N'LIMS')
+                        UPDATE Configurations SET [Value] = N'{CurrentSeedVersion}', ModifiedOn = GETUTCDATE() WHERE KeyName = N'SEED_VERSION' AND CompanyCode = N'LIMS';
+                    ELSE
+                        INSERT INTO Configurations (KeyName, GroupName, [Value], ValueType, [Description], CreatedBy, CreatedOn, CompanyCode, IsActive)
+                        VALUES (N'SEED_VERSION', N'SYSTEM', N'{CurrentSeedVersion}', N'string', N'Data seeder schema and sync version', 0, GETUTCDATE(), N'LIMS', 1);
+                ");
+            }
+
+            logger.LogInformation("DataSeeder: complete initialization & synchronization successful (Version: {Version}).", CurrentSeedVersion);
         }
         catch (Exception ex)
         {
@@ -160,7 +172,7 @@ public static class DataSeeder
             (N'Bank Master',         NULL, N'/bank',               NULL, N'Administration'),
             (N'Courier Master',      NULL, N'/courier',            NULL, N'Administration'),
             (N'Product Size Master', NULL, N'/product-size-master',NULL, N'Administration'),
-            (N'Analysis Technique',  NULL, N'/analysis-technique', NULL, N'Administration'),
+            (N'Analysis Technique Master', NULL, N'/analysis-technique', NULL, N'Test'),
             (N'TPI Master',          NULL, N'/tpi',                NULL, N'Administration'),
             (N'Supplier Master',     NULL, N'/supplier',           NULL, N'Administration'),
             (N'Equipment',           NULL, N'/equipment',          NULL, N'Administration'),
@@ -169,10 +181,17 @@ public static class DataSeeder
             -- ══ Level 1: Specification — folders only ══
             (N'Material Specification', NULL, NULL, NULL, N'Specification'),
             (N'Product Specification',  NULL, NULL, NULL, N'Specification'),
+            (N'Specification Master',   NULL, N'/specification',              NULL, N'Specification'),
+            (N'Specification Version Master', NULL, N'/specification-version', NULL, N'Specification'),
+            (N'Product / Material Master',    NULL, N'/product-master',        NULL, N'Specification'),
+            (N'Classification Master',        NULL, N'/classification-master', NULL, N'Specification'),
+            (N'Acceptance Criteria Master',   NULL, N'/acceptance-criteria',   NULL, N'Specification'),
+            (N'Specification Requirement Configuration', NULL, N'/specification-requirement', NULL, N'Specification'),
             -- ══ Level 1: Test ══
-            (N'Laboratory Test',           NULL, N'/test',              NULL, N'Test'),
+            (N'Laboratory Test Master',    NULL, N'/test',              NULL, N'Test'),
             (N'Test Method Specification', NULL, N'/test-specification', NULL, N'Test'),
             (N'Test Method Master',        NULL, N'/test-method',        NULL, N'Test'),
+            (N'Universal Test Group & Effective Config', NULL, N'/sample/test-groups', NULL, N'Test'),
             (N'Invoice Case',              NULL, N'/invoice-case',       NULL, N'Test'),
             -- ══ Level 1: Customer ══
             (N'Company Category', NULL, N'/company-category', NULL, N'Customer'),
@@ -269,6 +288,11 @@ public static class DataSeeder
             (N'Product Form',          NULL, N'/product-form',           NULL, N'Linked Masters'),
             (N'Dimensional Factor',    NULL, N'/dimesional-factor',      NULL, N'Linked Masters'),
             (N'Universal Code Type',   NULL, N'/universal-code-type',    NULL, N'Linked Masters'),
+            (N'Parameter Master',        NULL, N'/parameter',             NULL, N'Linked Masters'),
+            (N'Equipment Type Master',  NULL, N'/equipment-type',        NULL, N'Linked Masters'),
+            (N'Measurement Uncertainty Master', NULL, N'/measurement-uncertainty-master', NULL, N'Linked Masters'),
+            -- ══ PHASE 1G: Execution Layout (Operational Configuration → resolved by title, R5) ══
+            (N'Execution Layout Master', NULL, N'/execution-layout-master', NULL, N'Operational Configuration'),
             -- ══ Level 3: Under Personnel ══
             (N'F-1: Job Description',         NULL, N'/job-description',                       NULL, N'Personnel'),
             (N'F-3: Resp. & Authority',        NULL, N'/responsibility-authority',               NULL, N'Personnel'),
@@ -503,6 +527,10 @@ public static class DataSeeder
             ('CanManageParameter','Manage Parameter','Chemical Parameter',NULL,'Manage'),
 
             ('CanReadParameterUnit','View Parameter Unit','Parameter Unit',NULL,'Read'),
+            ('CanCreateParameterUnit','Create Parameter Unit','Parameter Unit',NULL,'Create'),
+            ('CanUpdateParameterUnit','Update Parameter Unit','Parameter Unit',NULL,'Update'),
+            ('CanDeleteParameterUnit','Delete Parameter Unit','Parameter Unit',NULL,'Delete'),
+            ('CanManageParameterUnit','Manage Parameter Unit','Parameter Unit',NULL,'Manage'),
             ('CanReadHeatTreatment','View Heat Treatment','Heat Treatment',NULL,'Read'),
             ('CanReadProductCondition','View Product Condition','Product Condition',NULL,'Read'),
             ('CanReadSpecimenOrientation','View Specimen Orientation','Specimen Orientation',NULL,'Read'),
@@ -516,22 +544,100 @@ public static class DataSeeder
             ('CanDeleteConditionMaster','Delete Condition Master','Condition Master',NULL,'Delete'),
             ('CanManageConditionMaster','Manage Condition Master','Condition Master',NULL,'Manage'),
 
+            ('CanReadDiscipline','View Discipline Master','Discipline Master',NULL,'Read'),
+            ('CanCreateDiscipline','Create Discipline Master','Discipline Master',NULL,'Create'),
+            ('CanUpdateDiscipline','Update Discipline Master','Discipline Master',NULL,'Update'),
+            ('CanDeleteDiscipline','Delete Discipline Master','Discipline Master',NULL,'Delete'),
+            ('CanManageDiscipline','Manage Discipline Master','Discipline Master',NULL,'Manage'),
+
+            ('CanReadTestGroup','View Test Group','Universal Test Group & Effective Config',NULL,'Read'),
+            ('CanCreateTestGroup','Create Test Group','Universal Test Group & Effective Config',NULL,'Create'),
+            ('CanUpdateTestGroup','Update Test Group','Universal Test Group & Effective Config',NULL,'Update'),
+            ('CanDeleteTestGroup','Delete Test Group','Universal Test Group & Effective Config',NULL,'Delete'),
+            ('CanManageTestGroup','Manage Test Group','Universal Test Group & Effective Config',NULL,'Manage'),
+
+            ('CanViewConfigurationAdjustment','View Configuration Adjustment','Universal Test Group & Effective Config',NULL,'Read'),
+            ('CanCreateConfigurationAdjustment','Create Configuration Adjustment','Universal Test Group & Effective Config',NULL,'Create'),
+            ('CanApplyConfigurationAdjustment','Apply Configuration Adjustment','Universal Test Group & Effective Config',NULL,'Update'),
+            ('CanApproveConfigurationAdjustment','Approve Configuration Adjustment','Universal Test Group & Effective Config',NULL,'Approve'),
+
+            ('CanReadClassification','View Classification Master','Classification Master',NULL,'Read'),
+            ('CanCreateClassification','Create Classification Master','Classification Master',NULL,'Create'),
+            ('CanUpdateClassification','Update Classification Master','Classification Master',NULL,'Update'),
+            ('CanDeleteClassification','Delete Classification Master','Classification Master',NULL,'Delete'),
+            ('CanManageClassification','Manage Classification Master','Classification Master',NULL,'Manage'),
+
+            ('CanReadAcceptanceCriteria','View Acceptance Criteria Master','Acceptance Criteria Master',NULL,'Read'),
+            ('CanCreateAcceptanceCriteria','Create Acceptance Criteria Master','Acceptance Criteria Master',NULL,'Create'),
+            ('CanUpdateAcceptanceCriteria','Update Acceptance Criteria Master','Acceptance Criteria Master',NULL,'Update'),
+            ('CanDeleteAcceptanceCriteria','Delete Acceptance Criteria Master','Acceptance Criteria Master',NULL,'Delete'),
+            ('CanManageAcceptanceCriteria','Manage Acceptance Criteria Master','Acceptance Criteria Master',NULL,'Manage'),
+
+            ('CanReadEquipmentRequirement','View Equipment Requirement Master','Equipment Requirement Master',NULL,'Read'),
+            ('CanCreateEquipmentRequirement','Create Equipment Requirement Master','Equipment Requirement Master',NULL,'Create'),
+            ('CanUpdateEquipmentRequirement','Update Equipment Requirement Master','Equipment Requirement Master',NULL,'Update'),
+            ('CanDeleteEquipmentRequirement','Delete Equipment Requirement Master','Equipment Requirement Master',NULL,'Delete'),
+            ('CanManageEquipmentRequirement','Manage Equipment Requirement Master','Equipment Requirement Master',NULL,'Manage'),
+
+            ('CanReadEquipmentType','View Equipment Type Master','Equipment Type Master',NULL,'Read'),
+            ('CanCreateEquipmentType','Create Equipment Type Master','Equipment Type Master',NULL,'Create'),
+            ('CanUpdateEquipmentType','Update Equipment Type Master','Equipment Type Master',NULL,'Update'),
+            ('CanDeleteEquipmentType','Delete Equipment Type Master','Equipment Type Master',NULL,'Delete'),
+            ('CanManageEquipmentType','Manage Equipment Type Master','Equipment Type Master',NULL,'Manage'),
+
+            ('CanReadFactorConversion','View Factor Conversion Master','Factor Conversion Master',NULL,'Read'),
+            ('CanCreateFactorConversion','Create Factor Conversion Master','Factor Conversion Master',NULL,'Create'),
+            ('CanUpdateFactorConversion','Update Factor Conversion Master','Factor Conversion Master',NULL,'Update'),
+            ('CanDeleteFactorConversion','Delete Factor Conversion Master','Factor Conversion Master',NULL,'Delete'),
+            ('CanManageFactorConversion','Manage Factor Conversion Master','Factor Conversion Master',NULL,'Manage'),
+
+            ('CanReadMeasurementUncertainty','View Measurement Uncertainty Master','Measurement Uncertainty Master',NULL,'Read'),
+            ('CanCreateMeasurementUncertainty','Create Measurement Uncertainty Master','Measurement Uncertainty Master',NULL,'Create'),
+            ('CanUpdateMeasurementUncertainty','Update Measurement Uncertainty Master','Measurement Uncertainty Master',NULL,'Update'),
+            ('CanDeleteMeasurementUncertainty','Delete Measurement Uncertainty Master','Measurement Uncertainty Master',NULL,'Delete'),
+            ('CanManageMeasurementUncertainty','Manage Measurement Uncertainty Master','Measurement Uncertainty Master',NULL,'Manage'),
+
+            -- ═══════════════════════ PHASE 1G: Execution Layout ═══════════════════════
+            ('CanReadExecutionLayout','View Execution Layout Master','Execution Layout Master',NULL,'Read'),
+            ('CanCreateExecutionLayout','Create Execution Layout Master','Execution Layout Master',NULL,'Create'),
+            ('CanUpdateExecutionLayout','Update Execution Layout Master','Execution Layout Master',NULL,'Update'),
+            ('CanDeleteExecutionLayout','Delete Execution Layout Master','Execution Layout Master',NULL,'Delete'),
+            ('CanManageExecutionLayout','Manage Execution Layout Master','Execution Layout Master',NULL,'Manage'),
+
+            -- ═══════════════════════ PHASE 7: Universal Result / Compliance ═══════════════════════
+            ('CanReadUniversalResult','View Universal Result','Universal Test Execution',NULL,'Read'),
+            ('CanEvaluateUniversalResult','Evaluate Universal Result','Universal Test Execution',NULL,'Create'),
+            ('CanFinalizeUniversalResult','Finalize Universal Result','Universal Test Execution',NULL,'Update'),
+            ('CanReworkUniversalResult','Rework Universal Result','Universal Test Execution',NULL,'Update'),
+
+            -- ═══════════════════════ PHASE 8: Universal Review / Approval ═══════════════════════
+            ('CanReadUniversalReview','View Universal Review','Universal Test Execution',NULL,'Read'),
+            ('CanReviewUniversalResult','Review Universal Result','Universal Test Execution',NULL,'Update'),
+            ('CanVerifyUniversalResult','Verify Universal Result','Universal Test Execution',NULL,'Verify'),
+            ('CanApproveUniversalResult','Approve Universal Result','Universal Test Execution',NULL,'Approve'),
+
+            -- ═══════════════════════ PHASE 9: Universal Report ═══════════════════════
+            ('CanReadUniversalReport','View Universal Report','Universal Test Execution',NULL,'Read'),
+            ('CanGenerateUniversalReport','Generate Universal Report','Universal Test Execution',NULL,'Create'),
+            ('CanReleaseUniversalReport','Release Universal Report','Universal Test Execution',NULL,'Approve'),
+            ('CanReissueUniversalReport','Reissue Universal Report','Universal Test Execution',NULL,'Update'),
+
             -- 'Product Specification' title exists on BOTH folder (202) and leaf (33).
             -- ParentTitle='Product Specification' picks the leaf (33).
-            ('CanReadProductMaster','View Product Master','Product Master','Product Master','Read'),
-            ('CanCreateProductMaster','Create Product Master','Product Master','Product Master','Create'),
-            ('CanUpdateProductMaster','Update Product Master','Product Master','Product Master','Update'),
-            ('CanDeleteProductMaster','Delete Product Master','Product Master','Product Master','Delete'),
-            ('CanManageProductMaster','Manage Product Master','Product Master','Product Master','Manage'),
+            ('CanReadProductMaster','View Product Master','Product / Material Master',NULL,'Read'),
+            ('CanCreateProductMaster','Create Product Master','Product / Material Master',NULL,'Create'),
+            ('CanUpdateProductMaster','Update Product Master','Product / Material Master',NULL,'Update'),
+            ('CanDeleteProductMaster','Delete Product Master','Product / Material Master',NULL,'Delete'),
+            ('CanManageProductMaster','Manage Product Master','Product / Material Master',NULL,'Manage'),
 
             ('CanReadCustomProductSpecification','View Custom Product Specification','Custom Product Specification',NULL,'Read'),
 
             -- ═══════════════════════ Test ═══════════════════════
-            ('CanReadLaboratoryTest','View Laboratory Test','Laboratory Test',NULL,'Read'),
-            ('CanCreateLaboratoryTest','Create Laboratory Test','Laboratory Test',NULL,'Create'),
-            ('CanUpdateLaboratoryTest','Update Laboratory Test','Laboratory Test',NULL,'Update'),
-            ('CanDeleteLaboratoryTest','Delete Laboratory Test','Laboratory Test',NULL,'Delete'),
-            ('CanManageLaboratoryTest','Manage Laboratory Test','Laboratory Test',NULL,'Manage'),
+            ('CanReadLaboratoryTest','View Laboratory Test','Laboratory Test Master',NULL,'Read'),
+            ('CanCreateLaboratoryTest','Create Laboratory Test','Laboratory Test Master',NULL,'Create'),
+            ('CanUpdateLaboratoryTest','Update Laboratory Test','Laboratory Test Master',NULL,'Update'),
+            ('CanDeleteLaboratoryTest','Delete Laboratory Test','Laboratory Test Master',NULL,'Delete'),
+            ('CanManageLaboratoryTest','Manage Laboratory Test','Laboratory Test Master',NULL,'Manage'),
 
             ('CanReadTestMethodSpecification','View Test Method Specification','Test Method Specification',NULL,'Read'),
             ('CanCreateTestMethodSpecification','Create Test Method Spec','Test Method Specification',NULL,'Create'),
@@ -808,6 +914,72 @@ public static class DataSeeder
     }
 
     // ───────────────────────────────────────────────
+    // 4b. PHASE 1 MENU FIXUPS — align legacy menu rows to FE-exact titles/routes/parents.
+    // ID-targeted + value-guarded (fully idempotent). MUST run before SeedMenusAsync so the
+    // SP's (Title + ParentID) NOT EXISTS guard sees the corrected identity and never duplicates.
+    // ───────────────────────────────────────────────
+    private static async Task SeedPhase1MenuFixupsAsync(LIMSContext db)
+    {
+        await db.Database.ExecuteSqlRawAsync(@"
+            UPDATE dbo.MenuMasters SET Title = N'Laboratory Test Master'
+            WHERE ID = 750528 AND Title <> N'Laboratory Test Master';
+
+            -- Orphan merge: legacy 'Analysis Technique' (750654, Administration) into the
+            -- FE-exact 'Analysis Technique Master' (under Test). Re-points permissions + role
+            -- mappings by ID, then removes the orphan. Fully idempotent.
+            IF EXISTS (SELECT 1 FROM dbo.MenuMasters WHERE ID = 750654 AND Title = N'Analysis Technique')
+            BEGIN
+                DECLARE @NewTech BIGINT = (SELECT TOP 1 ID FROM dbo.MenuMasters
+                    WHERE Title = N'Analysis Technique Master' AND Route = N'/analysis-technique' AND ID <> 750654);
+                IF @NewTech IS NOT NULL
+                BEGIN
+                    UPDATE dbo.PermissionMasters SET MenuID = @NewTech WHERE MenuID = 750654;
+                    DELETE FROM dbo.RoleMenuMappings
+                    WHERE MenuID = 750654
+                      AND EXISTS (SELECT 1 FROM dbo.RoleMenuMappings r2
+                                  WHERE r2.RoleID = dbo.RoleMenuMappings.RoleID AND r2.MenuID = @NewTech);
+                    UPDATE dbo.RoleMenuMappings SET MenuID = @NewTech WHERE MenuID = 750654;
+                    DELETE FROM dbo.MenuMasters WHERE ID = 750654 AND Title = N'Analysis Technique';
+                END
+            END
+
+            UPDATE dbo.MenuMasters SET Title = N'Lab Scope / NABL Master', Route = N'/lab-scope'
+            WHERE ID = 750544
+              AND (Title <> N'Lab Scope / NABL Master' OR Route <> N'/lab-scope' OR Route IS NULL);
+
+            -- Phase 7/8: 'Universal Test Execution' menu row (permission seeder JOINs
+            -- MenuMasters.Title; without this row the 8 UniversalResult/Review permission
+            -- rows are silently skipped and gated buttons stay hidden). Idempotent:
+            -- inserts once by title, then ensures exact route/parent. Identity-safe.
+            DECLARE @TestParentId BIGINT = (SELECT TOP 1 ID FROM dbo.MenuMasters WHERE Title = N'Test' AND Route IS NULL);
+            IF @TestParentId IS NULL AND EXISTS (SELECT 1 FROM dbo.MenuMasters WHERE ID = 750505)
+                SET @TestParentId = 750505;
+
+            IF NOT EXISTS (SELECT 1 FROM dbo.MenuMasters WHERE Title = N'Universal Test Execution')
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM dbo.MenuMasters WHERE ID = 760675)
+                BEGIN
+                    SET IDENTITY_INSERT dbo.MenuMasters ON;
+                    INSERT INTO dbo.MenuMasters (ID, Title, Icon, IsExpanded, Route, Color, ParentID)
+                    VALUES (760675, N'Universal Test Execution', N'bi-clipboard2-check', 0, N'/universal-test-execution', NULL, @TestParentId);
+                    SET IDENTITY_INSERT dbo.MenuMasters OFF;
+                END
+                ELSE
+                BEGIN
+                    INSERT INTO dbo.MenuMasters (Title, Icon, IsExpanded, Route, Color, ParentID)
+                    VALUES (N'Universal Test Execution', N'bi-clipboard2-check', 0, N'/universal-test-execution', NULL, @TestParentId);
+                END
+            END
+            ELSE
+            BEGIN
+                UPDATE dbo.MenuMasters SET Route = N'/universal-test-execution', ParentID = @TestParentId
+                WHERE Title = N'Universal Test Execution'
+                  AND (Route <> N'/universal-test-execution' OR Route IS NULL OR ParentID <> @TestParentId);
+            END
+        ");
+    }
+
+    // ───────────────────────────────────────────────
     // 5. CONFIGURATIONS  (3 keys not yet seeded by migrations)
     // ───────────────────────────────────────────────
     private static async Task SeedConfigurationsAsync(LIMSContext db)
@@ -931,115 +1103,290 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
     }
 
     // ───────────────────────────────────────────────
+    // 7b. ORGANIZATIONS & BRANCHES
+    // ───────────────────────────────────────────────
+    private static async Task SeedOrganizationAndBranchesAsync(LIMSContext db)
+    {
+        await db.Database.ExecuteSqlRawAsync(@"
+            IF NOT EXISTS (SELECT 1 FROM Organizations WHERE IsActive = 1)
+            BEGIN
+                INSERT INTO Organizations (LabName, LabCode, LabAddress, ContactEmail, ContactPhone, CIN, Website, MobileNo, UlrPrefix, LabLocationCode, IsMultiBranch, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (N'Devine Laboratory', N'DMSPL-0000000', N'Plot No 1, Industrial Area, Phase 1', N'info@lims.com', N'0000000000', N'U12345MH2020PTC123456', N'https://lims.com', N'0000000000', N'TC-1234', N'L1', 1, 0, GETUTCDATE(), N'LIMS', 1);
+            END
+
+            DECLARE @orgId BIGINT = (SELECT TOP 1 Id FROM Organizations WHERE IsActive = 1 ORDER BY Id);
+
+            IF NOT EXISTS (SELECT 1 FROM Branches WHERE IsActive = 1)
+            BEGIN
+                INSERT INTO Branches (OrganizationID, Name, Code, IsHeadOffice, Address, ContactEmail, ContactPhone, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                VALUES (@orgId, N'Devine Laboratory (Head Office)', N'DMSPL-0000000', 1, N'Plot No 1, Industrial Area, Phase 1', N'info@lims.com', N'0000000000', 0, GETUTCDATE(), N'LIMS', 1);
+            END
+            ELSE
+            BEGIN
+                -- Link any orphaned active branch to the primary active organization
+                UPDATE Branches SET OrganizationID = @orgId WHERE (OrganizationID IS NULL OR OrganizationID = 0) AND IsActive = 1;
+            END
+        ");
+    }
+
+    // ───────────────────────────────────────────────
     // 8. ADMIN USER  (Department → Designation → Employee → User)
     //    Password: Admin@123 (ForcePasswordChange = true)
     // ───────────────────────────────────────────────
     private static async Task SeedAdminUserAsync(LIMSContext db, ILogger logger)
     {
         var passwordHasher = new PasswordHasher<UserMaster>();
+        var defaultOrg = await db.Organizations.IgnoreQueryFilters().FirstOrDefaultAsync(o => o.IsActive);
+        var defaultBranch = await db.Branches.IgnoreQueryFilters().FirstOrDefaultAsync(b => b.IsActive);
+        long orgId = defaultOrg?.Id ?? defaultBranch?.OrganizationID ?? 0;
+        long branchId = defaultBranch?.ID ?? 0;
+
+        var adminRole = await db.RoleMasters.IgnoreQueryFilters().FirstOrDefaultAsync(r => r.Name == "Admin" && r.IsActive);
+        if (adminRole == null) return;
+
+        var dept = await db.DepartmentMasters.IgnoreQueryFilters().FirstOrDefaultAsync(d => d.Name == "Administration" && d.IsActive);
+        if (dept == null)
+        {
+            dept = new DepartmentMaster { Name = "Administration", Description = "Administration Department", BranchID = branchId > 0 ? branchId : 0 };
+            db.DepartmentMasters.Add(dept);
+            await db.SaveChangesAsync();
+        }
+
+        var desigAdmin = await db.DesignationMasters.IgnoreQueryFilters().FirstOrDefaultAsync(d => d.Name == "System Administrator" && d.IsActive);
+        if (desigAdmin == null)
+        {
+            desigAdmin = new DesignationMaster { Name = "System Administrator", Description = "Full system access", RoleID = adminRole.ID };
+            db.DesignationMasters.Add(desigAdmin);
+            await db.SaveChangesAsync();
+        }
+
+        var desigSuper = await db.DesignationMasters.IgnoreQueryFilters().FirstOrDefaultAsync(d => d.Name == "Super Administrator" && d.IsActive);
+        if (desigSuper == null)
+        {
+            desigSuper = new DesignationMaster { Name = "Super Administrator", Description = "Hidden full system access", RoleID = adminRole.ID };
+            db.DesignationMasters.Add(desigSuper);
+            await db.SaveChangesAsync();
+        }
 
         // ------------------ ADMIN USER ------------------
-        var adminExists = await db.Database
-            .SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM UserMasters WHERE UserName = N'admin' AND IsActive = 1")
-            .FirstAsync();
-
-        if (adminExists == 0)
+        var adminUser = await db.UserMasters.IgnoreQueryFilters().FirstOrDefaultAsync(u => u.UserName == "admin");
+        if (adminUser == null)
         {
-            var adminRole = await db.RoleMasters.FirstOrDefaultAsync(r => r.Name == "Admin" && r.IsActive);
-            if (adminRole != null)
+            var emp = await db.EmployeeMasters.IgnoreQueryFilters().FirstOrDefaultAsync(e => e.Name == "System Admin" && e.IsActive);
+            if (emp == null)
             {
-                var dept = await db.DepartmentMasters.FirstOrDefaultAsync(d => d.Name == "Administration" && d.IsActive);
-                if (dept == null)
+                emp = new EmployeeMaster
                 {
-                    dept = new DepartmentMaster { Name = "Administration", Description = "Administration Department" };
-                    db.DepartmentMasters.Add(dept);
-                    await db.SaveChangesAsync();
-                }
-
-                var desig = await db.DesignationMasters.FirstOrDefaultAsync(d => d.Name == "System Administrator" && d.IsActive);
-                if (desig == null)
-                {
-                    desig = new DesignationMaster { Name = "System Administrator", Description = "Full system access", RoleID = adminRole.ID };
-                    db.DesignationMasters.Add(desig);
-                    await db.SaveChangesAsync();
-                }
-
-                var emp = await db.EmployeeMasters.FirstOrDefaultAsync(e => e.Name == "System Admin" && e.IsActive);
-                if (emp == null)
-                {
-                    emp = new EmployeeMaster
-                    {
-                        Name = "System Admin", EmailId = "admin@lims.com", Gender = "Male", DesignationID = desig.ID, DepartmentID = dept.ID,
-                        DateOfJoin = DateTime.UtcNow, DateOfBirth = new DateTime(1990, 1, 1), RoleID = adminRole.ID, MobileNo = "0000000000",
-                        ResidentialPinCode = "000000", ResidentialAreaID = 0, PermanentPinCode = "000000", PermanentAreaID = 0
-                    };
-                    db.EmployeeMasters.Add(emp);
-                    await db.SaveChangesAsync();
-                }
-
-                var user = new UserMaster
-                {
-                    UserName = "admin", EmailId = "admin@lims.com", Password = passwordHasher.HashPassword(null!, "Admin@123"),
-                    RoleID = adminRole.ID, RoleName = "Admin", IsAdmin = true, EmployeeID = emp.ID,
-                    IsLoginEnabled = true, AccountStatus = "Active", ForcePasswordChange = false
+                    Name = "System Admin", EmailId = "admin@lims.com", Gender = "Male", DesignationID = desigAdmin.ID, DepartmentID = dept.ID, BranchID = branchId > 0 ? branchId : null,
+                    DateOfJoin = DateTime.UtcNow, DateOfBirth = new DateTime(1990, 1, 1), RoleID = adminRole.ID, MobileNo = "0000000000",
+                    ResidentialPinCode = "000000", ResidentialAreaID = 0, PermanentPinCode = "000000", PermanentAreaID = 0
                 };
-                db.UserMasters.Add(user);
+                db.EmployeeMasters.Add(emp);
                 await db.SaveChangesAsync();
+            }
 
-                logger.LogInformation("DataSeeder: Admin user created (admin / Admin@123).");
+            adminUser = new UserMaster
+            {
+                UserName = "admin", EmailId = "admin@lims.com", Password = passwordHasher.HashPassword(null!, "Admin@123"),
+                RoleID = adminRole.ID, RoleName = "Admin", IsAdmin = true, EmployeeID = emp.ID,
+                OrganizationID = orgId > 0 ? orgId : null,
+                BranchID = branchId > 0 ? branchId : null,
+                CanViewAllBranches = true,
+                IsLoginEnabled = true, AccountStatus = "Active", ForcePasswordChange = false
+            };
+            db.UserMasters.Add(adminUser);
+            await db.SaveChangesAsync();
+            logger.LogInformation("DataSeeder: Admin user created (admin / Admin@123).");
+        }
+        else
+        {
+            bool updated = false;
+            if ((adminUser.OrganizationID == null || adminUser.OrganizationID == 0) && orgId > 0)
+            {
+                adminUser.OrganizationID = orgId;
+                updated = true;
+            }
+            if ((adminUser.BranchID == null || adminUser.BranchID == 0) && branchId > 0)
+            {
+                adminUser.BranchID = branchId;
+                updated = true;
+            }
+            if (!adminUser.CanViewAllBranches)
+            {
+                adminUser.CanViewAllBranches = true;
+                updated = true;
+            }
+            if (!adminUser.IsAdmin)
+            {
+                adminUser.IsAdmin = true;
+                updated = true;
+            }
+            if (!adminUser.IsLoginEnabled)
+            {
+                adminUser.IsLoginEnabled = true;
+                updated = true;
+            }
+            if (string.IsNullOrEmpty(adminUser.RoleName) || adminUser.RoleName != "Admin")
+            {
+                adminUser.RoleName = "Admin";
+                adminUser.RoleID = adminRole.ID;
+                updated = true;
+            }
+            if (updated)
+            {
+                db.UserMasters.Update(adminUser);
+                await db.SaveChangesAsync();
+                logger.LogInformation("DataSeeder: Admin user tenant context synchronized.");
+            }
+        }
+
+        if (branchId > 0 && adminUser != null)
+        {
+            var userBranch = await db.UserBranches.IgnoreQueryFilters().FirstOrDefaultAsync(ub => ub.UserID == adminUser.ID && ub.BranchID == branchId);
+            if (userBranch == null)
+            {
+                db.UserBranches.Add(new UserBranch
+                {
+                    UserID = adminUser.ID,
+                    BranchID = branchId,
+                    IsDefault = true,
+                    CanView = true,
+                    CanCreate = true,
+                    CanEdit = true,
+                    CanExecute = true,
+                    CanApprove = true,
+                    CanDelete = true,
+                    IsActive = true
+                });
+                await db.SaveChangesAsync();
+            }
+            else if (!userBranch.IsDefault || !userBranch.CanView || !userBranch.CanApprove)
+            {
+                userBranch.IsDefault = true;
+                userBranch.CanView = true;
+                userBranch.CanCreate = true;
+                userBranch.CanEdit = true;
+                userBranch.CanExecute = true;
+                userBranch.CanApprove = true;
+                userBranch.CanDelete = true;
+                userBranch.IsActive = true;
+                db.UserBranches.Update(userBranch);
+                await db.SaveChangesAsync();
             }
         }
 
         // ------------------ SUPER ADMIN USER ------------------
-        var superAdminExists = await db.Database
-            .SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM UserMasters WHERE UserName = N'superadmin' AND IsActive = 1")
-            .FirstAsync();
-
-        if (superAdminExists == 0)
+        var superAdminUser = await db.UserMasters.IgnoreQueryFilters().FirstOrDefaultAsync(u => u.UserName == "superadmin");
+        if (superAdminUser == null)
         {
-            var adminRole = await db.RoleMasters.FirstOrDefaultAsync(r => r.Name == "Admin" && r.IsActive);
-            if (adminRole != null)
+            var emp = await db.EmployeeMasters.IgnoreQueryFilters().FirstOrDefaultAsync(e => e.Name == "Super Admin" && e.IsActive);
+            if (emp == null)
             {
-                var dept = await db.DepartmentMasters.FirstOrDefaultAsync(d => d.Name == "Administration" && d.IsActive);
-                
-                var desig = await db.DesignationMasters.FirstOrDefaultAsync(d => d.Name == "Super Administrator" && d.IsActive);
-                if (desig == null)
+                emp = new EmployeeMaster
                 {
-                    desig = new DesignationMaster { Name = "Super Administrator", Description = "Hidden full system access", RoleID = adminRole.ID };
-                    db.DesignationMasters.Add(desig);
-                    await db.SaveChangesAsync();
-                }
-
-                var emp = await db.EmployeeMasters.FirstOrDefaultAsync(e => e.Name == "Super Admin" && e.IsActive);
-                if (emp == null)
-                {
-                    emp = new EmployeeMaster
-                    {
-                        Name = "Super Admin", EmailId = "superadmin@lims.com", Gender = "Male", DesignationID = desig.ID, DepartmentID = dept?.ID ?? 0,
-                        DateOfJoin = DateTime.UtcNow, DateOfBirth = new DateTime(1990, 1, 1), RoleID = adminRole.ID, MobileNo = "0000000000",
-                        ResidentialPinCode = "000000", ResidentialAreaID = 0, PermanentPinCode = "000000", PermanentAreaID = 0,
-                        IsSystemAdmin = true
-                    };
-                    db.EmployeeMasters.Add(emp);
-                    await db.SaveChangesAsync();
-                }
-                else if (!emp.IsSystemAdmin)
-                {
-                    emp.IsSystemAdmin = true;
-                    db.EmployeeMasters.Update(emp);
-                    await db.SaveChangesAsync();
-                }
-
-                var user = new UserMaster
-                {
-                    UserName = "superadmin", EmailId = "superadmin@lims.com", Password = passwordHasher.HashPassword(null!, "SuperAdmin@123"),
-                    RoleID = adminRole.ID, RoleName = "Admin", IsAdmin = true, EmployeeID = emp.ID,
-                    IsLoginEnabled = true, AccountStatus = "Active", ForcePasswordChange = false
+                    Name = "Super Admin", EmailId = "superadmin@lims.com", Gender = "Male", DesignationID = desigSuper.ID, DepartmentID = dept?.ID ?? 0, BranchID = branchId > 0 ? branchId : null,
+                    DateOfJoin = DateTime.UtcNow, DateOfBirth = new DateTime(1990, 1, 1), RoleID = adminRole.ID, MobileNo = "0000000000",
+                    ResidentialPinCode = "000000", ResidentialAreaID = 0, PermanentPinCode = "000000", PermanentAreaID = 0,
+                    IsSystemAdmin = true
                 };
-                db.UserMasters.Add(user);
+                db.EmployeeMasters.Add(emp);
                 await db.SaveChangesAsync();
+            }
+            else if (!emp.IsSystemAdmin)
+            {
+                emp.IsSystemAdmin = true;
+                if (emp.BranchID == null || emp.BranchID == 0) emp.BranchID = branchId > 0 ? branchId : null;
+                db.EmployeeMasters.Update(emp);
+                await db.SaveChangesAsync();
+            }
 
-                logger.LogInformation("DataSeeder: Super Admin user created (superadmin / SuperAdmin@123).");
+            superAdminUser = new UserMaster
+            {
+                UserName = "superadmin", EmailId = "superadmin@lims.com", Password = passwordHasher.HashPassword(null!, "SuperAdmin@123"),
+                RoleID = adminRole.ID, RoleName = "Admin", IsAdmin = true, EmployeeID = emp.ID,
+                OrganizationID = orgId > 0 ? orgId : null,
+                BranchID = branchId > 0 ? branchId : null,
+                CanViewAllBranches = true,
+                IsLoginEnabled = true, AccountStatus = "Active", ForcePasswordChange = false
+            };
+            db.UserMasters.Add(superAdminUser);
+            await db.SaveChangesAsync();
+            logger.LogInformation("DataSeeder: Super Admin user created (superadmin / SuperAdmin@123).");
+        }
+        else
+        {
+            bool updated = false;
+            if ((superAdminUser.OrganizationID == null || superAdminUser.OrganizationID == 0) && orgId > 0)
+            {
+                superAdminUser.OrganizationID = orgId;
+                updated = true;
+            }
+            if ((superAdminUser.BranchID == null || superAdminUser.BranchID == 0) && branchId > 0)
+            {
+                superAdminUser.BranchID = branchId;
+                updated = true;
+            }
+            if (!superAdminUser.CanViewAllBranches)
+            {
+                superAdminUser.CanViewAllBranches = true;
+                updated = true;
+            }
+            if (!superAdminUser.IsAdmin)
+            {
+                superAdminUser.IsAdmin = true;
+                updated = true;
+            }
+            if (!superAdminUser.IsLoginEnabled)
+            {
+                superAdminUser.IsLoginEnabled = true;
+                updated = true;
+            }
+            if (string.IsNullOrEmpty(superAdminUser.RoleName) || superAdminUser.RoleName != "Admin")
+            {
+                superAdminUser.RoleName = "Admin";
+                superAdminUser.RoleID = adminRole.ID;
+                updated = true;
+            }
+            if (updated)
+            {
+                db.UserMasters.Update(superAdminUser);
+                await db.SaveChangesAsync();
+                logger.LogInformation("DataSeeder: Super Admin user tenant context synchronized.");
+            }
+        }
+
+        if (branchId > 0 && superAdminUser != null)
+        {
+            var userBranch = await db.UserBranches.IgnoreQueryFilters().FirstOrDefaultAsync(ub => ub.UserID == superAdminUser.ID && ub.BranchID == branchId);
+            if (userBranch == null)
+            {
+                db.UserBranches.Add(new UserBranch
+                {
+                    UserID = superAdminUser.ID,
+                    BranchID = branchId,
+                    IsDefault = true,
+                    CanView = true,
+                    CanCreate = true,
+                    CanEdit = true,
+                    CanExecute = true,
+                    CanApprove = true,
+                    CanDelete = true,
+                    IsActive = true
+                });
+                await db.SaveChangesAsync();
+            }
+            else if (!userBranch.IsDefault || !userBranch.CanView || !userBranch.CanApprove)
+            {
+                userBranch.IsDefault = true;
+                userBranch.CanView = true;
+                userBranch.CanCreate = true;
+                userBranch.CanEdit = true;
+                userBranch.CanExecute = true;
+                userBranch.CanApprove = true;
+                userBranch.CanDelete = true;
+                userBranch.IsActive = true;
+                db.UserBranches.Update(userBranch);
+                await db.SaveChangesAsync();
             }
         }
     }
@@ -1208,6 +1555,82 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
             BEGIN
                 UPDATE ParameterMasters SET ParameterType = N'Observed' WHERE ParameterType = N'Observation';
                 UPDATE ParameterMasters SET ParameterType = N'Reported' WHERE ParameterType = N'Mechanical';
+            END
+
+            -- Standard Organization Masters (BIS, ASTM, ISO, ASME, DIN, EN)
+            IF OBJECT_ID(N'StandardOrganizationMasters', N'U') IS NOT NULL
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM StandardOrganizationMasters WHERE Code = N'BIS' AND IsActive = 1)
+                    INSERT INTO StandardOrganizationMasters (Code, Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'BIS', N'Bureau of Indian Standards', N'National Standards Body of India', 0, GETUTCDATE(), N'LIMS', 1);
+                IF NOT EXISTS (SELECT 1 FROM StandardOrganizationMasters WHERE Code = N'ASTM' AND IsActive = 1)
+                    INSERT INTO StandardOrganizationMasters (Code, Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'ASTM', N'American Society for Testing and Materials', N'International Standards Organization', 0, GETUTCDATE(), N'LIMS', 1);
+                IF NOT EXISTS (SELECT 1 FROM StandardOrganizationMasters WHERE Code = N'ISO' AND IsActive = 1)
+                    INSERT INTO StandardOrganizationMasters (Code, Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'ISO', N'International Organization for Standardization', N'International Standards Organization', 0, GETUTCDATE(), N'LIMS', 1);
+                IF NOT EXISTS (SELECT 1 FROM StandardOrganizationMasters WHERE Code = N'ASME' AND IsActive = 1)
+                    INSERT INTO StandardOrganizationMasters (Code, Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'ASME', N'American Society of Mechanical Engineers', N'Boiler & Pressure Vessel Code Body', 0, GETUTCDATE(), N'LIMS', 1);
+                IF NOT EXISTS (SELECT 1 FROM StandardOrganizationMasters WHERE Code = N'DIN' AND IsActive = 1)
+                    INSERT INTO StandardOrganizationMasters (Code, Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'DIN', N'Deutsches Institut für Normung', N'German Institute for Standardization', 0, GETUTCDATE(), N'LIMS', 1);
+                IF NOT EXISTS (SELECT 1 FROM StandardOrganizationMasters WHERE Code = N'EN' AND IsActive = 1)
+                    INSERT INTO StandardOrganizationMasters (Code, Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'EN', N'European Standards', N'European Committee for Standardization', 0, GETUTCDATE(), N'LIMS', 1);
+            END
+
+            -- Reference Specification Headers (IS 1786, ASTM A240)
+            IF OBJECT_ID(N'SpecificationHeaders', N'U') IS NOT NULL
+            BEGIN
+                DECLARE @bisId BIGINT = (SELECT TOP 1 ID FROM StandardOrganizationMasters WHERE Code = N'BIS' AND IsActive = 1);
+                DECLARE @astmId BIGINT = (SELECT TOP 1 ID FROM StandardOrganizationMasters WHERE Code = N'ASTM' AND IsActive = 1);
+
+                IF NOT EXISTS (SELECT 1 FROM SpecificationHeaders WHERE SpecificationNo = N'IS_1786' OR AliasName = N'IS 1786')
+                BEGIN
+                    INSERT INTO SpecificationHeaders (SpecificationNo, AliasName, DisplayTitle, StandardOrganizationID, Description, IsActive, CreatedBy, CreatedOn, CompanyCode)
+                    VALUES (N'IS_1786', N'IS 1786', N'High strength deformed steel bars and wires for concrete reinforcement', @bisId, N'Standard specification for high strength deformed bars (TMT rebars) for concrete reinforcement', 1, 0, GETUTCDATE(), N'LIMS');
+                END
+
+                IF NOT EXISTS (SELECT 1 FROM SpecificationHeaders WHERE SpecificationNo = N'ASTM_A240' OR AliasName = N'ASTM A240')
+                BEGIN
+                    INSERT INTO SpecificationHeaders (SpecificationNo, AliasName, DisplayTitle, StandardOrganizationID, Description, IsActive, CreatedBy, CreatedOn, CompanyCode)
+                    VALUES (N'ASTM_A240', N'ASTM A240', N'Standard Specification for Chromium and Chromium-Nickel Stainless Steel', @astmId, N'Standard specification for chromium and chromium-nickel stainless steel plate, sheet, and strip for pressure vessels and general applications', 1, 0, GETUTCDATE(), N'LIMS');
+                END
+            END
+
+            -- Specification Grades Seeding for Reference Standards (IS 1786 & ASTM A240)
+            IF OBJECT_ID(N'SpecificationGrades', N'U') IS NOT NULL AND OBJECT_ID(N'SpecificationHeaders', N'U') IS NOT NULL
+            BEGIN
+                -- 1. IS 1786 Grades (Fe 415, Fe 500, Fe 500D, Fe 550, Fe 550D, Fe 600)
+                DECLARE @is1786Id BIGINT = (SELECT TOP 1 ID FROM SpecificationHeaders WHERE (SpecificationNo LIKE '%1786%' OR AliasName LIKE '%1786%' OR DisplayTitle LIKE '%1786%') AND IsActive = 1);
+                IF @is1786Id IS NOT NULL
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM SpecificationGrades WHERE SpecificationHeaderID = @is1786Id AND Grade = N'Fe 415')
+                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn, CompanyCode) VALUES (@is1786Id, N'Fe 415', N'Standard Reinforcement Grade', 1, 0, GETUTCDATE(), N'LIMS');
+                    IF NOT EXISTS (SELECT 1 FROM SpecificationGrades WHERE SpecificationHeaderID = @is1786Id AND Grade = N'Fe 500')
+                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn, CompanyCode) VALUES (@is1786Id, N'Fe 500', N'High Strength Grade', 1, 0, GETUTCDATE(), N'LIMS');
+                    IF NOT EXISTS (SELECT 1 FROM SpecificationGrades WHERE SpecificationHeaderID = @is1786Id AND Grade = N'Fe 500D')
+                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn, CompanyCode) VALUES (@is1786Id, N'Fe 500D', N'High Ductility Earthquake Resistant Grade', 1, 0, GETUTCDATE(), N'LIMS');
+                    IF NOT EXISTS (SELECT 1 FROM SpecificationGrades WHERE SpecificationHeaderID = @is1786Id AND Grade = N'Fe 550')
+                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn, CompanyCode) VALUES (@is1786Id, N'Fe 550', N'Extra High Strength Grade', 1, 0, GETUTCDATE(), N'LIMS');
+                    IF NOT EXISTS (SELECT 1 FROM SpecificationGrades WHERE SpecificationHeaderID = @is1786Id AND Grade = N'Fe 550D')
+                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn, CompanyCode) VALUES (@is1786Id, N'Fe 550D', N'Extra High Strength High Ductility Grade', 1, 0, GETUTCDATE(), N'LIMS');
+                    IF NOT EXISTS (SELECT 1 FROM SpecificationGrades WHERE SpecificationHeaderID = @is1786Id AND Grade = N'Fe 600')
+                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn, CompanyCode) VALUES (@is1786Id, N'Fe 600', N'Ultra High Strength Grade', 1, 0, GETUTCDATE(), N'LIMS');
+                END
+
+                -- 2. ASTM A240 Grades (304, 304L, 316, 316L, 321, 310S)
+                DECLARE @astmA240Id BIGINT = (SELECT TOP 1 ID FROM SpecificationHeaders WHERE (SpecificationNo LIKE '%A240%' OR AliasName LIKE '%A240%' OR DisplayTitle LIKE '%A240%') AND IsActive = 1);
+                IF @astmA240Id IS NOT NULL
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM SpecificationGrades WHERE SpecificationHeaderID = @astmA240Id AND Grade = N'304')
+                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn, CompanyCode) VALUES (@astmA240Id, N'304', N'Standard Austenitic Stainless Steel', 1, 0, GETUTCDATE(), N'LIMS');
+                    IF NOT EXISTS (SELECT 1 FROM SpecificationGrades WHERE SpecificationHeaderID = @astmA240Id AND Grade = N'304L')
+                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn, CompanyCode) VALUES (@astmA240Id, N'304L', N'Low Carbon Austenitic Stainless Steel', 1, 0, GETUTCDATE(), N'LIMS');
+                    IF NOT EXISTS (SELECT 1 FROM SpecificationGrades WHERE SpecificationHeaderID = @astmA240Id AND Grade = N'316')
+                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn, CompanyCode) VALUES (@astmA240Id, N'316', N'Molybdenum-bearing Austenitic Stainless Steel', 1, 0, GETUTCDATE(), N'LIMS');
+                    IF NOT EXISTS (SELECT 1 FROM SpecificationGrades WHERE SpecificationHeaderID = @astmA240Id AND Grade = N'316L')
+                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn, CompanyCode) VALUES (@astmA240Id, N'316L', N'Low Carbon Molybdenum Austenitic Stainless Steel', 1, 0, GETUTCDATE(), N'LIMS');
+                    IF NOT EXISTS (SELECT 1 FROM SpecificationGrades WHERE SpecificationHeaderID = @astmA240Id AND Grade = N'321')
+                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn, CompanyCode) VALUES (@astmA240Id, N'321', N'Titanium Stabilized Austenitic Stainless Steel', 1, 0, GETUTCDATE(), N'LIMS');
+                    IF NOT EXISTS (SELECT 1 FROM SpecificationGrades WHERE SpecificationHeaderID = @astmA240Id AND Grade = N'310S')
+                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn, CompanyCode) VALUES (@astmA240Id, N'310S', N'High Temperature Heat Resistant Stainless Steel', 1, 0, GETUTCDATE(), N'LIMS');
+                END
             END
         ");
     }
@@ -1406,6 +1829,7 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 // Plan management
                 "CanReadPlan", "CanManagePlan", "CanApprovePlan", "CanRejectPlan",
                 "CanReadReview", "CanApproveReview", "CanRejectReview", "CanManageReview",
+                "CanViewConfigurationAdjustment", "CanCreateConfigurationAdjustment", "CanApplyConfigurationAdjustment", "CanApproveConfigurationAdjustment",
                 // Sample prep
                 "CanReadSampleCutting", "CanManageSampleCutting",
                 // Inward read (plan upstream)
@@ -1433,6 +1857,8 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 "CanReadTestingDashboard", "CanReadTestResults",
                 "CanReadPerformTest", "CanReadLongTermTracking",
                 "TEST_RESULT_SAVE",
+                // Configuration Adjustment (Analyst draft & submit - cannot approve)
+                "CanViewConfigurationAdjustment", "CanCreateConfigurationAdjustment", "CanApplyConfigurationAdjustment",
                 // Read upstream
                 "CanReadSampleInward", "CanReadPlan", "CanReadSampleCutting",
                 // Masters
@@ -1467,6 +1893,57 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 "CanUpdateLabScopeMaster", "CanDeleteLabScopeMaster",
                 "CanManageLabScopeMaster",
 
+                // Equipment Requirement — full CRUD (operational configuration for planning)
+                "CanReadEquipmentRequirement", "CanCreateEquipmentRequirement",
+                "CanUpdateEquipmentRequirement", "CanDeleteEquipmentRequirement",
+                "CanManageEquipmentRequirement",
+
+                // Factor / Conversion — full CRUD (operational configuration for planning)
+                "CanReadFactorConversion", "CanCreateFactorConversion",
+                "CanUpdateFactorConversion", "CanDeleteFactorConversion",
+                "CanManageFactorConversion",
+
+                // Measurement Uncertainty — full CRUD (operational configuration for planning)
+                "CanReadMeasurementUncertainty", "CanCreateMeasurementUncertainty",
+                "CanUpdateMeasurementUncertainty", "CanDeleteMeasurementUncertainty",
+                "CanManageMeasurementUncertainty",
+
+                // Execution Layout — full CRUD (Phase 1G operational configuration for execution presentation)
+                "CanReadExecutionLayout", "CanCreateExecutionLayout",
+                "CanUpdateExecutionLayout", "CanDeleteExecutionLayout",
+                "CanManageExecutionLayout",
+
+                // Phase 7/8 — Universal Result / Review (LabManager full cycle)
+                "CanReadUniversalResult", "CanEvaluateUniversalResult",
+                "CanFinalizeUniversalResult", "CanReworkUniversalResult",
+                "CanReadUniversalReview", "CanReviewUniversalResult",
+                "CanVerifyUniversalResult", "CanApproveUniversalResult",
+
+                // Phase 9 — Universal Report (LabManager full cycle)
+                "CanReadUniversalReport", "CanGenerateUniversalReport",
+                "CanReleaseUniversalReport", "CanReissueUniversalReport",
+
+                // Phase 1 masters — full CRUD (Test Definition / Method & Scientific / Spec & Compliance)
+                "CanReadDiscipline", "CanCreateDiscipline",
+                "CanUpdateDiscipline", "CanDeleteDiscipline",
+                "CanManageDiscipline",
+                "CanReadTestGroup", "CanCreateTestGroup",
+                "CanUpdateTestGroup", "CanDeleteTestGroup",
+                "CanManageTestGroup",
+                "CanViewConfigurationAdjustment", "CanCreateConfigurationAdjustment",
+                "CanApplyConfigurationAdjustment", "CanApproveConfigurationAdjustment",
+                "CanCreateParameterUnit", "CanUpdateParameterUnit",
+                "CanDeleteParameterUnit", "CanManageParameterUnit",
+                "CanReadClassification", "CanCreateClassification",
+                "CanUpdateClassification", "CanDeleteClassification",
+                "CanManageClassification",
+                "CanReadAcceptanceCriteria", "CanCreateAcceptanceCriteria",
+                "CanUpdateAcceptanceCriteria", "CanDeleteAcceptanceCriteria",
+                "CanManageAcceptanceCriteria",
+                "CanReadConditionMaster", "CanCreateConditionMaster",
+                "CanUpdateConditionMaster", "CanDeleteConditionMaster",
+                "CanManageConditionMaster",
+
                 // Masters — FULL CRUD (LabManager can add/edit/delete any master)
                 "CanReadCustomerMaster", "CanCreateCustomerMaster",
                 "CanUpdateCustomerMaster", "CanDeleteCustomerMaster", "CanManageCustomerMaster",
@@ -1474,6 +1951,7 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 "CanReadDepartment", "CanCreateDepartment", "CanUpdateDepartment", "CanDeleteDepartment", "CanManageDepartment",
                 "CanReadDesignation", "CanCreateDesignation", "CanUpdateDesignation", "CanDeleteDesignation", "CanManageDesignation",
                 "CanReadEquipment", "CanCreateEquipment", "CanUpdateEquipment", "CanDeleteEquipment", "CanManageEquipment",
+                "CanReadEquipmentType", "CanCreateEquipmentType", "CanUpdateEquipmentType", "CanDeleteEquipmentType", "CanManageEquipmentType",
                 "CanReadCalibrationAgency", "CanCreateCalibrationAgency", "CanUpdateCalibrationAgency", "CanDeleteCalibrationAgency", "CanManageCalibrationAgency",
                 "CanReadMaterialSpecification", "CanCreateMaterialSpecification", "CanUpdateMaterialSpecification", "CanDeleteMaterialSpecification", "CanManageMaterialSpecification",
                 "CanReadProductMaster", "CanCreateProductMaster", "CanUpdateProductMaster", "CanDeleteProductMaster", "CanManageProductMaster",
@@ -1702,4 +2180,759 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
             logger.LogWarning(ex, "DataSeeder: Exception checking/dropping MachiningChargeMasters constraints (safe to proceed).");
         }
     }
+
+    private static async Task RepairHangfireSchemaAsync(LIMSContext db, ILogger logger)
+    {
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(@"
+                IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'HangFire' AND TABLE_NAME = 'Job')
+                   AND EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'HangFire' AND TABLE_NAME = 'Schema')
+                   AND NOT EXISTS (SELECT 1 FROM [HangFire].[Schema])
+                BEGIN
+                    INSERT INTO [HangFire].[Schema] ([Version]) VALUES (7);
+                END
+            ");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "DataSeeder: Hangfire schema check/repair warning (safe to proceed)");
+        }
+    }
+
+    private static async Task AlignTenantCodesAsync(LIMSContext db, ILogger logger)
+    {
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(@"
+                IF OBJECT_ID(N'LabScopeMasters', N'U') IS NOT NULL
+                    UPDATE LabScopeMasters SET CompanyCode = N'LIMS' WHERE CompanyCode = N'LIMS01' OR CompanyCode IS NULL;
+
+                IF OBJECT_ID(N'LabScopeSpecifications', N'U') IS NOT NULL
+                    UPDATE LabScopeSpecifications SET CompanyCode = N'LIMS' WHERE CompanyCode = N'LIMS01' OR CompanyCode IS NULL;
+
+                IF OBJECT_ID(N'LabScopeSpecificationParameters', N'U') IS NOT NULL
+                    UPDATE LabScopeSpecificationParameters SET CompanyCode = N'LIMS' WHERE CompanyCode = N'LIMS01' OR CompanyCode IS NULL;
+
+                IF OBJECT_ID(N'LaboratoryTests', N'U') IS NOT NULL
+                    UPDATE LaboratoryTests SET CompanyCode = N'LIMS' WHERE CompanyCode = N'LIMS01' OR CompanyCode IS NULL;
+
+                IF OBJECT_ID(N'TestMethodSpecifications', N'U') IS NOT NULL
+                    UPDATE TestMethodSpecifications SET CompanyCode = N'LIMS' WHERE CompanyCode = N'LIMS01' OR CompanyCode IS NULL;
+
+                IF OBJECT_ID(N'RoleMasters', N'U') IS NOT NULL
+                    UPDATE RoleMasters SET CompanyCode = N'LIMS' WHERE CompanyCode = N'LIMS01' OR CompanyCode IS NULL;
+
+                IF OBJECT_ID(N'UserMasters', N'U') IS NOT NULL
+                    UPDATE UserMasters SET CompanyCode = N'LIMS' WHERE CompanyCode = N'LIMS01' OR CompanyCode IS NULL;
+
+                IF OBJECT_ID(N'EmployeeMasters', N'U') IS NOT NULL
+                    UPDATE EmployeeMasters SET CompanyCode = N'LIMS' WHERE CompanyCode = N'LIMS01' OR CompanyCode IS NULL;
+
+                IF OBJECT_ID(N'MenuMasters', N'U') IS NOT NULL
+                    UPDATE MenuMasters SET CompanyCode = N'LIMS' WHERE CompanyCode = N'LIMS01' OR CompanyCode IS NULL;
+
+                IF OBJECT_ID(N'PermissionMasters', N'U') IS NOT NULL
+                    UPDATE PermissionMasters SET CompanyCode = N'LIMS' WHERE CompanyCode = N'LIMS01' OR CompanyCode IS NULL;
+            ");
+            logger.LogInformation("DataSeeder: tenant alignment completed.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "DataSeeder: tenant alignment warning (safe to proceed)");
+        }
+    }
+
+    private static async Task EnsureDatabaseSchemaAsync(LIMSContext db, ILogger logger)
+    {
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(@"
+                -- 1. AcceptanceCriteriaMasters
+                IF OBJECT_ID(N'dbo.AcceptanceCriteriaMasters', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE [dbo].[AcceptanceCriteriaMasters](
+                        [ID] [bigint] IDENTITY(1,1) NOT NULL PRIMARY KEY CLUSTERED,
+                        [Code] [nvarchar](50) NOT NULL,
+                        [Name] [nvarchar](150) NOT NULL,
+                        [Description] [nvarchar](500) NULL,
+                        [EvaluationType] [nvarchar](20) NOT NULL,
+                        [ComparisonType] [nvarchar](30) NOT NULL,
+                        [DecisionRule] [nvarchar](50) NOT NULL,
+                        [RoundingRule] [nvarchar](30) NOT NULL,
+                        [DisplayOrder] [int] NOT NULL CONSTRAINT [DF_AcceptanceCriteriaMasters_DisplayOrder] DEFAULT (0),
+                        [CreatedBy] [bigint] NOT NULL CONSTRAINT [DF_AcceptanceCriteriaMasters_CreatedBy] DEFAULT (0),
+                        [CreatedOn] [datetime2](7) NOT NULL CONSTRAINT [DF_AcceptanceCriteriaMasters_CreatedOn] DEFAULT (GETUTCDATE()),
+                        [ModifiedBy] [bigint] NULL,
+                        [ModifiedOn] [datetime2](7) NULL,
+                        [CompanyCode] [nvarchar](450) NOT NULL CONSTRAINT [DF_AcceptanceCriteriaMasters_CompanyCode] DEFAULT (N'LIMS'),
+                        [IsActive] [bit] NOT NULL CONSTRAINT [DF_AcceptanceCriteriaMasters_IsActive] DEFAULT (1)
+                    );
+                END
+
+                IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_AcceptanceCriteriaMasters_CompanyCode_Code' AND object_id = OBJECT_ID(N'dbo.AcceptanceCriteriaMasters'))
+                BEGIN
+                    CREATE UNIQUE NONCLUSTERED INDEX [IX_AcceptanceCriteriaMasters_CompanyCode_Code]
+                        ON [dbo].[AcceptanceCriteriaMasters]([CompanyCode] ASC, [Code] ASC)
+                        WHERE ([IsActive] = 1 AND [Code] IS NOT NULL);
+                END
+
+                -- 2. EquipmentRequirementMasters
+                IF OBJECT_ID(N'dbo.EquipmentRequirementMasters', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE dbo.EquipmentRequirementMasters
+                    (
+                        ID                              BIGINT          IDENTITY(1,1) NOT NULL CONSTRAINT PK_EquipmentRequirementMasters PRIMARY KEY,
+                        Code                            NVARCHAR(50)    NOT NULL,
+                        Name                            NVARCHAR(150)   NOT NULL,
+                        Description                     NVARCHAR(500)   NULL,
+                        LaboratoryTestID                BIGINT          NOT NULL,
+                        TestMethodSpecificationID       BIGINT          NULL,
+                        TestMethodSpecificationVersionID BIGINT         NULL,
+                        ParameterID                     BIGINT          NULL,
+                        EquipmentTypeID                 BIGINT          NOT NULL,
+                        EquipmentID                     BIGINT          NULL,
+                        RequiredCapability              NVARCHAR(500)   NULL,
+                        MinimumRange                    DECIMAL(18,4)   NULL,
+                        MaximumRange                    DECIMAL(18,4)   NULL,
+                        RangeUnitID                     BIGINT          NULL,
+                        AccuracyRequirement             NVARCHAR(200)   NULL,
+                        ResolutionRequirement           NVARCHAR(200)   NULL,
+                        IsMandatory                     BIT             NOT NULL CONSTRAINT DF_EquipmentRequirementMasters_IsMandatory DEFAULT(1),
+                        DisplayOrder                    INT             NOT NULL CONSTRAINT DF_EquipmentRequirementMasters_DisplayOrder DEFAULT(0),
+                        CreatedBy                       BIGINT          NOT NULL CONSTRAINT DF_EquipmentRequirementMasters_CreatedBy DEFAULT(0),
+                        CreatedOn                       DATETIME2       NOT NULL CONSTRAINT DF_EquipmentRequirementMasters_CreatedOn DEFAULT(GETUTCDATE()),
+                        ModifiedBy                      BIGINT          NULL,
+                        ModifiedOn                      DATETIME2       NULL,
+                        CompanyCode                     NVARCHAR(50)    NOT NULL CONSTRAINT DF_EquipmentRequirementMasters_CompanyCode DEFAULT(N'LIMS'),
+                        IsActive                        BIT             NOT NULL CONSTRAINT DF_EquipmentRequirementMasters_IsActive DEFAULT(1)
+                    );
+                END
+
+                IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_EquipmentRequirementMasters_CompanyCode_Code' AND object_id = OBJECT_ID(N'dbo.EquipmentRequirementMasters'))
+                BEGIN
+                    CREATE UNIQUE INDEX IX_EquipmentRequirementMasters_CompanyCode_Code
+                        ON dbo.EquipmentRequirementMasters (CompanyCode, Code)
+                        WHERE [IsActive] = 1 AND [Code] IS NOT NULL;
+                END
+
+                -- 3. FactorConversionMasters
+                IF OBJECT_ID(N'dbo.FactorConversionMasters', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE dbo.FactorConversionMasters
+                    (
+                        ID                              BIGINT          IDENTITY(1,1) NOT NULL CONSTRAINT PK_FactorConversionMasters PRIMARY KEY,
+                        Code                            NVARCHAR(50)    NOT NULL,
+                        Name                            NVARCHAR(150)   NOT NULL,
+                        Description                     NVARCHAR(500)   NULL,
+                        FactorType                      NVARCHAR(20)    NOT NULL CONSTRAINT DF_FactorConversionMasters_FactorType DEFAULT(N'MULTIPLICATION'),
+                        FactorValue                     DECIMAL(18,6)   NOT NULL CONSTRAINT DF_FactorConversionMasters_FactorValue DEFAULT(1.0),
+                        InputParameterID                BIGINT          NOT NULL,
+                        OutputParameterID               BIGINT          NULL,
+                        LaboratoryTestID                BIGINT          NULL,
+                        TestMethodSpecificationID       BIGINT          NULL,
+                        TestMethodSpecificationVersionID BIGINT         NULL,
+                        AppliedOn                       NVARCHAR(100)   NOT NULL CONSTRAINT DF_FactorConversionMasters_AppliedOn DEFAULT(N'Measured Value'),
+                        IsMandatory                     BIT             NOT NULL CONSTRAINT DF_FactorConversionMasters_IsMandatory DEFAULT(1),
+                        DisplayOrder                    INT             NOT NULL CONSTRAINT DF_FactorConversionMasters_DisplayOrder DEFAULT(0),
+                        CreatedBy                       BIGINT          NOT NULL CONSTRAINT DF_FactorConversionMasters_CreatedBy DEFAULT(0),
+                        CreatedOn                       DATETIME2       NOT NULL CONSTRAINT DF_FactorConversionMasters_CreatedOn DEFAULT(GETUTCDATE()),
+                        ModifiedBy                      BIGINT          NULL,
+                        ModifiedOn                      DATETIME2       NULL,
+                        CompanyCode                     NVARCHAR(50)    NOT NULL CONSTRAINT DF_FactorConversionMasters_CompanyCode DEFAULT(N'LIMS'),
+                        IsActive                        BIT             NOT NULL CONSTRAINT DF_FactorConversionMasters_IsActive DEFAULT(1)
+                    );
+                END
+
+                IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_FactorConversionMasters_CompanyCode_Code' AND object_id = OBJECT_ID(N'dbo.FactorConversionMasters'))
+                BEGIN
+                    CREATE UNIQUE INDEX IX_FactorConversionMasters_CompanyCode_Code
+                        ON dbo.FactorConversionMasters (CompanyCode, Code)
+                        WHERE [IsActive] = 1 AND [Code] IS NOT NULL;
+                END
+
+                -- 4. MeasurementUncertaintyMasters
+                IF OBJECT_ID(N'dbo.MeasurementUncertaintyMasters', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE [dbo].[MeasurementUncertaintyMasters] (
+                        [ID] [bigint] IDENTITY(1,1) NOT NULL PRIMARY KEY CLUSTERED,
+                        [Code] [nvarchar](50) NOT NULL,
+                        [Name] [nvarchar](150) NOT NULL,
+                        [Description] [nvarchar](500) NULL,
+                        [LaboratoryTestID] [bigint] NULL,
+                        [ParameterID] [bigint] NULL,
+                        [TestMethodSpecificationID] [bigint] NULL,
+                        [TestMethodSpecificationVersionID] [bigint] NULL,
+                        [ParameterUnitID] [bigint] NULL,
+                        [UncertaintyType] [nvarchar](20) NOT NULL CONSTRAINT [DF_MUMasters_UncertaintyType] DEFAULT (N'EXPANDED'),
+                        [Basis] [nvarchar](20) NOT NULL CONSTRAINT [DF_MUMasters_Basis] DEFAULT (N'Type B'),
+                        [CombinedUncertainty] [decimal](18,6) NULL,
+                        [ExpandedUncertainty] [decimal](18,6) NULL,
+                        [CoverageFactor] [decimal](18,4) NOT NULL CONSTRAINT [DF_MUMasters_CoverageFactor] DEFAULT ((2.0)),
+                        [ConfidenceLevel] [decimal](5,2) NULL,
+                        [ComponentsJson] [nvarchar](max) NULL,
+                        [DisplayOrder] [int] NOT NULL CONSTRAINT [DF_MUMasters_DisplayOrder] DEFAULT ((0)),
+                        [CreatedBy] [bigint] NOT NULL CONSTRAINT [DF_MUMasters_CreatedBy] DEFAULT ((0)),
+                        [CreatedOn] [datetime2](7) NOT NULL CONSTRAINT [DF_MUMasters_CreatedOn] DEFAULT (GETUTCDATE()),
+                        [ModifiedBy] [bigint] NULL,
+                        [ModifiedOn] [datetime2](7) NULL,
+                        [CompanyCode] [nvarchar](50) NOT NULL CONSTRAINT [DF_MUMasters_CompanyCode] DEFAULT (N'LIMS'),
+                        [IsActive] [bit] NOT NULL CONSTRAINT [DF_MUMasters_IsActive] DEFAULT ((1))
+                    );
+                END
+
+                IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_MeasurementUncertaintyMasters_CompanyCode_Code' AND object_id = OBJECT_ID(N'dbo.MeasurementUncertaintyMasters'))
+                BEGIN
+                    CREATE UNIQUE NONCLUSTERED INDEX [IX_MeasurementUncertaintyMasters_CompanyCode_Code]
+                        ON [dbo].[MeasurementUncertaintyMasters] ([CompanyCode] ASC, [Code] ASC)
+                        WHERE ([IsActive] = 1 AND [Code] IS NOT NULL);
+                END
+
+                -- 5. ExecutionLayoutMasters, ExecutionLayoutSections, ExecutionLayoutItems
+                IF OBJECT_ID(N'dbo.ExecutionLayoutMasters', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE dbo.ExecutionLayoutMasters
+                    (
+                        ID BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                        Code NVARCHAR(50) NOT NULL,
+                        Name NVARCHAR(150) NOT NULL,
+                        Description NVARCHAR(500) NULL,
+                        RendererType NVARCHAR(50) NOT NULL CONSTRAINT DF_ExecutionLayoutMasters_Renderer DEFAULT (N'Grid'),
+                        DisplayOrder INT NOT NULL CONSTRAINT DF_ExecutionLayoutMasters_DisplayOrder DEFAULT (0),
+                        CreatedBy BIGINT NOT NULL CONSTRAINT DF_ExecutionLayoutMasters_CreatedBy DEFAULT (0),
+                        CreatedOn DATETIME2 NOT NULL CONSTRAINT DF_ExecutionLayoutMasters_CreatedOn DEFAULT (GETUTCDATE()),
+                        ModifiedBy BIGINT NULL,
+                        ModifiedOn DATETIME2 NULL,
+                        CompanyCode NVARCHAR(50) NOT NULL CONSTRAINT DF_ExecutionLayoutMasters_Company DEFAULT (N'LIMS'),
+                        IsActive BIT NOT NULL CONSTRAINT DF_ExecutionLayoutMasters_IsActive DEFAULT (1)
+                    );
+                END
+
+                IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ExecutionLayoutMasters_Code' AND object_id = OBJECT_ID(N'dbo.ExecutionLayoutMasters'))
+                BEGIN
+                    CREATE UNIQUE INDEX IX_ExecutionLayoutMasters_Code ON dbo.ExecutionLayoutMasters (CompanyCode, Code) WHERE IsActive = 1;
+                END
+
+                IF OBJECT_ID(N'dbo.ExecutionLayoutSections', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE dbo.ExecutionLayoutSections
+                    (
+                        ID BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                        ExecutionLayoutID BIGINT NOT NULL,
+                        Title NVARCHAR(150) NOT NULL,
+                        SectionKey NVARCHAR(50) NOT NULL,
+                        SectionType NVARCHAR(50) NOT NULL CONSTRAINT DF_ExecutionLayoutSections_Type DEFAULT (N'Parameters'),
+                        DisplayOrder INT NOT NULL CONSTRAINT DF_ExecutionLayoutSections_DisplayOrder DEFAULT (0),
+                        IsCollapsible BIT NOT NULL CONSTRAINT DF_ExecutionLayoutSections_Collapsible DEFAULT (0),
+                        IsCollapsedByDefault BIT NOT NULL CONSTRAINT DF_ExecutionLayoutSections_Collapsed DEFAULT (0),
+                        CreatedBy BIGINT NOT NULL CONSTRAINT DF_ExecutionLayoutSections_CreatedBy DEFAULT (0),
+                        CreatedOn DATETIME2 NOT NULL CONSTRAINT DF_ExecutionLayoutSections_CreatedOn DEFAULT (GETUTCDATE()),
+                        ModifiedBy BIGINT NULL,
+                        ModifiedOn DATETIME2 NULL,
+                        CompanyCode NVARCHAR(50) NOT NULL CONSTRAINT DF_ExecutionLayoutSections_Company DEFAULT (N'LIMS'),
+                        IsActive BIT NOT NULL CONSTRAINT DF_ExecutionLayoutSections_IsActive DEFAULT (1)
+                    );
+                END
+
+                IF OBJECT_ID(N'dbo.ExecutionLayoutItems', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE dbo.ExecutionLayoutItems
+                    (
+                        ID BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                        ExecutionLayoutSectionID BIGINT NOT NULL,
+                        ItemType NVARCHAR(50) NOT NULL,
+                        ItemKey NVARCHAR(100) NOT NULL,
+                        Label NVARCHAR(150) NULL,
+                        ColumnSpan INT NOT NULL CONSTRAINT DF_ExecutionLayoutItems_ColSpan DEFAULT (1),
+                        DisplayOrder INT NOT NULL CONSTRAINT DF_ExecutionLayoutItems_DisplayOrder DEFAULT (0),
+                        IsRequired BIT NOT NULL CONSTRAINT DF_ExecutionLayoutItems_Required DEFAULT (0),
+                        IsReadOnly BIT NOT NULL CONSTRAINT DF_ExecutionLayoutItems_ReadOnly DEFAULT (0),
+                        ConfigurationJson NVARCHAR(MAX) NULL,
+                        CreatedBy BIGINT NOT NULL CONSTRAINT DF_ExecutionLayoutItems_CreatedBy DEFAULT (0),
+                        CreatedOn DATETIME2 NOT NULL CONSTRAINT DF_ExecutionLayoutItems_CreatedOn DEFAULT (GETUTCDATE()),
+                        ModifiedBy BIGINT NULL,
+                        ModifiedOn DATETIME2 NULL,
+                        CompanyCode NVARCHAR(50) NOT NULL CONSTRAINT DF_ExecutionLayoutItems_Company DEFAULT (N'LIMS'),
+                        IsActive BIT NOT NULL CONSTRAINT DF_ExecutionLayoutItems_IsActive DEFAULT (1)
+                    );
+                END
+
+                -- 6. LaboratoryTestLayouts
+                IF OBJECT_ID(N'dbo.LaboratoryTestLayouts', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE dbo.LaboratoryTestLayouts
+                    (
+                        ID BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_LaboratoryTestLayouts PRIMARY KEY,
+                        LaboratoryTestID BIGINT NOT NULL,
+                        ExecutionLayoutID BIGINT NOT NULL,
+                        TestMethodSpecificationID BIGINT NULL,
+                        TestMethodSpecificationVersionID BIGINT NULL,
+                        Priority INT NOT NULL CONSTRAINT DF_LaboratoryTestLayouts_Priority DEFAULT (0),
+                        IsDefault BIT NOT NULL CONSTRAINT DF_LaboratoryTestLayouts_IsDefault DEFAULT (0),
+                        CreatedBy BIGINT NULL,
+                        CreatedOn DATETIME2 NOT NULL CONSTRAINT DF_LaboratoryTestLayouts_CreatedOn DEFAULT (GETUTCDATE()),
+                        ModifiedBy BIGINT NULL,
+                        ModifiedOn DATETIME2 NULL,
+                        CompanyCode NVARCHAR(50) NOT NULL CONSTRAINT DF_LaboratoryTestLayouts_Company DEFAULT (N'LIMS'),
+                        IsActive BIT NOT NULL CONSTRAINT DF_LaboratoryTestLayouts_IsActive DEFAULT (1)
+                    );
+                END
+
+                IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_LaboratoryTestLayouts_Test_Layout_Method_Version' AND object_id = OBJECT_ID(N'dbo.LaboratoryTestLayouts'))
+                BEGIN
+                    CREATE NONCLUSTERED INDEX IX_LaboratoryTestLayouts_Test_Layout_Method_Version
+                        ON dbo.LaboratoryTestLayouts (LaboratoryTestID, ExecutionLayoutID, TestMethodSpecificationID, TestMethodSpecificationVersionID);
+                END
+
+                -- 7. ConfigurationAdjustments & ConfigurationAdjustmentItems
+                IF OBJECT_ID(N'dbo.ConfigurationAdjustments', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE dbo.ConfigurationAdjustments
+                    (
+                        ID BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ConfigurationAdjustments PRIMARY KEY,
+                        UniversalTestGroupID BIGINT NOT NULL,
+                        AdjustmentNumber INT NOT NULL CONSTRAINT DF_ConfigurationAdjustments_AdjNo DEFAULT (1),
+                        Status NVARCHAR(50) NOT NULL CONSTRAINT DF_ConfigurationAdjustments_Status DEFAULT (N'Draft'),
+                        OverallReason NVARCHAR(500) NOT NULL CONSTRAINT DF_ConfigurationAdjustments_Reason DEFAULT (N''),
+                        AppliedBy BIGINT NULL,
+                        AppliedOn DATETIME2 NULL,
+                        ApprovedBy BIGINT NULL,
+                        ApprovedOn DATETIME2 NULL,
+                        ApprovalRemarks NVARCHAR(500) NULL,
+                        BranchID BIGINT NOT NULL,
+                        ConcurrencyToken NVARCHAR(64) NOT NULL CONSTRAINT DF_ConfigurationAdjustments_Token DEFAULT (NEWID()),
+                        AdjustedConfigurationJson NVARCHAR(MAX) NULL,
+                        CreatedBy BIGINT NOT NULL CONSTRAINT DF_ConfigurationAdjustments_CreatedBy DEFAULT (0),
+                        CreatedOn DATETIME2 NOT NULL CONSTRAINT DF_ConfigurationAdjustments_CreatedOn DEFAULT (GETUTCDATE()),
+                        ModifiedBy BIGINT NULL,
+                        ModifiedOn DATETIME2 NULL,
+                        CompanyCode NVARCHAR(50) NOT NULL CONSTRAINT DF_ConfigurationAdjustments_Company DEFAULT (N'LIMS'),
+                        IsActive BIT NOT NULL CONSTRAINT DF_ConfigurationAdjustments_IsActive DEFAULT (1)
+                    );
+                END
+
+                IF OBJECT_ID(N'dbo.ConfigurationAdjustmentItems', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE dbo.ConfigurationAdjustmentItems
+                    (
+                        ID BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ConfigurationAdjustmentItems PRIMARY KEY,
+                        ConfigurationAdjustmentID BIGINT NOT NULL,
+                        UniversalTestGroupID BIGINT NOT NULL,
+                        Section NVARCHAR(50) NOT NULL,
+                        EntityType NVARCHAR(50) NOT NULL,
+                        EntityID BIGINT NULL,
+                        EntityCode NVARCHAR(100) NULL,
+                        EntityName NVARCHAR(250) NULL,
+                        FieldName NVARCHAR(100) NOT NULL,
+                        ChangeType NVARCHAR(50) NOT NULL,
+                        PlannedValue NVARCHAR(MAX) NULL,
+                        EffectiveValue NVARCHAR(MAX) NULL,
+                        PreviousAdjustedValue NVARCHAR(MAX) NULL,
+                        NewAdjustedValue NVARCHAR(MAX) NULL,
+                        Reason NVARCHAR(500) NOT NULL CONSTRAINT DF_ConfigurationAdjustmentItems_Reason DEFAULT (N''),
+                        AuthorizationStatus NVARCHAR(50) NOT NULL CONSTRAINT DF_ConfigurationAdjustmentItems_AuthStatus DEFAULT (N'Pending'),
+                        AuthorizedBy BIGINT NULL,
+                        AuthorizedOn DATETIME2 NULL,
+                        BranchID BIGINT NOT NULL,
+                        CreatedBy BIGINT NOT NULL CONSTRAINT DF_ConfigurationAdjustmentItems_CreatedBy DEFAULT (0),
+                        CreatedOn DATETIME2 NOT NULL CONSTRAINT DF_ConfigurationAdjustmentItems_CreatedOn DEFAULT (GETUTCDATE()),
+                        ModifiedBy BIGINT NULL,
+                        ModifiedOn DATETIME2 NULL,
+                        CompanyCode NVARCHAR(50) NOT NULL CONSTRAINT DF_ConfigurationAdjustmentItems_Company DEFAULT (N'LIMS'),
+                        IsActive BIT NOT NULL CONSTRAINT DF_ConfigurationAdjustmentItems_IsActive DEFAULT (1)
+                    );
+                END
+
+                -- 8. ExecutionConfigSnapshots
+                IF OBJECT_ID(N'dbo.ExecutionConfigSnapshots', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE dbo.ExecutionConfigSnapshots
+                    (
+                        ID BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                        ConfigJson NVARCHAR(MAX) NOT NULL,
+                        SnapshotHash NVARCHAR(256) NULL,
+                        CreatedBy BIGINT NOT NULL CONSTRAINT DF_ExecutionConfigSnapshots_CreatedBy DEFAULT (0),
+                        CreatedOn DATETIME2 NOT NULL CONSTRAINT DF_ExecutionConfigSnapshots_CreatedOn DEFAULT (GETUTCDATE()),
+                        ModifiedBy BIGINT NULL,
+                        ModifiedOn DATETIME2 NULL,
+                        CompanyCode NVARCHAR(50) NOT NULL CONSTRAINT DF_ExecutionConfigSnapshots_Company DEFAULT (N'LIMS'),
+                        IsActive BIT NOT NULL CONSTRAINT DF_ExecutionConfigSnapshots_IsActive DEFAULT (1)
+                    );
+                END
+
+                -- 9. UniversalTestResults, UniversalTestResultParameters, UniversalReviewFindings, UniversalResultAudits
+                IF OBJECT_ID(N'dbo.UniversalTestResults', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE dbo.UniversalTestResults (
+                        ID BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                        TestExecutionID BIGINT NOT NULL,
+                        UniversalTestGroupID BIGINT NOT NULL,
+                        BranchID BIGINT NOT NULL,
+                        OrganizationID BIGINT NOT NULL,
+                        RevisionNo INT NOT NULL CONSTRAINT DF_UniversalTestResults_Rev DEFAULT 1,
+                        ResultStatus NVARCHAR(30) NOT NULL CONSTRAINT DF_UniversalTestResults_Status DEFAULT 'Draft',
+                        OverallDecision NVARCHAR(30) NOT NULL CONSTRAINT DF_UniversalTestResults_Decision DEFAULT 'NOT_EVALUATED',
+                        SnapshotHash NVARCHAR(256) NULL,
+                        ExecutionConfigSnapshotID BIGINT NULL,
+                        DecisionRule NVARCHAR(50) NULL,
+                        AcceptanceCriteriaCode NVARCHAR(50) NULL,
+                        CalculationTraceJson NVARCHAR(MAX) NULL,
+                        ComplianceSummaryJson NVARCHAR(MAX) NULL,
+                        FinalizedBy BIGINT NULL, FinalizedOn DATETIME2 NULL,
+                        ReviewerID BIGINT NULL, ReviewedOn DATETIME2 NULL,
+                        VerifiedBy BIGINT NULL, VerifiedOn DATETIME2 NULL,
+                        ApprovedBy BIGINT NULL, ApprovedOn DATETIME2 NULL,
+                        ReviewRemarks NVARCHAR(1000) NULL,
+                        ApprovalRemarks NVARCHAR(1000) NULL,
+                        ConcurrencyToken NVARCHAR(64) NOT NULL CONSTRAINT DF_UniversalTestResults_Token DEFAULT (NEWID()),
+                        CreatedBy BIGINT NOT NULL CONSTRAINT DF_UniversalTestResults_CreatedBy DEFAULT (0),
+                        CreatedOn DATETIME2 NOT NULL CONSTRAINT DF_UniversalTestResults_CreatedOn DEFAULT (GETUTCDATE()),
+                        ModifiedBy BIGINT NULL, ModifiedOn DATETIME2 NULL,
+                        CompanyCode NVARCHAR(50) NOT NULL CONSTRAINT DF_UniversalTestResults_Company DEFAULT 'LIMS',
+                        IsActive BIT NOT NULL CONSTRAINT DF_UniversalTestResults_IsActive DEFAULT 1
+                    );
+                END
+
+                IF OBJECT_ID(N'dbo.UniversalTestResultParameters', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE dbo.UniversalTestResultParameters (
+                        ID BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                        UniversalTestResultID BIGINT NOT NULL,
+                        ParameterMasterID BIGINT NOT NULL,
+                        ParameterCode NVARCHAR(100) NOT NULL,
+                        ParameterName NVARCHAR(200) NULL,
+                        InputType NVARCHAR(20) NOT NULL CONSTRAINT DF_UTRP_InputType DEFAULT 'Decimal',
+                        Unit NVARCHAR(50) NULL,
+                        DecimalPrecision INT NOT NULL CONSTRAINT DF_UTRP_DecPrec DEFAULT 2,
+                        IsCalculated BIT NOT NULL CONSTRAINT DF_UTRP_IsCalc DEFAULT 0,
+                        IsMandatory BIT NOT NULL CONSTRAINT DF_UTRP_IsMand DEFAULT 1,
+                        IsReportable BIT NOT NULL CONSTRAINT DF_UTRP_IsRep DEFAULT 1,
+                        DisplayOrder INT NOT NULL CONSTRAINT DF_UTRP_DispOrder DEFAULT 0,
+                        RawValue NVARCHAR(255) NULL,
+                        RawNumericValue DECIMAL(18,6) NULL,
+                        AppliedFactorCode NVARCHAR(100) NULL,
+                        AppliedFactorOperation NVARCHAR(100) NULL,
+                        FactoredValue DECIMAL(18,6) NULL,
+                        Formula NVARCHAR(MAX) NULL,
+                        SubstitutionTrace NVARCHAR(MAX) NULL,
+                        CalculatedValue DECIMAL(18,6) NULL,
+                        ComplianceValue DECIMAL(18,6) NULL,
+                        DisplayValue NVARCHAR(100) NULL,
+                        ReportedValue NVARCHAR(100) NULL,
+                        SpecMin DECIMAL(18,6) NULL, SpecMax DECIMAL(18,6) NULL,
+                        SpecTarget DECIMAL(18,6) NULL,
+                        MinTolerance DECIMAL(18,6) NULL, MaxTolerance DECIMAL(18,6) NULL,
+                        RequirementStatus NVARCHAR(40) NOT NULL CONSTRAINT DF_UTRP_ReqStatus DEFAULT 'RESOLVED',
+                        Verdict NVARCHAR(30) NOT NULL CONSTRAINT DF_UTRP_Verdict DEFAULT 'NOT_EVALUATED',
+                        CombinedUncertainty DECIMAL(18,6) NULL,
+                        ExpandedUncertainty DECIMAL(18,6) NULL,
+                        CoverageFactor DECIMAL(10,4) NULL,
+                        GuardBandApplied BIT NOT NULL CONSTRAINT DF_UTRP_GuardBand DEFAULT 0,
+                        EvaluationNote NVARCHAR(500) NULL,
+                        CreatedBy BIGINT NOT NULL CONSTRAINT DF_UTRP_CreatedBy DEFAULT (0),
+                        CreatedOn DATETIME2 NOT NULL CONSTRAINT DF_UTRP_CreatedOn DEFAULT (GETUTCDATE()),
+                        ModifiedBy BIGINT NULL, ModifiedOn DATETIME2 NULL,
+                        CompanyCode NVARCHAR(50) NOT NULL CONSTRAINT DF_UTRP_Company DEFAULT 'LIMS',
+                        IsActive BIT NOT NULL CONSTRAINT DF_UTRP_IsActive DEFAULT 1
+                    );
+                END
+
+                IF OBJECT_ID(N'dbo.UniversalReviewFindings', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE dbo.UniversalReviewFindings (
+                        ID BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                        UniversalTestResultID BIGINT NOT NULL,
+                        TestExecutionID BIGINT NOT NULL,
+                        FindingType NVARCHAR(50) NOT NULL CONSTRAINT DF_URF_Type DEFAULT 'Observation',
+                        Description NVARCHAR(1000) NOT NULL,
+                        Severity NVARCHAR(20) NOT NULL CONSTRAINT DF_URF_Severity DEFAULT 'Major',
+                        Status NVARCHAR(20) NOT NULL CONSTRAINT DF_URF_Status DEFAULT 'Open',
+                        IsBlocking BIT NOT NULL CONSTRAINT DF_URF_Blocking DEFAULT 1,
+                        Resolution NVARCHAR(1000) NULL,
+                        ResolvedBy BIGINT NULL, ResolvedOn DATETIME2 NULL,
+                        CreatedBy BIGINT NOT NULL CONSTRAINT DF_URF_CreatedBy DEFAULT (0),
+                        CreatedOn DATETIME2 NOT NULL CONSTRAINT DF_URF_CreatedOn DEFAULT (GETUTCDATE()),
+                        ModifiedBy BIGINT NULL, ModifiedOn DATETIME2 NULL,
+                        CompanyCode NVARCHAR(50) NOT NULL CONSTRAINT DF_URF_Company DEFAULT 'LIMS',
+                        IsActive BIT NOT NULL CONSTRAINT DF_URF_IsActive DEFAULT 1
+                    );
+                END
+
+                IF OBJECT_ID(N'dbo.UniversalResultAudits', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE dbo.UniversalResultAudits (
+                        ID BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                        UniversalTestResultID BIGINT NOT NULL,
+                        TestExecutionID BIGINT NOT NULL,
+                        Action NVARCHAR(50) NOT NULL,
+                        ActionCategory NVARCHAR(50) NOT NULL CONSTRAINT DF_URA_Category DEFAULT 'WORKFLOW',
+                        FromState NVARCHAR(50) NULL,
+                        ToState NVARCHAR(50) NULL,
+                        Remarks NVARCHAR(1000) NULL,
+                        PayloadJson NVARCHAR(MAX) NULL,
+                        PerformedBy BIGINT NOT NULL CONSTRAINT DF_URA_PerfBy DEFAULT (0),
+                        PerformedOn DATETIME2 NOT NULL CONSTRAINT DF_URA_PerfOn DEFAULT (GETUTCDATE()),
+                        BranchID BIGINT NOT NULL CONSTRAINT DF_URA_Branch DEFAULT (1),
+                        CreatedBy BIGINT NOT NULL CONSTRAINT DF_URA_CreatedBy DEFAULT (0),
+                        CreatedOn DATETIME2 NOT NULL CONSTRAINT DF_URA_CreatedOn DEFAULT (GETUTCDATE()),
+                        ModifiedBy BIGINT NULL, ModifiedOn DATETIME2 NULL,
+                        CompanyCode NVARCHAR(50) NOT NULL CONSTRAINT DF_URA_Company DEFAULT 'LIMS',
+                        IsActive BIT NOT NULL CONSTRAINT DF_URA_IsActive DEFAULT 1
+                    );
+                END
+
+                -- 10. UniversalReports
+                IF OBJECT_ID(N'dbo.UniversalReports', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE dbo.UniversalReports
+                    (
+                        ID                          BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                        TestExecutionID               BIGINT NOT NULL,
+                        UniversalTestResultID         BIGINT NOT NULL,
+                        ResultRevisionNo              INT NOT NULL CONSTRAINT DF_UniversalReports_ResultRev DEFAULT (1),
+                        ReportRevisionNo              INT NOT NULL CONSTRAINT DF_UniversalReports_ReportRev DEFAULT (1),
+                        ReportNo                      NVARCHAR(100) NOT NULL,
+                        SnapshotHash                  NVARCHAR(256) NULL,
+                        ResultRevisionHash            NVARCHAR(256) NULL,
+                        ReportDataJson                NVARCHAR(MAX) NULL,
+                        ReportDataHash                NVARCHAR(256) NULL,
+                        PdfPath                       NVARCHAR(500) NULL,
+                        PdfHash                       NVARCHAR(256) NULL,
+                        Status                        NVARCHAR(30) NOT NULL CONSTRAINT DF_UniversalReports_Status DEFAULT (N'GENERATED'),
+                        BranchID                      BIGINT NOT NULL,
+                        OrganizationID                BIGINT NOT NULL,
+                        GeneratedOn                   DATETIME2 NULL,
+                        GeneratedBy                   BIGINT NULL,
+                        ReleasedOn                    DATETIME2 NULL,
+                        ReleasedBy                    BIGINT NULL,
+                        CreatedBy                     BIGINT NOT NULL CONSTRAINT DF_UniversalReports_CreatedBy DEFAULT (0),
+                        CreatedOn                     DATETIME2 NOT NULL CONSTRAINT DF_UniversalReports_CreatedOn DEFAULT (GETUTCDATE()),
+                        ModifiedBy                    BIGINT NULL,
+                        ModifiedOn                    DATETIME2 NULL,
+                        CompanyCode                   NVARCHAR(50) NOT NULL CONSTRAINT DF_UniversalReports_Company DEFAULT (N'LIMS'),
+                        IsActive                      BIT NOT NULL CONSTRAINT DF_UniversalReports_IsActive DEFAULT (1)
+                    );
+                END
+
+                -- 11. SpecificationVersions & SpecificationVersionParameters
+                IF OBJECT_ID(N'dbo.SpecificationVersions', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE dbo.SpecificationVersions (
+                        ID BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_SpecificationVersions PRIMARY KEY,
+                        SpecificationHeaderID BIGINT NOT NULL,
+                        Version NVARCHAR(50) NOT NULL,
+                        Year NVARCHAR(20) NULL,
+                        Status VARCHAR(20) NOT NULL CONSTRAINT DF_SpecificationVersions_Status DEFAULT 'Draft',
+                        EffectiveDate DATETIME2 NULL,
+                        SupersededDate DATETIME2 NULL,
+                        ReviewDate DATETIME2 NULL,
+                        ChangeReason NVARCHAR(500) NULL,
+                        StandardFile NVARCHAR(255) NULL,
+                        StandardFilePath NVARCHAR(500) NULL,
+                        UploadReferenceID BIGINT NULL,
+                        IsDefault BIT NOT NULL CONSTRAINT DF_SpecificationVersions_IsDefault DEFAULT 0,
+                        CreatedBy BIGINT NOT NULL CONSTRAINT DF_SpecificationVersions_CreatedBy DEFAULT 0,
+                        CreatedOn DATETIME2 NOT NULL CONSTRAINT DF_SpecificationVersions_CreatedOn DEFAULT GETUTCDATE(),
+                        ModifiedBy BIGINT NULL,
+                        ModifiedOn DATETIME2 NULL,
+                        CompanyCode NVARCHAR(50) NOT NULL CONSTRAINT DF_SpecificationVersions_CompanyCode DEFAULT 'LIMS',
+                        IsActive BIT NOT NULL CONSTRAINT DF_SpecificationVersions_IsActive DEFAULT 1
+                    );
+                END
+
+                IF OBJECT_ID(N'dbo.SpecificationVersionParameters', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE dbo.SpecificationVersionParameters (
+                        ID BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT PK_SpecificationVersionParameters PRIMARY KEY,
+                        SpecificationVersionID BIGINT NOT NULL,
+                        ParameterID BIGINT NOT NULL,
+                        Comment NVARCHAR(1000) NULL,
+                        SortOrder INT NOT NULL CONSTRAINT DF_SpecificationVersionParameters_SortOrder DEFAULT 1,
+                        IsActive BIT NOT NULL CONSTRAINT DF_SpecificationVersionParameters_IsActive DEFAULT 1
+                    );
+                END
+
+                -- 12. LaboratoryTest columns and LaboratoryTestParameters / LaboratoryTestMethods
+                IF OBJECT_ID(N'dbo.LaboratoryTests', N'U') IS NOT NULL
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'LaboratoryTests' AND COLUMN_NAME = 'Code')
+                        ALTER TABLE [dbo].[LaboratoryTests] ADD [Code] NVARCHAR(50) NULL;
+
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'LaboratoryTests' AND COLUMN_NAME = 'Description')
+                        ALTER TABLE [dbo].[LaboratoryTests] ADD [Description] NVARCHAR(500) NULL;
+                END
+
+                IF OBJECT_ID(N'dbo.LaboratoryTestParameters', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE [dbo].[LaboratoryTestParameters] (
+                        [ID] BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT [PK_LaboratoryTestParameters] PRIMARY KEY,
+                        [LaboratoryTestID] BIGINT NOT NULL,
+                        [ParameterID] BIGINT NOT NULL,
+                        [IsMandatory] BIT NOT NULL CONSTRAINT [DF_LaboratoryTestParameters_IsMandatory] DEFAULT 1,
+                        [IsReportable] BIT NOT NULL CONSTRAINT [DF_LaboratoryTestParameters_IsReportable] DEFAULT 1,
+                        [DisplayOrder] INT NOT NULL CONSTRAINT [DF_LaboratoryTestParameters_DisplayOrder] DEFAULT 0,
+                        [CreatedBy] BIGINT NOT NULL CONSTRAINT [DF_LaboratoryTestParameters_CreatedBy] DEFAULT 0,
+                        [CreatedOn] DATETIME2 NOT NULL CONSTRAINT [DF_LaboratoryTestParameters_CreatedOn] DEFAULT GETUTCDATE(),
+                        [ModifiedBy] BIGINT NULL,
+                        [ModifiedOn] DATETIME2 NULL,
+                        [CompanyCode] NVARCHAR(50) NOT NULL CONSTRAINT [DF_LaboratoryTestParameters_CompanyCode] DEFAULT 'LIMS',
+                        [IsActive] BIT NOT NULL CONSTRAINT [DF_LaboratoryTestParameters_IsActive] DEFAULT 1
+                    );
+                END
+
+                IF OBJECT_ID(N'dbo.LaboratoryTestMethods', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE [dbo].[LaboratoryTestMethods] (
+                        [ID] BIGINT IDENTITY(1,1) NOT NULL CONSTRAINT [PK_LaboratoryTestMethods] PRIMARY KEY,
+                        [LaboratoryTestID] BIGINT NOT NULL,
+                        [TestMethodSpecificationID] BIGINT NOT NULL,
+                        [IsDefault] BIT NOT NULL CONSTRAINT [DF_LaboratoryTestMethods_IsDefault] DEFAULT 0,
+                        [DisplayOrder] INT NOT NULL CONSTRAINT [DF_LaboratoryTestMethods_DisplayOrder] DEFAULT 0,
+                        [CreatedBy] BIGINT NOT NULL CONSTRAINT [DF_LaboratoryTestMethods_CreatedBy] DEFAULT 0,
+                        [CreatedOn] DATETIME2 NOT NULL CONSTRAINT [DF_LaboratoryTestMethods_CreatedOn] DEFAULT GETUTCDATE(),
+                        [ModifiedBy] BIGINT NULL,
+                        [ModifiedOn] DATETIME2 NULL,
+                        [CompanyCode] NVARCHAR(50) NOT NULL CONSTRAINT [DF_LaboratoryTestMethods_CompanyCode] DEFAULT 'LIMS',
+                        [IsActive] BIT NOT NULL CONSTRAINT [DF_LaboratoryTestMethods_IsActive] DEFAULT 1
+                    );
+                END
+
+                -- 13. UniversalTestGroups columns
+                IF OBJECT_ID(N'dbo.UniversalTestGroups', N'U') IS NOT NULL
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'UniversalTestGroups' AND COLUMN_NAME = 'ExecutionLayoutID')
+                        ALTER TABLE [dbo].[UniversalTestGroups] ADD [ExecutionLayoutID] BIGINT NULL;
+
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'UniversalTestGroups' AND COLUMN_NAME = 'DepartmentID')
+                        ALTER TABLE [dbo].[UniversalTestGroups] ADD [DepartmentID] BIGINT NULL;
+
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'UniversalTestGroups' AND COLUMN_NAME = 'PlannedConfigurationJson')
+                        ALTER TABLE [dbo].[UniversalTestGroups] ADD [PlannedConfigurationJson] NVARCHAR(MAX) NULL;
+
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'UniversalTestGroups' AND COLUMN_NAME = 'ExecutionCount')
+                        ALTER TABLE [dbo].[UniversalTestGroups] ADD [ExecutionCount] INT NOT NULL CONSTRAINT DF_UTG_ExecCount DEFAULT 0;
+
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'UniversalTestGroups' AND COLUMN_NAME = 'TestMethodSpecificationVersionID')
+                        ALTER TABLE [dbo].[UniversalTestGroups] ADD [TestMethodSpecificationVersionID] BIGINT NULL;
+
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'UniversalTestGroups' AND COLUMN_NAME = 'SpecificationVersionID')
+                        ALTER TABLE [dbo].[UniversalTestGroups] ADD [SpecificationVersionID] BIGINT NULL;
+                END
+
+                -- 14. TestExecutions columns
+                IF OBJECT_ID(N'dbo.TestExecutions', N'U') IS NOT NULL
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'TestExecutions' AND COLUMN_NAME = 'ExecutionConfigSnapshotID')
+                        ALTER TABLE [dbo].[TestExecutions] ADD [ExecutionConfigSnapshotID] BIGINT NULL;
+
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'TestExecutions' AND COLUMN_NAME = 'ActualConditionsJson')
+                        ALTER TABLE [dbo].[TestExecutions] ADD [ActualConditionsJson] NVARCHAR(MAX) NULL;
+
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'TestExecutions' AND COLUMN_NAME = 'ActualEquipmentJson')
+                        ALTER TABLE [dbo].[TestExecutions] ADD [ActualEquipmentJson] NVARCHAR(MAX) NULL;
+                END
+            ");
+            logger.LogInformation("DataSeeder: incremental database schema validated and ensured.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "DataSeeder: warning during EnsureDatabaseSchemaAsync (safe to proceed)");
+        }
+    }
+
+    private static async Task SeedAcceptanceCriteriaAsync(LIMSContext db)
+    {
+        if (await db.Database.SqlQueryRaw<int>("SELECT CASE WHEN OBJECT_ID(N'AcceptanceCriteriaMasters', N'U') IS NOT NULL THEN 1 ELSE 0 END AS [Value]").FirstOrDefaultAsync() == 1)
+        {
+            await db.Database.ExecuteSqlRawAsync(@"
+                IF NOT EXISTS (SELECT 1 FROM AcceptanceCriteriaMasters WHERE Code = N'ALL_REQUIRED_PASS' AND CompanyCode = N'LIMS')
+                BEGIN
+                    INSERT INTO AcceptanceCriteriaMasters
+                        (Code, Name, Description, EvaluationType, ComparisonType, DecisionRule, RoundingRule, DisplayOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                    VALUES
+                        (N'ALL_REQUIRED_PASS', N'All Required Parameters Must Pass',
+                         N'Default rule: every required parameter must be within its specification requirement (FormulaEvaluator Pass).',
+                         N'TEST', N'RANGE', N'ALL_REQUIRED_PASS', N'ROUND_NEAREST', 1, 0, GETUTCDATE(), N'LIMS', 1);
+                END
+
+                IF NOT EXISTS (SELECT 1 FROM AcceptanceCriteriaMasters WHERE Code = N'WITH_MOU_GUARD' AND CompanyCode = N'LIMS')
+                BEGIN
+                    INSERT INTO AcceptanceCriteriaMasters
+                        (Code, Name, Description, EvaluationType, ComparisonType, DecisionRule, RoundingRule, DisplayOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                    VALUES
+                        (N'WITH_MOU_GUARD', N'Guard-Band Acceptance (With MOU Consideration)',
+                         N'Guard-band path: acceptance band shrinks by ExpandedUncertainty when case decision rule requires MOU consideration.',
+                         N'TEST', N'RANGE', N'WITH_MOU_GUARD', N'ROUND_NEAREST', 2, 0, GETUTCDATE(), N'LIMS', 1);
+                END
+
+                IF NOT EXISTS (SELECT 1 FROM AcceptanceCriteriaMasters WHERE Code = N'INFORMATIONAL' AND CompanyCode = N'LIMS')
+                BEGIN
+                    INSERT INTO AcceptanceCriteriaMasters
+                        (Code, Name, Description, EvaluationType, ComparisonType, DecisionRule, RoundingRule, DisplayOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                    VALUES
+                        (N'INFORMATIONAL', N'Informational (Excluded from Decision)',
+                         N'Result is recorded but does not participate in the compliance decision.',
+                         N'PARAMETER', N'RANGE', N'INFORMATIONAL', N'ROUND_NEAREST', 3, 0, GETUTCDATE(), N'LIMS', 1);
+                END
+            ");
+        }
+    }
+
+    private static async Task SeedExecutionLayoutsAsync(LIMSContext db)
+    {
+        if (await db.Database.SqlQueryRaw<int>("SELECT CASE WHEN OBJECT_ID(N'ExecutionLayoutMasters', N'U') IS NOT NULL THEN 1 ELSE 0 END AS [Value]").FirstOrDefaultAsync() == 1)
+        {
+            await db.Database.ExecuteSqlRawAsync(@"
+                IF NOT EXISTS (SELECT 1 FROM ExecutionLayoutMasters WHERE Code = N'TENSILE_STD')
+                    INSERT INTO ExecutionLayoutMasters (Code, Name, Description, RendererType, DisplayOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                    VALUES (N'TENSILE_STD', N'Tensile Standard Layout', N'Standard layout for tensile and mechanical testing', N'Grid', 1, 0, GETUTCDATE(), N'LIMS', 1);
+
+                IF NOT EXISTS (SELECT 1 FROM ExecutionLayoutMasters WHERE Code = N'OES_CHEM')
+                    INSERT INTO ExecutionLayoutMasters (Code, Name, Description, RendererType, DisplayOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                    VALUES (N'OES_CHEM', N'OES Chemical Layout', N'Optical Emission Spectrometry chemical analysis layout', N'Table', 2, 0, GETUTCDATE(), N'LIMS', 1);
+
+                IF NOT EXISTS (SELECT 1 FROM ExecutionLayoutMasters WHERE Code = N'CBR_LAYOUT')
+                    INSERT INTO ExecutionLayoutMasters (Code, Name, Description, RendererType, DisplayOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                    VALUES (N'CBR_LAYOUT', N'CBR Execution Layout', N'California Bearing Ratio soil mechanics testing layout', N'Custom', 3, 0, GETUTCDATE(), N'LIMS', 1);
+
+                IF NOT EXISTS (SELECT 1 FROM ExecutionLayoutMasters WHERE Code = N'MAT_EXEC')
+                    INSERT INTO ExecutionLayoutMasters (Code, Name, Description, RendererType, DisplayOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                    VALUES (N'MAT_EXEC', N'Material Test Execution Layout', N'Material testing comprehensive execution layout', N'Grid', 4, 0, GETUTCDATE(), N'LIMS', 1);
+
+                IF NOT EXISTS (SELECT 1 FROM ExecutionLayoutMasters WHERE Code = N'GENERIC_STD')
+                    INSERT INTO ExecutionLayoutMasters (Code, Name, Description, RendererType, DisplayOrder, CreatedBy, CreatedOn, CompanyCode, IsActive)
+                    VALUES (N'GENERIC_STD', N'Generic Standard Layout', N'Default generic test parameter layout', N'Grid', 5, 0, GETUTCDATE(), N'LIMS', 1);
+            ");
+        }
+    }
+
+    private static async Task SeedSpecificationAndMethodVersionsAsync(LIMSContext db)
+    {
+        await db.Database.ExecuteSqlRawAsync(@"
+            -- Auto-create active default version for any SpecificationHeaders missing versions
+            IF OBJECT_ID(N'SpecificationHeaders', N'U') IS NOT NULL AND OBJECT_ID(N'SpecificationVersions', N'U') IS NOT NULL
+            BEGIN
+                INSERT INTO SpecificationVersions (SpecificationHeaderID, Version, Year, Status, EffectiveDate, IsDefault, CreatedBy, CreatedOn, CompanyCode)
+                SELECT sh.ID, COALESCE(NULLIF(sh.StandardYear, ''), '01'), COALESCE(NULLIF(sh.StandardYear, ''), CAST(YEAR(GETUTCDATE()) AS NVARCHAR(10))), 'Active', GETUTCDATE(), 1, 0, GETUTCDATE(), N'LIMS'
+                FROM SpecificationHeaders sh
+                WHERE sh.IsActive = 1
+                  AND NOT EXISTS (
+                      SELECT 1 FROM SpecificationVersions sv WHERE sv.SpecificationHeaderID = sh.ID
+                  );
+            END
+
+            -- Auto-create active default version for any TestMethodSpecifications missing versions
+            IF OBJECT_ID(N'TestMethodSpecifications', N'U') IS NOT NULL AND OBJECT_ID(N'TestMethodSpecificationVersions', N'U') IS NOT NULL
+            BEGIN
+                INSERT INTO TestMethodSpecificationVersions (TestMethodSpecificationID, Version, Year, Status, EffectiveDate, IsDefault, CreatedBy, CreatedOn, CompanyCode)
+                SELECT tms.ID, '01', CAST(YEAR(GETUTCDATE()) AS NVARCHAR(10)), 'Active', GETUTCDATE(), 1, 0, GETUTCDATE(), N'LIMS'
+                FROM TestMethodSpecifications tms
+                WHERE (tms.IsDisabled = 0 OR tms.IsDisabled IS NULL)
+                  AND NOT EXISTS (
+                      SELECT 1 FROM TestMethodSpecificationVersions tmsv WHERE tmsv.TestMethodSpecificationID = tms.ID
+                  );
+            END
+        ");
+    }
 }
+

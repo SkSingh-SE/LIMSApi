@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
@@ -54,10 +54,12 @@ namespace LIMSApi.Repositories
         {
             var user = await _context.UserMasters
                 .Include(u => u.Role)
-                .FirstOrDefaultAsync(u => u.ID == userId);
+                .FirstOrDefaultAsync(u => u.ID == userId || u.EmployeeID == userId);
 
             if (user == null)
                 throw new InvalidOperationException("User Not Found");
+
+            var actualUserId = user.ID;
 
             // Get menu IDs from role
             var roleMenuIds = await _context.RoleMenuMappings
@@ -73,7 +75,7 @@ namespace LIMSApi.Repositories
 
             // Get permission overrides by user
             var userOverrides = await _context.UserPermissions
-                .Where(up => up.UserID == userId)
+                .Where(up => up.UserID == actualUserId)
                 .ToDictionaryAsync(up => up.PermissionID, up => up.IsGranted);
 
             // Combine permission IDs: role-based + overrides
@@ -122,10 +124,12 @@ namespace LIMSApi.Repositories
         {
             var user = await _context.UserMasters
                 .Include(u => u.Role)
-                .FirstOrDefaultAsync(u => u.ID == userId);
+                .FirstOrDefaultAsync(u => u.ID == userId || u.EmployeeID == userId);
 
             if (user == null)
                 throw new Exception("User not found!");
+
+            var actualUserId = user.ID;
 
             // 1️ Get SubMenu IDs assigned to User's Role
             var roleSubMenuIds = await _context.RoleMenuMappings
@@ -138,7 +142,7 @@ namespace LIMSApi.Repositories
             var userSpecialMenuIds = await _context.UserPermissions
                 .Include(up => up.Permission)
                 .ThenInclude(p => p.Menu)
-                .Where(up => up.UserID == userId && up.IsGranted == true)
+                .Where(up => up.UserID == actualUserId && up.IsGranted == true)
                 .Select(up => (long)up.Permission.MenuID)
                 .Distinct()
                 .ToListAsync();

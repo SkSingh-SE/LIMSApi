@@ -50,11 +50,12 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> GetUserMenuWithPermission(long userId)
         {
             var callerIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (!long.TryParse(callerIdStr, out var callerId))
-                return Unauthorized();
+            var employeeIdStr = User.FindFirst("EmployeeID")?.Value;
+            long.TryParse(callerIdStr, out var callerId);
+            long.TryParse(employeeIdStr, out var employeeId);
 
-            // Allow own menu access; other users require ReadUserPermission or Admin
-            if (userId != callerId)
+            // Allow own menu access (matched either by UserID or EmployeeID)
+            if (userId != callerId && (employeeId == 0 || userId != employeeId))
             {
                 var role = User.FindFirst(ClaimTypes.Role)?.Value;
                 var isAdminClaim = User.FindFirst("IsAdmin")?.Value;

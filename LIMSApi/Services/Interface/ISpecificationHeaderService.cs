@@ -14,8 +14,8 @@ namespace LIMSApi.Services.Interface
         Task<PagedResponse<object>> FetchCustomSpecificationHeaderList(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetSpecificationHeaderDropdown(string? searchTerm, int pageNo, int pageSize);
-        Task<List<DropdwonSelector>> GetGradeDropdown(string? searchTerm, int pageNo, int pageSize);
-        Task<List<DropdwonSelector>> GetGradeDropdownMetalWise(string? searchTerm, int pageNo, int pageSize, long metalId);
+        Task<List<DropdwonSelector>> GetGradeDropdown(string? searchTerm, int pageNo, int pageSize, long specHeaderId = 0, long productMasterId = 0);
+        Task<List<DropdwonSelector>> GetGradeDropdownMetalWise(string? searchTerm, int pageNo, int pageSize, long metalId, long specHeaderId = 0, long productMasterId = 0);
         Task<List<DropdwonSelector>> GetDefaultStandardForSpecification(long gradeId);
         Task<List<DropdwonSelector>> GetTestMethodsForSpecifications(long gradeId1, long gradeId2 = 0);
         Task<List<ChemicalElementDto>> GetChemicalElementsBySpecificationsAsync(long gradeId1 = 0, long gradeId2 = 0);

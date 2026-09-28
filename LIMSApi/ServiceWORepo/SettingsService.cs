@@ -476,7 +476,11 @@ namespace LIMSApi.ServiceWORepo
                 NablEnabled = nabl != null,
                 NablTcNumber = nabl?.CertificateNumber,
                 NablCertificate = nabl?.CertificatePath,
-                NablLogo = nabl?.LogoPath
+                NablLogo = nabl?.LogoPath,
+                IssueDate = nabl?.IssueDate == default(DateTime) ? null : nabl?.IssueDate,
+                ExpiryDate = nabl?.ExpiryDate == default(DateTime) ? null : nabl?.ExpiryDate,
+                BranchId = nabl?.BranchID,
+                IsActive = nabl?.IsActive ?? true
             };
 
             var numberingDto = new NumberingDto();
@@ -558,6 +562,10 @@ namespace LIMSApi.ServiceWORepo
             var (org, existingNabl, _, _, _, _) = await GetAllAsync(0, cancellationToken);
             var model = existingNabl ?? new NablAccreditation { OrganizationId = org.Id };
             model.CertificateNumber = nablDto.NablTcNumber?.Trim() ?? string.Empty;
+            model.IssueDate = nablDto.IssueDate ?? default(DateTime);
+            model.ExpiryDate = nablDto.ExpiryDate ?? default(DateTime);
+            model.BranchID = nablDto.BranchId;
+            model.IsActive = nablDto.IsActive;
             if (!string.IsNullOrWhiteSpace(nablDto.NablCertificate)) model.CertificatePath = nablDto.NablCertificate;
             if (!string.IsNullOrWhiteSpace(nablDto.NablLogo)) model.LogoPath = nablDto.NablLogo;
             return await SaveNablAsync(model, cancellationToken);

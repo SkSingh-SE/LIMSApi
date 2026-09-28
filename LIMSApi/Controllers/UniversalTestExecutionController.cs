@@ -37,20 +37,34 @@ namespace LIMSApi.Controllers
             }
 
             long branchId = _branchContext.CurrentBranchID ?? user?.BranchID ?? 0;
-            long organizationId = _branchContext.CurrentOrganizationID ?? user?.OrganizationID ?? 1;
+            long organizationId = _branchContext.CurrentOrganizationID ?? user?.OrganizationID ?? 0;
             bool canViewAll = _branchContext.CanViewAllBranches;
 
             return (userId, branchId, organizationId, canViewAll);
         }
 
-        [HttpGet("{testExecutionId}")]
+        [HttpGet("dropdown")]
+        [RequirePermission(Permissions.Testing.Read)]
+        public async Task<IActionResult> GetExecutionDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            var ctx = GetContext();
+            if (ctx.userId == 0 || ctx.branchId == 0 || ctx.organizationId == 0)
+            {
+                return Unauthorized("Branch, user, or organization context missing.");
+            }
+
+            var list = await _executionService.GetExecutionDropdownAsync(searchTerm, pageNo, pageSize, ctx.branchId, ctx.organizationId, ctx.canViewAll);
+            return Ok(list);
+        }
+
+        [HttpGet("{testExecutionId:long}")]
         [RequirePermission(Permissions.Testing.Read)]
         public async Task<IActionResult> GetExecutionById(long testExecutionId)
         {
             var ctx = GetContext();
-            if (ctx.userId == 0 || ctx.branchId == 0)
+            if (ctx.userId == 0 || ctx.branchId == 0 || ctx.organizationId == 0)
             {
-                return Unauthorized("Branch or user context missing.");
+                return Unauthorized("Branch, user, or organization context missing.");
             }
 
             var execution = await _executionService.GetExecutionByIdAsync(testExecutionId, ctx.branchId, ctx.organizationId, ctx.canViewAll);
@@ -67,9 +81,9 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> GetExecutionByGroupId(long universalTestGroupId)
         {
             var ctx = GetContext();
-            if (ctx.userId == 0 || ctx.branchId == 0)
+            if (ctx.userId == 0 || ctx.branchId == 0 || ctx.organizationId == 0)
             {
-                return Unauthorized("Branch or user context missing.");
+                return Unauthorized("Branch, user, or organization context missing.");
             }
 
             var execution = await _executionService.GetExecutionByGroupIdAsync(universalTestGroupId, ctx.branchId, ctx.organizationId, ctx.canViewAll);
@@ -81,14 +95,33 @@ namespace LIMSApi.Controllers
             return Ok(new { success = true, data = execution });
         }
 
+        [HttpGet("by-group/{universalTestGroupId}/run/{runNo:int}")]
+        [RequirePermission(Permissions.Testing.Read)]
+        public async Task<IActionResult> GetExecutionByGroupAndRun(long universalTestGroupId, int runNo)
+        {
+            var ctx = GetContext();
+            if (ctx.userId == 0 || ctx.branchId == 0 || ctx.organizationId == 0)
+            {
+                return Unauthorized("Branch, user, or organization context missing.");
+            }
+
+            var execution = await _executionService.GetExecutionByGroupAndRunAsync(universalTestGroupId, runNo, ctx.branchId, ctx.organizationId, ctx.canViewAll);
+            if (execution == null)
+            {
+                return NotFound(new { success = false, message = $"Run {runNo} not found for this test group." });
+            }
+
+            return Ok(new { success = true, data = execution });
+        }
+
         [HttpPost("start/{universalTestGroupId}")]
         [RequirePermission(Permissions.Testing.Perform)]
         public async Task<IActionResult> StartExecution(long universalTestGroupId, [FromQuery] bool isRetest = false)
         {
             var ctx = GetContext();
-            if (ctx.userId == 0 || ctx.branchId == 0)
+            if (ctx.userId == 0 || ctx.branchId == 0 || ctx.organizationId == 0)
             {
-                return Unauthorized("Branch or user context missing.");
+                return Unauthorized("Branch, user, or organization context missing.");
             }
 
             try
@@ -98,6 +131,10 @@ namespace LIMSApi.Controllers
             }
             catch (Exception ex)
             {
+                if (ex.Message.Contains("SPECIFICATION_REQUIRED"))
+                {
+                    return BadRequest(new { success = false, code = "SPECIFICATION_REQUIRED", message = "Valid specification is required before test execution." });
+                }
                 return BadRequest(new { success = false, message = ex.Message });
             }
         }
@@ -107,9 +144,9 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> SaveObservations(long testExecutionId, [FromBody] TestExecutionSaveDto data)
         {
             var ctx = GetContext();
-            if (ctx.userId == 0 || ctx.branchId == 0)
+            if (ctx.userId == 0 || ctx.branchId == 0 || ctx.organizationId == 0)
             {
-                return Unauthorized("Branch or user context missing.");
+                return Unauthorized("Branch, user, or organization context missing.");
             }
 
             try
@@ -128,9 +165,9 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> CompleteExecution(long testExecutionId)
         {
             var ctx = GetContext();
-            if (ctx.userId == 0 || ctx.branchId == 0)
+            if (ctx.userId == 0 || ctx.branchId == 0 || ctx.organizationId == 0)
             {
-                return Unauthorized("Branch or user context missing.");
+                return Unauthorized("Branch, user, or organization context missing.");
             }
 
             try
@@ -144,14 +181,40 @@ namespace LIMSApi.Controllers
             }
         }
 
+        [HttpPost("retest/{testExecutionId}")]
+        [RequirePermission(Permissions.Testing.Perform)]
+        public async Task<IActionResult> RetestExecution(long testExecutionId, [FromBody] RetestRequestDto dto)
+        {
+            var ctx = GetContext();
+            if (ctx.userId == 0 || ctx.branchId == 0 || ctx.organizationId == 0)
+            {
+                return Unauthorized("Branch, user, or organization context missing.");
+            }
+
+            try
+            {
+                var execution = await _executionService.RetestExecutionAsync(testExecutionId, dto, ctx.userId, ctx.branchId, ctx.organizationId);
+                return Ok(new { success = true, data = execution, executionId = execution.ID });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        // Phase 8 canonical path: Screen 18 callers must use the result-centric
+        // UniversalReview API (api/UniversalReview/{resultId}/verify) when a
+        // UniversalTestResult exists for the execution, so the full review audit
+        // chain (assign/finding/verify/approve) is preserved. This execution-centric
+        // endpoint remains solely for legacy-compatible executions without results.
         [HttpPost("verify/{testExecutionId}")]
         [RequirePermission(Permissions.Testing.VerifyResult)]
         public async Task<IActionResult> VerifyExecution(long testExecutionId, [FromBody] ExecutionActionDto dto)
         {
             var ctx = GetContext();
-            if (ctx.userId == 0 || ctx.branchId == 0)
+            if (ctx.userId == 0 || ctx.branchId == 0 || ctx.organizationId == 0)
             {
-                return Unauthorized("Branch or user context missing.");
+                return Unauthorized("Branch, user, or organization context missing.");
             }
 
             try
@@ -165,14 +228,17 @@ namespace LIMSApi.Controllers
             }
         }
 
+        // Phase 8 canonical path: Screen 18 callers must use the result-centric
+        // UniversalReview API (api/UniversalReview/{resultId}/approve) when a
+        // UniversalTestResult exists for the execution (see note on VerifyExecution).
         [HttpPost("approve/{testExecutionId}")]
         [RequirePermission(Permissions.Reporting.Approve)]
         public async Task<IActionResult> ApproveExecution(long testExecutionId, [FromBody] ExecutionActionDto dto)
         {
             var ctx = GetContext();
-            if (ctx.userId == 0 || ctx.branchId == 0)
+            if (ctx.userId == 0 || ctx.branchId == 0 || ctx.organizationId == 0)
             {
-                return Unauthorized("Branch or user context missing.");
+                return Unauthorized("Branch, user, or organization context missing.");
             }
 
             try
@@ -191,9 +257,9 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> RejectExecution(long testExecutionId, [FromBody] ExecutionActionDto dto)
         {
             var ctx = GetContext();
-            if (ctx.userId == 0 || ctx.branchId == 0)
+            if (ctx.userId == 0 || ctx.branchId == 0 || ctx.organizationId == 0)
             {
-                return Unauthorized("Branch or user context missing.");
+                return Unauthorized("Branch, user, or organization context missing.");
             }
 
             try
@@ -212,9 +278,9 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> UpdateConfiguration(long testExecutionId, [FromBody] TestExecutionConfigSnapshotDto updatedConfig)
         {
             var ctx = GetContext();
-            if (ctx.userId == 0 || ctx.branchId == 0)
+            if (ctx.userId == 0 || ctx.branchId == 0 || ctx.organizationId == 0)
             {
-                return Unauthorized("Branch or user context missing.");
+                return Unauthorized("Branch, user, or organization context missing.");
             }
 
             try
@@ -233,9 +299,9 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> GetCalculationTrace(long testExecutionId)
         {
             var ctx = GetContext();
-            if (ctx.userId == 0 || ctx.branchId == 0)
+            if (ctx.userId == 0 || ctx.branchId == 0 || ctx.organizationId == 0)
             {
-                return Unauthorized("Branch or user context missing.");
+                return Unauthorized("Branch, user, or organization context missing.");
             }
 
             try
@@ -254,9 +320,9 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> GetResultsOverview(long testExecutionId)
         {
             var ctx = GetContext();
-            if (ctx.userId == 0 || ctx.branchId == 0)
+            if (ctx.userId == 0 || ctx.branchId == 0 || ctx.organizationId == 0)
             {
-                return Unauthorized("Branch or user context missing.");
+                return Unauthorized("Branch, user, or organization context missing.");
             }
 
             try
@@ -275,9 +341,9 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> GetNablScopeSummary(long testExecutionId)
         {
             var ctx = GetContext();
-            if (ctx.userId == 0 || ctx.branchId == 0)
+            if (ctx.userId == 0 || ctx.branchId == 0 || ctx.organizationId == 0)
             {
-                return Unauthorized("Branch or user context missing.");
+                return Unauthorized("Branch, user, or organization context missing.");
             }
 
             try
@@ -311,9 +377,9 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> AddAttachment(long testExecutionId, [FromBody] ExecutionAttachmentUploadDto uploadDto)
         {
             var ctx = GetContext();
-            if (ctx.userId == 0 || ctx.branchId == 0)
+            if (ctx.userId == 0 || ctx.branchId == 0 || ctx.organizationId == 0)
             {
-                return Unauthorized("Branch or user context missing.");
+                return Unauthorized("Branch, user, or organization context missing.");
             }
 
             try
@@ -333,9 +399,9 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> GenerateReportPdf(long testExecutionId)
         {
             var ctx = GetContext();
-            if (ctx.userId == 0 || ctx.branchId == 0)
+            if (ctx.userId == 0 || ctx.branchId == 0 || ctx.organizationId == 0)
             {
-                return Unauthorized("Branch or user context missing.");
+                return Unauthorized("Branch, user, or organization context missing.");
             }
 
             try

@@ -135,8 +135,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
             return Task.CompletedTask;
         },
+        OnAuthenticationFailed = context =>
+        {
+            Console.WriteLine($"[JWT AUTH FAILED] {context.Exception.GetType().Name}: {context.Exception.Message}");
+            return Task.CompletedTask;
+        },
         OnChallenge = context =>
         {
+            Console.WriteLine($"[JWT CHALLENGE] Error: {context.Error}, ErrorDescription: {context.ErrorDescription}, AuthenticateFailure: {context.AuthenticateFailure?.Message}");
             context.HandleResponse();
 
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
@@ -144,7 +150,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
             return context.Response.WriteAsJsonAsync(new
             {
-                message = "Token expired or invalid. Please login again."
+                message = "Token expired or invalid. Please login again.",
+                debugError = context.AuthenticateFailure?.Message ?? context.ErrorDescription ?? context.Error
             });
         }
     };
@@ -197,6 +204,11 @@ builder.Services.AddScoped<ICourierRepository, CourierRepository>();
 builder.Services.AddScoped<IProductSizeMasterRepository, ProductSizeMasterRepository>();
 builder.Services.AddScoped<IAnalysisTechniqueRepository, AnalysisTechniqueRepository>();
 builder.Services.AddScoped<IConditionMasterRepository, ConditionMasterRepository>();
+builder.Services.AddScoped<IClassificationRepository, ClassificationRepository>();
+builder.Services.AddScoped<IAcceptanceCriteriaRepository, AcceptanceCriteriaRepository>();
+builder.Services.AddScoped<IEquipmentRequirementRepository, EquipmentRequirementRepository>();
+builder.Services.AddScoped<IFactorConversionRepository, FactorConversionRepository>();
+builder.Services.AddScoped<IMeasurementUncertaintyRepository, MeasurementUncertaintyRepository>();
 builder.Services.AddScoped<ICurrencyRepository, CurrencyRepository>();
 builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
 builder.Services.AddScoped<IDepartmentRepository, DepartmentRepository>();
@@ -266,6 +278,7 @@ builder.Services.AddScoped<ISampleStatusRepository, SampleStatusRepository>();
 builder.Services.AddScoped<ICuttingRepository, CuttingRepository>();
 builder.Services.AddScoped<IProformaInvoiceRepository, ProformaInvoiceRepository>();
 builder.Services.AddScoped<INablRepository, NablRepository>();
+builder.Services.AddScoped<IConfigurationAdjustmentRepository, ConfigurationAdjustmentRepository>();
 
 
 // Register Services
@@ -280,6 +293,15 @@ builder.Services.AddScoped<ICourierService, CourierService>();
 builder.Services.AddScoped<IProductSizeMasterService, ProductSizeMasterService>();
 builder.Services.AddScoped<IAnalysisTechniqueService, AnalysisTechniqueService>();
 builder.Services.AddScoped<IConditionMasterService, ConditionMasterService>();
+builder.Services.AddScoped<IClassificationService, ClassificationService>();
+builder.Services.AddScoped<IAcceptanceCriteriaService, AcceptanceCriteriaService>();
+builder.Services.AddScoped<IEquipmentRequirementService, EquipmentRequirementService>();
+builder.Services.AddScoped<IFactorConversionService, FactorConversionService>();
+builder.Services.AddScoped<IMeasurementUncertaintyService, MeasurementUncertaintyService>();
+builder.Services.AddScoped<IExecutionLayoutRepository, ExecutionLayoutRepository>();
+builder.Services.AddScoped<IExecutionLayoutService, ExecutionLayoutService>();
+builder.Services.AddScoped<ILaboratoryTestLayoutRepository, LaboratoryTestLayoutRepository>();
+builder.Services.AddScoped<ILaboratoryTestLayoutService, LaboratoryTestLayoutService>();
 builder.Services.AddScoped<ICurrencyService, CurrencyService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IDepartmentService, DepartmentService>();
@@ -308,7 +330,7 @@ builder.Services.AddScoped<ILaboratoryTestService, LaboratoryTestService>();
 builder.Services.AddScoped<ILaboratoryTestSubGroupService, LaboratoryTestSubGroupService>();
 builder.Services.AddScoped<ILaboratoryTestAnalysisTypeService, LaboratoryTestAnalysisTypeService>();
 builder.Services.AddScoped<ITestMasterService, TestMasterService>();
-builder.Services.AddScoped<ILabScopeService, LabScopeService>();
+builder.Services.AddScoped<ILabScopeConfigurationService, LabScopeConfigurationService>();
 builder.Services.AddScoped<IMetalClassificationService, MetalClassificationService>();
 builder.Services.AddScoped<IOEMService, OEMService>();
 builder.Services.AddScoped<IParameterService, ParameterService>();
@@ -368,6 +390,12 @@ builder.Services.AddScoped<IPlanComplianceService, PlanComplianceService>();
 builder.Services.AddScoped<IEffectiveConfigurationResolver, EffectiveConfigurationResolver>();
 builder.Services.AddScoped<IUniversalPlanService, UniversalPlanService>();
 builder.Services.AddScoped<IUniversalTestExecutionService, UniversalTestExecutionService>();
+builder.Services.AddScoped<ISnapshotIntegrityValidator, SnapshotIntegrityValidator>();
+builder.Services.AddScoped<IUniversalTestGroupService, UniversalTestGroupService>();
+builder.Services.AddScoped<IConfigurationAdjustmentService, ConfigurationAdjustmentService>();
+builder.Services.AddScoped<IUniversalResultService, UniversalResultService>();
+builder.Services.AddScoped<IUniversalReviewService, UniversalReviewService>();
+builder.Services.AddScoped<IUniversalReportService, UniversalReportService>();
 
 builder.Services.AddScoped<ITestResultService, TestResultService>();
 builder.Services.AddScoped<ITestPriceCalculationService, TestPriceCalculationService>();

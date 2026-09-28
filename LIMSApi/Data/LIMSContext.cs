@@ -25,6 +25,13 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<CalibrationAgencyMaster> CalibrationAgencyMasters { get; set; }
     public virtual DbSet<CityMaster> CityMasters { get; set; }
     public virtual DbSet<ClassificationMaster> ClassificationMasters { get; set; }
+    public virtual DbSet<AcceptanceCriteriaMaster> AcceptanceCriteriaMasters { get; set; }
+    public virtual DbSet<EquipmentRequirementMaster> EquipmentRequirementMasters { get; set; }
+    public virtual DbSet<FactorConversionMaster> FactorConversionMasters { get; set; }
+    public virtual DbSet<MeasurementUncertaintyMaster> MeasurementUncertaintyMasters { get; set; }
+    public virtual DbSet<ExecutionLayoutMaster> ExecutionLayoutMasters { get; set; }
+    public virtual DbSet<ExecutionLayoutSection> ExecutionLayoutSections { get; set; }
+    public virtual DbSet<ExecutionLayoutItem> ExecutionLayoutItems { get; set; }
     public virtual DbSet<CompanyCategoryMaster> CompanyCategoryMasters { get; set; }
     public virtual DbSet<CompanyMaster> CompanyMasters { get; set; }
     public virtual DbSet<ContactPerson> ContactPersons { get; set; }
@@ -126,6 +133,7 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<LaboratoryTestParameter> LaboratoryTestParameters { get; set; }
     public virtual DbSet<LaboratoryTestMethod> LaboratoryTestMethods { get; set; }
     public virtual DbSet<LaboratoryTestCondition> LaboratoryTestConditions { get; set; }
+    public virtual DbSet<LaboratoryTestLayout> LaboratoryTestLayouts { get; set; }
     public virtual DbSet<TestMethodSubGroup> TestMethodSubGroups { get; set; }
     public virtual DbSet<TestMethodSpecification> TestMethodSpecifications { get; set; }
     public virtual DbSet<TestMethodSpecificationVersion> TestMethodSpecificationVersions { get; set; }
@@ -184,6 +192,13 @@ public partial class LIMSContext : DbContext
     public DbSet<TestObservation> TestObservations { get; set; }
     public DbSet<ParameterObservationResult> ParameterObservationResults { get; set; }
     public DbSet<ExecutionConfigSnapshot> ExecutionConfigSnapshots { get; set; }
+    public DbSet<ConfigurationAdjustment> ConfigurationAdjustments { get; set; }
+    public DbSet<ConfigurationAdjustmentItem> ConfigurationAdjustmentItems { get; set; }
+    public DbSet<UniversalTestResult> UniversalTestResults { get; set; }
+    public DbSet<UniversalTestResultParameter> UniversalTestResultParameters { get; set; }
+    public DbSet<UniversalReviewFinding> UniversalReviewFindings { get; set; }
+    public DbSet<UniversalResultAudit> UniversalResultAudits { get; set; }
+    public DbSet<UniversalReport> UniversalReports { get; set; }
 
     public DbSet<ReportHeader> ReportHeaders { get; set; }
     public DbSet<Report> Reports { get; set; }
@@ -486,6 +501,13 @@ public partial class LIMSContext : DbContext
             .HasForeignKey(x => x.ProductMasterVersionGradeID)
             .OnDelete(DeleteBehavior.Cascade);
 
+        modelBuilder.Entity<SpecificationGrade>(entity =>
+        {
+            entity.HasIndex(g => new { g.SpecificationHeaderID, g.Grade })
+                  .IsUnique()
+                  .HasDatabaseName("IX_SpecificationGrades_SpecificationHeaderID_Grade");
+        });
+
         // RolePermission — one (Role, Permission) pair only when active
         modelBuilder.Entity<RolePermission>()
             .HasIndex(x => new { x.RoleID, x.PermissionID })
@@ -627,6 +649,172 @@ public partial class LIMSContext : DbContext
             .HasFilter("[IsActive] = 1 AND [Code] IS NOT NULL")
             .HasDatabaseName("IX_AnalysisTechniqueMaster_Code");
 
+        // Phase 1A: Universal Classification Master (enterprise metadata, CompanyCode-scoped, no FK consumers yet)
+        modelBuilder.Entity<ClassificationMaster>()
+            .HasIndex(x => new { x.CompanyCode, x.Code })
+            .IsUnique()
+            .HasFilter("[IsActive] = 1 AND [Code] IS NOT NULL")
+            .HasDatabaseName("IX_ClassificationMasters_CompanyCode_Code");
+
+        // Phase 1B: Acceptance Criteria Master (reusable evaluation/decision configuration, CompanyCode-scoped, no FK consumers yet).
+        // Requirement values stay in SpecificationLine; this master only owns HOW conformance is decided.
+        modelBuilder.Entity<AcceptanceCriteriaMaster>()
+            .HasIndex(x => new { x.CompanyCode, x.Code })
+            .IsUnique()
+            .HasFilter("[IsActive] = 1 AND [Code] IS NOT NULL")
+            .HasDatabaseName("IX_AcceptanceCriteriaMasters_CompanyCode_Code");
+
+        // Phase 1D: Equipment Requirement Master (enterprise test/method configuration, CompanyCode-scoped).
+        // Actual instruments stay in EquipmentMasters (branch-owned); calibration stays in EquipmentCalibration.
+        // This master owns only WHAT a test/method/parameter requires (type-level, optional pinned instrument).
+        modelBuilder.Entity<EquipmentRequirementMaster>()
+            .HasIndex(x => new { x.CompanyCode, x.Code })
+            .IsUnique()
+            .HasFilter("[IsActive] = 1 AND [Code] IS NOT NULL")
+            .HasDatabaseName("IX_EquipmentRequirementMasters_CompanyCode_Code");
+
+        modelBuilder.Entity<EquipmentRequirementMaster>()
+            .HasOne(x => x.LaboratoryTest)
+            .WithMany()
+            .HasForeignKey(x => x.LaboratoryTestID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<EquipmentRequirementMaster>()
+            .HasOne(x => x.TestMethodSpecification)
+            .WithMany()
+            .HasForeignKey(x => x.TestMethodSpecificationID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<EquipmentRequirementMaster>()
+            .HasOne(x => x.TestMethodSpecificationVersion)
+            .WithMany()
+            .HasForeignKey(x => x.TestMethodSpecificationVersionID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<EquipmentRequirementMaster>()
+            .HasOne(x => x.Parameter)
+            .WithMany()
+            .HasForeignKey(x => x.ParameterID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<EquipmentRequirementMaster>()
+            .HasOne(x => x.EquipmentType)
+            .WithMany()
+            .HasForeignKey(x => x.EquipmentTypeID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<EquipmentRequirementMaster>()
+            .HasOne(x => x.Equipment)
+            .WithMany()
+            .HasForeignKey(x => x.EquipmentID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<EquipmentRequirementMaster>()
+            .HasOne(x => x.RangeUnit)
+            .WithMany()
+            .HasForeignKey(x => x.RangeUnitID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // Phase 1E: Factor / Conversion Master (enterprise reusable transformation config, CompanyCode-scoped).
+        // Unit conversion stays in ParameterUnitMaster/Equivalents; formulas stay in FormulaEvaluator/SpecificationLine.
+        // This master owns only constant-value transformations (multiply/divide/offset/dilution) applied to observed values.
+        modelBuilder.Entity<FactorConversionMaster>()
+            .HasIndex(x => new { x.CompanyCode, x.Code })
+            .IsUnique()
+            .HasFilter("[IsActive] = 1 AND [Code] IS NOT NULL")
+            .HasDatabaseName("IX_FactorConversionMasters_CompanyCode_Code");
+
+        modelBuilder.Entity<FactorConversionMaster>()
+            .HasOne(x => x.InputParameter)
+            .WithMany()
+            .HasForeignKey(x => x.InputParameterID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<FactorConversionMaster>()
+            .HasOne(x => x.OutputParameter)
+            .WithMany()
+            .HasForeignKey(x => x.OutputParameterID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<FactorConversionMaster>()
+            .HasOne(x => x.LaboratoryTest)
+            .WithMany()
+            .HasForeignKey(x => x.LaboratoryTestID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<FactorConversionMaster>()
+            .HasOne(x => x.TestMethodSpecification)
+            .WithMany()
+            .HasForeignKey(x => x.TestMethodSpecificationID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<FactorConversionMaster>()
+            .HasOne(x => x.TestMethodSpecificationVersion)
+            .WithMany()
+            .HasForeignKey(x => x.TestMethodSpecificationVersionID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // Phase 1F: Measurement Uncertainty Master (enterprise reusable MU configuration, CompanyCode-scoped).
+        // NABL document rows stay in NablMeasurementUncertainties (per-study records, string-matched legacy).
+        // This master owns only validated reusable MU (test/method/parameter applicability + frozen snapshot refs).
+        modelBuilder.Entity<MeasurementUncertaintyMaster>()
+            .HasIndex(x => new { x.CompanyCode, x.Code })
+            .IsUnique()
+            .HasFilter("[IsActive] = 1 AND [Code] IS NOT NULL")
+            .HasDatabaseName("IX_MeasurementUncertaintyMasters_CompanyCode_Code");
+
+        modelBuilder.Entity<MeasurementUncertaintyMaster>()
+            .HasOne(x => x.LaboratoryTest)
+            .WithMany()
+            .HasForeignKey(x => x.LaboratoryTestID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<MeasurementUncertaintyMaster>()
+            .HasOne(x => x.Parameter)
+            .WithMany()
+            .HasForeignKey(x => x.ParameterID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<MeasurementUncertaintyMaster>()
+            .HasOne(x => x.TestMethodSpecification)
+            .WithMany()
+            .HasForeignKey(x => x.TestMethodSpecificationID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<MeasurementUncertaintyMaster>()
+            .HasOne(x => x.TestMethodSpecificationVersion)
+            .WithMany()
+            .HasForeignKey(x => x.TestMethodSpecificationVersionID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<MeasurementUncertaintyMaster>()
+            .HasOne(x => x.ParameterUnit)
+            .WithMany()
+            .HasForeignKey(x => x.ParameterUnitID)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // ── PHASE 1G: Execution Layout Master ── aggregate-owned sections/items; CASCADE only header→section→item ──
+        modelBuilder.Entity<ExecutionLayoutMaster>(entity =>
+        {
+            entity.HasIndex(x => new { x.CompanyCode, x.Code }).IsUnique()
+                .HasFilter("[IsActive] = 1 AND [Code] IS NOT NULL")
+                .HasDatabaseName("IX_ExecutionLayoutMasters_CompanyCode_Code");
+            entity.HasMany(x => x.Sections).WithOne(x => x.ExecutionLayout)
+                .HasForeignKey(x => x.ExecutionLayoutID).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<ExecutionLayoutSection>(entity =>
+        {
+            entity.HasIndex(x => new { x.ExecutionLayoutID, x.SectionCode }).IsUnique()
+                .HasDatabaseName("IX_ExecutionLayoutSections_Layout_SectionCode");
+            entity.HasMany(x => x.Items).WithOne(x => x.ExecutionLayoutSection)
+                .HasForeignKey(x => x.ExecutionLayoutSectionID).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<ExecutionLayoutItem>(entity =>
+        {
+            entity.HasIndex(x => new { x.ExecutionLayoutSectionID, x.ReferenceType, x.ReferenceID }).IsUnique()
+                .HasDatabaseName("IX_ExecutionLayoutItems_Section_RefType_RefId");
+        });
+
         // MetalClassification ↔ AnalysisTechnique junction (both FKs NoAction; synced in service)
         modelBuilder.Entity<MetalClassificationAnalysisTechnique>()
             .HasOne(x => x.MetalClassification)
@@ -705,6 +893,18 @@ public partial class LIMSContext : DbContext
             entity.HasOne(d => d.SpecificationVersion)
                 .WithMany()
                 .HasForeignKey(d => d.SpecificationVersionID)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(d => d.ExecutionLayout)
+                .WithMany()
+                .HasForeignKey(d => d.ExecutionLayoutID)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(d => d.Department)
+                .WithMany()
+                .HasForeignKey(d => d.DepartmentID)
+                .IsRequired(false)
                 .OnDelete(DeleteBehavior.NoAction);
         });
 
@@ -1594,17 +1794,146 @@ public partial class LIMSContext : DbContext
             .HasForeignKey(u => u.BranchID)
             .OnDelete(DeleteBehavior.Restrict);
 
-        modelBuilder.Entity<TestExecution>()
-            .HasOne(e => e.Branch)
-            .WithMany()
-            .HasForeignKey(e => e.BranchID)
-            .OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<TestExecution>(entity =>
+        {
+            entity.HasOne(e => e.Branch)
+                .WithMany()
+                .HasForeignKey(e => e.BranchID)
+                .OnDelete(DeleteBehavior.Restrict);
 
-        modelBuilder.Entity<TestExecution>()
-            .HasOne(e => e.UniversalTestGroup)
-            .WithMany(u => u.TestExecutions)
-            .HasForeignKey(e => e.UniversalTestGroupID)
-            .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.UniversalTestGroup)
+                .WithMany(u => u.TestExecutions)
+                .HasForeignKey(e => e.UniversalTestGroupID)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.ExecutionConfigSnapshot)
+                .WithOne()
+                .HasForeignKey<TestExecution>(e => e.ExecutionConfigSnapshotID)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(e => new { e.UniversalTestGroupID, e.ExecutionNo })
+                .IsUnique()
+                .HasDatabaseName("IX_TestExecutions_UTG_ExecutionNo");
+
+            entity.HasIndex(e => e.ExecutionConfigSnapshotID)
+                .IsUnique()
+                .HasFilter("[ExecutionConfigSnapshotID] IS NOT NULL")
+                .HasDatabaseName("IX_TestExecutions_ExecutionConfigSnapshotID");
+        });
+
+        // ── Phase 5: Configuration Adjustment & Difference Audit ──
+        modelBuilder.Entity<ConfigurationAdjustment>(entity =>
+        {
+            entity.HasOne(a => a.UniversalTestGroup)
+                .WithMany()
+                .HasForeignKey(a => a.UniversalTestGroupID)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(a => a.Branch)
+                .WithMany()
+                .HasForeignKey(a => a.BranchID)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(a => new { a.UniversalTestGroupID, a.Status });
+            entity.HasIndex(a => new { a.CompanyCode, a.BranchID });
+        });
+
+        // ── Phase 7/8: Universal Result / Compliance + Review / Approval ──
+        modelBuilder.Entity<UniversalTestResult>(entity =>
+        {
+            entity.HasOne(r => r.TestExecution)
+                .WithMany()
+                .HasForeignKey(r => r.TestExecutionID)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(r => r.UniversalTestGroup)
+                .WithMany()
+                .HasForeignKey(r => r.UniversalTestGroupID)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(r => r.Branch)
+                .WithMany()
+                .HasForeignKey(r => r.BranchID)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasIndex(r => new { r.TestExecutionID, r.RevisionNo })
+                .IsUnique()
+                .HasDatabaseName("IX_UniversalTestResults_Execution_Revision");
+            entity.HasIndex(r => new { r.CompanyCode, r.BranchID });
+            entity.HasIndex(r => r.ResultStatus);
+        });
+
+        modelBuilder.Entity<UniversalTestResultParameter>(entity =>
+        {
+            entity.HasOne(p => p.UniversalTestResult)
+                .WithMany(r => r.Parameters)
+                .HasForeignKey(p => p.UniversalTestResultID)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(p => p.UniversalTestResultID);
+            entity.HasIndex(p => new { p.UniversalTestResultID, p.ParameterMasterID });
+        });
+
+        modelBuilder.Entity<UniversalReviewFinding>(entity =>
+        {
+            entity.HasOne(f => f.UniversalTestResult)
+                .WithMany(r => r.Findings)
+                .HasForeignKey(f => f.UniversalTestResultID)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(f => f.UniversalTestResultID);
+            entity.HasIndex(f => new { f.UniversalTestResultID, f.Status });
+        });
+
+        modelBuilder.Entity<UniversalResultAudit>(entity =>
+        {
+            entity.HasOne(a => a.UniversalTestResult)
+                .WithMany(r => r.Audits)
+                .HasForeignKey(a => a.UniversalTestResultID)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(a => a.UniversalTestResultID);
+            entity.HasIndex(a => new { a.TestExecutionID, a.EventType });
+        });
+
+        // ── Phase 9: Universal Report (document history, NOT a configuration layer) ──
+        modelBuilder.Entity<UniversalReport>(entity =>
+        {
+            entity.HasOne(r => r.TestExecution)
+                .WithMany()
+                .HasForeignKey(r => r.TestExecutionID)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(r => r.UniversalTestResult)
+                .WithMany()
+                .HasForeignKey(r => r.UniversalTestResultID)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(r => r.Branch)
+                .WithMany()
+                .HasForeignKey(r => r.BranchID)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasIndex(r => new { r.TestExecutionID, r.ResultRevisionNo, r.ReportRevisionNo })
+                .IsUnique()
+                .HasDatabaseName("IX_UniversalReports_Execution_ResultRev_ReportRev");
+            entity.HasIndex(r => r.ReportNo)
+                .IsUnique()
+                .HasDatabaseName("IX_UniversalReports_ReportNo");
+            entity.HasIndex(r => new { r.CompanyCode, r.BranchID });
+            entity.HasIndex(r => r.Status);
+        });
+
+        modelBuilder.Entity<ConfigurationAdjustmentItem>(entity =>
+        {
+            entity.HasOne(i => i.ConfigurationAdjustment)
+                .WithMany(a => a.Items)
+                .HasForeignKey(i => i.ConfigurationAdjustmentID)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(i => i.ConfigurationAdjustmentID);
+            entity.HasIndex(i => new { i.UniversalTestGroupID, i.Section });
+        });
 
         // ── Tier 3: Multi-Branch Gaps Remediation ──
         modelBuilder.Entity<BankMaster>()
@@ -1680,7 +2009,7 @@ public partial class LIMSContext : DbContext
 
         modelBuilder.Entity<LaboratoryTestMethod>(entity =>
         {
-            entity.HasIndex(e => new { e.LaboratoryTestID, e.TestMethodSpecificationID }).IsUnique();
+            entity.HasIndex(e => new { e.LaboratoryTestID, e.TestMethodSpecificationID, e.TestMethodSpecificationVersionID }).IsUnique();
             entity.HasOne(e => e.LaboratoryTest)
                   .WithMany(t => t.Methods)
                   .HasForeignKey(e => e.LaboratoryTestID)
@@ -1688,6 +2017,10 @@ public partial class LIMSContext : DbContext
             entity.HasOne(e => e.TestMethodSpecification)
                   .WithMany()
                   .HasForeignKey(e => e.TestMethodSpecificationID)
+                  .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(e => e.TestMethodSpecificationVersion)
+                  .WithMany()
+                  .HasForeignKey(e => e.TestMethodSpecificationVersionID)
                   .OnDelete(DeleteBehavior.NoAction);
         });
 
@@ -1701,6 +2034,29 @@ public partial class LIMSContext : DbContext
             entity.HasOne(e => e.ConditionMaster)
                   .WithMany()
                   .HasForeignKey(e => e.ConditionMasterID)
+                  .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        // Phase 2: LaboratoryTestLayout (assignment only — all FKs NoAction).
+        modelBuilder.Entity<LaboratoryTestLayout>(entity =>
+        {
+            entity.HasIndex(e => new { e.LaboratoryTestID, e.ExecutionLayoutID, e.TestMethodSpecificationID, e.TestMethodSpecificationVersionID })
+                .HasDatabaseName("IX_LaboratoryTestLayouts_Test_Layout_Method_Version");
+            entity.HasOne(e => e.LaboratoryTest)
+                  .WithMany()
+                  .HasForeignKey(e => e.LaboratoryTestID)
+                  .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(e => e.ExecutionLayout)
+                  .WithMany()
+                  .HasForeignKey(e => e.ExecutionLayoutID)
+                  .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(e => e.TestMethodSpecification)
+                  .WithMany()
+                  .HasForeignKey(e => e.TestMethodSpecificationID)
+                  .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne(e => e.TestMethodSpecificationVersion)
+                  .WithMany()
+                  .HasForeignKey(e => e.TestMethodSpecificationVersionID)
                   .OnDelete(DeleteBehavior.NoAction);
         });
     }

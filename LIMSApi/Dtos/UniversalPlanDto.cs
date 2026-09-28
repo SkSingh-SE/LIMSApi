@@ -44,6 +44,8 @@ namespace LIMSApi.Dtos
         public long SampleID { get; set; }
         public string SampleNo { get; set; } = string.Empty;
         public string? SampleDetails { get; set; }
+        public long? SampleDisciplineID { get; set; }
+        public string? SampleDisciplineName { get; set; }
         public DateTime InwardDate { get; set; }
 
         public long? CustomerID { get; set; }
@@ -141,12 +143,17 @@ namespace LIMSApi.Dtos
         public long? DepartmentID { get; set; }
         public string? DepartmentName { get; set; }
 
+        public long? ExecutionLayoutID { get; set; }
+        public string? ExecutionLayoutCode { get; set; }
+        public string? ExecutionLayoutName { get; set; }
+        public string? RendererType { get; set; }
+
         public string Status { get; set; } = "Pending"; // Pending, InProgress, Completed
         public long? TestExecutionID { get; set; }
         public string? ExecutionStatus { get; set; }
     }
 
-    // Effective Configuration Preview Request & Response
+    // Planned Configuration Preview Request & Response
     public class UniversalPlanPreviewRequestDto
     {
         public long SampleID { get; set; }
@@ -169,6 +176,7 @@ namespace LIMSApi.Dtos
         public string? DisciplineName { get; set; }
 
         public long? TestMethodSpecificationID { get; set; }
+        public string? TestMethodCode { get; set; }
         public string? TestMethodName { get; set; }
         public string? TestMethodStandard { get; set; }
         public long? TestMethodSpecificationVersionID { get; set; }
@@ -194,8 +202,18 @@ namespace LIMSApi.Dtos
         public string? DepartmentName { get; set; }
         public string DepartmentRoutingSource { get; set; } = "Resolved from Branch + Discipline";
 
+        // Layout Resolution (Phase 2 -> Phase 3)
+        public long? ExecutionLayoutID { get; set; }
+        public string? ExecutionLayoutCode { get; set; }
+        public string? ExecutionLayoutName { get; set; }
+        public string? RendererType { get; set; }
+        public string LayoutResolutionLevel { get; set; } = "Unassigned";
+        public ExecutionLayoutDto? ExecutionLayout { get; set; }
+
         public List<PreviewParameterDto> Parameters { get; set; } = new();
+        public List<PreviewParameterDto> UnmappedParameters { get; set; } = new();
         public List<PreviewConditionDto> Conditions { get; set; } = new();
+        public List<PreviewEquipmentDto> Equipment { get; set; } = new();
 
         public UniversalPlanValidationSummaryDto ValidationSummary { get; set; } = new();
         public bool IsConfigurationReady { get; set; }
@@ -252,6 +270,9 @@ namespace LIMSApi.Dtos
         /// <summary>ID of the resolved SpecificationLine (if any).</summary>
         public long? SpecificationLineID { get; set; }
 
+        /// <summary>NABL scope coverage at planning time (same validator semantics): WithinScope / NotAccredited / null when N/A.</summary>
+        public string? ScopeStatus { get; set; }
+
         /// <summary>Backing SpecificationVersionID (for traceability).</summary>
         public long? SourceSpecificationVersionID { get; set; }
 
@@ -306,14 +327,76 @@ namespace LIMSApi.Dtos
         public bool RequiredConditionsPass { get; set; } = true;
         public string? RequiredConditionsMessage { get; set; }
 
+        public bool EquipmentPass { get; set; } = true;
+        public string? EquipmentMessage { get; set; }
+
         public bool AllPassed => SamplePass && ProductGradePass && SpecificationPass &&
                                 SpecificationVersionPass && TestDefinitionPass && MandatoryParametersPass &&
                                 TestMethodPass && MethodVersionPass && BranchPass &&
-                                DepartmentRoutingPass && RequiredConditionsPass &&
+                                DepartmentRoutingPass && RequiredConditionsPass && EquipmentPass &&
                                 (!BlockingErrors?.Any() ?? true);
 
         public List<string> BlockingErrors { get; set; } = new();
         public List<string> Warnings { get; set; } = new();
+    }
+
+    public class PreviewEquipmentDto
+    {
+        public long EquipmentRequirementMasterID { get; set; }
+        public string RequirementName { get; set; } = string.Empty;
+        public long EquipmentTypeID { get; set; }
+        public string? EquipmentTypeName { get; set; }
+        public bool IsMandatory { get; set; }
+        public long? EquipmentID { get; set; }
+        public string? EquipmentName { get; set; }
+        public string? EquipmentCode { get; set; }
+        public string? SerialNumber { get; set; }
+        public string CalibrationStatus { get; set; } = "Not Required"; // "Valid", "Expired", "Not Configured", "Not Required"
+        public DateTime? CalibrationDueDate { get; set; }
+        public bool IsValidForExecution { get; set; }
+        public string? Message { get; set; }
+    }
+
+    public class PlannedConfigurationSnapshotDto
+    {
+        public long UniversalTestGroupID { get; set; }
+        public long LaboratoryTestID { get; set; }
+        public string LaboratoryTestCode { get; set; } = string.Empty;
+        public string LaboratoryTestName { get; set; } = string.Empty;
+        public long? DisciplineID { get; set; }
+        public string? DisciplineName { get; set; }
+
+        public long? ExecutionLayoutID { get; set; }
+        public string? ExecutionLayoutCode { get; set; }
+        public string? ExecutionLayoutName { get; set; }
+        public string? RendererType { get; set; }
+        public string LayoutResolutionLevel { get; set; } = "Unassigned";
+
+        public long BranchID { get; set; }
+        public string? BranchName { get; set; }
+        public long? DepartmentID { get; set; }
+        public string? DepartmentName { get; set; }
+
+        public long? TestMethodSpecificationID { get; set; }
+        public string? TestMethodCode { get; set; }
+        public string? TestMethodName { get; set; }
+        public string? TestMethodStandard { get; set; }
+        public long? TestMethodSpecificationVersionID { get; set; }
+        public string? TestMethodVersion { get; set; }
+
+        public long? SpecificationHeaderID { get; set; }
+        public string? SpecificationTitle { get; set; }
+        public long? SpecificationGradeID { get; set; }
+        public string? GradeName { get; set; }
+        public long? SpecificationVersionID { get; set; }
+        public string? SpecificationVersionNumber { get; set; }
+        public bool IsStandardlessTest { get; set; }
+
+        public List<PreviewParameterDto> Parameters { get; set; } = new();
+        public List<PreviewConditionDto> Conditions { get; set; } = new();
+        public List<PreviewEquipmentDto> EquipmentRequirements { get; set; } = new();
+        public TenantContextDto? Tenant { get; set; }
+        public DateTime FrozenAtUtc { get; set; }
     }
 
     // Save Draft & Confirm Requests
@@ -322,6 +405,7 @@ namespace LIMSApi.Dtos
         public long SampleTestPlanID { get; set; }
         public long SampleID { get; set; }
         public long BranchID { get; set; }
+        public long? ProductMasterID { get; set; }
         public long? SpecificationHeaderID { get; set; }
         public long? SpecificationGradeID { get; set; }
         public long? SpecificationVersionID { get; set; }
@@ -338,6 +422,8 @@ namespace LIMSApi.Dtos
         public long? SpecificationGradeID { get; set; }
         public long? SpecificationVersionID { get; set; }
         public long? BranchID { get; set; }
+        public long? DepartmentID { get; set; }
+        public long? ExecutionLayoutID { get; set; }
         public bool IsRetest { get; set; } = false;
     }
 
@@ -346,6 +432,7 @@ namespace LIMSApi.Dtos
         public long SampleTestPlanID { get; set; }
         public long SampleID { get; set; }
         public long BranchID { get; set; }
+        public long? ProductMasterID { get; set; }
         public long? SpecificationHeaderID { get; set; }
         public long? SpecificationGradeID { get; set; }
         public long? SpecificationVersionID { get; set; }
@@ -370,6 +457,8 @@ namespace LIMSApi.Dtos
         public string? ProductName { get; set; }
         public long? SpecificationGradeID { get; set; }
         public string? GradeName { get; set; }
+        public long? SampleDisciplineID { get; set; }
+        public string? SampleDisciplineName { get; set; }
         public int Quantity { get; set; }
         public string PlanStatus { get; set; } = "Draft"; // Draft, Submitted, Approved, Cancelled
         public int PlannedTestCount { get; set; }

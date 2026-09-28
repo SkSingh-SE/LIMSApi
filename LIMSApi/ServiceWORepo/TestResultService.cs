@@ -252,14 +252,19 @@ namespace LIMSApi.ServiceWORepo
 
                 try
                 {
-                    var scopeResults = await _nablScopeService.CheckAllParameters(g.HeaderId);
-                    if (!scopeResults.Any()) continue;
-
                     var header = await _db.TestResultHeaders
                         .Include(h => h.Parameters)
                         .FirstOrDefaultAsync(h => h.ID == g.HeaderId);
 
                     if (header == null) continue;
+
+                    var branchId = await _db.SampleDetails
+                        .Where(s => s.ID == header.SampleID)
+                        .Join(_db.SampleInwards, s => s.InwardID, i => i.ID, (s, i) => (long?)i.BranchID)
+                        .FirstOrDefaultAsync();
+
+                    var scopeResults = await _nablScopeService.CheckAllParameters(g.HeaderId, branchId, DateTime.UtcNow);
+                    if (!scopeResults.Any()) continue;
 
                     bool allInScope = true;
 
@@ -1498,12 +1503,10 @@ namespace LIMSApi.ServiceWORepo
             var grade = await (from g in _db.SpecificationGrades
                                join h in _db.SpecificationHeaders
                                    on g.SpecificationHeaderID equals h.ID
-                               join mc in _db.MetalClassificationMasters on g.MetalClassificationID equals mc.ID into mcGroup
-                               from mc in mcGroup.DefaultIfEmpty()
                                where g.ID == gradeId
                                select new
                                {
-                                   Grade = h.AliasName + "-" + g.Grade + (mc != null ? ("-" + mc.Name) : ""),
+                                   Grade = h.AliasName + "-" + g.Grade,
                                })
                     .FirstOrDefaultAsync();
 

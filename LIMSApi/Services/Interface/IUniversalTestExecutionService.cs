@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using LIMSApi.Dtos;
 
@@ -8,8 +9,10 @@ namespace LIMSApi.Services.Interface
         Task<TestExecutionDto> StartExecutionAsync(long universalTestGroupId, long userId, long branchId, long organizationId, bool isRetest = false);
         Task<TestExecutionDto?> GetExecutionByIdAsync(long testExecutionId, long branchId, long organizationId, bool canViewAllBranches = false);
         Task<TestExecutionDto?> GetExecutionByGroupIdAsync(long universalTestGroupId, long branchId, long organizationId, bool canViewAllBranches = false);
+        Task<TestExecutionDto?> GetExecutionByGroupAndRunAsync(long universalTestGroupId, int runNo, long branchId, long organizationId, bool canViewAllBranches = false);
         Task<TestExecutionDto> SaveObservationsAsync(long testExecutionId, TestExecutionSaveDto data, long userId, long branchId, long organizationId);
         Task<TestExecutionDto> CompleteExecutionAsync(long testExecutionId, long userId, long branchId, long organizationId);
+        Task<TestExecutionDto> RetestExecutionAsync(long testExecutionId, RetestRequestDto dto, long userId, long branchId, long organizationId);
         Task<TestExecutionDto> VerifyExecutionAsync(long testExecutionId, ExecutionActionDto dto, long userId, long branchId, long organizationId);
         Task<TestExecutionDto> ApproveExecutionAsync(long testExecutionId, ExecutionActionDto dto, long userId, long branchId, long organizationId);
         Task<TestExecutionDto> RejectExecutionAsync(long testExecutionId, ExecutionActionDto dto, long userId, long branchId, long organizationId);
@@ -22,5 +25,6 @@ namespace LIMSApi.Services.Interface
         Task<FormulaPreviewResponseDto> PreviewFormulaAsync(FormulaPreviewRequestDto request);
         Task<TestExecutionDto> AddAttachmentAsync(long testExecutionId, ExecutionAttachmentUploadDto uploadDto, long userId, long branchId, long organizationId);
         Task<byte[]> GenerateReportPdfAsync(long testExecutionId, long branchId, long organizationId);
+        Task<IEnumerable<object>> GetExecutionDropdownAsync(string? searchTerm, int pageNo, int pageSize, long branchId, long organizationId, bool canViewAllBranches = false);
     }
 }

@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using LIMSApi.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace LIMSApi.Helpers
 {
@@ -32,13 +33,13 @@ namespace LIMSApi.Helpers
     public class LoggedInUserProvider : IBranchContext
     {
         private readonly IHttpContextAccessor _httpContextAccessor;
-        private readonly LIMSContext _context;
+        private readonly IServiceProvider _serviceProvider;
         private static readonly AsyncLocal<LoggedInUserDTO?> _currentUser = new();
 
-        public LoggedInUserProvider(IHttpContextAccessor httpContext, LIMSContext context)
+        public LoggedInUserProvider(IHttpContextAccessor httpContext, IServiceProvider serviceProvider)
         {
             _httpContextAccessor = httpContext;
-            _context = context;
+            _serviceProvider = serviceProvider;
         }
 
         public long? CurrentOrganizationID => ResolveCurrentUser()?.OrganizationID;
@@ -133,7 +134,8 @@ namespace LIMSApi.Helpers
             }
 
             // Pull the canonical branch row.
-            var branch = _context.Branches.AsNoTracking()
+            var dbContext = _serviceProvider.GetRequiredService<LIMSContext>();
+            var branch = dbContext.Branches.AsNoTracking()
                 .FirstOrDefault(b => b.ID == executionBranchId && b.IsActive);
 
             if (branch == null)

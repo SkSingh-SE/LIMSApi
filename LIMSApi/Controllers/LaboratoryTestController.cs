@@ -14,10 +14,12 @@ namespace LIMSApi.Controllers
     public class LaboratoryTestController : ControllerBase
     {
         private readonly ILaboratoryTestService _testMethodService;
+        private readonly ILaboratoryTestLayoutService _layoutService;
 
-        public LaboratoryTestController(ILaboratoryTestService testMethodService)
+        public LaboratoryTestController(ILaboratoryTestService testMethodService, ILaboratoryTestLayoutService layoutService)
         {
             _testMethodService = testMethodService;
+            _layoutService = layoutService;
         }
 
         [RequirePermission(Permissions.LaboratoryTest.Read)]
@@ -180,6 +182,44 @@ namespace LIMSApi.Controllers
         {
             var data = await _testMethodService.GetTestMethodSpecificationByLabTestId(labTestId);
             return Ok(data);
+        }
+
+        [RequirePermission(Permissions.LaboratoryTest.Read)]
+        [HttpGet("{id}/layouts")]
+        public async Task<IActionResult> GetLayoutAssignments(long id)
+        {
+            return Ok(await _layoutService.GetLayoutsAsync(id));
+        }
+
+        [RequirePermission(Permissions.LaboratoryTest.Update)]
+        [HttpPost("{id}/layouts")]
+        public async Task<IActionResult> AddLayoutAssignment(long id, [FromBody] LaboratoryTestLayoutCreateDto dto)
+        {
+            var created = await _layoutService.AddLayoutAsync(id, dto);
+            return Ok(new { status = "success", message = $"Layout '{created.LayoutCode}' assigned successfully.", id = created.ID });
+        }
+
+        [RequirePermission(Permissions.LaboratoryTest.Update)]
+        [HttpPut("{id}/layouts/{assignmentId}")]
+        public async Task<IActionResult> UpdateLayoutAssignment(long id, long assignmentId, [FromBody] LaboratoryTestLayoutUpdateDto dto)
+        {
+            var updated = await _layoutService.UpdateLayoutAsync(id, assignmentId, dto);
+            return Ok(new { status = "success", message = $"Layout assignment '{updated.LayoutCode}' updated successfully.", id = updated.ID });
+        }
+
+        [RequirePermission(Permissions.LaboratoryTest.Update)]
+        [HttpPut("{id}/layouts/{assignmentId}/toggle-status")]
+        public async Task<IActionResult> ToggleLayoutAssignmentStatus(long id, long assignmentId)
+        {
+            bool isActive = await _layoutService.ToggleLayoutStatusAsync(id, assignmentId);
+            return Ok(new { status = "success", message = $"Layout assignment {(isActive ? "activated" : "deactivated")} successfully.", isActive });
+        }
+
+        [RequirePermission(Permissions.LaboratoryTest.Read)]
+        [HttpGet("{id}/effective-layout")]
+        public async Task<IActionResult> GetEffectiveLayout(long id, [FromQuery] long? methodId = null, [FromQuery] long? versionId = null)
+        {
+            return Ok(await _layoutService.ResolveEffectiveLayoutAsync(id, methodId, versionId));
         }
     }
 }

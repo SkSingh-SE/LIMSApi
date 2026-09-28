@@ -1,3 +1,4 @@
+using System.Text.Json;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -50,6 +51,8 @@ namespace LIMSApi.Services
                 .Include(i => i.SampleDetails)
                     .ThenInclude(s => s.ProductMaster)
                 .Include(i => i.SampleDetails)
+                    .ThenInclude(s => s.Discipline)
+                .Include(i => i.SampleDetails)
                     .ThenInclude(s => s.SpecificationGrade)
                         .ThenInclude(g => g!.SpecificationHeader)
                 .Include(i => i.SampleDetails)
@@ -80,6 +83,14 @@ namespace LIMSApi.Services
                     .ThenInclude(s => s.TestPlans)
                         .ThenInclude(tp => tp.UniversalTestGroups.Where(utg => utg.IsActive))
                             .ThenInclude(u => u.Branch)
+                .Include(i => i.SampleDetails)
+                    .ThenInclude(s => s.TestPlans)
+                        .ThenInclude(tp => tp.UniversalTestGroups.Where(utg => utg.IsActive))
+                            .ThenInclude(u => u.ExecutionLayout)
+                .Include(i => i.SampleDetails)
+                    .ThenInclude(s => s.TestPlans)
+                        .ThenInclude(tp => tp.UniversalTestGroups.Where(utg => utg.IsActive))
+                            .ThenInclude(u => u.Department)
                 .Include(i => i.SampleDetails)
                     .ThenInclude(s => s.TestPlans)
                         .ThenInclude(tp => tp.UniversalTestGroups.Where(utg => utg.IsActive))
@@ -127,6 +138,8 @@ namespace LIMSApi.Services
                 SampleID = activeSample.ID,
                 SampleNo = activeSample.SampleNo,
                 SampleDetails = activeSample.Details,
+                SampleDisciplineID = activeSample.DisciplineID,
+                SampleDisciplineName = activeSample.Discipline?.Name,
                 InwardDate = inwardDate,
                 CustomerID = inward.CustomerID,
                 CustomerName = inward.Customer?.Name ?? string.Empty,
@@ -154,6 +167,8 @@ namespace LIMSApi.Services
                             ProductName = s.ProductMaster?.ProductName ?? s.ProductMaster?.DisplayTitle,
                             SpecificationGradeID = s.SpecificationGradeID,
                             GradeName = s.SpecificationGrade?.Grade,
+                            SampleDisciplineID = s.DisciplineID,
+                            SampleDisciplineName = s.Discipline?.Name,
                             Quantity = s.Quantity,
                             PlanStatus = sPlan?.PlanStatus ?? "Draft",
                             PlannedTestCount = sPlan?.UniversalTestGroups.Count(u => u.IsActive && u.Status != "Cancelled") ?? 0,
@@ -290,8 +305,12 @@ namespace LIMSApi.Services
                         GradeName = u.SpecificationGrade?.Grade,
                         BranchID = u.BranchID,
                         BranchName = u.Branch?.Name,
-                        DepartmentID = resolvedDept?.ID ?? u.LaboratoryTest?.LabDepartmentID,
-                        DepartmentName = resolvedDept?.Name ?? u.LaboratoryTest?.LabDepartment?.Name,
+                        DepartmentID = u.DepartmentID ?? resolvedDept?.ID ?? u.LaboratoryTest?.LabDepartmentID,
+                        DepartmentName = u.Department?.Name ?? resolvedDept?.Name ?? u.LaboratoryTest?.LabDepartment?.Name,
+                        ExecutionLayoutID = u.ExecutionLayoutID,
+                        ExecutionLayoutCode = u.ExecutionLayout?.Code,
+                        ExecutionLayoutName = u.ExecutionLayout?.Name,
+                        RendererType = u.ExecutionLayout?.RendererType,
                         Status = u.Status,
                         TestExecutionID = u.TestExecutions.OrderByDescending(e => e.ID).Select(e => (long?)e.ID).FirstOrDefault(),
                         ExecutionStatus = u.TestExecutions.OrderByDescending(e => e.ID).Select(e => e.Status).FirstOrDefault()
@@ -328,6 +347,131 @@ namespace LIMSApi.Services
             return await _resolver.ResolveEffectiveConfigurationAsync(request);
         }
 
+        // Screen 14 cascade: persist planner-selected Product/Grade identity onto the sample (Draft only).
+        // Returns the effective specification header (grade's header wins; conflicts fail loud).
+        private async Task<long?> ApplySampleIdentityAsync(SampleTestPlan plan, long? productMasterId, long? gradeId, long? headerId)
+        {
+            var sample = plan.SampleDetail
+                ?? throw new InvalidOperationException($"Sample Test Plan {plan.ID} has no linked sample detail.");
+
+            if (productMasterId.HasValue)
+            {
+                if (productMasterId.Value > 0)
+                {
+                    bool productOk = await _context.ProductMasters.AsNoTracking()
+                        .AnyAsync(p => p.ID == productMasterId.Value && p.IsActive);
+                    if (!productOk)
+                        throw new ArgumentException($"Product Master {productMasterId.Value} not found or inactive. Select an existing active product (Screen 10).");
+                    sample.ProductMasterID = productMasterId.Value;
+                }
+                else
+                {
+                    sample.ProductMasterID = null;
+                }
+            }
+
+            long? effectiveHeaderId = (headerId.HasValue && headerId.Value > 0) ? headerId.Value : null;
+
+            if (gradeId.HasValue)
+            {
+                if (gradeId.Value > 0)
+                {
+                    var grade = await _context.SpecificationGrades.AsNoTracking()
+                        .FirstOrDefaultAsync(g => g.ID == gradeId.Value)
+                        ?? throw new ArgumentException($"Specification Grade {gradeId.Value} not found. Select an existing grade (Screen 08/09).");
+                    if (effectiveHeaderId.HasValue && effectiveHeaderId.Value != grade.SpecificationHeaderID)
+                        throw new ArgumentException($"Selected grade '{grade.Grade}' does not belong to the selected specification standard. Change the grade or the standard so both agree.");
+                    sample.SpecificationGradeID = grade.ID;
+                    effectiveHeaderId = grade.SpecificationHeaderID;
+                }
+                else
+                {
+                    sample.SpecificationGradeID = null;
+                }
+            }
+
+            if (effectiveHeaderId.HasValue)
+            {
+                bool headerOk = await _context.SpecificationHeaders.AsNoTracking()
+                    .AnyAsync(h => h.ID == effectiveHeaderId.Value && h.IsActive);
+                if (!headerOk)
+                    throw new ArgumentException($"Specification Standard {effectiveHeaderId.Value} not found or inactive. Select an existing active standard (Screen 08).");
+            }
+
+            return effectiveHeaderId;
+        }
+
+        // Screen 11 lifecycle: explicit versions must belong to the header and be Active/Superseded.
+        // Null version + known header auto-resolves the Active edition on the reference date (parity-safe).
+        private async Task<long?> ResolvePinnedVersionIdAsync(long? explicitVersionId, long? headerId, DateTime referenceDate)
+        {
+            if (!headerId.HasValue || headerId.Value <= 0) return null;
+
+            if (explicitVersionId.HasValue && explicitVersionId.Value > 0)
+            {
+                var pinned = await _context.SpecificationVersions.AsNoTracking()
+                    .FirstOrDefaultAsync(v => v.ID == explicitVersionId.Value);
+                if (pinned == null)
+                    throw new ArgumentException($"Specification Version {explicitVersionId.Value} not found.");
+                if (pinned.SpecificationHeaderID != headerId.Value)
+                    throw new ArgumentException($"Specification version '{pinned.Version}' does not belong to the selected specification standard.");
+                if (pinned.Status != VersionStatus.Active && pinned.Status != VersionStatus.Superseded)
+                    throw new ArgumentException($"Specification version '{pinned.Version}' is {pinned.Status}. Only Active editions (or an explicitly acknowledged Superseded edition) can be pinned into a plan.");
+                return pinned.ID;
+            }
+
+            var active = await _context.SpecificationVersions.AsNoTracking()
+                .Where(v => v.SpecificationHeaderID == headerId.Value
+                    && v.Status == VersionStatus.Active
+                    && (v.EffectiveDate == null || v.EffectiveDate <= referenceDate)
+                    && (v.SupersededDate == null || v.SupersededDate > referenceDate))
+                .OrderByDescending(v => v.IsDefault)
+                .ThenByDescending(v => v.ID)
+                .FirstOrDefaultAsync();
+            if (active != null) return active.ID;
+
+            var fallback = await _context.SpecificationVersions.AsNoTracking()
+                .Where(v => v.SpecificationHeaderID == headerId.Value
+                    && (v.Status == VersionStatus.Active || v.Status == VersionStatus.Superseded))
+                .OrderByDescending(v => v.IsDefault)
+                .ThenByDescending(v => v.ID)
+                .FirstOrDefaultAsync();
+            if (fallback != null) return fallback.ID;
+
+            throw new InvalidOperationException("Selected specification standard has no Active version on the inward date. Configure an Active edition in Screen 09 before planning.");
+        }
+
+        // Sample-linked header fallback for read-only (locked) confirmations.
+        private async Task<long?> ResolveHeaderFromSampleGradeAsync(SampleTestPlan plan)
+        {
+            var gradeId = plan.SampleDetail?.SpecificationGradeID;
+            if (gradeId.HasValue && gradeId.Value > 0)
+            {
+                var grade = await _context.SpecificationGrades.AsNoTracking()
+                    .FirstOrDefaultAsync(g => g.ID == gradeId.Value);
+                if (grade != null) return grade.SpecificationHeaderID;
+            }
+            return null;
+        }
+        private async Task<(long? GradeId, long? HeaderId, long? VersionId)> ResolveTestRoutingAsync(
+            long? gradeId, long? headerId, long? versionId, long? effectiveHeaderId, DateTime referenceDate)
+        {
+            long? g = (gradeId.HasValue && gradeId.Value > 0) ? gradeId.Value : null;
+            long? h = (headerId.HasValue && headerId.Value > 0) ? headerId.Value : effectiveHeaderId;
+            if (g.HasValue)
+            {
+                var grade = await _context.SpecificationGrades.AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.ID == g.Value)
+                    ?? throw new ArgumentException($"Specification Grade {g.Value} not found.");
+                if (h.HasValue && h.Value != grade.SpecificationHeaderID)
+                    throw new ArgumentException($"Planned test references grade '{grade.Grade}' which does not belong to its specification standard.");
+                h ??= grade.SpecificationHeaderID;
+            }
+            long? v = await ResolvePinnedVersionIdAsync(
+                (versionId.HasValue && versionId.Value > 0) ? versionId.Value : null, h, referenceDate);
+            return (g, h, v);
+        }
+
         public async Task<UniversalPlanConfirmResultDto> SaveDraftPlanAsync(UniversalPlanSaveDto dto)
         {
             var loggedInUser = LoggedInUserProvider.CurrentUser;
@@ -354,12 +498,21 @@ namespace LIMSApi.Services
                 throw new UnauthorizedAccessException("Access denied. Case does not belong to your organization.");
             }
 
+            if (plan.PlanStatus != "Draft")
+            {
+                throw new InvalidOperationException($"Cannot edit plan {plan.ID} because it is in '{plan.PlanStatus}' status and frozen. Only 'Draft' plans can be edited through planning APIs.");
+            }
+
             plan.PlanStatus = "Draft";
 
             if (plan.SampleDetail?.SampleInward != null)
             {
                 plan.SampleDetail.SampleInward.InwardStatus = InwardStatus.UNDER_PLANNING.ToString();
             }
+
+            // Screen 14 cascade: pin planner-selected identity + lifecycle-checked version.
+            long? effectiveHeaderId = await ApplySampleIdentityAsync(plan, dto.ProductMasterID, dto.SpecificationGradeID, dto.SpecificationHeaderID);
+            DateTime referenceDate = plan.SampleDetail?.SampleInward?.CollectionTime ?? DateTime.UtcNow;
 
             var createdIds = new List<long>();
 
@@ -375,33 +528,48 @@ namespace LIMSApi.Services
                 {
                     // Check if an unexecuted group already exists for this test
                     utg = plan.UniversalTestGroups.FirstOrDefault(u => u.LaboratoryTestID == item.LaboratoryTestID &&
-                                                                      u.IsActive &&
-                                                                      u.Status == "Pending");
+                                                                       u.IsActive &&
+                                                                       u.Status == "Pending");
                 }
+
+                var routed = await ResolveTestRoutingAsync(
+                    item.SpecificationGradeID ?? dto.SpecificationGradeID,
+                    item.SpecificationHeaderID,
+                    item.SpecificationVersionID,
+                    effectiveHeaderId, referenceDate);
+
+                var previewReq = new UniversalPlanPreviewRequestDto
+                {
+                    SampleID = dto.SampleID,
+                    LaboratoryTestID = item.LaboratoryTestID,
+                    SpecificationHeaderID = routed.HeaderId,
+                    SpecificationGradeID = routed.GradeId,
+                    SpecificationVersionID = routed.VersionId,
+                    TestMethodSpecificationID = item.TestMethodSpecificationID,
+                    TestMethodSpecificationVersionID = item.TestMethodSpecificationVersionID,
+                    BranchID = item.BranchID ?? dto.BranchID
+                };
+                var preview = await _resolver.ResolveEffectiveConfigurationAsync(previewReq);
 
                 if (utg != null)
                 {
-                    // Update existing pending test group
+                    // Update existing pending test group with fully pinned routing.
                     utg.LaboratoryTestID = item.LaboratoryTestID;
                     utg.TestMethodSpecificationID = item.TestMethodSpecificationID;
                     utg.TestMethodSpecificationVersionID = item.TestMethodSpecificationVersionID;
-                    long? specVerId = (item.SpecificationVersionID.HasValue && item.SpecificationVersionID.Value > 0)
-                        ? item.SpecificationVersionID.Value
-                        : (dto.SpecificationVersionID.HasValue && dto.SpecificationVersionID.Value > 0 ? dto.SpecificationVersionID.Value : null);
-
-                    utg.SpecificationVersionID = specVerId;
+                    utg.SpecificationHeaderID = routed.HeaderId;
+                    utg.SpecificationGradeID = routed.GradeId;
+                    utg.SpecificationVersionID = routed.VersionId;
                     utg.BranchID = item.BranchID ?? dto.BranchID;
+                    utg.DepartmentID = item.DepartmentID ?? preview.DepartmentID;
+                    utg.ExecutionLayoutID = item.ExecutionLayoutID ?? preview.ExecutionLayoutID;
                     utg.ModifiedOn = DateTime.UtcNow;
                     utg.ModifiedBy = loggedInUser.EmployeeID;
                     createdIds.Add(utg.ID);
                 }
                 else
                 {
-                    long? specVerId = (item.SpecificationVersionID.HasValue && item.SpecificationVersionID.Value > 0)
-                        ? item.SpecificationVersionID.Value
-                        : (dto.SpecificationVersionID.HasValue && dto.SpecificationVersionID.Value > 0 ? dto.SpecificationVersionID.Value : null);
-
-                    // Create new UniversalTestGroup (or legitimate retest)
+                    // Create new UniversalTestGroup (or legitimate retest) with fully pinned routing.
                     long execBranchId = item.BranchID ?? dto.BranchID;
 
                     // Authoritative tenant resolution (Part B). Never defaults to 7 or 1.
@@ -427,9 +595,11 @@ namespace LIMSApi.Services
                         LaboratoryTestID = item.LaboratoryTestID,
                         TestMethodSpecificationID = item.TestMethodSpecificationID,
                         TestMethodSpecificationVersionID = item.TestMethodSpecificationVersionID,
-                        SpecificationHeaderID = item.SpecificationHeaderID ?? dto.SpecificationHeaderID,
-                        SpecificationGradeID = item.SpecificationGradeID ?? dto.SpecificationGradeID,
-                        SpecificationVersionID = specVerId,
+                        SpecificationHeaderID = routed.HeaderId,
+                        SpecificationGradeID = routed.GradeId,
+                        SpecificationVersionID = routed.VersionId,
+                        DepartmentID = item.DepartmentID ?? preview.DepartmentID,
+                        ExecutionLayoutID = item.ExecutionLayoutID ?? preview.ExecutionLayoutID,
                         Status = "Pending",
                         IsActive = true,
                         CreatedOn = DateTime.UtcNow,
@@ -499,6 +669,7 @@ namespace LIMSApi.Services
                 summary.BranchPass &= preview.ValidationSummary.BranchPass;
                 summary.DepartmentRoutingPass &= preview.ValidationSummary.DepartmentRoutingPass;
                 summary.RequiredConditionsPass &= preview.ValidationSummary.RequiredConditionsPass;
+                summary.EquipmentPass &= preview.ValidationSummary.EquipmentPass;
 
                 if (!preview.IsConfigurationReady)
                 {
@@ -546,7 +717,17 @@ namespace LIMSApi.Services
                 throw new InvalidOperationException("At least one test definition must be selected for planning.");
             }
 
-            // Validate all tests before confirmation
+            if (plan.PlanStatus != "Draft")
+            {
+                throw new InvalidOperationException($"Cannot confirm or modify plan {plan.ID} because it is in '{plan.PlanStatus}' status and frozen. Only 'Draft' plans can be confirmed.");
+            }
+
+            // Screen 14 cascade: planner-selected identity persists while the plan is still Draft.
+            long? effectiveHeaderId = await ApplySampleIdentityAsync(plan, dto.ProductMasterID, dto.SpecificationGradeID, dto.SpecificationHeaderID);
+            DateTime confirmReferenceDate = plan.SampleDetail?.SampleInward?.CollectionTime ?? DateTime.UtcNow;
+
+            // Validate all tests before confirmation (enforcing all 12 gates)
+            var resolvedPreviews = new Dictionary<UniversalPlanTestItemDto, UniversalPlanPreviewResponseDto>();
             foreach (var test in dto.Tests)
             {
                 var previewReq = new UniversalPlanPreviewRequestDto
@@ -573,13 +754,18 @@ namespace LIMSApi.Services
                 test.TestMethodSpecificationVersionID = preview.TestMethodSpecificationVersionID;
                 test.SpecificationHeaderID = preview.SpecificationHeaderID;
                 test.SpecificationVersionID = preview.SpecificationVersionID;
+                test.DepartmentID = preview.DepartmentID;
+                test.ExecutionLayoutID = preview.ExecutionLayoutID;
+
+                resolvedPreviews[test] = preview;
             }
 
-            // Persist UniversalTestGroups with strictly pinned configuration
+            // Persist UniversalTestGroups with strictly pinned configuration & frozen PlannedConfigurationJson snapshot
             var createdIds = new List<long>();
 
             foreach (var item in dto.Tests)
             {
+                var preview = resolvedPreviews[item];
                 UniversalTestGroup? utg = null;
                 if (item.UniversalTestGroupID.HasValue && item.UniversalTestGroupID.Value > 0)
                 {
@@ -595,27 +781,67 @@ namespace LIMSApi.Services
 
                 if (utg != null)
                 {
+                    var routed = await ResolveTestRoutingAsync(
+                        item.SpecificationGradeID ?? dto.SpecificationGradeID,
+                        item.SpecificationHeaderID,
+                        item.SpecificationVersionID,
+                        effectiveHeaderId, confirmReferenceDate);
+
                     utg.LaboratoryTestID = item.LaboratoryTestID;
                     utg.TestMethodSpecificationID = item.TestMethodSpecificationID;
                     utg.TestMethodSpecificationVersionID = item.TestMethodSpecificationVersionID;
-                    utg.SpecificationHeaderID = item.SpecificationHeaderID ?? dto.SpecificationHeaderID;
-                    long? specVerId = (item.SpecificationVersionID.HasValue && item.SpecificationVersionID.Value > 0)
-                        ? item.SpecificationVersionID.Value
-                        : (dto.SpecificationVersionID.HasValue && dto.SpecificationVersionID.Value > 0 ? dto.SpecificationVersionID.Value : null);
-
-                    utg.SpecificationVersionID = specVerId;
+                    utg.SpecificationHeaderID = routed.HeaderId;
+                    utg.SpecificationGradeID = routed.GradeId;
+                    utg.SpecificationVersionID = routed.VersionId;
                     utg.BranchID = item.BranchID ?? dto.BranchID;
+                    utg.DepartmentID = preview.DepartmentID;
+                    utg.ExecutionLayoutID = preview.ExecutionLayoutID;
                     utg.Status = "Pending";
                     utg.ModifiedOn = DateTime.UtcNow;
                     utg.ModifiedBy = loggedInUser.EmployeeID;
+
+                    var plannedSnapshot = new PlannedConfigurationSnapshotDto
+                    {
+                        UniversalTestGroupID = utg.ID,
+                        LaboratoryTestID = preview.LaboratoryTestID,
+                        LaboratoryTestCode = preview.LaboratoryTestCode,
+                        LaboratoryTestName = preview.LaboratoryTestName,
+                        DisciplineID = preview.DisciplineID,
+                        DisciplineName = preview.DisciplineName,
+                        ExecutionLayoutID = preview.ExecutionLayoutID,
+                        ExecutionLayoutCode = preview.ExecutionLayoutCode,
+                        ExecutionLayoutName = preview.ExecutionLayoutName,
+                        RendererType = preview.RendererType,
+                        LayoutResolutionLevel = preview.LayoutResolutionLevel,
+                        BranchID = preview.BranchID,
+                        BranchName = preview.BranchName,
+                        DepartmentID = preview.DepartmentID,
+                        DepartmentName = preview.DepartmentName,
+                        TestMethodSpecificationID = preview.TestMethodSpecificationID,
+                        TestMethodCode = preview.TestMethodCode,
+                        TestMethodName = preview.TestMethodName,
+                        TestMethodStandard = preview.TestMethodStandard,
+                        TestMethodSpecificationVersionID = preview.TestMethodSpecificationVersionID,
+                        TestMethodVersion = preview.TestMethodVersion,
+                        SpecificationHeaderID = preview.SpecificationHeaderID,
+                        SpecificationTitle = preview.SpecificationTitle,
+                        SpecificationGradeID = preview.SpecificationGradeID,
+                        GradeName = preview.GradeName,
+                        SpecificationVersionID = preview.SpecificationVersionID,
+                        SpecificationVersionNumber = preview.SpecificationVersionNumber,
+                        IsStandardlessTest = preview.IsStandardlessTest,
+                        Parameters = preview.Parameters,
+                        Conditions = preview.Conditions,
+                        EquipmentRequirements = preview.Equipment,
+                        Tenant = preview.Tenant,
+                        FrozenAtUtc = DateTime.UtcNow
+                    };
+                    utg.PlannedConfigurationJson = JsonSerializer.Serialize(plannedSnapshot);
+
                     createdIds.Add(utg.ID);
                 }
                 else
                 {
-                    long? specVerId = (item.SpecificationVersionID.HasValue && item.SpecificationVersionID.Value > 0)
-                        ? item.SpecificationVersionID.Value
-                        : (dto.SpecificationVersionID.HasValue && dto.SpecificationVersionID.Value > 0 ? dto.SpecificationVersionID.Value : null);
-
                     long execBranchId = item.BranchID ?? dto.BranchID;
 
                     // Authoritative tenant resolution (Part B). Never defaults to 7 or 1.
@@ -633,6 +859,12 @@ namespace LIMSApi.Services
                     long orgId = tenantForItem.OrganizationID;
                     string companyCode = tenantForItem.CompanyCode;
 
+                    var routedNew = await ResolveTestRoutingAsync(
+                        item.SpecificationGradeID ?? dto.SpecificationGradeID,
+                        item.SpecificationHeaderID,
+                        item.SpecificationVersionID,
+                        effectiveHeaderId, confirmReferenceDate);
+
                     var newUtg = new UniversalTestGroup
                     {
                         SampleTestPlanID = plan.ID,
@@ -641,27 +873,97 @@ namespace LIMSApi.Services
                         LaboratoryTestID = item.LaboratoryTestID,
                         TestMethodSpecificationID = item.TestMethodSpecificationID,
                         TestMethodSpecificationVersionID = item.TestMethodSpecificationVersionID,
-                        SpecificationHeaderID = item.SpecificationHeaderID ?? dto.SpecificationHeaderID,
-                        SpecificationGradeID = item.SpecificationGradeID ?? dto.SpecificationGradeID,
-                        SpecificationVersionID = specVerId,
+                        SpecificationHeaderID = routedNew.HeaderId,
+                        SpecificationGradeID = routedNew.GradeId,
+                        SpecificationVersionID = routedNew.VersionId,
+                        DepartmentID = preview.DepartmentID,
+                        ExecutionLayoutID = preview.ExecutionLayoutID,
                         Status = "Pending",
                         IsActive = true,
                         CreatedOn = DateTime.UtcNow,
                         CreatedBy = loggedInUser.EmployeeID,
                         CompanyCode = companyCode
                     };
+
+                    var plannedSnapshot = new PlannedConfigurationSnapshotDto
+                    {
+                        UniversalTestGroupID = 0,
+                        LaboratoryTestID = preview.LaboratoryTestID,
+                        LaboratoryTestCode = preview.LaboratoryTestCode,
+                        LaboratoryTestName = preview.LaboratoryTestName,
+                        DisciplineID = preview.DisciplineID,
+                        DisciplineName = preview.DisciplineName,
+                        ExecutionLayoutID = preview.ExecutionLayoutID,
+                        ExecutionLayoutCode = preview.ExecutionLayoutCode,
+                        ExecutionLayoutName = preview.ExecutionLayoutName,
+                        RendererType = preview.RendererType,
+                        LayoutResolutionLevel = preview.LayoutResolutionLevel,
+                        BranchID = preview.BranchID,
+                        BranchName = preview.BranchName,
+                        DepartmentID = preview.DepartmentID,
+                        DepartmentName = preview.DepartmentName,
+                        TestMethodSpecificationID = preview.TestMethodSpecificationID,
+                        TestMethodCode = preview.TestMethodCode,
+                        TestMethodName = preview.TestMethodName,
+                        TestMethodStandard = preview.TestMethodStandard,
+                        TestMethodSpecificationVersionID = preview.TestMethodSpecificationVersionID,
+                        TestMethodVersion = preview.TestMethodVersion,
+                        SpecificationHeaderID = preview.SpecificationHeaderID,
+                        SpecificationTitle = preview.SpecificationTitle,
+                        SpecificationGradeID = preview.SpecificationGradeID,
+                        GradeName = preview.GradeName,
+                        SpecificationVersionID = preview.SpecificationVersionID,
+                        SpecificationVersionNumber = preview.SpecificationVersionNumber,
+                        IsStandardlessTest = preview.IsStandardlessTest,
+                        Parameters = preview.Parameters,
+                        Conditions = preview.Conditions,
+                        EquipmentRequirements = preview.Equipment,
+                        Tenant = preview.Tenant,
+                        FrozenAtUtc = DateTime.UtcNow
+                    };
+                    newUtg.PlannedConfigurationJson = JsonSerializer.Serialize(plannedSnapshot);
+
                     plan.UniversalTestGroups.Add(newUtg);
                 }
             }
 
             plan.PlanStatus = "Submitted";
 
-            if (plan.SampleDetail?.SampleInward != null)
+            if (plan.SampleDetail != null)
             {
-                plan.SampleDetail.SampleInward.InwardStatus = InwardStatus.UNDER_PLANNING.ToString();
+                plan.SampleDetail.SampleStatus = SampleStatus.REQUEST_APPROVED.ToString();
+                plan.SampleDetail.ModifiedBy = loggedInUser.EmployeeID;
+                plan.SampleDetail.ModifiedOn = DateTime.UtcNow;
+
+                if (plan.SampleDetail.SampleInward != null)
+                {
+                    plan.SampleDetail.SampleInward.InwardStatus = InwardStatus.IN_PROGRESS.ToString();
+                    plan.SampleDetail.SampleInward.ModifiedBy = loggedInUser.EmployeeID;
+                    plan.SampleDetail.SampleInward.ModifiedOn = DateTime.UtcNow;
+                }
             }
 
             await _context.SaveChangesAsync();
+
+            // Stamp newly generated IDs into PlannedConfigurationJson snapshots
+            bool needsResave = false;
+            foreach (var u in plan.UniversalTestGroups.Where(x => x.IsActive && !string.IsNullOrEmpty(x.PlannedConfigurationJson)))
+            {
+                if (u.PlannedConfigurationJson.Contains("\"UniversalTestGroupID\":0"))
+                {
+                    var snapshotObj = JsonSerializer.Deserialize<PlannedConfigurationSnapshotDto>(u.PlannedConfigurationJson);
+                    if (snapshotObj != null && snapshotObj.UniversalTestGroupID == 0)
+                    {
+                        snapshotObj.UniversalTestGroupID = u.ID;
+                        u.PlannedConfigurationJson = JsonSerializer.Serialize(snapshotObj);
+                        needsResave = true;
+                    }
+                }
+            }
+            if (needsResave)
+            {
+                await _context.SaveChangesAsync();
+            }
 
             // Record Plan History audit log
             await _planService.CreatePlanHistoryEntry(
@@ -689,6 +991,8 @@ namespace LIMSApi.Services
                 .Include(i => i.SampleDetails)
                     .ThenInclude(s => s.ProductMaster)
                 .Include(i => i.SampleDetails)
+                    .ThenInclude(s => s.Discipline)
+                .Include(i => i.SampleDetails)
                     .ThenInclude(s => s.SpecificationGrade)
                 .Include(i => i.SampleDetails)
                     .ThenInclude(s => s.TestPlans)
@@ -714,6 +1018,8 @@ namespace LIMSApi.Services
                         ProductName = s.ProductMaster?.ProductName ?? s.ProductMaster?.DisplayTitle,
                         SpecificationGradeID = s.SpecificationGradeID,
                         GradeName = s.SpecificationGrade?.Grade,
+                        SampleDisciplineID = s.DisciplineID,
+                        SampleDisciplineName = s.Discipline?.Name,
                         Quantity = s.Quantity,
                         PlanStatus = sPlan?.PlanStatus ?? "Draft",
                         PlannedTestCount = sPlan?.UniversalTestGroups.Count(u => u.IsActive && u.Status != "Cancelled") ?? 0,
