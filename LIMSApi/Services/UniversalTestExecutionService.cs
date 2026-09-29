@@ -551,7 +551,9 @@ namespace LIMSApi.Services
                         }
 
                         // Formula-driven parameter: manual input overrides are strictly ignored; value is derived server-side
-                        if (isParamCalculated)
+                        // Exceptions: CurvePeak (e.g. Proctor MDD/OMC) relies on client-side polynomial regression, so we accept the UI value.
+                        bool isCurvePeak = spMeta?.CalculationRole == "CurvePeak";
+                        if (isParamCalculated && !isCurvePeak)
                         {
                             numericVal = null;
                             resData.RawValue = null;
@@ -561,7 +563,7 @@ namespace LIMSApi.Services
                         if (existingResults.TryGetValue(resData.ParameterMasterID, out var matchedResult))
                         {
                             resEntity = matchedResult;
-                            if (!isParamCalculated)
+                            if (!isParamCalculated || isCurvePeak)
                             {
                                 resEntity.RawValue = resData.RawValue;
                                 resEntity.NumericValue = numericVal;
@@ -575,8 +577,8 @@ namespace LIMSApi.Services
                             {
                                 TestObservationID = obsEntity.ID,
                                 ParameterMasterID = resData.ParameterMasterID,
-                                RawValue = isParamCalculated ? null : resData.RawValue,
-                                NumericValue = isParamCalculated ? null : numericVal,
+                                RawValue = (isParamCalculated && !isCurvePeak) ? null : resData.RawValue,
+                                NumericValue = (isParamCalculated && !isCurvePeak) ? null : numericVal,
                                 IsFormulaCalculated = isParamCalculated || resData.IsFormulaCalculated,
                                 CreatedBy = userId,
                                 CreatedOn = DateTime.UtcNow,

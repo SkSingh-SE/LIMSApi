@@ -1582,14 +1582,14 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
 
                 IF NOT EXISTS (SELECT 1 FROM SpecificationHeaders WHERE SpecificationNo = N'IS_1786' OR AliasName = N'IS 1786')
                 BEGIN
-                    INSERT INTO SpecificationHeaders (SpecificationNo, AliasName, DisplayTitle, StandardOrganizationID, Description, IsActive, CreatedBy, CreatedOn, CompanyCode)
-                    VALUES (N'IS_1786', N'IS 1786', N'High strength deformed steel bars and wires for concrete reinforcement', @bisId, N'Standard specification for high strength deformed bars (TMT rebars) for concrete reinforcement', 1, 0, GETUTCDATE(), N'LIMS');
+                    INSERT INTO SpecificationHeaders (SpecificationNo, AliasName, DisplayTitle, StandardOrganizationID, Description, IsActive, CreatedBy, CreatedOn, CompanyCode, IsCustom)
+                    VALUES (N'IS_1786', N'IS 1786', N'High strength deformed steel bars and wires for concrete reinforcement', @bisId, N'Standard specification for high strength deformed bars (TMT rebars) for concrete reinforcement', 1, 0, GETUTCDATE(), N'LIMS', 0);
                 END
 
                 IF NOT EXISTS (SELECT 1 FROM SpecificationHeaders WHERE SpecificationNo = N'ASTM_A240' OR AliasName = N'ASTM A240')
                 BEGIN
-                    INSERT INTO SpecificationHeaders (SpecificationNo, AliasName, DisplayTitle, StandardOrganizationID, Description, IsActive, CreatedBy, CreatedOn, CompanyCode)
-                    VALUES (N'ASTM_A240', N'ASTM A240', N'Standard Specification for Chromium and Chromium-Nickel Stainless Steel', @astmId, N'Standard specification for chromium and chromium-nickel stainless steel plate, sheet, and strip for pressure vessels and general applications', 1, 0, GETUTCDATE(), N'LIMS');
+                    INSERT INTO SpecificationHeaders (SpecificationNo, AliasName, DisplayTitle, StandardOrganizationID, Description, IsActive, CreatedBy, CreatedOn, CompanyCode, IsCustom)
+                    VALUES (N'ASTM_A240', N'ASTM A240', N'Standard Specification for Chromium and Chromium-Nickel Stainless Steel', @astmId, N'Standard specification for chromium and chromium-nickel stainless steel plate, sheet, and strip for pressure vessels and general applications', 1, 0, GETUTCDATE(), N'LIMS', 0);
                 END
             END
 
