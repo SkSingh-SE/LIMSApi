@@ -548,6 +548,7 @@ namespace LIMSApi.Repositories
         {
             var entity = await _context.ParameterMasters
                 .Include(p => p.ParameterUnit)
+                .Include(p => p.ParameterUnitEquivalent)
                 .Include(p => p.DropdownOptions.Where(o => o.IsActive))
                 .FirstOrDefaultAsync(x => x.ID == id);
 
@@ -562,7 +563,7 @@ namespace LIMSApi.Repositories
                 ParameterType = entity.ParameterType,
                 InputType = entity.InputType,
                 ParameterUnitID = entity.ParameterUnitID,
-                UnitName = entity.ParameterUnit?.Name,
+                UnitName = entity.ParameterUnitEquivalent != null ? entity.ParameterUnitEquivalent.Name : entity.ParameterUnit?.Name,
                 UnitSymbol = entity.ParameterUnit?.Symbol,
                 ParameterUnitEquivalentID = entity.ParameterUnitEquivalentID,
                 UnitConversionFactor = entity.UnitConversionFactor,

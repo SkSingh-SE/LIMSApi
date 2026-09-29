@@ -1560,25 +1560,25 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
             -- Standard Organization Masters (BIS, ASTM, ISO, ASME, DIN, EN)
             IF OBJECT_ID(N'StandardOrganizationMasters', N'U') IS NOT NULL
             BEGIN
-                IF NOT EXISTS (SELECT 1 FROM StandardOrganizationMasters WHERE Code = N'BIS' AND IsActive = 1)
-                    INSERT INTO StandardOrganizationMasters (Code, Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'BIS', N'Bureau of Indian Standards', N'National Standards Body of India', 0, GETUTCDATE(), N'LIMS', 1);
-                IF NOT EXISTS (SELECT 1 FROM StandardOrganizationMasters WHERE Code = N'ASTM' AND IsActive = 1)
-                    INSERT INTO StandardOrganizationMasters (Code, Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'ASTM', N'American Society for Testing and Materials', N'International Standards Organization', 0, GETUTCDATE(), N'LIMS', 1);
-                IF NOT EXISTS (SELECT 1 FROM StandardOrganizationMasters WHERE Code = N'ISO' AND IsActive = 1)
-                    INSERT INTO StandardOrganizationMasters (Code, Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'ISO', N'International Organization for Standardization', N'International Standards Organization', 0, GETUTCDATE(), N'LIMS', 1);
-                IF NOT EXISTS (SELECT 1 FROM StandardOrganizationMasters WHERE Code = N'ASME' AND IsActive = 1)
-                    INSERT INTO StandardOrganizationMasters (Code, Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'ASME', N'American Society of Mechanical Engineers', N'Boiler & Pressure Vessel Code Body', 0, GETUTCDATE(), N'LIMS', 1);
-                IF NOT EXISTS (SELECT 1 FROM StandardOrganizationMasters WHERE Code = N'DIN' AND IsActive = 1)
-                    INSERT INTO StandardOrganizationMasters (Code, Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'DIN', N'Deutsches Institut für Normung', N'German Institute for Standardization', 0, GETUTCDATE(), N'LIMS', 1);
-                IF NOT EXISTS (SELECT 1 FROM StandardOrganizationMasters WHERE Code = N'EN' AND IsActive = 1)
-                    INSERT INTO StandardOrganizationMasters (Code, Name, Description, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'EN', N'European Standards', N'European Committee for Standardization', 0, GETUTCDATE(), N'LIMS', 1);
+                IF NOT EXISTS (SELECT 1 FROM StandardOrganizationMasters WHERE Name LIKE '%BIS%' OR Name LIKE '%Indian%' AND IsActive = 1)
+                    INSERT INTO StandardOrganizationMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'BIS', 0, GETUTCDATE(), N'LIMS', 1);
+                IF NOT EXISTS (SELECT 1 FROM StandardOrganizationMasters WHERE Name LIKE '%ASTM%' AND IsActive = 1)
+                    INSERT INTO StandardOrganizationMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'ASTM', 0, GETUTCDATE(), N'LIMS', 1);
+                IF NOT EXISTS (SELECT 1 FROM StandardOrganizationMasters WHERE Name = N'ISO' AND IsActive = 1)
+                    INSERT INTO StandardOrganizationMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'ISO', 0, GETUTCDATE(), N'LIMS', 1);
+                IF NOT EXISTS (SELECT 1 FROM StandardOrganizationMasters WHERE Name = N'ASME' AND IsActive = 1)
+                    INSERT INTO StandardOrganizationMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'ASME', 0, GETUTCDATE(), N'LIMS', 1);
+                IF NOT EXISTS (SELECT 1 FROM StandardOrganizationMasters WHERE Name = N'DIN' AND IsActive = 1)
+                    INSERT INTO StandardOrganizationMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'DIN', 0, GETUTCDATE(), N'LIMS', 1);
+                IF NOT EXISTS (SELECT 1 FROM StandardOrganizationMasters WHERE Name = N'EN' AND IsActive = 1)
+                    INSERT INTO StandardOrganizationMasters (Name, CreatedBy, CreatedOn, CompanyCode, IsActive) VALUES (N'EN', 0, GETUTCDATE(), N'LIMS', 1);
             END
 
             -- Reference Specification Headers (IS 1786, ASTM A240)
             IF OBJECT_ID(N'SpecificationHeaders', N'U') IS NOT NULL
             BEGIN
-                DECLARE @bisId BIGINT = (SELECT TOP 1 ID FROM StandardOrganizationMasters WHERE Code = N'BIS' AND IsActive = 1);
-                DECLARE @astmId BIGINT = (SELECT TOP 1 ID FROM StandardOrganizationMasters WHERE Code = N'ASTM' AND IsActive = 1);
+                DECLARE @bisId BIGINT = (SELECT TOP 1 ID FROM StandardOrganizationMasters WHERE (Name LIKE '%BIS%' OR Name LIKE '%Indian%') AND IsActive = 1);
+                DECLARE @astmId BIGINT = (SELECT TOP 1 ID FROM StandardOrganizationMasters WHERE Name LIKE '%ASTM%' AND IsActive = 1);
 
                 IF NOT EXISTS (SELECT 1 FROM SpecificationHeaders WHERE SpecificationNo = N'IS_1786' OR AliasName = N'IS 1786')
                 BEGIN
@@ -1601,17 +1601,17 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 IF @is1786Id IS NOT NULL
                 BEGIN
                     IF NOT EXISTS (SELECT 1 FROM SpecificationGrades WHERE SpecificationHeaderID = @is1786Id AND Grade = N'Fe 415')
-                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn, CompanyCode) VALUES (@is1786Id, N'Fe 415', N'Standard Reinforcement Grade', 1, 0, GETUTCDATE(), N'LIMS');
+                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn) VALUES (@is1786Id, N'Fe 415', N'Standard Reinforcement Grade', 1, 0, GETUTCDATE());
                     IF NOT EXISTS (SELECT 1 FROM SpecificationGrades WHERE SpecificationHeaderID = @is1786Id AND Grade = N'Fe 500')
-                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn, CompanyCode) VALUES (@is1786Id, N'Fe 500', N'High Strength Grade', 1, 0, GETUTCDATE(), N'LIMS');
+                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn) VALUES (@is1786Id, N'Fe 500', N'High Strength Grade', 1, 0, GETUTCDATE());
                     IF NOT EXISTS (SELECT 1 FROM SpecificationGrades WHERE SpecificationHeaderID = @is1786Id AND Grade = N'Fe 500D')
-                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn, CompanyCode) VALUES (@is1786Id, N'Fe 500D', N'High Ductility Earthquake Resistant Grade', 1, 0, GETUTCDATE(), N'LIMS');
+                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn) VALUES (@is1786Id, N'Fe 500D', N'High Ductility Earthquake Resistant Grade', 1, 0, GETUTCDATE());
                     IF NOT EXISTS (SELECT 1 FROM SpecificationGrades WHERE SpecificationHeaderID = @is1786Id AND Grade = N'Fe 550')
-                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn, CompanyCode) VALUES (@is1786Id, N'Fe 550', N'Extra High Strength Grade', 1, 0, GETUTCDATE(), N'LIMS');
+                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn) VALUES (@is1786Id, N'Fe 550', N'Extra High Strength Grade', 1, 0, GETUTCDATE());
                     IF NOT EXISTS (SELECT 1 FROM SpecificationGrades WHERE SpecificationHeaderID = @is1786Id AND Grade = N'Fe 550D')
-                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn, CompanyCode) VALUES (@is1786Id, N'Fe 550D', N'Extra High Strength High Ductility Grade', 1, 0, GETUTCDATE(), N'LIMS');
+                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn) VALUES (@is1786Id, N'Fe 550D', N'Extra High Strength High Ductility Grade', 1, 0, GETUTCDATE());
                     IF NOT EXISTS (SELECT 1 FROM SpecificationGrades WHERE SpecificationHeaderID = @is1786Id AND Grade = N'Fe 600')
-                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn, CompanyCode) VALUES (@is1786Id, N'Fe 600', N'Ultra High Strength Grade', 1, 0, GETUTCDATE(), N'LIMS');
+                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn) VALUES (@is1786Id, N'Fe 600', N'Ultra High Strength Grade', 1, 0, GETUTCDATE());
                 END
 
                 -- 2. ASTM A240 Grades (304, 304L, 316, 316L, 321, 310S)
@@ -1619,17 +1619,17 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 IF @astmA240Id IS NOT NULL
                 BEGIN
                     IF NOT EXISTS (SELECT 1 FROM SpecificationGrades WHERE SpecificationHeaderID = @astmA240Id AND Grade = N'304')
-                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn, CompanyCode) VALUES (@astmA240Id, N'304', N'Standard Austenitic Stainless Steel', 1, 0, GETUTCDATE(), N'LIMS');
+                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn) VALUES (@astmA240Id, N'304', N'Standard Austenitic Stainless Steel', 1, 0, GETUTCDATE());
                     IF NOT EXISTS (SELECT 1 FROM SpecificationGrades WHERE SpecificationHeaderID = @astmA240Id AND Grade = N'304L')
-                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn, CompanyCode) VALUES (@astmA240Id, N'304L', N'Low Carbon Austenitic Stainless Steel', 1, 0, GETUTCDATE(), N'LIMS');
+                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn) VALUES (@astmA240Id, N'304L', N'Low Carbon Austenitic Stainless Steel', 1, 0, GETUTCDATE());
                     IF NOT EXISTS (SELECT 1 FROM SpecificationGrades WHERE SpecificationHeaderID = @astmA240Id AND Grade = N'316')
-                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn, CompanyCode) VALUES (@astmA240Id, N'316', N'Molybdenum-bearing Austenitic Stainless Steel', 1, 0, GETUTCDATE(), N'LIMS');
+                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn) VALUES (@astmA240Id, N'316', N'Molybdenum-bearing Austenitic Stainless Steel', 1, 0, GETUTCDATE());
                     IF NOT EXISTS (SELECT 1 FROM SpecificationGrades WHERE SpecificationHeaderID = @astmA240Id AND Grade = N'316L')
-                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn, CompanyCode) VALUES (@astmA240Id, N'316L', N'Low Carbon Molybdenum Austenitic Stainless Steel', 1, 0, GETUTCDATE(), N'LIMS');
+                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn) VALUES (@astmA240Id, N'316L', N'Low Carbon Molybdenum Austenitic Stainless Steel', 1, 0, GETUTCDATE());
                     IF NOT EXISTS (SELECT 1 FROM SpecificationGrades WHERE SpecificationHeaderID = @astmA240Id AND Grade = N'321')
-                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn, CompanyCode) VALUES (@astmA240Id, N'321', N'Titanium Stabilized Austenitic Stainless Steel', 1, 0, GETUTCDATE(), N'LIMS');
+                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn) VALUES (@astmA240Id, N'321', N'Titanium Stabilized Austenitic Stainless Steel', 1, 0, GETUTCDATE());
                     IF NOT EXISTS (SELECT 1 FROM SpecificationGrades WHERE SpecificationHeaderID = @astmA240Id AND Grade = N'310S')
-                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn, CompanyCode) VALUES (@astmA240Id, N'310S', N'High Temperature Heat Resistant Stainless Steel', 1, 0, GETUTCDATE(), N'LIMS');
+                        INSERT INTO SpecificationGrades (SpecificationHeaderID, Grade, Remarks, IsActive, CreatedBy, CreatedOn) VALUES (@astmA240Id, N'310S', N'High Temperature Heat Resistant Stainless Steel', 1, 0, GETUTCDATE());
                 END
             END
         ");

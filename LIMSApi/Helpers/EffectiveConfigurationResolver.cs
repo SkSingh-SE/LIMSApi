@@ -1150,6 +1150,7 @@ namespace LIMSApi.Helpers
                     InputType = pmMaster?.InputType ?? p.InputType ?? "Decimal",
                     DecimalPrecision = pmMaster?.DecimalPrecision ?? 2,
                     ParameterType = pmMaster?.CalculationRole ?? (!string.IsNullOrWhiteSpace(p.Equation) ? "Calculated" : "Input"),
+                    CalculationRole = pmMaster?.CalculationRole,
                     IsCalculated = !string.IsNullOrWhiteSpace(p.Equation) || pmMaster?.IsCalculated == true,
                     Formula = p.Equation ?? pmMaster?.Formula,
                     SpecMin = p.MinValue,

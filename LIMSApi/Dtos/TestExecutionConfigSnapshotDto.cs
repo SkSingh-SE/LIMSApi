@@ -86,6 +86,7 @@ namespace LIMSApi.Dtos
         public string? Unit { get; set; }
         public string InputType { get; set; } = "Decimal"; // Decimal, Integer, Text, Dropdown, Boolean, Formula, Date, DateTime
         public string ParameterType { get; set; } = "Input"; // "Input", "Calculated", "Derived"
+        public string? CalculationRole { get; set; } // e.g. "CurvePeak"
         public int DecimalPrecision { get; set; } = 2;
         public bool IsCalculated { get; set; }
         public string? Formula { get; set; } // e.g. "{SOIL_LL} - {SOIL_PL}"

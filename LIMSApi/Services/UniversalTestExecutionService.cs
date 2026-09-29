@@ -347,6 +347,20 @@ namespace LIMSApi.Services
             var execution = await query.FirstOrDefaultAsync();
             if (execution == null) return null;
 
+            // SNAPSHOT ARCHITECTURE: Allow dynamic adjustments from master tables until the test is Complete
+            if (execution.Status == "InProgress" && execution.ExecutionConfigSnapshot != null && execution.UniversalTestGroup != null)
+            {
+                var freshConfigDto = await ResolveExecutionSourceAsync(execution.UniversalTestGroup, execution.CreatedBy);
+                var freshJson = CanonicalJsonSerializer.SerializeCanonical(freshConfigDto);
+                
+                if (execution.ExecutionConfigSnapshot.ConfigJson != freshJson)
+                {
+                    execution.ExecutionConfigSnapshot.ConfigJson = freshJson;
+                    execution.ExecutionConfigSnapshot.SnapshotHash = CanonicalJsonSerializer.ComputeSha256Hash(freshJson);
+                    await _context.SaveChangesAsync();
+                }
+            }
+
             return MapToExecutionDto(execution);
         }
 
@@ -1205,6 +1219,7 @@ namespace LIMSApi.Services
                         InputType = p.InputType ?? "Decimal",
                         DecimalPrecision = p.DecimalPrecision ?? 2,
                         ParameterType = p.CalculationRole ?? (p.IsCalculated ? "Calculated" : "Input"),
+                        CalculationRole = p.CalculationRole,
                         IsCalculated = p.IsCalculated,
                         Formula = p.Formula,
                         FormulaDependencies = p.FormulaDependencies ?? new List<string>(),
