@@ -2924,8 +2924,8 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
             -- Auto-create active default version for any TestMethodSpecifications missing versions
             IF OBJECT_ID(N'TestMethodSpecifications', N'U') IS NOT NULL AND OBJECT_ID(N'TestMethodSpecificationVersions', N'U') IS NOT NULL
             BEGIN
-                INSERT INTO TestMethodSpecificationVersions (TestMethodSpecificationID, Version, Year, Status, EffectiveDate, IsDefault, CreatedBy, CreatedOn, CompanyCode)
-                SELECT tms.ID, '01', CAST(YEAR(GETUTCDATE()) AS NVARCHAR(10)), 'Active', GETUTCDATE(), 1, 0, GETUTCDATE(), N'LIMS'
+                INSERT INTO TestMethodSpecificationVersions (TestMethodSpecificationID, Version, Year, Status, EffectiveDate, IsDefault, CreatedBy, CreatedOn)
+                SELECT tms.ID, '01', CAST(YEAR(GETUTCDATE()) AS NVARCHAR(10)), 'Active', GETUTCDATE(), 1, 0, GETUTCDATE()
                 FROM TestMethodSpecifications tms
                 WHERE (tms.IsDisabled = 0 OR tms.IsDisabled IS NULL)
                   AND NOT EXISTS (
