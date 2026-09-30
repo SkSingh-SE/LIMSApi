@@ -266,6 +266,7 @@ namespace LIMSApi.Repositories
                 "Area",
                 "Volume",
                 "Dimensionless",
+                "Speed",
                 "Energy",
                 "Hardness",
                 "Other"

@@ -231,7 +231,7 @@ namespace LIMSApi.Services
 
             var calcRole = string.IsNullOrWhiteSpace(dto.CalculationRole) ? "Input" : dto.CalculationRole.Trim();
             if (!UniversalCalculationRoles.Contains(calcRole))
-                throw new ArgumentException($"Invalid CalculationRole '{calcRole}'. Allowed values: Input, Calculated, Derived.");
+                throw new ArgumentException($"Invalid CalculationRole '{calcRole}'. Allowed values: Input, Calculated, Derived, CurvePeak.");
 
             bool isCalculated = calcRole.Equals("Calculated", StringComparison.OrdinalIgnoreCase) ||
                                 calcRole.Equals("Derived", StringComparison.OrdinalIgnoreCase) ||
@@ -330,7 +330,7 @@ namespace LIMSApi.Services
 
             var calcRole = string.IsNullOrWhiteSpace(dto.CalculationRole) ? "Input" : dto.CalculationRole.Trim();
             if (!UniversalCalculationRoles.Contains(calcRole))
-                throw new ArgumentException($"Invalid CalculationRole '{calcRole}'. Allowed values: Input, Calculated, Derived.");
+                throw new ArgumentException($"Invalid CalculationRole '{calcRole}'. Allowed values: Input, Calculated, Derived, CurvePeak.");
 
             bool isCalculated = calcRole.Equals("Calculated", StringComparison.OrdinalIgnoreCase) ||
                                 calcRole.Equals("Derived", StringComparison.OrdinalIgnoreCase) ||
@@ -452,7 +452,7 @@ namespace LIMSApi.Services
             { "Quantitative", "Qualitative", "Reported", "Observed", "Derived" };
 
         private static readonly HashSet<string> UniversalCalculationRoles = new(StringComparer.OrdinalIgnoreCase)
-            { "Input", "Calculated", "Derived" };
+            { "Input", "Calculated", "Derived", "CurvePeak" };
 
         private static string NormalizeCode(string rawCode)
         {

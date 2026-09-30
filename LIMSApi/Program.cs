@@ -462,8 +462,19 @@ await LIMSApi.DataSeeder.SeedAsync(app);
 // --------------------
 // Infrastructure (no auth needed)
 // --------------------
-app.UseStaticFiles();
+app.UseStaticFiles(); // serves wwwroot
+
+// Serve Uploads folder (org logo, NABL logo, signatures, etc.) at /Uploads
+var uploadsPath = Path.Combine(app.Environment.ContentRootPath, "Uploads");
+if (!Directory.Exists(uploadsPath)) Directory.CreateDirectory(uploadsPath);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPath),
+    RequestPath = "/Uploads"
+});
+
 app.UseHttpsRedirection();
+
 
 // Security headers
 app.Use(async (context, next) =>

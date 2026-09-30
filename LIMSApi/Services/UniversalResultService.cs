@@ -198,18 +198,36 @@ namespace LIMSApi.Services
                 var rows = allRows.Where(r => r.ParameterMasterID == sp.ParameterMasterID).ToList();
                 var numerics = rows.Where(r => r.NumericValue.HasValue).Select(r => (double)r.NumericValue!.Value).ToList();
                 decimal? agg = null;
-                if (numerics.Any())
+                string? raw = null;
+                if (string.Equals(sp.AggregateType, "None", StringComparison.OrdinalIgnoreCase))
                 {
-                    var calc = _formulaEvaluator.CalculateAggregate(numerics, sp.AggregateType ?? "Average");
-                    if (calc.HasValue) agg = (decimal)calc.Value;
+                    // For multi-trial parameters (e.g. Proctor Curve distinct trial points), do not aggregate them into a single mean numeric value.
+                    // Instead, keep them at reading-level representation.
+                    agg = null;
+                    if (rows.Any(r => !string.IsNullOrWhiteSpace(r.RawValue)))
+                    {
+                        raw = string.Join(", ", rows.Where(r => !string.IsNullOrWhiteSpace(r.RawValue)).Select(r => r.RawValue));
+                    }
+                    else if (numerics.Any())
+                    {
+                        raw = string.Join(", ", numerics);
+                    }
                 }
-                else if (rows.Any(r => !string.IsNullOrWhiteSpace(r.RawValue)) && decimal.TryParse(rows.First(r => !string.IsNullOrWhiteSpace(r.RawValue)).RawValue,
-                    System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+                else
                 {
-                    agg = parsed;
+                    if (numerics.Any())
+                    {
+                        var calc = _formulaEvaluator.CalculateAggregate(numerics, sp.AggregateType ?? "Average");
+                        if (calc.HasValue) agg = (decimal)calc.Value;
+                    }
+                    else if (rows.Any(r => !string.IsNullOrWhiteSpace(r.RawValue)) && decimal.TryParse(rows.First(r => !string.IsNullOrWhiteSpace(r.RawValue)).RawValue,
+                        System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+                    {
+                        agg = parsed;
+                    }
+                    raw = rows.FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.RawValue))?.RawValue
+                        ?? (agg.HasValue ? agg.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : null);
                 }
-                string? raw = rows.FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.RawValue))?.RawValue
-                    ?? (agg.HasValue ? agg.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : null);
                 aggregated[sp.ParameterMasterID] = (agg, raw);
                 rawTexts[sp.ParameterMasterID] = rows.Where(r => !string.IsNullOrWhiteSpace(r.RawValue)).Select(r => r.RawValue!).ToList();
             }
@@ -312,7 +330,13 @@ namespace LIMSApi.Services
                 bool isCalc = sp.IsCalculated;
                 decimal? calcVal = null;
                 string? trace = null;
-                if (isCalc && calcValues.TryGetValue(sp.ParameterMasterID, out var cv))
+                
+                // CRITICAL FIX: Do not override with server-evaluated formula output if this is a CurvePeak.
+                // CurvePeaks (like MDD/OMC) are evaluated dynamically by the UI curve regression engine 
+                // and pushed as raw values.
+                bool isCurvePeak = sp.CalculationRole == "CurvePeak";
+
+                if (isCalc && !isCurvePeak && calcValues.TryGetValue(sp.ParameterMasterID, out var cv))
                 {
                     calcVal = cv.value;
                     trace = cv.trace;
@@ -364,9 +388,12 @@ namespace LIMSApi.Services
                 }
 
                 string cvSource;
-                if (isCalc) cvSource = "CALCULATED";
+                if (isCalc) cvSource = isCurvePeak ? "CURVE_PEAK" : "CALCULATED";
                 else if (!string.IsNullOrEmpty(fcode)) cvSource = "FACTORED";
-                else if (rawTexts.TryGetValue(sp.ParameterMasterID, out var rList) && rList.Count > 1) cvSource = "AGGREGATED";
+                else if (rawTexts.TryGetValue(sp.ParameterMasterID, out var rList) && rList.Count > 1) 
+                {
+                    cvSource = string.Equals(sp.AggregateType, "None", StringComparison.OrdinalIgnoreCase) ? "MULTI_TRIAL" : "AGGREGATED";
+                }
                 else cvSource = "OBSERVATION";
 
                 string reqStatus;
@@ -474,8 +501,10 @@ namespace LIMSApi.Services
                     }
                     else if (reqStatus == "NOT_CONFIGURED" || reqStatus == "SPECIFICATION_NOT_APPLICABLE")
                     {
-                        verdict = reqStatus == "SPECIFICATION_NOT_APPLICABLE" ? "INFORMATIONAL" : "NOT_CONFIGURED";
-                        if (verdict == "INFORMATIONAL") note = "Standardless observation recorded without conformity verdict.";
+                        verdict = "INFORMATIONAL";
+                        note = reqStatus == "SPECIFICATION_NOT_APPLICABLE"
+                            ? "Standardless observation recorded without conformity verdict."
+                            : "Observation recorded without conformity limits.";
                     }
                     else
                     {

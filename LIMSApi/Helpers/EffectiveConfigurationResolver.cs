@@ -1524,6 +1524,34 @@ namespace LIMSApi.Helpers
             snapshot.ObservationMode = "Multiple";
             snapshot.ConfiguredReadingCount = 1;
 
+            // Phase C.4: Dynamic Execution Layout-Driven Compliance
+            // ---------------------------------------------------
+            // The execution layout structurally separates 'Observations' (intermediate trial data)
+            // from final 'Parameters' (reportable outcomes). Parameters explicitly mapped in an 
+            // Observation section are marked as non-reportable in the snapshot. This strictly 
+            // isolates them from the final compliance table and overall decision engine without 
+            // affecting their formula dependencies.
+            if (snapshot.ExecutionLayout != null && snapshot.ExecutionLayout.Sections != null)
+            {
+                var obsSectionParamIds = snapshot.ExecutionLayout.Sections
+                    .Where(s => s.SectionType == "Observations")
+                    .SelectMany(s => s.Items ?? new List<Dtos.ExecutionLayoutItemDto>())
+                    .Where(i => i.ReferenceType == "ParameterMaster" && i.ReferenceID.HasValue)
+                    .Select(i => i.ReferenceID.Value)
+                    .ToHashSet();
+
+                if (obsSectionParamIds.Count > 0)
+                {
+                    foreach (var p in snapshot.Parameters)
+                    {
+                        if (obsSectionParamIds.Contains(p.ParameterMasterID))
+                        {
+                            p.IsReportable = false;
+                        }
+                    }
+                }
+            }
+
             return snapshot;
         }
     }
