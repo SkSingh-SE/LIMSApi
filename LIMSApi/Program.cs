@@ -41,7 +41,8 @@ builder.Services.AddCors(options =>
     });
 });
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
+    ?? builder.Configuration.GetConnectionString("LimsUatConnection");
 // Add services to the container.
 
 // Global upload size limit — safety net for all multipart form endpoints
@@ -450,7 +451,10 @@ builder.Services.AddHangfire(config =>
 {
     config.UseSqlServerStorage(connectionString);
 });
-builder.Services.AddHangfireServer();
+builder.Services.AddHangfireServer(options =>
+{
+    options.WorkerCount = 2;
+});
 
 var app = builder.Build();
 

@@ -21,16 +21,13 @@ if (Test-Path $WebConfigSrc) {
     Copy-Item $WebConfigSrc $WebConfigDst -Force
 }
 
-# Prepare appsettings.Secrets.json for UAT (Site 6)
+# Prepare appsettings.Secrets.json for UAT (Site 6) with UAT (LimsUatConnection) as DefaultConnection
+$SecretsSrc = Join-Path $PSScriptRoot "LIMSApi\appsettings.Secrets.json"
 $SecretsDst = Join-Path $PSScriptRoot "LIMSApi\bin\Release\net8.0\publish\appsettings.Secrets.json"
-$SecretsScratch = Join-Path $PSScriptRoot "..\scratch\site6_secrets.json"
-if (Test-Path $SecretsScratch) {
-    Copy-Item $SecretsScratch $SecretsDst -Force
-} else {
-    $SecretsSrc = Join-Path $PSScriptRoot "LIMSApi\appsettings.Secrets.json"
+if (Test-Path $SecretsSrc) {
     $secrets = Get-Content $SecretsSrc -Raw | ConvertFrom-Json
-    if ($secrets.ConnectionStrings.LimsDevConnection) {
-        $secrets.ConnectionStrings.DefaultConnection = $secrets.ConnectionStrings.LimsDevConnection
+    if ($secrets.ConnectionStrings.LimsUatConnection) {
+        $secrets.ConnectionStrings.DefaultConnection = $secrets.ConnectionStrings.LimsUatConnection
     }
     $secrets | ConvertTo-Json -Depth 10 | Set-Content $SecretsDst -Encoding UTF8
 }

@@ -20,6 +20,26 @@ public static class DataSeeder
 
         try
         {
+            // 0. Version check guard — if already seeded, skip heavy initialization for instant cold-start
+            const string CurrentSeedVersion = "2026.09.21.02";
+            string? dbSeedVersion = null;
+            try
+            {
+                dbSeedVersion = await db.Database
+                    .SqlQueryRaw<string>("SELECT TOP 1 [Value] AS [Value] FROM Configurations WHERE KeyName = N'SEED_VERSION' AND CompanyCode = N'LIMS'")
+                    .FirstOrDefaultAsync();
+            }
+            catch
+            {
+                // Configurations table might not exist yet on fresh DB
+            }
+
+            if (string.Equals(dbSeedVersion, CurrentSeedVersion, StringComparison.OrdinalIgnoreCase))
+            {
+                logger.LogInformation("DataSeeder: database schema & seed data already up-to-date (Version: {Version}). Fast boot bypass active.", CurrentSeedVersion);
+                return;
+            }
+
             // 1. Repair empty Hangfire schema table if Hangfire objects already exist from backup/restore
             await RepairHangfireSchemaAsync(db, logger);
 
@@ -61,8 +81,7 @@ public static class DataSeeder
             await FixMachiningChargeMasterConstraintsAsync(db, logger);
 
             // Versioned Seeding Guard: Stamp CurrentSeedVersion in Configurations
-            const string CurrentSeedVersion = "2026.09.21.02";
-            var dbSeedVersion = await db.Database
+            dbSeedVersion = await db.Database
                 .SqlQueryRaw<string>("SELECT TOP 1 [Value] AS [Value] FROM Configurations WHERE KeyName = N'SEED_VERSION' AND CompanyCode = N'LIMS'")
                 .FirstOrDefaultAsync();
 
