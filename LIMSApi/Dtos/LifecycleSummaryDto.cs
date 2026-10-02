@@ -18,6 +18,21 @@ namespace LIMSApi.Dtos
         public string? ReportStatus { get; set; }
         public long? ReportHeaderId { get; set; }
         public string? ReportNo { get; set; }
+        public int UniversalTestCount { get; set; }
+        public int UniversalPendingCount { get; set; }
+        public int UniversalInProgressCount { get; set; }
+        public int UniversalCompletedCount { get; set; }
+        public int UniversalVerifiedCount { get; set; }
+        public int UniversalApprovedCount { get; set; }
+        public string? LatestExecutionStatus { get; set; }
+        public long? LatestUniversalTestGroupId { get; set; }
+        public long? LatestExecutionId { get; set; }
+        public long? LatestResultId { get; set; }
+        public string? UniversalResultStatus { get; set; }
+        public string? UniversalOverallDecision { get; set; }
+        public string? UniversalReportStatus { get; set; }
+        public long? UniversalReportId { get; set; }
+        public string? UniversalReportNo { get; set; }
         public bool IsCancelled { get; set; }
         public string? CancellationReason { get; set; }
     }
@@ -40,6 +55,14 @@ namespace LIMSApi.Dtos
         public int TotalGeneralTests { get; set; }
         public int TotalChemicalTests { get; set; }
         public int TotalTests { get; set; }
+        public int TotalUniversalTests { get; set; }
+        public int UniversalPendingTests { get; set; }
+        public int UniversalInProgressTests { get; set; }
+        public int UniversalCompletedTests { get; set; }
+        public int UniversalVerifiedTests { get; set; }
+        public int UniversalApprovedTests { get; set; }
+        public int ReleasedUniversalReports { get; set; }
+        public bool HasReleasedUniversalReport { get; set; }
 
         public bool IsReportStopped { get; set; }
         public string? StopReportReason { get; set; }

@@ -3033,6 +3033,37 @@ namespace LIMSApi.Services
                 .Select(r => new { r.SampleID, r.ID, r.ReportNo, r.Status })
                 .ToListAsync();
 
+            var planToSample = inward.SampleDetails
+                .SelectMany(s => s.TestPlans.Select(tp => new { PlanId = tp.ID, SampleId = s.ID }))
+                .ToDictionary(x => x.PlanId, x => x.SampleId);
+            var planIds = planToSample.Keys.ToList();
+
+            var utgs = await _context.UniversalTestGroups
+                .AsNoTracking()
+                .Where(u => planIds.Contains(u.SampleTestPlanID) && u.IsActive)
+                .Select(u => new { u.ID, u.SampleTestPlanID, u.Status, u.LaboratoryTestID })
+                .ToListAsync();
+            var utgIds = utgs.Select(u => u.ID).ToList();
+
+            var uExecutions = await _context.TestExecutions
+                .AsNoTracking()
+                .Where(e => utgIds.Contains(e.UniversalTestGroupID) && e.IsActive)
+                .Select(e => new { e.ID, e.UniversalTestGroupID, e.Status, e.ExecutionNo })
+                .ToListAsync();
+            var uExecIds = uExecutions.Select(e => e.ID).ToList();
+
+            var uResults = await _context.UniversalTestResults
+                .AsNoTracking()
+                .Where(r => uExecIds.Contains(r.TestExecutionID) && r.IsActive)
+                .Select(r => new { r.ID, r.TestExecutionID, r.UniversalTestGroupID, r.ResultStatus, r.OverallDecision })
+                .ToListAsync();
+
+            var uReports = await _context.UniversalReports
+                .AsNoTracking()
+                .Where(r => uExecIds.Contains(r.TestExecutionID) && r.IsActive)
+                .Select(r => new { r.ID, r.TestExecutionID, r.Status, r.ReportNo })
+                .ToListAsync();
+
             var proforma = await _context.ProformaInvoiceHeader
                 .AsNoTracking()
                 .Where(pi => pi.InwardID == id && pi.IsActive)
@@ -3072,6 +3103,21 @@ namespace LIMSApi.Services
                 totalGenTests += genCount;
                 totalChemTests += chemCount;
 
+                var sPlanIds = s.TestPlans.Select(tp => tp.ID).ToHashSet();
+                var sUtgs = utgs.Where(u => sPlanIds.Contains((long)u.SampleTestPlanID)).ToList();
+                var sUtgIds = sUtgs.Select(u => (long)u.ID).ToHashSet();
+                var sExecs = uExecutions.Where(e => sUtgIds.Contains((long)e.UniversalTestGroupID)).OrderByDescending(e => (long)e.ID).ToList();
+                var latestExec = sExecs.FirstOrDefault();
+                long latestExecId = latestExec != null ? (long)latestExec.ID : 0;
+                var latestResult = latestExec != null ? uResults.Where(r => (long)r.TestExecutionID == latestExecId).OrderByDescending(r => (long)r.ID).FirstOrDefault() : null;
+                var latestReport = latestExec != null ? uReports.Where(r => (long)r.TestExecutionID == latestExecId).OrderByDescending(r => (long)r.ID).FirstOrDefault() : null;
+
+                int uPending = sUtgs.Count(u => string.Equals((string)u.Status, "Pending", StringComparison.OrdinalIgnoreCase) && !sExecs.Any(e => (long)e.UniversalTestGroupID == (long)u.ID));
+                int uInProg = sExecs.Count(e => string.Equals((string)e.Status, "InProgress", StringComparison.OrdinalIgnoreCase));
+                int uComp = sExecs.Count(e => ((string)e.Status).IndexOf("Complet", StringComparison.OrdinalIgnoreCase) >= 0);
+                int uVer = sExecs.Count(e => ((string)e.Status).IndexOf("Verif", StringComparison.OrdinalIgnoreCase) >= 0);
+                int uAppr = sExecs.Count(e => ((string)e.Status).IndexOf("Approv", StringComparison.OrdinalIgnoreCase) >= 0);
+
                 sampleDtos.Add(new LifecycleSampleSummaryDto
                 {
                     SampleId = s.ID,
@@ -3091,7 +3137,22 @@ namespace LIMSApi.Services
                     ReportHeaderId = sReport?.ID,
                     ReportNo = sReport?.ReportNo,
                     IsCancelled = s.IsCancelled,
-                    CancellationReason = s.CancellationReason
+                    CancellationReason = s.CancellationReason,
+                    UniversalTestCount = sUtgs.Count,
+                    UniversalPendingCount = uPending,
+                    UniversalInProgressCount = uInProg,
+                    UniversalCompletedCount = uComp,
+                    UniversalVerifiedCount = uVer,
+                    UniversalApprovedCount = uAppr,
+                    LatestExecutionStatus = latestExec != null ? (string)latestExec.Status : null,
+                    LatestUniversalTestGroupId = sExecs.Count > 0 ? (long?)sExecs.First().UniversalTestGroupID : (sUtgs.Count > 0 ? (long?)sUtgs.First().ID : null),
+                    LatestExecutionId = latestExec != null ? (long?)latestExecId : null,
+                    LatestResultId = latestResult != null ? (long?)latestResult.ID : null,
+                    UniversalResultStatus = latestResult != null ? (string)latestResult.ResultStatus : null,
+                    UniversalOverallDecision = latestResult != null ? (string)latestResult.OverallDecision : null,
+                    UniversalReportStatus = latestReport != null ? (string)latestReport.Status : null,
+                    UniversalReportId = latestReport != null ? (long?)latestReport.ID : null,
+                    UniversalReportNo = latestReport != null ? (string)latestReport.ReportNo : null
                 });
             }
 
@@ -3116,6 +3177,14 @@ namespace LIMSApi.Services
                 TotalGeneralTests = totalGenTests,
                 TotalChemicalTests = totalChemTests,
                 TotalTests = totalGenTests + totalChemTests,
+                TotalUniversalTests = sampleDtos.Sum(x => x.UniversalTestCount),
+                UniversalPendingTests = sampleDtos.Sum(x => x.UniversalPendingCount),
+                UniversalInProgressTests = sampleDtos.Sum(x => x.UniversalInProgressCount),
+                UniversalCompletedTests = sampleDtos.Sum(x => x.UniversalCompletedCount),
+                UniversalVerifiedTests = sampleDtos.Sum(x => x.UniversalVerifiedCount),
+                UniversalApprovedTests = sampleDtos.Sum(x => x.UniversalApprovedCount),
+                ReleasedUniversalReports = sampleDtos.Count(x => string.Equals(x.UniversalReportStatus, "RELEASED", StringComparison.OrdinalIgnoreCase)),
+                HasReleasedUniversalReport = sampleDtos.Any(x => string.Equals(x.UniversalReportStatus, "RELEASED", StringComparison.OrdinalIgnoreCase)),
                 IsReportStopped = inward.IsReportStopped,
                 StopReportReason = inward.StopReportReason,
                 IsClosed = isClosed,
