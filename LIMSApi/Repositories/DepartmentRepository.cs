@@ -59,7 +59,7 @@ namespace LIMSApi.Repositories
                           select new
                           {
                               c.ID,
-                              c.Name,
+                              c.Name,   
                               c.Description,
                               c.IsChemical,
                               c.CreatedOn,

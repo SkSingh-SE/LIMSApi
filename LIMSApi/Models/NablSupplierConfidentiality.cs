@@ -27,5 +27,8 @@ namespace LIMSApi.Models
 
         [MaxLength(500)]
         public string? SupplierSignature { get; set; }
+        [StringLength(500)]
+        public string? Address{ get; set; }
+
     }
 }

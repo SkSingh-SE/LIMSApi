@@ -38,5 +38,23 @@ namespace LIMSApi.Models
         public string? OverallResult { get; set; } // Pass/Fail
 
         public string? CorrectiveAction { get; set; }
+        public string? ProductName { get; set; }
+        public string? ProductCode { get; set; }
+        public string? Category { get; set; }
+        public string? InspectionStage { get; set; }
+        public string? Remarks { get; set; }
+        public string? PlanNo { get; set; }
+        public string? Risklevel { get; set; }
+        [NotMapped]
+        public List<Inspectionparameters>? Parameters { get; set; }
+    }
+    public class Inspectionparameters
+    {
+        public string? ParameterName { get; set; }
+        public string? Requirement { get; set; }
+        public string? ReferenceStandard { get; set; }
+        public string? MethodOfCheck { get; set; }
+        public string? Frequency { get; set; }
+        public string? AcceptanceCriteria { get; set; }
     }
 }

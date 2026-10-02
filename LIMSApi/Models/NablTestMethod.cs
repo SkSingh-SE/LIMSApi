@@ -57,5 +57,38 @@ namespace LIMSApi.Models
 
         [MaxLength(200)]
         public string? DetectionLimit { get; set; }
+
+        public string TestMethodJson { get; set; }
+        public string OrginDocJson { get; set; }
+        [NotMapped]
+        public List<TestMethod>? TestMethod { get; set; }
+        [NotMapped]
+        public List<DocEntries>? DocEntries { get; set; }
+
     }
+
+    [NotMapped]
+    public class TestMethod
+    {
+        public string MethodName { get; set; }
+        public string SpecificationCode { get; set; }
+        public string ReferenceStandard { get; set; }
+        public string RevisionNo { get; set; }
+        public DateTime EffectiveDate { get; set; }
+        public string Status { get; set; }
+        public bool IsVerified { get; set; }
+        public bool IsValidated { get; set; }
+    }
+    [NotMapped]
+    public class DocEntries
+    {
+        public string DocId { get; set; }
+        public string Description { get; set; }
+        public string SpecificationCode { get; set; }
+        public string DocSource { get; set; }
+        public string DocType { get; set; }
+        public string Issue { get; set; }
+        public DateTime MonthYear { get; set; }
+    }
+
 }

@@ -40,7 +40,7 @@ namespace LIMSApi.Models
         [EmailAddress]
         public string? EmailId3 { get; set; }
 
-        [StringLength(100)]
+        [StringLength(500)]
         public string? Address {  get; set; }
         [Required]
         [EnumDataType(typeof(SupplierStatus))]

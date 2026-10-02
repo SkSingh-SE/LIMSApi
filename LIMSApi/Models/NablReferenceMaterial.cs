@@ -47,5 +47,38 @@ namespace LIMSApi.Models
 
         [MaxLength(50)]
         public string? QuantityUnit { get; set; }
+        public string? MaterialDescription { get; set; }
+        public string? Type { get; set; }
+        public string? Supplier { get; set; }
+        public string? MatrixType { get; set; }
+        public string? StorageLocation { get; set; }
+        public string? Traceability { get; set; }
+        public DateTime? CertificationDate { get; set; }
+        public DateTime? ValidityDate { get; set; }
+        public decimal InitialQuantity { get; set; }
+        public decimal AvailableQuantity { get; set; }
+        public decimal MinimumQuantity { get; set; }
+        public string? UnitOfMeasure { get; set; }
+        public string? Specifications { get; set; }
+        public string? ItemId { get; set; }
+        public long? DepartmentID { get; set; }
+        public long? InventoryId { get; set; }
+        public string? ParameterJson { get; set; }
+        public string? ItemCode { get; set; }
+        public string? ItemName{ get; set; }
+        [NotMapped]
+        public List<Parameters> Parameters{ get; set; }
+    }
+    [NotMapped]
+    public class Parameters
+    {
+        public string ParameterName { get; set; }
+        public decimal CertifiedValue { get; set; }
+        public decimal UpperLimit { get; set; }
+        public decimal LowerLimit { get; set; }
+        public string Unit { get; set; }
+        public decimal MeasurementUncertainty { get; set; }
+        public string? Remarks { get; set; }
+
     }
 }

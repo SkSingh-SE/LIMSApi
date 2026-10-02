@@ -9,9 +9,12 @@ namespace LIMSApi.Models
         public long ID { get; set; }
         public long EquipmentID { get; set; }
         public DateTime MaintenanceDate { get; set; }
-        public string Certificate { get; set; } = string.Empty;
+        public string? Certificate { get; set; } = string.Empty;
         public string? CertificatePath { get; set; } = string.Empty;
         public long? UploadReferenceID { get; set; }
+        public string? Desrciption { get; set; }
+        public string? MaintanceCreateBy { get; set; }
+        public DateTime? MaintanceCreateDate { get; set; }
 
         [NotMapped]
         public IFormFile? File { get; set; }

@@ -41,5 +41,14 @@ namespace LIMSApi.Models
 
         [MaxLength(500)]
         public string? ActionOnFailure { get; set; }
+        public string? PlanNo { get; set; }
+        public string? RetentionPeriod { get; set; }
+        public string? LabIncharge { get; set; }
+        public string? MaterialProductGroup { get; set; }
+        public string? Discipline { get; set; }
+        public int? PlanYear { get; set; }
+        public DateTime? EffectiveFrom { get; set; }
+        public DateTime? EffectiveTo { get; set; }
+        public ICollection<NablQualityControlPlanActivity> Activities { get; set; }= new List<NablQualityControlPlanActivity>();
     }
 }

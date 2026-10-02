@@ -30,5 +30,12 @@ namespace LIMSApi.Models
 
         [MaxLength(200)]
         public string? ApprovedBy { get; set; }
+        public string TechnicalSpecification { get; set; }
+        public string IndentorName { get; set; }
+        public string? Remarks { get; set; }
+        public int? Quantity { get; set; }
+        public DateTime? ExpectedDate { get; set; }
+        public string? PINo { get; set; }
+        public string? UnitOfMeasure { get; set; }
     }
 }

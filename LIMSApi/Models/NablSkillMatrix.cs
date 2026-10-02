@@ -9,32 +9,22 @@ namespace LIMSApi.Models
         // FK to existing Designation master
         public long DesignationId { get; set; }
 
-        [ForeignKey("DesignationId")]
-        public virtual DesignationMaster? Designation { get; set; }
-
         [MaxLength(100)]
         public string? DesignationName { get; set; }
-
-        [MaxLength(200)]
-        public string? Title { get; set; }
-
-        [MaxLength(100)]
-        public string? Decision { get; set; }
 
         // Skills list stored as JSON array of skill names
         public string? SkillsJson { get; set; }
 
-        // Employee skills stored as JSON array of { employeeId, employeeName, designationName, skills: {} }
-        public string? EmployeeSkillsJson { get; set; }
-
+        // Employee skills stored as JSON array of { employeeId, employeeName, designationName, skills: {} }\
         // Approval
-        [MaxLength(200)]
-        public string? IssuedBy { get; set; }
+        public string? AverageRequiredSkillLevel { get; set; }
+        public decimal? AverageRequiredSkill { get; set; }
+        public string? EmployeeName { get; set; }
+        public long? EmployeeId { get; set; }
+        public DateTime? EvaluationDate { get; set; }
 
-        [MaxLength(200)]
-        public string? ReviewedApprovedBy { get; set; }
-
-        public DateTime? LastUpdated { get; set; }
+        [NotMapped]
+        public List<EmployeeSkills> EmployeeSkills { get; set; } = new();
     }
 
     [Table("NablSkillMatrixDecisions")]
@@ -63,5 +53,14 @@ namespace LIMSApi.Models
         public string? ReviewedApprovedBy { get; set; }
 
         public DateTime? LastUpdated { get; set; }
+    }
+
+    [NotMapped]
+    public class EmployeeSkills
+    {
+        public string? SkillName { get; set; }
+        public string? SkillLevel { get; set; }
+        public string? Level{ get; set; }
+        public bool? Required { get; set; }
     }
 }

@@ -28,7 +28,7 @@ namespace LIMSApi.Models
         public DateTime? RequestDate { get; set; }
 
         [MaxLength(50)]
-        public string? UrgencyLevel { get; set; } // Routine/Urgent/Critical
+        public string? UrgencyLevel { get; set; }  
 
         public string? AssessedImpact { get; set; }
 
@@ -38,8 +38,29 @@ namespace LIMSApi.Models
         public DateTime? AssessmentDate { get; set; }
 
         [MaxLength(50)]
-        public string? Disposition { get; set; } // Approved/Rejected/Deferred
+        public string? Disposition { get; set; } 
 
         public DateTime? ImplementationDate { get; set; }
+        public DateTime? EffectiveDate { get; set; }
+        public DateTime? NextReviewDate { get; set; }
+        public long? ReviewedById { get; set; }
+        public long? DepartmentId { get; set; }
+        public string? CurrentIssue { get; set; } 
+        public string? ReviewedByName { get; set; } 
+        public string? CurrentRevision { get; set; } 
+        public string? RequestNo { get; set; } 
+        public string? ChangeType { get; set; } 
+        public string? DescriptionOfChange { get; set; } 
+        public string? ImpactOfChange { get; set; } 
+        public string? Reference { get; set; } 
+        public string? DepartmentName { get; set; } 
+        public string? DepartmentDoc { get; set; } 
+        public string? Designation { get; set; } 
+        public string? DocumentOwner { get; set; } 
+        public string? Priority { get; set; } 
+        public string? DocumentName { get; set; } 
+        public int? DocumentId { get; set; }
+        public long? SourceReviewId { get; set; }
+        public long? DesignationId { get; set; }
     }
 }

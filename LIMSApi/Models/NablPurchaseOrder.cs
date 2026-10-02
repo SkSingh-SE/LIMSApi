@@ -38,5 +38,33 @@ namespace LIMSApi.Models
 
         [MaxLength(200)]
         public string? IssuedBy { get; set; }
+        public string? GSTNo { get; set; }
+        public string? SupplierAddress { get; set; }
+        public string? OrderType { get; set; }
+        public string? TearmCondition { get; set; }
+        [NotMapped]
+        public List<Items>? Items { get; set; }
+        public int? GstPercentage { get; set; }
+        public decimal? GstAmount { get; set; }
+        public decimal? GrandTotal { get; set; }
+        public string? ReferenceIndentNo { get; set; }
+        public string? PONo { get; set; }
+        public string? Email { get; set; }
+        public string? PhoneNo { get; set; }
+        public string? AuthorizedBy { get; set; }
+        public int? RequestedQuantity { get; set; }
+        public long? ApprovedSupplierId { get; set; }
+        [ForeignKey("ApprovedSupplierId")]
+        public NablApprovedSupplier? NablApprovedSupplier { get; set; }
+        public string? ReferenceIndentName { get; set; }
+    }
+    [NotMapped]
+    public class Items
+    {
+        public string? Description { get; set; }
+        public int? Quantity { get; set; }
+        public string? UnitOfMeasure { get; set; }
+        public decimal? UnitPrice { get; set; }
+        public decimal? TotalAmount { get; set; }
     }
 }

@@ -34,10 +34,12 @@ namespace LIMSApi.Models
 
         public long? LeadAuditorId { get; set; }
 
-        [ForeignKey("LeadAuditorId")]
-        public virtual EmployeeMaster? LeadAuditor { get; set; }
-
         [MaxLength(200)]
         public string? LeadAuditorName { get; set; }
+        public string? PlanNo { get; set; }
+        public DateTime? ScheduleDateFrom { get; set; }
+        public DateTime? ScheduleDateTo { get; set; }
+        public string? Remarks { get; set; }
+        public virtual ICollection<ScheduleItems> ScheduleItems { get; set; } = new List<ScheduleItems>();
     }
 }
