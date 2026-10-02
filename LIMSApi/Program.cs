@@ -41,8 +41,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-    ?? builder.Configuration.GetConnectionString("LimsUatConnection");
+var connectionString = builder.Configuration.GetConnectionString("LimsUatConnection");
 // Add services to the container.
 
 // Global upload size limit — safety net for all multipart form endpoints
