@@ -123,6 +123,8 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<TestMethodSpecificationVersion> TestMethodSpecificationVersions { get; set; }
     public virtual DbSet<TestMethodSpecificationMetalClassification> TestMethodSpecificationMetalClassifications { get; set; }
     public virtual DbSet<TestMethodSpecificationParameter> TestMethodSpecificationParameters { get; set; }
+    public virtual DbSet<TestLayoutTemplate> TestLayoutTemplates { get; set; }
+    public virtual DbSet<TestLayoutTemplateMapping> TestLayoutTemplateMappings { get; set; }
     public virtual DbSet<TestTypeMaster> TestTypeMasters { get; set; }
     public virtual DbSet<TPIMaster> TPIMasters { get; set; }
     public virtual DbSet<UniversalCodeTypeMaster> UniversalCodeTypeMasters { get; set; }

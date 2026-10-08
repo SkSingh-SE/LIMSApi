@@ -20,6 +20,8 @@ namespace LIMSApi.Helpers
 
             // Add user to their personal group for targeted notifications
             await Groups.AddToGroupAsync(Context.ConnectionId, $"employee-{employeeId}");
+            // Add every authenticated user to the shared dashboard live group
+            await Groups.AddToGroupAsync(Context.ConnectionId, "dashboard-live");
 
             Console.WriteLine($"SignalR connected: {userName} (EmployeeID: {employeeId})");
             await base.OnConnectedAsync();
@@ -33,7 +35,21 @@ namespace LIMSApi.Helpers
                 await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"employee-{employeeId}");
             }
 
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, "dashboard-live");
             await base.OnDisconnectedAsync(exception);
+        }
+
+        /// <summary>
+        /// Explicit join/leave so the dashboard can re-subscribe after reconnects.
+        /// </summary>
+        public async Task JoinDashboard()
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, "dashboard-live");
+        }
+
+        public async Task LeaveDashboard()
+        {
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, "dashboard-live");
         }
     }
 }
