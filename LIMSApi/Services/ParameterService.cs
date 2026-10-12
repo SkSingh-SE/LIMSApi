@@ -57,6 +57,7 @@ namespace LIMSApi.Services
             else
             {
                 await ValidateFormulaExpression(model.Formula);
+                await ResolveFormulaDisplayIfNeeded(model);
             }
 
             // Dropdown options: only for Dropdown/MultiSelect
@@ -103,6 +104,7 @@ namespace LIMSApi.Services
             if (model.IsCalculated && NumericInputTypes.Contains(model.InputType))
             {
                 await ValidateFormulaExpression(model.Formula);
+                await ResolveFormulaDisplayIfNeeded(model);
                 existingParameter.IsCalculated   = true;
                 existingParameter.Formula        = model.Formula;
                 existingParameter.FormulaDisplay = model.FormulaDisplay;
@@ -253,6 +255,21 @@ namespace LIMSApi.Services
             var error = _formulaEvaluator.ValidateFormula(formula, existingIds);
             if (error != null)
                 throw new ArgumentException(error);
+        }
+
+        private async Task ResolveFormulaDisplayIfNeeded(ParameterMaster model)
+        {
+            if (string.IsNullOrWhiteSpace(model.FormulaDisplay) && !string.IsNullOrWhiteSpace(model.Formula))
+            {
+                var referencedIds = _formulaEvaluator.ExtractParamIds(model.Formula).ToList();
+                if (referencedIds.Any())
+                {
+                    var names = await _context.ParameterMasters
+                        .Where(p => referencedIds.Contains(p.ID))
+                        .ToDictionaryAsync(p => p.ID, p => p.Name);
+                    model.FormulaDisplay = FormulaEvaluator.FormatDisplayFormula(model.Formula, names);
+                }
+            }
         }
 
         private async Task SyncDropdownOptions(ParameterMaster existing, List<ParameterDropdownOption>? incomingOptions)

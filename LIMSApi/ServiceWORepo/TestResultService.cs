@@ -901,6 +901,7 @@ namespace LIMSApi.ServiceWORepo
                                 var inputType = pm?.InputType ?? (p.ParameterType == "Qualitative" ? "Text" : "Decimal");
                                 var dropdownOpts = pm?.DropdownOptions?.Where(o => o.IsActive).OrderBy(o => o.DisplayOrder).Select(o => new { displayText = o.DisplayText, value = o.Value, isDefault = o.IsDefault }).ToList() ?? new();
                                 var formulaExpr = !string.IsNullOrWhiteSpace(p.Formula) ? p.Formula : pm?.Formula;
+                                var formulaDisplay = !string.IsNullOrWhiteSpace(pm?.FormulaDisplay) ? pm.FormulaDisplay : null;
 
                                 paramDtos.Add(new
                                 {
@@ -916,6 +917,7 @@ namespace LIMSApi.ServiceWORepo
                                     acceptanceCriteria = p.AcceptanceCriteria,
                                     p.Remarks,
                                     formulaExpression = formulaExpr,
+                                    formulaDisplay = formulaDisplay,
                                     isCalculated = isCalc,
                                     p.SpecificationLineID,
                                     isBillable = p.IsBillable,
@@ -943,6 +945,8 @@ namespace LIMSApi.ServiceWORepo
                                 laboratoryTest = labTestName,
                                 sequenceNo = header.SequenceNo,
                                 totalSpecimens = totalSpecimens,
+                                plannedQuantity = method.Quantity > 0 ? method.Quantity : 1,
+                                quantity = method.Quantity > 0 ? method.Quantity : 1,
                                 standard = method.StandardID,
                                 standardName = method.StandardID > 0
                                     ? (standardNameCache.TryGetValue(method.StandardID, out var sn) ? sn
@@ -1045,6 +1049,7 @@ namespace LIMSApi.ServiceWORepo
                                 var inputType = pm?.InputType ?? (p.ParameterType == "Qualitative" ? "Text" : "Decimal");
                                 var dropdownOpts = pm?.DropdownOptions?.Where(o => o.IsActive).OrderBy(o => o.DisplayOrder).Select(o => new { displayText = o.DisplayText, value = o.Value, isDefault = o.IsDefault }).ToList() ?? new();
                                 var formulaExpr = !string.IsNullOrWhiteSpace(p.Formula) ? p.Formula : pm?.Formula;
+                                var formulaDisplay = !string.IsNullOrWhiteSpace(pm?.FormulaDisplay) ? pm.FormulaDisplay : null;
 
                                 chemParamDtos.Add(new
                                 {
@@ -1060,6 +1065,7 @@ namespace LIMSApi.ServiceWORepo
                                     acceptanceCriteria = p.AcceptanceCriteria,
                                     p.Remarks,
                                     formulaExpression = formulaExpr,
+                                    formulaDisplay = formulaDisplay,
                                     isCalculated = isCalc,
                                     p.SpecificationLineID,
                                     p.IsAdditional,
@@ -1093,6 +1099,8 @@ namespace LIMSApi.ServiceWORepo
                                               ?? "Chemical Test",
                                 sequenceNo = 1,
                                 totalSpecimens = 1,
+                                plannedQuantity = 1,
+                                quantity = 1,
                                 testMethodId = (long?)(ct.Methods?.FirstOrDefault(m => !m.Cancel)?.TestMethodSpecificationID ?? ct.Methods?.FirstOrDefault()?.TestMethodSpecificationID),
                                 standard = (long?)(ct.Methods?.FirstOrDefault(m => !m.Cancel)?.TestMethodSpecificationID ?? ct.Methods?.FirstOrDefault()?.TestMethodSpecificationID),
                                 standardName = ctStandardName,
@@ -2868,12 +2876,11 @@ namespace LIMSApi.ServiceWORepo
                 throw new Exception("TestResultHeader not found.");
 
             // Build dictionary for formula vars
-            Dictionary<string, double> vars = header.Parameters
-                .Where(x => x.Value.HasValue && x.Value > 0)
-                .ToDictionary(
-                    x => $"P{x.ParameterID}",
-                    x => (double)x.Value.Value
-                );
+            var vars = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+            foreach (var x in header.Parameters.Where(x => x.Value.HasValue && x.Value > 0))
+            {
+                vars[$"P{x.ParameterID}"] = (double)x.Value.Value;
+            }
 
             bool changed = true;
             int loopGuard = 0;

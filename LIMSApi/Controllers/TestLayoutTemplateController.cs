@@ -33,7 +33,6 @@ namespace LIMSApi.Controllers
             return entity == null ? NoContent() : Ok(entity);
         }
 
-        [RequirePermission(Permissions.TestLayout.Read)]
         [HttpGet("by-hierarchy")]
         public async Task<ActionResult<TestLayoutTemplate>> GetByHierarchy(
             [FromQuery] long? testId,
