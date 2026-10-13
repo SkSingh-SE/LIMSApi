@@ -1,4 +1,4 @@
-﻿using System.Linq.Dynamic.Core;
+using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -41,6 +41,9 @@ namespace LIMSApi.Repositories
         public async Task<LabScopeMaster?> GetLabScopeById(long id)
         {
             return await _context.LabScopeMasters
+            .Include(x => x.LaboratoryTest)
+            .Include(x => x.SubGroup)
+            .Include(x => x.AnalysisType)
             .Include(x => x.Specifications)
                 .ThenInclude(s => s.TestMethodSpecification)
             .Include(x => x.Specifications)
@@ -67,6 +70,11 @@ namespace LIMSApi.Repositories
                    labScope.ID,
                    labScope.LaboratoryTestID,
                    LaboratoryTestName = testMethod.Name,
+                   testMethod.IsChemicalTest,
+                   labScope.LaboratoryTestSubGroupID,
+                   SubGroupName = labScope.SubGroup != null ? labScope.SubGroup.Name : null,
+                   labScope.AnalysisTypeID,
+                   AnalysisTypeName = labScope.AnalysisType != null ? labScope.AnalysisType.Name : null,
                    ParameterCount = _context.LabScopeSpecificationParameters
                        .Count(p => _context.LabScopeSpecifications
                            .Any(s => s.LabScopeID == labScope.ID && s.ID == p.LabScopeSpecificationID)),
@@ -83,7 +91,9 @@ namespace LIMSApi.Repositories
             {
                 var search = filter.searchTerm.Trim();
                 baseQuery = baseQuery.Where(x =>
-                    x.LaboratoryTestName != null && x.LaboratoryTestName.Contains(search));
+                    (x.LaboratoryTestName != null && x.LaboratoryTestName.Contains(search))
+                    || (x.SubGroupName != null && x.SubGroupName.Contains(search))
+                    || (x.AnalysisTypeName != null && x.AnalysisTypeName.Contains(search)));
             }
 
             if (filter.SortByColumn != null)
@@ -112,18 +122,38 @@ namespace LIMSApi.Repositories
                 .GroupBy(x => x.LabScopeID)
                 .ToDictionary(g => g.Key, g => string.Join(", ", g.Select(x => x.Name)));
 
-            var result = dbItems.Select(x => (object)new
+            var result = dbItems.Select(x =>
             {
-                x.ID,
-                x.LaboratoryTestID,
-                x.LaboratoryTestName,
-                TestMethodSpecificationName = specNameMap.GetValueOrDefault(x.ID, ""),
-                x.ParameterCount,
-                IsUnderISO = x.HasISO ? "Yes" : "No",
-                x.ValidFrom,
-                x.ValidUntil,
-                x.NextReviewDate,
-                x.ModifiedOn
+                var hierarchyParts = new List<string>();
+                if (!string.IsNullOrEmpty(x.LaboratoryTestName)) hierarchyParts.Add(x.LaboratoryTestName);
+                if (!string.IsNullOrEmpty(x.SubGroupName)) hierarchyParts.Add(x.SubGroupName);
+                if (x.IsChemicalTest && !string.IsNullOrEmpty(x.AnalysisTypeName)) hierarchyParts.Add(x.AnalysisTypeName);
+
+                var hierarchyName = hierarchyParts.Count > 0 ? string.Join(" > ", hierarchyParts) : (x.LaboratoryTestName ?? "");
+                var childName = (x.IsChemicalTest && !string.IsNullOrEmpty(x.AnalysisTypeName))
+                    ? x.AnalysisTypeName
+                    : (!string.IsNullOrEmpty(x.SubGroupName) ? x.SubGroupName : (x.LaboratoryTestName ?? ""));
+
+                return (object)new
+                {
+                    x.ID,
+                    x.LaboratoryTestID,
+                    x.LaboratoryTestName,
+                    x.IsChemicalTest,
+                    x.LaboratoryTestSubGroupID,
+                    x.SubGroupName,
+                    x.AnalysisTypeID,
+                    x.AnalysisTypeName,
+                    HierarchyName = hierarchyName,
+                    ChildName = childName,
+                    TestMethodSpecificationName = specNameMap.GetValueOrDefault(x.ID, ""),
+                    x.ParameterCount,
+                    IsUnderISO = x.HasISO ? "Yes" : "No",
+                    x.ValidFrom,
+                    x.ValidUntil,
+                    x.NextReviewDate,
+                    x.ModifiedOn
+                };
             }).ToList();
 
             return new PagedResponse<object>(result, totalRecords, pageNumber, pageSize);

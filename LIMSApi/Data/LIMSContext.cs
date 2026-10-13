@@ -1400,6 +1400,21 @@ public partial class LIMSContext : DbContext
             .IsRequired(false)
             .OnDelete(DeleteBehavior.NoAction);
 
+        // ── LabScopeMaster → LaboratoryTestSubGroup & LaboratoryTestAnalysisType (nullable FKs) ──
+        modelBuilder.Entity<LabScopeMaster>()
+            .HasOne(x => x.SubGroup)
+            .WithMany()
+            .HasForeignKey(x => x.LaboratoryTestSubGroupID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        modelBuilder.Entity<LabScopeMaster>()
+            .HasOne(x => x.AnalysisType)
+            .WithMany()
+            .HasForeignKey(x => x.AnalysisTypeID)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
+
     }
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);

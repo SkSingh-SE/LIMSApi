@@ -25,11 +25,15 @@ namespace LIMSApi.Services
 
         public async Task CreateLabScope(LabScopeMaster model)
         {
-            // G1: Prevent duplicate scope for same Laboratory Test
+            // Prevent duplicate scope for same Laboratory Test + SubGroup + AnalysisType
             var exists = await _context.LabScopeMasters
-                .AnyAsync(x => x.LaboratoryTestID == model.LaboratoryTestID && x.IsActive);
+                .AnyAsync(x => x.LaboratoryTestID == model.LaboratoryTestID
+                    && x.LaboratoryTestSubGroupID == model.LaboratoryTestSubGroupID
+                    && x.AnalysisTypeID == model.AnalysisTypeID
+                    && x.IsActive
+                    && x.CompanyCode == _loggedInUser.CompanyCode);
             if (exists)
-                throw new InvalidOperationException("A scope already exists for this Laboratory Test. Edit the existing scope instead.");
+                throw new InvalidOperationException("A scope already exists for this Laboratory Test, Sub-Group, and Analysis Technique combination. Edit the existing scope instead.");
 
             await _labScopeRepository.AddLabScope(model);
 
@@ -38,7 +42,7 @@ namespace LIMSApi.Services
             {
                 LabScopeID = model.ID,
                 ChangeType = "Created",
-                EntityName = $"LabTestID: {model.LaboratoryTestID}",
+                EntityName = $"LabTestID: {model.LaboratoryTestID}, SubGroupID: {model.LaboratoryTestSubGroupID}, AnalysisTypeID: {model.AnalysisTypeID}",
                 NewValue = $"{model.Specifications.Count} specifications, {model.Specifications.SelectMany(s => s.Parameters).Count()} parameters",
                 ChangedBy = _loggedInUser.EmployeeID,
                 ChangedOn = DateTime.UtcNow
@@ -57,16 +61,19 @@ namespace LIMSApi.Services
             if (existingLabScope == null)
                 throw new InvalidOperationException("LabScope not found!");
 
-            // G1: Prevent changing to a LaboratoryTestID that already has another scope
-            if (existingLabScope.LaboratoryTestID != model.LaboratoryTestID)
-            {
-                var duplicate = await _context.LabScopeMasters
-                    .AnyAsync(x => x.LaboratoryTestID == model.LaboratoryTestID && x.IsActive && x.ID != model.ID);
-                if (duplicate)
-                    throw new InvalidOperationException("A scope already exists for this Laboratory Test.");
-            }
+            var duplicate = await _context.LabScopeMasters
+                .AnyAsync(x => x.LaboratoryTestID == model.LaboratoryTestID
+                    && x.LaboratoryTestSubGroupID == model.LaboratoryTestSubGroupID
+                    && x.AnalysisTypeID == model.AnalysisTypeID
+                    && x.IsActive
+                    && x.ID != model.ID
+                    && x.CompanyCode == _loggedInUser.CompanyCode);
+            if (duplicate)
+                throw new InvalidOperationException("A scope already exists for this Laboratory Test, Sub-Group, and Analysis Technique combination.");
 
             existingLabScope.LaboratoryTestID = model.LaboratoryTestID;
+            existingLabScope.LaboratoryTestSubGroupID = model.LaboratoryTestSubGroupID;
+            existingLabScope.AnalysisTypeID = model.AnalysisTypeID;
             existingLabScope.ValidFrom = model.ValidFrom;
             existingLabScope.ValidUntil = model.ValidUntil;
             existingLabScope.NextReviewDate = model.NextReviewDate;
@@ -256,6 +263,398 @@ namespace LIMSApi.Services
         public async Task<PagedResponse<object>> FetchLabScopeList(PageFilter filter)
         {
             return await _labScopeRepository.GetAllLabScopes(filter);
+        }
+
+        public async Task<List<UnifiedTestHierarchyDto>> GetUnifiedTestHierarchy(string? searchTerm = null, int pageNo = 1, int pageSize = 50)
+        {
+            var rawTests = await _context.LaboratoryTests.AsNoTracking()
+                .Where(t => t.IsActive)
+                .Select(t => new
+                {
+                    TestId = t.ID,
+                    TestName = t.Name,
+                    IsChemical = t.IsChemicalTest
+                })
+                .ToListAsync();
+
+            var rawSubGroups = await _context.LaboratoryTestSubGroups.AsNoTracking()
+                .Where(sg => sg.IsActive)
+                .Select(sg => new
+                {
+                    SubGroupId = sg.ID,
+                    SubGroupName = sg.Name,
+                    LaboratoryTestId = sg.LaboratoryTestID
+                })
+                .ToListAsync();
+
+            var rawAnalysisTypes = await _context.LaboratoryTestAnalysisTypes.AsNoTracking()
+                .Where(at => at.IsActive)
+                .Select(at => new
+                {
+                    AnalysisTypeId = at.ID,
+                    AnalysisTypeName = at.Name,
+                    LaboratoryTestSubGroupId = at.LaboratoryTestSubGroupID
+                })
+                .ToListAsync();
+
+            var term = searchTerm?.Trim().ToLower();
+
+            // Direct key/ID lookup (e.g. on rebind)
+            if (!string.IsNullOrWhiteSpace(term) && (term.StartsWith("chem_at_") || term.StartsWith("chem_sg_") || term.StartsWith("gen_sg_") || term.StartsWith("test_")))
+            {
+                foreach (var test in rawTests)
+                {
+                    var matchingSubGroups = rawSubGroups.Where(sg => sg.LaboratoryTestId == test.TestId).ToList();
+                    foreach (var sg in matchingSubGroups)
+                    {
+                        var matchingAts = rawAnalysisTypes.Where(at => at.LaboratoryTestSubGroupId == sg.SubGroupId).ToList();
+                        foreach (var at in matchingAts)
+                        {
+                            var key = $"chem_at_{at.AnalysisTypeId}".ToLower();
+                            if (key == term)
+                            {
+                                return new List<UnifiedTestHierarchyDto>
+                                {
+                                    new UnifiedTestHierarchyDto
+                                    {
+                                        Key = $"chem_at_{at.AnalysisTypeId}",
+                                        Id = $"chem_at_{at.AnalysisTypeId}",
+                                        LaboratoryTestID = test.TestId,
+                                        LaboratoryTestSubGroupID = sg.SubGroupId,
+                                        AnalysisTypeID = at.AnalysisTypeId,
+                                        TestName = test.TestName,
+                                        SubGroupName = sg.SubGroupName,
+                                        AnalysisTypeName = at.AnalysisTypeName,
+                                        IsChemicalTest = true,
+                                        Name = at.AnalysisTypeName,
+                                        HierarchyPath = $"{test.TestName} > {sg.SubGroupName} > {at.AnalysisTypeName}",
+                                        Category = "Chemical",
+                                        IsHeader = false,
+                                        Level = 2,
+                                        Selectable = true,
+                                        AdditionalValues = new Dictionary<string, object>
+                                        {
+                                            { "fullDisplayName", $"{test.TestName} > {sg.SubGroupName} > {at.AnalysisTypeName}" }
+                                        }
+                                    }
+                                };
+                            }
+                        }
+
+                        var sgKey = (test.IsChemical ? $"chem_sg_{sg.SubGroupId}" : $"gen_sg_{sg.SubGroupId}").ToLower();
+                        if (sgKey == term)
+                        {
+                            return new List<UnifiedTestHierarchyDto>
+                            {
+                                new UnifiedTestHierarchyDto
+                                {
+                                    Key = test.IsChemical ? $"chem_sg_{sg.SubGroupId}" : $"gen_sg_{sg.SubGroupId}",
+                                    Id = test.IsChemical ? $"chem_sg_{sg.SubGroupId}" : $"gen_sg_{sg.SubGroupId}",
+                                    LaboratoryTestID = test.TestId,
+                                    LaboratoryTestSubGroupID = sg.SubGroupId,
+                                    TestName = test.TestName,
+                                    SubGroupName = sg.SubGroupName,
+                                    IsChemicalTest = test.IsChemical,
+                                    Name = sg.SubGroupName,
+                                    HierarchyPath = $"{test.TestName} > {sg.SubGroupName}",
+                                    Category = test.IsChemical ? "Chemical" : "Mechanical / General",
+                                    IsHeader = false,
+                                    Level = 1,
+                                    Selectable = true,
+                                    AdditionalValues = new Dictionary<string, object>
+                                    {
+                                        { "fullDisplayName", $"{test.TestName} > {sg.SubGroupName}" }
+                                    }
+                                }
+                            };
+                        }
+                    }
+
+                    var testKey = $"test_{test.TestId}".ToLower();
+                    if (testKey == term)
+                    {
+                        return new List<UnifiedTestHierarchyDto>
+                        {
+                            new UnifiedTestHierarchyDto
+                            {
+                                Key = $"test_{test.TestId}",
+                                Id = $"test_{test.TestId}",
+                                LaboratoryTestID = test.TestId,
+                                TestName = test.TestName,
+                                IsChemicalTest = test.IsChemical,
+                                Name = test.TestName,
+                                HierarchyPath = test.TestName,
+                                Category = test.IsChemical ? "Chemical" : "Mechanical / General",
+                                IsHeader = false,
+                                Level = 0,
+                                Selectable = true,
+                                AdditionalValues = new Dictionary<string, object>
+                                {
+                                    { "fullDisplayName", test.TestName }
+                                }
+                            }
+                        };
+                    }
+                }
+            }
+
+            var result = new List<UnifiedTestHierarchyDto>();
+
+            foreach (var test in rawTests)
+            {
+                var matchingSubGroups = rawSubGroups.Where(sg => sg.LaboratoryTestId == test.TestId).ToList();
+
+                if (test.IsChemical)
+                {
+                    var testMatches = string.IsNullOrEmpty(term) || test.TestName.ToLower().Contains(term);
+                    var relevantSubGroups = matchingSubGroups.Where(sg =>
+                    {
+                        if (testMatches) return true;
+                        if (sg.SubGroupName.ToLower().Contains(term)) return true;
+                        return rawAnalysisTypes.Any(at => at.LaboratoryTestSubGroupId == sg.SubGroupId && at.AnalysisTypeName.ToLower().Contains(term));
+                    }).ToList();
+
+                    if (!testMatches && relevantSubGroups.Count == 0) continue;
+
+                    // Level 0 Header: Test Name
+                    result.Add(new UnifiedTestHierarchyDto
+                    {
+                        Key = $"header_test_{test.TestId}",
+                        Id = $"header_test_{test.TestId}",
+                        LaboratoryTestID = test.TestId,
+                        TestName = test.TestName,
+                        IsChemicalTest = true,
+                        Name = test.TestName,
+                        HierarchyPath = test.TestName,
+                        Category = "Chemical",
+                        IsHeader = true,
+                        Level = 0,
+                        Selectable = false
+                    });
+
+                    if (relevantSubGroups.Count == 0)
+                    {
+                        result.Add(new UnifiedTestHierarchyDto
+                        {
+                            Key = $"test_{test.TestId}",
+                            Id = $"test_{test.TestId}",
+                            LaboratoryTestID = test.TestId,
+                            TestName = test.TestName,
+                            IsChemicalTest = true,
+                            Name = test.TestName,
+                            HierarchyPath = test.TestName,
+                            Category = "Chemical",
+                            IsHeader = false,
+                            Level = 1,
+                            Selectable = true,
+                            AdditionalValues = new Dictionary<string, object>
+                            {
+                                { "fullDisplayName", test.TestName }
+                            }
+                        });
+                    }
+                    else
+                    {
+                        foreach (var sg in relevantSubGroups)
+                        {
+                            var sgMatches = testMatches || sg.SubGroupName.ToLower().Contains(term);
+                            var matchingAnalysisTypes = rawAnalysisTypes
+                                .Where(at => at.LaboratoryTestSubGroupId == sg.SubGroupId && (sgMatches || at.AnalysisTypeName.ToLower().Contains(term)))
+                                .ToList();
+
+                            if (matchingAnalysisTypes.Count == 0)
+                            {
+                                result.Add(new UnifiedTestHierarchyDto
+                                {
+                                    Key = $"chem_sg_{sg.SubGroupId}",
+                                    Id = $"chem_sg_{sg.SubGroupId}",
+                                    LaboratoryTestID = test.TestId,
+                                    LaboratoryTestSubGroupID = sg.SubGroupId,
+                                    TestName = test.TestName,
+                                    SubGroupName = sg.SubGroupName,
+                                    IsChemicalTest = true,
+                                    Name = sg.SubGroupName,
+                                    HierarchyPath = $"{test.TestName} > {sg.SubGroupName}",
+                                    Category = "Chemical",
+                                    IsHeader = false,
+                                    Level = 1,
+                                    Selectable = true,
+                                    AdditionalValues = new Dictionary<string, object>
+                                    {
+                                        { "fullDisplayName", $"{test.TestName} > {sg.SubGroupName}" }
+                                    }
+                                });
+                            }
+                            else
+                            {
+                                // Level 1 Header: SubGroup Name
+                                result.Add(new UnifiedTestHierarchyDto
+                                {
+                                    Key = $"header_sg_{sg.SubGroupId}",
+                                    Id = $"header_sg_{sg.SubGroupId}",
+                                    LaboratoryTestID = test.TestId,
+                                    LaboratoryTestSubGroupID = sg.SubGroupId,
+                                    TestName = test.TestName,
+                                    SubGroupName = sg.SubGroupName,
+                                    IsChemicalTest = true,
+                                    Name = sg.SubGroupName,
+                                    HierarchyPath = $"{test.TestName} > {sg.SubGroupName}",
+                                    Category = "Chemical",
+                                    IsHeader = true,
+                                    Level = 1,
+                                    Selectable = false
+                                });
+
+                                // Level 2 Selectable Leaves: Analysis Types
+                                foreach (var at in matchingAnalysisTypes)
+                                {
+                                    result.Add(new UnifiedTestHierarchyDto
+                                    {
+                                        Key = $"chem_at_{at.AnalysisTypeId}",
+                                        Id = $"chem_at_{at.AnalysisTypeId}",
+                                        LaboratoryTestID = test.TestId,
+                                        LaboratoryTestSubGroupID = sg.SubGroupId,
+                                        AnalysisTypeID = at.AnalysisTypeId,
+                                        TestName = test.TestName,
+                                        SubGroupName = sg.SubGroupName,
+                                        AnalysisTypeName = at.AnalysisTypeName,
+                                        IsChemicalTest = true,
+                                        Name = at.AnalysisTypeName,
+                                        HierarchyPath = $"{test.TestName} > {sg.SubGroupName} > {at.AnalysisTypeName}",
+                                        Category = "Chemical",
+                                        IsHeader = false,
+                                        Level = 2,
+                                        Selectable = true,
+                                        AdditionalValues = new Dictionary<string, object>
+                                        {
+                                            { "fullDisplayName", $"{test.TestName} > {sg.SubGroupName} > {at.AnalysisTypeName}" }
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    // Mechanical / General
+                    var testMatches = string.IsNullOrEmpty(term) || test.TestName.ToLower().Contains(term);
+                    var relevantSubGroups = matchingSubGroups
+                        .Where(sg => testMatches || sg.SubGroupName.ToLower().Contains(term))
+                        .ToList();
+
+                    if (!testMatches && relevantSubGroups.Count == 0) continue;
+
+                    if (relevantSubGroups.Count == 0)
+                    {
+                        result.Add(new UnifiedTestHierarchyDto
+                        {
+                            Key = $"test_{test.TestId}",
+                            Id = $"test_{test.TestId}",
+                            LaboratoryTestID = test.TestId,
+                            TestName = test.TestName,
+                            IsChemicalTest = false,
+                            Name = test.TestName,
+                            HierarchyPath = test.TestName,
+                            Category = "Mechanical / General",
+                            IsHeader = false,
+                            Level = 0,
+                            Selectable = true,
+                            AdditionalValues = new Dictionary<string, object>
+                            {
+                                { "fullDisplayName", test.TestName }
+                            }
+                        });
+                    }
+                    else
+                    {
+                        // Level 0 Header: Test Name
+                        result.Add(new UnifiedTestHierarchyDto
+                        {
+                            Key = $"header_test_{test.TestId}",
+                            Id = $"header_test_{test.TestId}",
+                            LaboratoryTestID = test.TestId,
+                            TestName = test.TestName,
+                            IsChemicalTest = false,
+                            Name = test.TestName,
+                            HierarchyPath = test.TestName,
+                            Category = "Mechanical / General",
+                            IsHeader = true,
+                            Level = 0,
+                            Selectable = false
+                        });
+
+                        // Level 1 Selectable Leaves: SubGroups
+                        foreach (var sg in relevantSubGroups)
+                        {
+                            result.Add(new UnifiedTestHierarchyDto
+                            {
+                                Key = $"gen_sg_{sg.SubGroupId}",
+                                Id = $"gen_sg_{sg.SubGroupId}",
+                                LaboratoryTestID = test.TestId,
+                                LaboratoryTestSubGroupID = sg.SubGroupId,
+                                TestName = test.TestName,
+                                SubGroupName = sg.SubGroupName,
+                                IsChemicalTest = false,
+                                Name = sg.SubGroupName,
+                                HierarchyPath = $"{test.TestName} > {sg.SubGroupName}",
+                                Category = "Mechanical / General",
+                                IsHeader = false,
+                                Level = 1,
+                                Selectable = true,
+                                AdditionalValues = new Dictionary<string, object>
+                                {
+                                    { "fullDisplayName", $"{test.TestName} > {sg.SubGroupName}" }
+                                }
+                            });
+                        }
+                    }
+                }
+            }
+
+            var effectivePageSize = Math.Max(pageSize, 120);
+            return result
+                .Skip((pageNo - 1) * effectivePageSize)
+                .Take(effectivePageSize)
+                .ToList();
+        }
+
+        public async Task<NablValidityDto> GetNablValidity()
+        {
+            var nabl = await _context.NablAccreditations.AsNoTracking().FirstOrDefaultAsync();
+
+            DateTime fromDate;
+            DateTime toDate;
+
+            if (nabl != null && nabl.IssueDate > new DateTime(2000, 1, 1) && nabl.ExpiryDate > new DateTime(2000, 1, 1))
+            {
+                fromDate = nabl.IssueDate;
+                toDate = nabl.ExpiryDate;
+            }
+            else
+            {
+                var today = DateTime.Today;
+                fromDate = new DateTime(today.Year, 4, 1);
+                if (today < fromDate) fromDate = fromDate.AddYears(-1);
+                toDate = fromDate.AddYears(2).AddDays(-1);
+            }
+
+            var reviewDate = fromDate.AddYears(1);
+            var isExpired = DateTime.Today > toDate;
+            var isActive = (nabl?.IsActive ?? true) && !isExpired;
+            var status = isExpired ? "Certificate Expired" : "Certificate Effective";
+            var validityPeriodFormatted = $"{fromDate:dd MMM yyyy} – {toDate:dd MMM yyyy}";
+
+            return new NablValidityDto
+            {
+                ValidFrom = fromDate.ToString("yyyy-MM-dd"),
+                ValidUntil = toDate.ToString("yyyy-MM-dd"),
+                NextReviewDate = reviewDate.ToString("yyyy-MM-dd"),
+                CertificateNumber = nabl?.CertificateNumber ?? "",
+                IsActive = isActive,
+                Status = status,
+                ValidityPeriodFormatted = validityPeriodFormatted
+            };
         }
 
     }

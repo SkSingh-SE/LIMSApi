@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Helpers;
 using LIMSApi.Middleware;
@@ -25,6 +25,18 @@ namespace LIMSApi.Controllers
         public async Task<IActionResult> LabScopeList(PageFilter filter)
         {
             return Ok(await _labScopeService.FetchLabScopeList(filter));
+        }
+
+        [HttpGet("unified-tests")]
+        public async Task<IActionResult> GetUnifiedTests([FromQuery] string? searchTerm = null, [FromQuery] int pageNo = 1, [FromQuery] int pageSize = 50)
+        {
+            return Ok(await _labScopeService.GetUnifiedTestHierarchy(searchTerm, pageNo, pageSize));
+        }
+
+        [HttpGet("nabl-validity")]
+        public async Task<IActionResult> GetNablValidity()
+        {
+            return Ok(await _labScopeService.GetNablValidity());
         }
 
 
