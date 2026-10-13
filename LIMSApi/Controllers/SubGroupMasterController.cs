@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
@@ -74,8 +74,13 @@ namespace LIMSApi.Controllers
         }
 
         [HttpGet("dropdown")]
-        public async Task<IActionResult> GetSubGroupDropdown(string? searchTerm, int pageNo, int pageSize)
+        public async Task<IActionResult> GetSubGroupDropdown(string? searchTerm, int pageNo, int pageSize, long? groupId = null)
         {
+            if (groupId.HasValue && groupId.Value > 0)
+            {
+                var groupData = await _subGroupService.GetDropdownByGroupId(groupId.Value);
+                return groupData == null ? NoContent() : Ok(groupData);
+            }
             var data = await _subGroupService.GetSubGroupDropdown(searchTerm, pageNo, pageSize);
             return data == null ? NoContent(): Ok(data);
         }
