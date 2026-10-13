@@ -47,6 +47,8 @@ namespace LIMSApi.Repositories
             .Include(x => x.Specifications)
                 .ThenInclude(s => s.TestMethodSpecification)
             .Include(x => x.Specifications)
+                .ThenInclude(s => s.TestMethodSpecificationVersion)
+            .Include(x => x.Specifications)
                 .ThenInclude(s => s.Parameters)
                     .ThenInclude(p => p.Equipments)
             .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
@@ -115,12 +117,20 @@ namespace LIMSApi.Repositories
             var scopeIds = dbItems.Select(x => x.ID).ToList();
             var specNames = await _context.LabScopeSpecifications
                 .Where(s => scopeIds.Contains(s.LabScopeID))
-                .Join(_context.TestMethodSpecifications, s => s.TestMethodSpecificationID, t => t.ID, (s, t) => new { s.LabScopeID, t.Name })
+                .Select(s => new
+                {
+                    s.LabScopeID,
+                    SpecTitle = s.TestMethodSpecification != null ? (s.TestMethodSpecification.DisplayTitle ?? s.TestMethodSpecification.Name) : "",
+                    VersionStr = s.TestMethodSpecificationVersion != null ? s.TestMethodSpecificationVersion.Version : null
+                })
                 .ToListAsync();
 
             var specNameMap = specNames
                 .GroupBy(x => x.LabScopeID)
-                .ToDictionary(g => g.Key, g => string.Join(", ", g.Select(x => x.Name)));
+                .ToDictionary(
+                    g => g.Key,
+                    g => string.Join(", ", g.Select(x => !string.IsNullOrEmpty(x.VersionStr) ? $"{x.SpecTitle} : {x.VersionStr}" : x.SpecTitle))
+                );
 
             var result = dbItems.Select(x =>
             {
