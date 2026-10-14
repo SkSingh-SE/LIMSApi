@@ -408,6 +408,15 @@ namespace LIMSApi.Services
                         }
                         return result;
                     }
+                case "FeedbackAnalysis":
+                    {
+                        var result = data as NablFeedbackAnalysis;
+                        if (result != null && !string.IsNullOrEmpty(result.RatingsJson))
+                        {
+                            result.FeedbackRatings = JsonSerializer.Deserialize<List<FeedbackRatings>>(result.RatingsJson);
+                        }
+                        return result;
+                    }
 
 
                 default:
@@ -4488,15 +4497,52 @@ namespace LIMSApi.Services
                         existingLog.Remarks = log.Remarks;
                     }
                 }
+                //foreach (var log in model.RetestingLogs)
+                //{
+                //    var existingLog = existing.RetestingLogs
+                //        .FirstOrDefault(x => x.Id == log.Id);
+
+                //    if (existingLog == null)
+                //    {
+                //        log.RetestingRetainedSampleId = existing.ID;
+
+                //        existing.RetestingLogs.Add(log);
+
+                //        var initial = existing.InitialTestingLogs
+                //            .FirstOrDefault(x => x.Id == log.InitialTestLogId);
+
+                //        if (initial != null)
+                //        {
+                //            bool previousChanged =
+                //                initial.ResultPrefix != log.PreviousPrefix ||
+                //                initial.ResultValue != log.PreviousValue;
+
+                //            // User ne Previous Test Result edit kiya
+                //            if (previousChanged)
+                //            {
+                //                initial.ResultPrefix = log.PreviousPrefix;
+                //                initial.ResultValue = log.PreviousValue;
+                //                initial.ModifiedDate = DateTime.UtcNow;
+                //            }
+
+                //            // Latest Test Result hamesha Retesting Result hoga
+                //            initial.LatestResultPrefix = log.RetestPrefix;
+                //            initial.LatestResultValue = log.RetestValue;
+                //        }
+                //    }
+                //}
+
                 foreach (var log in model.RetestingLogs)
                 {
-                    var existingLog = existing.RetestingLogs
-                        .FirstOrDefault(x => x.Id == log.Id);
+                    // Only identify existing logs using a valid database ID
+                    var existingLog = log.Id > 0
+                        ? existing.RetestingLogs.FirstOrDefault(x => x.Id == log.Id)
+                        : null;
 
                     if (existingLog == null)
                     {
+                        // New log: add it to the parent collection
                         log.RetestingRetainedSampleId = existing.ID;
-
                         existing.RetestingLogs.Add(log);
 
                         var initial = existing.InitialTestingLogs
@@ -4508,7 +4554,7 @@ namespace LIMSApi.Services
                                 initial.ResultPrefix != log.PreviousPrefix ||
                                 initial.ResultValue != log.PreviousValue;
 
-                            // User ne Previous Test Result edit kiya
+                            // Update previous result only when it has changed
                             if (previousChanged)
                             {
                                 initial.ResultPrefix = log.PreviousPrefix;
@@ -4516,12 +4562,13 @@ namespace LIMSApi.Services
                                 initial.ModifiedDate = DateTime.UtcNow;
                             }
 
-                            // Latest Test Result hamesha Retesting Result hoga
+                            // Latest result should always be the retesting result
                             initial.LatestResultPrefix = log.RetestPrefix;
                             initial.LatestResultValue = log.RetestValue;
                         }
                     }
                 }
+
 
                 await _repository.Update("Retesting", existing);
 
@@ -5390,17 +5437,17 @@ namespace LIMSApi.Services
         {
             return await _repository.Roomdropdown(searchTerm, pageNo, pageSize);
         }
-        public async Task<List<DropdwonSelector>> Supplierlist(string? searchTerm, int pageNo, int pageSize, long? recordId = null)
+        public async Task<List<DropdwonSelector>> Supplierlist(string? searchTearm, int pageNo, int pageSize, long? recordId = null)
         {
-            return await _repository.Supplierlist(searchTerm, pageNo, pageSize,recordId);
+            return await _repository.Supplierlist(searchTearm, pageNo, pageSize,recordId);
         }
-        public async Task<List<DropdwonSelector>> AllSupplierlist(string? searchTerm, int pageNo, int pageSize)
+        public async Task<List<DropdwonSelector>> AllSupplierlist(string? searchTerm, int pageNo, int pageSize, long? recordId = null)
         {
-            return await _repository.AllSupplierlist(searchTerm, pageNo, pageSize);
+            return await _repository.AllSupplierlist(searchTerm, pageNo, pageSize,recordId);
         }
-        public async Task<List<DropdwonSelector>> Alltestmethodlist(string formType, string? searchTerm, int pageNo, int pageSize)
+        public async Task<List<DropdwonSelector>> Alltestmethodlist(string formType, string? searchTerm, int pageNo, int pageSize, long? recordId = null)
         {
-            return await _repository.Alltestmethodlist(formType, searchTerm, pageNo, pageSize);
+            return await _repository.Alltestmethodlist(formType, searchTerm, pageNo, pageSize,recordId);
         }
         public async Task<UploadFile> UploadSignatureAsync(IFormFile file, CancellationToken cancellationToken = default)
         {
@@ -5490,9 +5537,9 @@ namespace LIMSApi.Services
 
             return $"{prefix}{nextNumber:D3}";
         }
-        public async Task<List<DropdwonSelector>> IndentNoList(string? searchTerm, int pageNo, int pageSize)
+        public async Task<List<DropdwonSelector>> IndentNoList(string? searchTearm, int pageNo, int pageSize, long? recordId = null)
         {
-            return await _repository.IndentNoList(searchTerm, pageNo, pageSize);
+            return await _repository.IndentNoList(searchTearm, pageNo, pageSize,recordId);
         }
         public async Task<List<DropdwonSelector>> ApprovedSupplierlist(string? searchTerm, int pageNo, int pageSize)
         {
@@ -5502,9 +5549,9 @@ namespace LIMSApi.Services
         {
             return await _repository.PlanNoDetailslist(searchTerm, pageNo, pageSize);
         }
-        public async Task<List<DropdwonSelector>> PONoListDetailslist(string? formType, string? searchTerm, int pageNo, int pageSize)
+        public async Task<List<DropdwonSelector>> PONoListDetailslist(string? formType, string? searchTearm, int pageNo, int pageSize, long? recordId = null)
         {
-            return await _repository.PONoListDetailslist(formType, searchTerm, pageNo, pageSize);
+            return await _repository.PONoListDetailslist(formType, searchTearm, pageNo, pageSize,recordId);
         }
         public async Task<SupplierEvaluationDetailsDto> SupplierEvaluationDetails(string supplierName, DateTime? fromDate, DateTime? toDate)
         {
@@ -5769,17 +5816,17 @@ namespace LIMSApi.Services
                 _ => null
             };
         }
-        public async Task<List<DropdwonSelector>> GetQcplannoDropdown(string? searchTerm, int pageNo, int pageSize)
+        public async Task<List<DropdwonSelector>> GetQcplannoDropdown(string? searchTerm, int pageNo, int pageSize, long? recordId = null)
         {
-            return await _repository.GetQcplannoDropdown(searchTerm, pageNo, pageSize);
+            return await _repository.GetQcplannoDropdown(searchTerm, pageNo, pageSize,recordId);
         }
         public async Task<RetestingQcPlanDetailsDto> QCDetails(long id)
         {
             return await _repository.QCDetails(id);
         }
-        public async Task<List<DropdwonSelector>> GetCustomerDropdown(string? searchTerm, int pageNo, int pageSize)
+        public async Task<List<DropdwonSelector>> GetCustomerDropdown(string? searchTerm, int pageNo, int pageSize, long? recordId = null)
         {
-            return await _repository.GetCustomerDropdown(searchTerm, pageNo, pageSize);
+            return await _repository.GetCustomerDropdown(searchTerm, pageNo, pageSize,recordId);
         }
         public async Task<CustomerFeedbackAnalysisDto> GetFeedbackDetails(long id)
         {
@@ -5842,9 +5889,9 @@ namespace LIMSApi.Services
             return $"{companyCode}-{year}-{nextNumber:D3}";
         }
 
-        public async Task<List<DropdwonSelector>> GetMeetinglist(string? searchTerm, int pageNo, int pageSize)
+        public async Task<List<DropdwonSelector>> GetMeetinglist(string? searchTerm, int pageNo, int pageSize, long? recordId = null)
         {
-            return await _repository.GetMeetinglist(searchTerm, pageNo, pageSize);
+            return await _repository.GetMeetinglist(searchTerm, pageNo, pageSize,recordId);
         }
         public async Task<MeetingAgendaDto> GetMeetingDetails(string meetingNo)
         {

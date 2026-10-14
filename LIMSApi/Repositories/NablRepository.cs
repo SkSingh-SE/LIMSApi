@@ -848,7 +848,7 @@ namespace LIMSApi.Repositories
 
             return data;
         }
-        public async Task<List<DropdwonSelector>> Supplierlist(string? searchTerm, int pageNo = 0, int pageSize = 20, long? recordId = null)
+        public async Task<List<DropdwonSelector>> Supplierlist(string? searchTearm, int pageNo = 0, int pageSize = 20, long? recordId = null)
         {
             if (pageNo < 0)
                 pageNo = 0;
@@ -857,15 +857,15 @@ namespace LIMSApi.Repositories
                 .Where(x => x.IsActive &&
                             !string.IsNullOrWhiteSpace(x.SupplierName));
 
-            if (!string.IsNullOrWhiteSpace(searchTerm))
+            if (!string.IsNullOrWhiteSpace(searchTearm))
             {
-                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                if (FilterHelper.IsExactIdSearch(searchTearm, out long exactId))
                 {
                     query = query.Where(x => x.ID == exactId);
                 }
                 else
                 {
-                    var search = searchTerm.Trim();
+                    var search = searchTearm.Trim();
                     query = query.Where(x => x.SupplierName.Contains(search));
                 }
             }
@@ -927,7 +927,7 @@ namespace LIMSApi.Repositories
             return data;
         }
 
-        public async Task<List<DropdwonSelector>> AllSupplierlist(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> AllSupplierlist(string? searchTerm, int pageNo = 0, int pageSize = 20, long? recordId = null)
         {
             if (pageNo < 0)
                 pageNo = 0;
@@ -950,7 +950,7 @@ namespace LIMSApi.Repositories
                     query = query.Where(x => x.SupplierName.Contains(search));
                 }
             }
-
+            query = query.Where(supplier => !_context.NablSupplierEvaluations.Any(record => record.SupplierRegisterId == supplier.ID && record.IsActive && (!recordId.HasValue || record.ID != recordId.Value)));
             var approvedSuppliers = await query
                 .OrderBy(x => x.SupplierName)
                 .Skip(pageNo * pageSize)
@@ -998,30 +998,27 @@ namespace LIMSApi.Repositories
 
             return data;
         }
-        public async Task<List<DropdwonSelector>> IndentNoList(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> IndentNoList(string? searchTearm, int pageNo = 0, int pageSize = 20, long? recordId = null)
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.NablPurchaseIndents
-                         where a.IsActive
-                         select a;
+            var _query = _context.NablPurchaseIndents.Where(c => c.IsActive && !string.IsNullOrWhiteSpace(c.IndentorName));
 
 
-            _query = _query.Where(x => !string.IsNullOrWhiteSpace(x.PINo));
-
-            if (!string.IsNullOrWhiteSpace(searchTerm))
+            if (!string.IsNullOrWhiteSpace(searchTearm))
             {
-                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                if (FilterHelper.IsExactIdSearch(searchTearm, out long exactId))
                 {
                     _query = _query.Where(x => x.ID == exactId);
                 }
                 else
                 {
-                    var search = searchTerm.Trim();
-                    _query = _query.Where(x => x.PINo.Contains(search));
+                    var search = searchTearm.Trim();
+                    _query = _query.Where(x => x.IndentorName.Contains(search));
                 }
             }
 
+            _query = _query.Where(indent => !_context.NablPurchaseOrders.Any(record => record.PurchaseIndentId == indent.ID && record.IsActive && (!recordId.HasValue || record.ID != recordId.Value)));
             var skip = pageNo * pageSize;
 
             var data = await _query
@@ -1088,7 +1085,7 @@ namespace LIMSApi.Repositories
                 .ToList();
             return data;
         }
-        public async Task<List<DropdwonSelector>> Alltestmethodlist(string formType, string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> Alltestmethodlist(string formType, string? searchTerm, int pageNo = 0, int pageSize = 20, long? recordId = null)
         {
 
 
@@ -1096,50 +1093,64 @@ namespace LIMSApi.Repositories
             switch (formType)
             {
                 case "MethodVerification":
-                    var query = _context.NablTestMethods
-                        .Where(x => x.IsActive && !string.IsNullOrWhiteSpace(x.TestMethodJson));
-
-                    var allMethods = new List<TestMethodEntryDto>();
-                    foreach (var method in await query.ToListAsync())
                     {
+                        var query = _context.NablTestMethods
+                            .Where(x => x.IsActive &&
+                                        !string.IsNullOrWhiteSpace(x.TestMethodJson));
 
-                        var methods = System.Text.Json.JsonSerializer.Deserialize<List<TestMethodEntryDto>>(
-                    method.TestMethodJson,
-                    new JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true
-                    });
+                        var allMethods = new List<TestMethodEntryDto>();
 
-                        if (methods != null && methods.Any())
+                        foreach (var method in await query.ToListAsync())
                         {
-                            allMethods.AddRange(methods);
+                            var methods =
+                                System.Text.Json.JsonSerializer.Deserialize<List<TestMethodEntryDto>>(
+                                    method.TestMethodJson,
+                                    new JsonSerializerOptions
+                                    {
+                                        PropertyNameCaseInsensitive = true
+                                    });
+
+                            if (methods != null && methods.Any())
+                            {
+                                allMethods.AddRange(methods);
+                            }
                         }
-                        allMethods = allMethods.Where(x => x.Status == "Active").ToList();
-                    }
 
+                        // Only active Test Methods from master JSON
+                        allMethods = allMethods
+                            .Where(x => string.Equals(
+                                x.Status?.Trim(),
+                                "Active",
+                                StringComparison.OrdinalIgnoreCase))
+                            .ToList();
 
-                    var skip = pageNo * pageSize;
+                        // IMPORTANT:
+                        // Do not exclude already-saved methods here.
+                        // Duplicate validation will be handled on the frontend.
 
+                        var skip = pageNo * pageSize;
 
-                    var data = allMethods
-                        .Skip(skip)
-                        .Take(pageSize)
-                        .Select((x, index) => new DropdwonSelector
-                        {
-                            Id = skip + index +1,
-                            Name = x.SpecificationCode,
-                            AdditionalValues = new Dictionary<string, object>
-                        {
+                        var data = allMethods
+                            .Skip(skip)
+                            .Take(pageSize)
+                            .Select((x, index) => new DropdwonSelector
+                            {
+                                Id = skip + index + 1,
+                                Name = x.SpecificationCode?.Trim() ?? "",
+                                AdditionalValues = new Dictionary<string, object>
+                                {
                 { "MethodName", x.MethodName ?? "" },
-                { "SpecificationCode", x.SpecificationCode ?? "" },
+                { "SpecificationCode", x.SpecificationCode?.Trim() ?? "" },
                 { "ReferenceStandard", x.ReferenceStandard ?? "" },
                 { "RevisionNo", x.RevisionNo ?? "" },
                 { "EffectiveDate", x.EffectiveDate },
-                { "Status", x.Status ?? "" },
-                        }
-                        })
-                        .ToList();
-                    return data;
+                { "Status", x.Status ?? "" }
+                                }
+                            })
+                            .ToList();
+
+                        return data;
+                    }
 
                 case "MethodValidation":
                     var _query = await _context.NablMethodVerifications.Where(x => x.IsActive && x.VerificationStatus == "Verified").ToListAsync();
@@ -1209,7 +1220,7 @@ namespace LIMSApi.Repositories
                 .ToList();
             return data;
         }
-        public async Task<List<DropdwonSelector>> PONoListDetailslist(string? formType, string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> PONoListDetailslist(string? formType, string? searchTearm, int pageNo = 0, int pageSize = 20, long? recordId = null)
         {
 
             if (pageNo < 0) pageNo = 0;
@@ -1225,18 +1236,19 @@ namespace LIMSApi.Repositories
 
                     _query = _query.Where(x => !string.IsNullOrWhiteSpace(x.PONo));
 
-                    if (!string.IsNullOrWhiteSpace(searchTerm))
+                    if (!string.IsNullOrWhiteSpace(searchTearm))
                     {
-                        if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                        if (FilterHelper.IsExactIdSearch(searchTearm, out long exactId))
                         {
                             _query = _query.Where(x => x.ID == exactId);
                         }
                         else
                         {
-                            var search = searchTerm.Trim();
+                            var search = searchTearm.Trim();
                             _query = _query.Where(x => x.PONo.Contains(search));
                         }
                     }
+                    _query = _query.Where(porder => !_context.NablIncomingMaterials.Any(record => record.PoNo == porder.ID  && record.IsActive && (!recordId.HasValue || record.ID != recordId.Value)));
                     var skip = pageNo * pageSize;
 
                     var data = _query
@@ -1263,6 +1275,7 @@ namespace LIMSApi.Repositories
                     return data;
 
                 case "PurchaseMaterialVerification":
+
                     var query =
                         from im in _context.NablIncomingMaterials
                         join po in _context.NablPurchaseOrders
@@ -1276,15 +1289,15 @@ namespace LIMSApi.Repositories
                             PurchaseOrder = po
                         };
 
-                    if (!string.IsNullOrWhiteSpace(searchTerm))
+                    if (!string.IsNullOrWhiteSpace(searchTearm))
                     {
-                        if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                        if (FilterHelper.IsExactIdSearch(searchTearm, out long exactId))
                         {
                             query = query.Where(x => x.Incoming.ID == exactId);
                         }
                         else
                         {
-                            var search = searchTerm.Trim();
+                            var search = searchTearm.Trim();
 
                             query = query.Where(x =>
                                 x.Incoming.PurchaseOrderNo.Contains(search) ||
@@ -1294,6 +1307,20 @@ namespace LIMSApi.Repositories
                         }
                     }
 
+                    query = query.Where(porder =>
+                        !_context.NablPurchaseMaterialVerifications.Any(record =>
+                            record.PurchaseOrderNo == porder.Incoming.PurchaseOrderNo &&
+                            record.IsActive &&
+                            (recordId == null || recordId <= 0 || record.ID != recordId)
+                        ));
+                    var debugData = await query
+                        .Select(x => new
+                        {
+                            IncomingID = x.Incoming.ID,
+                            PurchaseOrderID = x.PurchaseOrder.ID,
+                            PONo = x.PurchaseOrder.PONo
+                        })
+                        .ToListAsync();
                     var skipped = pageNo * pageSize;
 
                     var obj = await query
@@ -1303,28 +1330,28 @@ namespace LIMSApi.Repositories
                         .Select(x => new DropdwonSelector
                         {
                             Id = x.Incoming.ID,
-
-
                             Name = x.Incoming.PurchaseOrderNo ?? "",
 
                             AdditionalValues = new Dictionary<string, object>
                             {
-                            // From Purchase Order table
-                            { "Deviations", x.Incoming.Deviations?? "" },
-                            { "CorrectiveActions", x.Incoming.CorrectiveActions?? "" },
-                            { "SupplierName", x.PurchaseOrder.SupplierName ?? "" },
-                            { "Email", x.PurchaseOrder.Email ?? "" },
-                            { "PhoneNo", x.PurchaseOrder.PhoneNo ?? "" },
-                            { "GSTNo", x.PurchaseOrder.GSTNo ?? "" },
-                            { "OrderType", x.PurchaseOrder.OrderType ?? "" },
-                            { "SupplierAddress", x.PurchaseOrder.SupplierAddress ?? "" },
-                            { "PurchaseOrderNo", x.PurchaseOrder.PONo ?? "" },
-                            { "PODate", x.PurchaseOrder.PODate },
-                            { "ItemsJson", x.Incoming.ItemsParametersJson ?? "" },
-                            { "InspectionBy", x.Incoming.InspectionBy ?? "" },
-                            { "ReceivedBy", x.Incoming.ReceivedBy ?? "" }
+                { "Deviations", x.Incoming.Deviations ?? "" },
+                { "CorrectiveActions", x.Incoming.CorrectiveActions ?? "" },
+                { "SupplierName", x.PurchaseOrder.SupplierName ?? "" },
+                { "Email", x.PurchaseOrder.Email ?? "" },
+                { "PhoneNo", x.PurchaseOrder.PhoneNo ?? "" },
+                { "GSTNo", x.PurchaseOrder.GSTNo ?? "" },
+                { "OrderType", x.PurchaseOrder.OrderType ?? "" },
+                { "SupplierAddress", x.PurchaseOrder.SupplierAddress ?? "" },
+                { "PurchaseOrderNo", x.PurchaseOrder.PONo ?? "" },
+                { "PODate", x.PurchaseOrder.PODate },
+                { "ItemsJson", x.Incoming.ItemsParametersJson ?? "" },
+                { "InspectionBy", x.Incoming.InspectionBy ?? "" },
+                { "ReceivedBy", x.Incoming.ReceivedBy ?? "" },
+                { "PurchaseOrderId", x.PurchaseOrder.ID }
                             }
-                        }).ToListAsync();
+                        })
+                        .ToListAsync();
+
                     return obj;
 
             }
@@ -1960,7 +1987,7 @@ namespace LIMSApi.Repositories
 
             return new List<DropdwonSelector>();
         }
-        public async Task<List<DropdwonSelector>> GetQcplannoDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> GetQcplannoDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20, long? recordId = null)
         {
             if (pageNo < 0) pageNo = 0;
 
@@ -1980,6 +2007,8 @@ namespace LIMSApi.Repositories
                     _query = _query.Where(x => x.PlanNo.Contains(search));
                 }
             }
+
+            _query = _query.Where(testing => !_context.NablRetestings.Any(record => record.QcPlanNoId == testing.ID && record.IsActive && (!recordId.HasValue || record.ID != recordId.Value)));
 
             var skip = pageNo * pageSize;
 
@@ -2032,7 +2061,7 @@ namespace LIMSApi.Repositories
 
             };
         }
-        public async Task<List<DropdwonSelector>> GetCustomerDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> GetCustomerDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20, long? recordId = null)
         {
             if (pageNo < 0) pageNo = 0;
 
@@ -2052,6 +2081,7 @@ namespace LIMSApi.Repositories
                     _query = _query.Where(x => x.CompanyName.Contains(search));
                 }
             }
+            _query = _query.Where(customer => !_context.NablFeedbackAnalyses.Any(report => report.CustomerID== customer.ID && report.IsActive &&(!recordId.HasValue || report.ID!= recordId.Value)));
 
             var skip = pageNo * pageSize;
 
@@ -2097,7 +2127,7 @@ namespace LIMSApi.Repositories
             };
 
         }
-        public async Task<List<DropdwonSelector>> GetMeetinglist(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> GetMeetinglist(string? searchTerm, int pageNo = 0, int pageSize = 20, long? recordId = null)
         {
             if (pageNo < 0) pageNo = 0;
 
@@ -2120,6 +2150,7 @@ namespace LIMSApi.Repositories
                     _query = _query.Where(x => x.MeetingNo.Contains(search));
                 }
             }
+            _query = _query.Where(meeting => !_context.NablMeetingMinutes.Any(report => report.MeetingId== meeting.ID && report.IsActive &&(!recordId.HasValue || report.ID!= recordId.Value)));
 
             var skip = pageNo * pageSize;
 

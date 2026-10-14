@@ -9088,8 +9088,8 @@ namespace LIMSApi.Migrations
                     b.Property<string>("PhoneNo")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("PoNo")
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<long?>("PoNo")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("PreparedBy")
                         .HasMaxLength(200)
@@ -12260,8 +12260,8 @@ namespace LIMSApi.Migrations
                     b.Property<string>("PhoneNo")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("PoNo")
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<long>("PoNo")
+                        .HasColumnType("bigint");
 
                     b.Property<string>("PreparedBy")
                         .HasMaxLength(200)

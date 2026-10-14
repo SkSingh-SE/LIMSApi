@@ -243,9 +243,9 @@ namespace LIMSApi.Controllers
             return data == null ? NoContent() : Ok(data);
         }
         [HttpGet("{formType}/allsupplierlist")]
-        public async Task<IActionResult> AllSupplierlist(string? searchTearm, int pageNo, int pageSize)
+        public async Task<IActionResult> AllSupplierlist(string? searchTearm, int pageNo, int pageSize, long? recordId = null)
         {
-            var data = await _service.AllSupplierlist(searchTearm, pageNo, pageSize);
+            var data = await _service.AllSupplierlist(searchTearm, pageNo, pageSize, recordId);
             return data == null ? NoContent() : Ok(data);
         }
         [HttpGet("{formType}/next-indent-no")]
@@ -261,9 +261,9 @@ namespace LIMSApi.Controllers
             return Ok(new { planNo });
         }
         [HttpGet("{formType}/indentNoList")]
-        public async Task<IActionResult> IndentNoList(string? searchTearm, int pageNo, int pageSize)
+        public async Task<IActionResult> IndentNoList(string? searchTearm, int pageNo, int pageSize, long? recordId = null)
         {
-            var data = await _service.IndentNoList(searchTearm, pageNo, pageSize);
+            var data = await _service.IndentNoList(searchTearm, pageNo, pageSize, recordId);
             return data == null ? NoContent() : Ok(data);
         }
         [HttpGet("{formType}/approvedSupplierlist")]
@@ -279,9 +279,9 @@ namespace LIMSApi.Controllers
             return data == null ? NoContent() : Ok(data);
         }
         [HttpGet("{formType}/pONoList")]
-        public async Task<IActionResult> PONoListDetailslist(string formType, string? searchTearm, int pageNo, int pageSize)
+        public async Task<IActionResult> PONoListDetailslist(string formType, string? searchTearm, int pageNo, int pageSize, long? recordId = null)
         {
-            var data = await _service.PONoListDetailslist(formType, searchTearm, pageNo, pageSize);
+            var data = await _service.PONoListDetailslist(formType, searchTearm, pageNo, pageSize, recordId);
             return data == null ? NoContent() : Ok(data);
         }
         [HttpGet("{formType}/supplier-evaluation-details")]
@@ -315,9 +315,9 @@ namespace LIMSApi.Controllers
             return data == null ? NoContent() : Ok(data);
         }
         [HttpGet("{formType}/alltestmethodlist")]
-        public async Task<IActionResult> Alltestmethodlist(string formType, string? searchTearm, int pageNo, int pageSize)
+        public async Task<IActionResult> Alltestmethodlist(string formType, string? searchTerm, int pageNo, int pageSize, long? recordId = null)
         {
-            var data = await _service.Alltestmethodlist(formType, searchTearm, pageNo, pageSize);
+            var data = await _service.Alltestmethodlist(formType, searchTerm, pageNo, pageSize, recordId);
             return data == null ? NoContent() : Ok(data);
         }
         [HttpGet("{formType}/testMethodDetails/{testmethodCode}")]
@@ -388,9 +388,9 @@ namespace LIMSApi.Controllers
             return Ok(new { planNo });
         }
         [HttpGet("{formType}/qcplanno-dropdown")]
-        public async Task<IActionResult> GetQcplannoDropdown(string? searchTerm, int pageNo, int pageSize)
+        public async Task<IActionResult> GetQcplannoDropdown(string? searchTerm, int pageNo, int pageSize, long? recordId = null)
         {
-            var data = await _service.GetQcplannoDropdown(searchTerm, pageNo, pageSize);
+            var data = await _service.GetQcplannoDropdown(searchTerm, pageNo, pageSize, recordId);
             return data == null ? NoContent() : Ok(data);
         }
         [HttpGet("{formType}/qcDetails/{id}")]
@@ -400,9 +400,9 @@ namespace LIMSApi.Controllers
             return entity == null ? NoContent() : Ok(entity);
         }
         [HttpGet("{formType}/customer-dropdown")]
-        public async Task<IActionResult> GetCustomerDropdown(string? searchTerm, int pageNo, int pageSize)
+        public async Task<IActionResult> GetCustomerDropdown(string? searchTerm, int pageNo, int pageSize, long? recordId = null)
         {
-            var data = await _service.GetCustomerDropdown(searchTerm, pageNo, pageSize);
+            var data = await _service.GetCustomerDropdown(searchTerm, pageNo, pageSize, recordId);
             return data == null ? NoContent() : Ok(data);
         }
         [HttpGet("{formType}/feedback-details/{id}")]
@@ -424,9 +424,9 @@ namespace LIMSApi.Controllers
             return Ok(new { meetingNo });
         }
         [HttpGet("{formType}/all-meeting-list")]
-        public async Task<IActionResult> GetMeetinglist(string? searchTearm, int pageNo, int pageSize)
+        public async Task<IActionResult> GetMeetinglist(string? searchTearm, int pageNo, int pageSize, long? recordId = null)
         {
-            var data = await _service.GetMeetinglist(searchTearm, pageNo, pageSize);
+            var data = await _service.GetMeetinglist(searchTearm, pageNo, pageSize,recordId);
             return data == null ? NoContent() : Ok(data);
         }
         [HttpGet("{formType}/meeting-details/{meetingNo}")]
