@@ -180,7 +180,7 @@ namespace LIMSApi.Services
             {
                 foreach (var gt in testPlan.GeneralTests)
                 {
-                    foreach (var m in gt.Methods.Where(m => !m.Cancel))
+                    foreach (var m in gt.Methods.Where(m => !m.Cancel && m.PreparationRequired))
                     {
                         if (!sp.TestItems.Any(ti => ti.PlannedTestMethodID == m.ID && ti.PlannedTestType == "General"))
                         {
@@ -192,6 +192,7 @@ namespace LIMSApi.Services
                                 PlannedTestType = "General",
                                 PlannedTestMethodID = m.ID,
                                 LaboratoryTestID = m.LaboratoryTestID,
+                                TestMethodSpecificationID = m.StandardID > 0 ? m.StandardID : null,
                                 SpecimenSize = sample.Specimen ?? "Standard Specimen",
                                 Quantity = m.Quantity > 0 ? m.Quantity : 1,
                                 CuttingRequired = m.PreparationRequired,
@@ -213,9 +214,25 @@ namespace LIMSApi.Services
                     }
                 }
 
+                // Backfill TestMethodSpecificationID for existing items if missing
+                foreach (var ti in sp.TestItems.Where(ti => ti.IsActive && (!ti.TestMethodSpecificationID.HasValue || ti.TestMethodSpecificationID.Value == 0)))
+                {
+                    if (ti.PlannedTestType == "General")
+                    {
+                        var gtm = testPlan.GeneralTests
+                            .SelectMany(gt => gt.Methods)
+                            .FirstOrDefault(m => m.ID == ti.PlannedTestMethodID);
+                        if (gtm != null && gtm.StandardID > 0)
+                        {
+                            ti.TestMethodSpecificationID = gtm.StandardID;
+                            addedItems = true;
+                        }
+                    }
+                }
+
                 foreach (var ct in testPlan.ChemicalTests)
                 {
-                    foreach (var m in ct.Methods.Where(m => !m.Cancel))
+                    foreach (var m in ct.Methods.Where(m => !m.Cancel && m.PreparationRequired))
                     {
                         if (!sp.TestItems.Any(ti => ti.PlannedTestMethodID == m.ID && ti.PlannedTestType == "Chemical"))
                         {
@@ -369,6 +386,10 @@ namespace LIMSApi.Services
                             item.SpecimenSize = itemDto.SpecimenSize;
                         if (!string.IsNullOrEmpty(itemDto.SpecimenRawMaterialSize))
                             item.SpecimenRawMaterialSize = itemDto.SpecimenRawMaterialSize;
+                        if (!string.IsNullOrEmpty(itemDto.DrawingFilePath))
+                            item.DrawingFilePath = itemDto.DrawingFilePath;
+                        if (!string.IsNullOrEmpty(itemDto.FileName))
+                            item.FileName = itemDto.FileName;
                         if (itemDto.Quantity > 0)
                             item.Quantity = itemDto.Quantity;
                         item.CuttingRequired = itemDto.CuttingRequired;
@@ -492,16 +513,22 @@ namespace LIMSApi.Services
 
         private async Task SyncChargeTotals(SamplePreparation sp)
         {
+            var itemsCuttingTotal = sp.TestItems?.Where(ti => ti.IsActive && ti.CuttingRequired).Sum(ti => ti.CuttingTotal) ?? 0;
+            var itemsMachiningTotal = sp.TestItems?.Where(ti => ti.IsActive && ti.MachiningRequired).Sum(ti => ti.MachiningTotal) ?? 0;
+
             // Cutting charges
-            sp.CuttingChargesTotal = await _db.CuttingChargeHeaders
+            var headerCuttingTotal = await _db.CuttingChargeHeaders
                 .Where(c => c.InwardID == sp.InwardID && c.IsActive)
                 .Select(c => c.GrandTotal)
                 .FirstOrDefaultAsync();
 
             // Machining charges
-            sp.MachiningChargesTotal = await _db.MachiningChargeItems
+            var itemsMachiningSum = await _db.MachiningChargeItems
                 .Where(m => m.SampleID == sp.SampleID && m.IsActive)
                 .SumAsync(m => m.Amount);
+
+            sp.CuttingChargesTotal = headerCuttingTotal > 0 ? headerCuttingTotal : itemsCuttingTotal;
+            sp.MachiningChargesTotal = itemsMachiningSum > 0 ? itemsMachiningSum : itemsMachiningTotal;
 
             // Other preparation charges
             sp.OtherChargesTotal = 0;
@@ -512,24 +539,212 @@ namespace LIMSApi.Services
             var sample = sp.Sample;
             var inward = sample?.SampleInward;
 
-            var missingTestIds = sp.TestItems?
-                .Where(ti => ti.IsActive && ti.LaboratoryTestID > 0 && ti.LaboratoryTest == null)
-                .Select(ti => ti.LaboratoryTestID)
-                .Distinct()
-                .ToList() ?? new List<long>();
+            var testPlan = await _db.TestPlans
+                .Include(tp => tp.GeneralTests).ThenInclude(gt => gt.Methods)
+                .Include(tp => tp.ChemicalTests).ThenInclude(ct => ct.Methods)
+                .FirstOrDefaultAsync(tp => tp.SampleID == sp.SampleID);
 
-            var subGroupMap = missingTestIds.Count > 0
+            var planLabTestIds = new List<long>();
+            var planStandardIds = new List<long>();
+
+            if (testPlan != null)
+            {
+                foreach (var gt in testPlan.GeneralTests)
+                {
+                    foreach (var m in gt.Methods.Where(m => !m.Cancel))
+                    {
+                        if (m.LaboratoryTestID > 0) planLabTestIds.Add(m.LaboratoryTestID);
+                        if (m.StandardID > 0) planStandardIds.Add(m.StandardID);
+                    }
+                }
+
+                foreach (var ct in testPlan.ChemicalTests)
+                {
+                    foreach (var m in ct.Methods.Where(m => !m.Cancel))
+                    {
+                        if (m.TestMethodSpecificationID.HasValue && m.TestMethodSpecificationID.Value > 0)
+                            planStandardIds.Add(m.TestMethodSpecificationID.Value);
+                    }
+                }
+            }
+
+            var allTestIds = (sp.TestItems?
+                .Where(ti => ti.IsActive && ti.LaboratoryTestID > 0)
+                .Select(ti => ti.LaboratoryTestID)
+                .Concat(planLabTestIds)
+                .Distinct()
+                .ToList()) ?? planLabTestIds.Distinct().ToList();
+
+            var standardIds = (sp.TestItems?
+                .Where(ti => ti.IsActive && ti.TestMethodSpecificationID.HasValue && ti.TestMethodSpecificationID.Value > 0)
+                .Select(ti => ti.TestMethodSpecificationID!.Value)
+                .Concat(planStandardIds)
+                .Distinct()
+                .ToList()) ?? planStandardIds.Distinct().ToList();
+
+            var subGroupMap = allTestIds.Count > 0
                 ? await _db.LaboratoryTestSubGroups
                     .Include(sg => sg.LaboratoryTest)
-                    .Where(sg => missingTestIds.Contains(sg.ID))
+                    .Where(sg => allTestIds.Contains(sg.ID))
                     .ToDictionaryAsync(sg => sg.ID, sg => sg)
                 : new Dictionary<long, LaboratoryTestSubGroup>();
 
-            var directTestMap = missingTestIds.Count > 0
+            var directTestMap = allTestIds.Count > 0
                 ? await _db.LaboratoryTests
-                    .Where(lt => missingTestIds.Contains(lt.ID))
+                    .Where(lt => allTestIds.Contains(lt.ID))
                     .ToDictionaryAsync(lt => lt.ID, lt => lt.Name)
                 : new Dictionary<long, string>();
+
+            var standardMap = standardIds.Count > 0
+                ? await _db.TestMethodSpecifications
+                    .Where(s => standardIds.Contains(s.ID))
+                    .ToDictionaryAsync(s => s.ID, s => !string.IsNullOrWhiteSpace(s.DisplayTitle) ? s.DisplayTitle : (!string.IsNullOrWhiteSpace(s.TestMethodStandard) ? s.TestMethodStandard : s.Name))
+                : new Dictionary<long, string>();
+
+            (string resolvedName, string? rootTestName, string? subGroupName) ResolveLabTest(long labTestId)
+            {
+                if (subGroupMap.TryGetValue(labTestId, out var sg))
+                {
+                    var rName = sg.LaboratoryTest?.Name;
+                    var sName = !string.IsNullOrWhiteSpace(sg.Name) ? sg.Name : null;
+                    string res;
+                    if (!string.IsNullOrWhiteSpace(sg.ReportTestName))
+                    {
+                        res = sg.ReportTestName;
+                    }
+                    else if (!string.IsNullOrWhiteSpace(rName) && !string.IsNullOrWhiteSpace(sName) && !rName.Equals(sName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        res = $"{rName} on {sName}";
+                    }
+                    else
+                    {
+                        res = rName ?? sName ?? "Laboratory Test";
+                    }
+                    return (res, rName, sName);
+                }
+                else if (directTestMap.TryGetValue(labTestId, out var dName))
+                {
+                    return (dName, dName, null);
+                }
+                return ("Laboratory Test", "Laboratory Test", null);
+            }
+
+            string? ResolveStandard(long? stdId)
+            {
+                if (stdId.HasValue && standardMap.TryGetValue(stdId.Value, out var sName))
+                    return sName;
+                return null;
+            }
+
+            var activeItems = sp.TestItems?
+                .Where(ti => ti.IsActive && (ti.CuttingRequired || ti.MachiningRequired || ti.Status == "Required" || ti.Status == "InProgress"))
+                .Select(ti =>
+                {
+                    var (resolvedName, rootTestName, subGroupName) = ResolveLabTest(ti.LaboratoryTestID);
+                    var resolvedStdName = ResolveStandard(ti.TestMethodSpecificationID);
+
+                    return new SamplePreparationTestItemDto
+                    {
+                        Id = ti.ID,
+                        SamplePreparationID = ti.SamplePreparationID,
+                        SampleID = ti.SampleID,
+                        TestPlanID = ti.TestPlanID,
+                        PlannedTestType = ti.PlannedTestType,
+                        PlannedTestMethodID = ti.PlannedTestMethodID,
+                        LaboratoryTestID = ti.LaboratoryTestID,
+                        LaboratoryTestName = resolvedName,
+                        RootTestName = rootTestName,
+                        SubGroupName = subGroupName,
+                        TestMethodSpecificationID = ti.TestMethodSpecificationID,
+                        TestMethodName = resolvedStdName,
+                        SpecimenPreparationMasterID = ti.SpecimenPreparationMasterID,
+                        SpecimenSize = ti.SpecimenSize,
+                        SpecimenRawMaterialSize = ti.SpecimenRawMaterialSize,
+                        DrawingFilePath = ti.DrawingFilePath,
+                        FileName = ti.FileName,
+                        Quantity = ti.Quantity,
+                        CuttingRequired = ti.CuttingRequired,
+                        MachiningRequired = ti.MachiningRequired,
+                        NoTesting = ti.NoTesting,
+                        PreparationType = ti.CuttingRequired && ti.MachiningRequired ? "Cutting & Machining" : (ti.MachiningRequired ? "Machining" : (ti.CuttingRequired ? "Cutting" : "Preparation")),
+                        Status = ti.Status,
+                        CompletedOn = ti.CompletedOn,
+                        CompletedByEmployeeID = ti.CompletedByEmployeeID,
+                        Remarks = ti.Remarks,
+                        ResolvedCuttingRate = ti.ResolvedCuttingRate,
+                        ResolvedMachiningRate = ti.ResolvedMachiningRate,
+                        CuttingTotal = ti.CuttingTotal,
+                        MachiningTotal = ti.MachiningTotal
+                    };
+                }).ToList() ?? new List<SamplePreparationTestItemDto>();
+
+            var availablePlanTests = new List<SamplePreparationTestItemDto>();
+            if (testPlan != null)
+            {
+                foreach (var gt in testPlan.GeneralTests)
+                {
+                    foreach (var m in gt.Methods.Where(m => !m.Cancel))
+                    {
+                        var (resolvedName, rootTestName, subGroupName) = ResolveLabTest(m.LaboratoryTestID);
+                        var resolvedStdName = ResolveStandard(m.StandardID > 0 ? m.StandardID : null);
+
+                        availablePlanTests.Add(new SamplePreparationTestItemDto
+                        {
+                            SamplePreparationID = sp.ID,
+                            SampleID = sp.SampleID,
+                            TestPlanID = testPlan.ID,
+                            PlannedTestType = "General",
+                            PlannedTestMethodID = m.ID,
+                            LaboratoryTestID = m.LaboratoryTestID,
+                            LaboratoryTestName = resolvedName,
+                            RootTestName = rootTestName,
+                            SubGroupName = subGroupName,
+                            TestMethodSpecificationID = m.StandardID > 0 ? m.StandardID : null,
+                            TestMethodName = resolvedStdName,
+                            SpecimenSize = sample?.Specimen ?? "Standard Specimen",
+                            Quantity = m.Quantity > 0 ? m.Quantity : 1,
+                            CuttingRequired = m.PreparationRequired,
+                            MachiningRequired = m.PreparationRequired,
+                            Status = "Required",
+                            PreparationType = m.PreparationRequired ? "Cutting & Machining" : "Preparation"
+                        });
+                    }
+                }
+
+                foreach (var ct in testPlan.ChemicalTests)
+                {
+                    foreach (var m in ct.Methods.Where(m => !m.Cancel))
+                    {
+                        var resolvedStdName = ResolveStandard(m.TestMethodSpecificationID);
+
+                        availablePlanTests.Add(new SamplePreparationTestItemDto
+                        {
+                            SamplePreparationID = sp.ID,
+                            SampleID = sp.SampleID,
+                            TestPlanID = testPlan.ID,
+                            PlannedTestType = "Chemical",
+                            PlannedTestMethodID = m.ID,
+                            LaboratoryTestName = "Chemical Composition Test",
+                            RootTestName = "Chemical Test",
+                            TestMethodSpecificationID = m.TestMethodSpecificationID,
+                            TestMethodName = resolvedStdName,
+                            SpecimenSize = sample?.Specimen ?? "Standard Specimen",
+                            Quantity = 1,
+                            CuttingRequired = m.PreparationRequired,
+                            MachiningRequired = m.PreparationRequired,
+                            Status = "Required",
+                            PreparationType = m.PreparationRequired ? "Cutting & Machining" : "Preparation"
+                        });
+                    }
+                }
+            }
+
+            bool prepRequiredFromPlan = testPlan != null && (
+                testPlan.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) ||
+                testPlan.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired))
+            );
+            bool hasActivePrep = activeItems.Any(i => i.CuttingRequired || i.MachiningRequired);
+            bool isPrepRequired = prepRequiredFromPlan || hasActivePrep;
 
             return new SamplePreparationDetailDto
             {
@@ -579,7 +794,7 @@ namespace LIMSApi.Services
                 IsInvoiced = inward?.IsInvoiceGenerated ?? false,
 
                 // Plan-level fields
-                PreparationRequired = sample?.TestPlans.Any(tp => tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) || tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired))) ?? false,
+                PreparationRequired = isPrepRequired,
                 MachiningRequired = false,
                 MachiningAmountFromPlan = 0,
                 OtherPreparation = false,
@@ -588,42 +803,26 @@ namespace LIMSApi.Services
                 TestInstructions = sample?.TestInstructions,
 
                 // Test-wise preparation items
-                Items = sp.TestItems?.Where(ti => ti.IsActive).Select(ti =>
-                {
-                    var resolvedName = ti.LaboratoryTest?.Name
-                        ?? (subGroupMap.TryGetValue(ti.LaboratoryTestID, out var sg)
-                            ? (sg.LaboratoryTest?.Name ?? (!string.IsNullOrWhiteSpace(sg.ReportTestName) ? sg.ReportTestName : sg.Name))
-                            : (directTestMap.TryGetValue(ti.LaboratoryTestID, out var dName) ? dName : null));
-
-                    return new SamplePreparationTestItemDto
-                    {
-                        Id = ti.ID,
-                        SamplePreparationID = ti.SamplePreparationID,
-                        SampleID = ti.SampleID,
-                        TestPlanID = ti.TestPlanID,
-                        PlannedTestType = ti.PlannedTestType,
-                        PlannedTestMethodID = ti.PlannedTestMethodID,
-                        LaboratoryTestID = ti.LaboratoryTestID,
-                        LaboratoryTestName = resolvedName,
-                        TestMethodSpecificationID = ti.TestMethodSpecificationID,
-                        SpecimenSize = ti.SpecimenSize,
-                        SpecimenRawMaterialSize = ti.SpecimenRawMaterialSize,
-                        Quantity = ti.Quantity,
-                        CuttingRequired = ti.CuttingRequired,
-                        MachiningRequired = ti.MachiningRequired,
-                        NoTesting = ti.NoTesting,
-                        PreparationType = ti.CuttingRequired && ti.MachiningRequired ? "Cutting & Machining" : (ti.MachiningRequired ? "Machining" : (ti.CuttingRequired ? "Cutting" : "Preparation")),
-                        Status = ti.Status,
-                        CompletedOn = ti.CompletedOn,
-                        CompletedByEmployeeID = ti.CompletedByEmployeeID,
-                        Remarks = ti.Remarks,
-                        ResolvedCuttingRate = ti.ResolvedCuttingRate,
-                        ResolvedMachiningRate = ti.ResolvedMachiningRate,
-                        CuttingTotal = ti.CuttingTotal,
-                        MachiningTotal = ti.MachiningTotal
-                    };
-                }).ToList() ?? new List<SamplePreparationTestItemDto>()
+                Items = activeItems,
+                AvailablePlanTests = availablePlanTests
             };
+        }
+
+        public async Task<List<SamplePreparationDetailDto>> GetOrCreateByInwardAsync(long inwardId)
+        {
+            var sampleIds = await _db.SampleDetails
+                .Where(s => s.InwardID == inwardId && s.IsActive)
+                .OrderBy(s => s.ID)
+                .Select(s => s.ID)
+                .ToListAsync();
+
+            var results = new List<SamplePreparationDetailDto>();
+            foreach (var sId in sampleIds)
+            {
+                var prepDto = await GetOrCreateBySampleAsync(sId);
+                results.Add(prepDto);
+            }
+            return results;
         }
     }
 }

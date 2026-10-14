@@ -9,6 +9,8 @@ namespace LIMSApi.Services.Interface
         Task RequestReplan(long planId, string reason);
         Task ApproveReplan(long requestId, string? remarks);
         Task RejectReplan(long requestId, string? remarks);
+        Task ApproveReplanByPlanId(long planId, string? remarks);
+        Task RejectReplanByPlanId(long planId, string? remarks);
         Task CreatePlanHistoryEntry(long planId, string changeType, string? previousDataJson, string? newDataJson, string? fieldChangesJson, string? remarks);
         Task AssignGradeAsync(AssignGradeDto dto);
 

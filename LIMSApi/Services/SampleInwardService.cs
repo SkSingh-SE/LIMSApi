@@ -944,7 +944,7 @@ namespace LIMSApi.Services
 
                         general.Specification1 = gDto.Specification1;
                         general.Specification2 = gDto.Specification2;
-                        general.LaboratoryTestSubGroupID = gDto.LaboratoryTestSubGroupID;
+                        general.LaboratoryTestSubGroupID = gDto.LaboratoryTestSubGroupID ?? (gDto.Methods?.FirstOrDefault()?.TestMethodID > 0 ? gDto.Methods.First().TestMethodID : null);
 
                         foreach (var m in gDto.Methods)
                         {
@@ -1394,6 +1394,7 @@ namespace LIMSApi.Services
                         ProductSizeID = s.ProductSizeMasterID,
                         ProductSizeName = s.ProductSizeMaster?.DisplayName,
                         SpecificationGradeID = s.SpecificationGradeID,
+                        SpecificationGradeName = s.SpecificationGrade?.Grade,
                         IsUnknownSample = s.IsUnknownSample,
                         AssignedGradeID = s.AssignedGradeID,
                         AssignedGradeName = s.AssignedGrade?.Grade,
@@ -1554,12 +1555,12 @@ namespace LIMSApi.Services
                 if (id <= 0) return string.Empty;
                 if (subGroupDict.TryGetValue(id, out var sg))
                 {
-                    if (sg.LaboratoryTest != null && !string.IsNullOrWhiteSpace(sg.LaboratoryTest.Name))
-                        return sg.LaboratoryTest.Name;
                     if (!string.IsNullOrWhiteSpace(sg.ReportTestName))
                         return sg.ReportTestName;
                     if (!string.IsNullOrWhiteSpace(sg.Name))
                         return sg.Name;
+                    if (sg.LaboratoryTest != null && !string.IsNullOrWhiteSpace(sg.LaboratoryTest.Name))
+                        return sg.LaboratoryTest.Name;
                 }
                 if (directLabTests.TryGetValue(id, out var directName) && !string.IsNullOrWhiteSpace(directName))
                 {
@@ -1670,6 +1671,26 @@ namespace LIMSApi.Services
                 ? await _context.ParameterMasters
                     .Where(p => paramIds.Contains(p.ID))
                     .ToDictionaryAsync(p => p.ID, p => p.Name)
+                : new Dictionary<long, string>();
+
+            var specGradeIds = sampleInward.SampleDetails
+                .SelectMany(s => s.TestPlans)
+                .SelectMany(tp => tp.GeneralTests)
+                .SelectMany(gt => new[] { gt.Specification1, gt.Specification2 })
+                .Concat(sampleInward.SampleDetails
+                    .SelectMany(s => s.TestPlans)
+                    .SelectMany(tp => tp.ChemicalTests)
+                    .SelectMany(ct => new[] { ct.Specification1, ct.Specification2 }))
+                .Concat(sampleInward.SampleDetails.Select(s => s.SpecificationGradeID))
+                .Where(id => id.HasValue && id.Value > 0)
+                .Select(id => id.Value)
+                .Distinct()
+                .ToList();
+
+            var gradeMap = specGradeIds.Count > 0
+                ? await _context.SpecificationGrades
+                    .Where(g => specGradeIds.Contains(g.ID))
+                    .ToDictionaryAsync(g => g.ID, g => g.Grade)
                 : new Dictionary<long, string>();
 
 
@@ -1791,6 +1812,7 @@ namespace LIMSApi.Services
                         ProductSizeID = s.ProductSizeMasterID,
                         ProductSizeName = s.ProductSizeMaster?.DisplayName,
                         SpecificationGradeID = s.SpecificationGradeID,
+                        SpecificationGradeName = s.SpecificationGrade?.Grade ?? (s.SpecificationGradeID.HasValue && gradeMap.ContainsKey(s.SpecificationGradeID.Value) ? gradeMap[s.SpecificationGradeID.Value] : null),
                         IsUnknownSample = s.IsUnknownSample,
                         AssignedGradeID = s.AssignedGradeID,
                         AssignedGradeName = s.AssignedGrade?.Grade,
@@ -1887,17 +1909,28 @@ namespace LIMSApi.Services
                 //  NEW: Sample Test Plans
                 SampleTestPlans = sampleInward.SampleDetails
                     .Where(s => !s.IsCancelled && s.TestPlans.Any())
-                    .SelectMany(s => s.TestPlans.Select(tp => new SampleTestPlanDto
+                    .SelectMany(s => s.TestPlans.Select(tp =>
                     {
-                        ID = tp.ID,
-                        SampleNo = tp.SampleNo,
-                        SampleID = tp.SampleID,
-                        Version = tp.Version,
-                        ReplanCount = tp.ReplanCount,
-                        PlanStatus = tp.PlanStatus,
-                        ApprovedById = tp.ApprovedById,
-                        ApprovedByName = tp.ApprovedByName,
-                        ApprovedAt = tp.ApprovedAt,
+                        var pendingReplan = tp.ReplanRequests?
+                            .Where(r => r.Status == "Pending")
+                            .OrderByDescending(r => r.RequestedAt)
+                            .FirstOrDefault();
+
+                        return new SampleTestPlanDto
+                        {
+                            ID = tp.ID,
+                            SampleNo = tp.SampleNo,
+                            SampleID = tp.SampleID,
+                            Version = tp.Version,
+                            ReplanCount = tp.ReplanCount,
+                            PlanStatus = tp.PlanStatus,
+                            ApprovedById = tp.ApprovedById,
+                            ApprovedByName = tp.ApprovedByName,
+                            ApprovedAt = tp.ApprovedAt,
+                            PendingReplanRequestId = pendingReplan?.Id,
+                            PendingReplanReason = pendingReplan?.Reason,
+                            PendingReplanRequestedByName = pendingReplan?.RequestedByName,
+                            PendingReplanRequestedAt = pendingReplan?.RequestedAt,
                         PlanHistories = tp.Histories.OrderByDescending(h => h.ChangedAt).Select(h => new PlanHistoryDto
                         {
                             Id = h.Id,
@@ -1916,19 +1949,25 @@ namespace LIMSApi.Services
                             ID = gt.ID,
                             SampleTestPlanID = gt.SampleTestPlanID,
                             Specification1 = gt.Specification1,
+                            Specification1Name = gt.Specification1.HasValue && gradeMap.ContainsKey(gt.Specification1.Value) ? gradeMap[gt.Specification1.Value] : null,
                             Specification2 = gt.Specification2,
+                            Specification2Name = gt.Specification2.HasValue && gradeMap.ContainsKey(gt.Specification2.Value) ? gradeMap[gt.Specification2.Value] : null,
                             LaboratoryTestSubGroupID = gt.LaboratoryTestSubGroupID,
                             SubGroupName = gt.LaboratoryTestSubGroupID.HasValue && subGroupMap.ContainsKey(gt.LaboratoryTestSubGroupID.Value) ? subGroupMap[gt.LaboratoryTestSubGroupID.Value] : null,
                             LaboratoryTestName = gt.LaboratoryTestSubGroupID.HasValue ? ResolveLabTestName(gt.LaboratoryTestSubGroupID.Value) : null,
                             Methods = gt.Methods.Select(m => {
+                                var targetSubGroupId = subGroupDict.ContainsKey(m.LaboratoryTestID)
+                                    ? m.LaboratoryTestID
+                                    : (gt.LaboratoryTestSubGroupID.HasValue && subGroupDict.ContainsKey(gt.LaboratoryTestSubGroupID.Value) ? gt.LaboratoryTestSubGroupID.Value : 0);
+
+                                var subName = targetSubGroupId > 0 ? ResolveSubGroupName(targetSubGroupId) : string.Empty;
                                 var labName = ResolveLabTestName(m.LaboratoryTestID);
-                                var subName = ResolveSubGroupName(m.LaboratoryTestID);
-                                var resolvedMethodName = !string.IsNullOrWhiteSpace(labName) ? labName : (!string.IsNullOrWhiteSpace(subName) ? subName : null);
+                                var resolvedMethodName = !string.IsNullOrWhiteSpace(subName) ? subName : (!string.IsNullOrWhiteSpace(labName) ? labName : null);
                                 return new GeneralTestMethodDto
                                 {
                                     ID = m.ID,
                                     GeneralTestID = m.GeneralTestID,
-                                    TestMethodID = m.LaboratoryTestID,
+                                    TestMethodID = targetSubGroupId > 0 ? targetSubGroupId : m.LaboratoryTestID,
                                     TestCaseID = m.TestCaseID,
                                     Quantity = m.Quantity,
                                     ReportNo = m.ReportNo,
@@ -2012,7 +2051,9 @@ namespace LIMSApi.Services
                                     TechniqueNames = directTechniqueNames.ToList(),
                                     MetalClassificationID = ct.MetalClassificationID,
                                     Specification1 = ct.Specification1,
+                                    Specification1Name = ct.Specification1.HasValue && gradeMap.ContainsKey(ct.Specification1.Value) ? gradeMap[ct.Specification1.Value] : null,
                                     Specification2 = ct.Specification2,
+                                    Specification2Name = ct.Specification2.HasValue && gradeMap.ContainsKey(ct.Specification2.Value) ? gradeMap[ct.Specification2.Value] : null,
                                     AnalysisTypeIds = ct.TestTypes
                                         .Select(tt => tt.LaboratoryTestAnalysisTypeID ?? tt.LaboratoryTestID ?? 0)
                                         .Where(id => id > 0)
@@ -2079,6 +2120,7 @@ namespace LIMSApi.Services
                                     }).ToList()
                                 };
                             }).ToList()
+                        };
                     }))
                     .ToList()
             };

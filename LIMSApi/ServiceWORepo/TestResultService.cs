@@ -883,7 +883,10 @@ namespace LIMSApi.ServiceWORepo
 
                         // Cache lab test name (avoid N+1)
                         var labTestName = labTestId > 0
-                            ? (await _db.LaboratoryTests.FindAsync(labTestId))?.Name ?? "General Test"
+                            ? ((await _db.LaboratoryTestSubGroups.Where(sg => sg.ID == labTestId).Select(sg => sg.ReportTestName ?? sg.Name).FirstOrDefaultAsync())
+                               ?? (await _db.LaboratoryTestAnalysisTypes.Where(at => at.ID == labTestId).Select(at => at.Name).FirstOrDefaultAsync())
+                               ?? (await _db.LaboratoryTests.FindAsync(labTestId))?.Name
+                               ?? "General Test")
                             : "General Test";
 
                         // totalSpecimens = max of plan qty and actual header count (handles replan qty decrease)
@@ -1825,10 +1828,10 @@ namespace LIMSApi.ServiceWORepo
         {
             var result = new List<TestResultParameter>();
 
-            var labTest = await _db.LaboratoryTests
-                .FirstOrDefaultAsync(t => t.ID == labTestId);
+            var subGroup = labTestId > 0 ? await _db.LaboratoryTestSubGroups.FirstOrDefaultAsync(sg => sg.ID == labTestId) : null;
+            var labTest = labTestId > 0 ? await _db.LaboratoryTests.FirstOrDefaultAsync(t => t.ID == labTestId) : null;
 
-            var labTestName = labTest?.Name ?? $"LabTest#{labTestId}";
+            var labTestName = subGroup?.ReportTestName ?? subGroup?.Name ?? labTest?.Name ?? $"LabTest#{labTestId}";
 
             // Get specification lines (Type="mechanical") by grade
             var specLines = new List<SpecificationLine>();
@@ -1848,7 +1851,6 @@ namespace LIMSApi.ServiceWORepo
                     var targetTestIds = new HashSet<long> { labTestId };
 
                     // If labTestId is a SubGroup, include parent LaboratoryTestID
-                    var subGroup = await _db.LaboratoryTestSubGroups.FirstOrDefaultAsync(sg => sg.ID == labTestId);
                     if (subGroup != null)
                     {
                         targetTestIds.Add(subGroup.LaboratoryTestID);

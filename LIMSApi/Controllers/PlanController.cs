@@ -63,6 +63,30 @@ namespace LIMSApi.Controllers
             });
         }
 
+        [HttpPost("approve-replan-by-plan/{planId}")]
+        [RequirePermission(Permissions.Plan.Approve)]
+        public async Task<IActionResult> ApproveReplanByPlan(long planId, [FromBody] ReplanApprovalDto dto)
+        {
+            await _planService.ApproveReplanByPlanId(planId, dto?.Remarks);
+            return Ok(new
+            {
+                status = "success",
+                message = "Replan request approved successfully."
+            });
+        }
+
+        [HttpPost("reject-replan-by-plan/{planId}")]
+        [RequirePermission(Permissions.Plan.Reject)]
+        public async Task<IActionResult> RejectReplanByPlan(long planId, [FromBody] ReplanApprovalDto dto)
+        {
+            await _planService.RejectReplanByPlanId(planId, dto?.Remarks);
+            return Ok(new
+            {
+                status = "success",
+                message = "Replan request rejected."
+            });
+        }
+
         [HttpPost("assign-grade")]
         [RequirePermission(Permissions.Plan.Update)]
         public async Task<IActionResult> AssignGrade([FromBody] AssignGradeDto dto)
