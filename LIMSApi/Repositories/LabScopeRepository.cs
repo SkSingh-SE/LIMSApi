@@ -67,6 +67,10 @@ namespace LIMSApi.Repositories
                     from labScope in _context.LabScopeMasters
                     join testMethod in _context.LaboratoryTests on labScope.LaboratoryTestID equals testMethod.ID
                     where labScope.IsActive && labScope.CompanyCode == loggedInUser.CompanyCode
+                    join empMod in _context.EmployeeMasters on labScope.ModifiedBy equals empMod.ID into empModJoin
+                    from empMod in empModJoin.DefaultIfEmpty()
+                    join empCre in _context.EmployeeMasters on labScope.CreatedBy equals empCre.ID into empCreJoin
+                    from empCre in empCreJoin.DefaultIfEmpty()
                select new
                {
                    labScope.ID,
@@ -86,7 +90,12 @@ namespace LIMSApi.Repositories
                    labScope.ValidFrom,
                    labScope.ValidUntil,
                    labScope.NextReviewDate,
-                   labScope.ModifiedOn
+                   labScope.CreatedBy,
+                   labScope.CreatedOn,
+                   labScope.ModifiedBy,
+                   ModifiedOn = labScope.ModifiedOn ?? labScope.CreatedOn,
+                   CreatedByName = empCre != null ? empCre.Name : null,
+                   ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : null)
                };
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
@@ -95,7 +104,9 @@ namespace LIMSApi.Repositories
                 baseQuery = baseQuery.Where(x =>
                     (x.LaboratoryTestName != null && x.LaboratoryTestName.Contains(search))
                     || (x.SubGroupName != null && x.SubGroupName.Contains(search))
-                    || (x.AnalysisTypeName != null && x.AnalysisTypeName.Contains(search)));
+                    || (x.AnalysisTypeName != null && x.AnalysisTypeName.Contains(search))
+                    || (x.ModifiedByName != null && x.ModifiedByName.Contains(search))
+                    || (x.CreatedByName != null && x.CreatedByName.Contains(search)));
             }
 
             if (filter.SortByColumn != null)
@@ -162,7 +173,12 @@ namespace LIMSApi.Repositories
                     x.ValidFrom,
                     x.ValidUntil,
                     x.NextReviewDate,
-                    x.ModifiedOn
+                    x.CreatedBy,
+                    x.CreatedOn,
+                    x.ModifiedBy,
+                    x.ModifiedOn,
+                    x.CreatedByName,
+                    x.ModifiedByName
                 };
             }).ToList();
 

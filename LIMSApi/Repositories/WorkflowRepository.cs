@@ -1,4 +1,4 @@
-﻿using System.Linq.Dynamic.Core;
+using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -33,16 +33,21 @@ namespace LIMSApi.Repositories
         {
             var _query = from c in _context.Workflows
                          where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
-                         join e in _context.EmployeeMasters on c.CreatedBy equals e.ID into emp
-                         from e in emp.DefaultIfEmpty()
+                         join empCre in _context.EmployeeMasters on c.CreatedBy equals empCre.ID into empCreGroup
+                         from empCre in empCreGroup.DefaultIfEmpty()
+                         join empMod in _context.EmployeeMasters on c.ModifiedBy equals empMod.ID into empModGroup
+                         from empMod in empModGroup.DefaultIfEmpty()
                          select new
                          {
                              c.ID,
                              c.Name,
                              c.EntityType,
+                             c.CreatedBy,
+                             CreatedByName = empCre != null ? empCre.Name : null,
                              c.CreatedOn,
-                             c.ModifiedOn,
-                             CreatedBy = e.Name,
+                             c.ModifiedBy,
+                             ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : null),
+                             ModifiedOn = c.ModifiedOn ?? c.CreatedOn
                          };
 
             _query = _query.AsQueryable().ApplyFilters(filter.Filter);
@@ -52,8 +57,8 @@ namespace LIMSApi.Repositories
                 // Date column excluded from free-text search — use the date column filter instead.
                 var search = filter.searchTerm.Trim();
                 _query = _query.Where(x => (x.Name != null && x.Name.Contains(search))
-                || x.EntityType.Contains(search)
-                || x.CreatedBy.Contains(search));
+                || (x.EntityType != null && x.EntityType.Contains(search))
+                || (x.CreatedByName != null && x.CreatedByName.Contains(search)));
             }
 
             if (filter.SortByColumn != null)

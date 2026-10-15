@@ -1,4 +1,4 @@
-﻿using System.Linq.Dynamic.Core;
+using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -44,7 +44,28 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllTaxs(PageFilter filter)
         {
-            var _query = (from c in _context.TaxMasters where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c).AsQueryable().ApplyFilters(filter.Filter);
+            var baseQuery = from c in _context.TaxMasters
+                            where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
+                            join empMod in _context.EmployeeMasters on c.ModifiedBy equals empMod.ID into empModJoin
+                            from empMod in empModJoin.DefaultIfEmpty()
+                            join empCre in _context.EmployeeMasters on c.CreatedBy equals empCre.ID into empCreJoin
+                            from empCre in empCreJoin.DefaultIfEmpty()
+                            select new
+                            {
+                                c.ID,
+                                c.Name,
+                                c.Rate,
+                                c.IsActive,
+                                c.CompanyCode,
+                                c.CreatedBy,
+                                c.CreatedOn,
+                                c.ModifiedBy,
+                                ModifiedOn = c.ModifiedOn ?? c.CreatedOn,
+                                CreatedByName = empCre != null ? empCre.Name : null,
+                                ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : null)
+                            };
+
+            var _query = baseQuery.AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
@@ -53,7 +74,9 @@ namespace LIMSApi.Repositories
                 decimal? searchRate = decimal.TryParse(search, out var r) ? r : (decimal?)null;
                 _query = _query.Where(x =>
                     (x.Name != null && x.Name.Contains(search))
-                    || (searchRate != null && x.Rate == searchRate));
+                    || (searchRate != null && x.Rate == searchRate)
+                    || (x.ModifiedByName != null && x.ModifiedByName.Contains(search))
+                    || (x.CreatedByName != null && x.CreatedByName.Contains(search)));
             }
 
             if (filter.SortByColumn != null)

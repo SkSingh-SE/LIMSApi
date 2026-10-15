@@ -32,6 +32,15 @@ namespace LIMSApi.Services
             if (exists)
                 throw new InvalidOperationException("Equipment already exists!");
 
+            if (model.SupplierID.HasValue && model.SupplierID.Value > 0 && model.OEMID == 0)
+            {
+                model.OEMID = model.SupplierID.Value;
+            }
+            else if (model.OEMID > 0 && (!model.SupplierID.HasValue || model.SupplierID.Value == 0))
+            {
+                model.SupplierID = model.OEMID;
+            }
+
             await _equipmentRepository.AddEquipment(model);
 
             if (model.AnalysisTechniques != null && model.AnalysisTechniques.Any())
@@ -64,7 +73,8 @@ namespace LIMSApi.Services
             existingEquipment.EquipmentNo = model.EquipmentNo;
             existingEquipment.DepartmentID = model.DepartmentID;
             existingEquipment.EquipmentTypeID = model.EquipmentTypeID;
-            existingEquipment.OEMID = model.OEMID;
+            existingEquipment.SupplierID = model.SupplierID ?? (model.OEMID > 0 ? model.OEMID : null);
+            existingEquipment.OEMID = existingEquipment.SupplierID ?? model.OEMID;
             existingEquipment.ModelNo = model.ModelNo;
             existingEquipment.PurchaseDate = model.PurchaseDate;
             existingEquipment.CalibrationRequired = model.CalibrationRequired;

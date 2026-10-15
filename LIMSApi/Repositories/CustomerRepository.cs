@@ -1,4 +1,4 @@
-﻿using System.Linq.Dynamic.Core;
+using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -58,6 +58,10 @@ namespace LIMSApi.Repositories
         public async Task<PagedResponse<object>> GetAllCustomers(PageFilter filter)
         {
             var _query = (from e in _context.Customers
+                          join empMod in _context.EmployeeMasters on e.ModifiedBy equals empMod.ID into empModGroup
+                          from empMod in empModGroup.DefaultIfEmpty()
+                          join empCre in _context.EmployeeMasters on e.CreatedBy equals empCre.ID into empCreGroup
+                          from empCre in empCreGroup.DefaultIfEmpty()
                           where e.IsActive && e.CompanyCode == loggedInUser.CompanyCode
                           select new
                           {
@@ -68,8 +72,11 @@ namespace LIMSApi.Repositories
                               e.Address,
                               e.GSTNo,
                               SampleReturn = e.SampleReturn ? "Yes" : "No",
-                              e.ModifiedOn,
-                              e.CreatedOn
+                              e.CreatedBy,
+                              CreatedByName = empCre != null ? empCre.Name : "-",
+                              e.CreatedOn,
+                              ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : "-"),
+                              ModifiedOn = e.ModifiedOn ?? e.CreatedOn
                           }).AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))

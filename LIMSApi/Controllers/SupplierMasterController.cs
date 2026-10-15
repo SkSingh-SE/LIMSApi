@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 using LIMSApi.Helpers;
 using LIMSApi.Middleware;
@@ -39,7 +39,7 @@ namespace LIMSApi.Controllers
 
         [RequirePermission(Permissions.Supplier.Update)]
         [HttpPut("update")]
-        public async Task<IActionResult> PutSupplierMaster(SupplierMaster model)
+        public async Task<IActionResult> PutSupplierMaster([FromForm] SupplierMaster model)
         {
             await _supplierService.ModifySupplier(model);
             return Ok(new

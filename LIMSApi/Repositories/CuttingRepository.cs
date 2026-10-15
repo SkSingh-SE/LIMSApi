@@ -70,9 +70,10 @@ namespace LIMSApi.Repositories
 
                     GrandTotal = c != null ? c.GrandTotal : (decimal?)null,
 
-                    ModifiedOn = c != null ? c.ModifiedOn : (DateTime?)null,
+                    ModifiedOn = c != null ? (c.ModifiedOn ?? c.CreatedOn) : (i.ModifiedOn ?? i.CreatedOn),
 
                     ModifiedBy = e != null ? e.Name : string.Empty,
+                    ModifiedByName = e != null ? e.Name : string.Empty,
 
                     // 🔥 Preparation stats
                     TotalRequired = i.SampleDetails.Count(s => s.TestPlans.Any(tp => tp.GeneralTests.Any(gt => gt.Methods.Any(m => !m.Cancel && m.PreparationRequired)) || tp.ChemicalTests.Any(ct => ct.Methods.Any(m => !m.Cancel && m.PreparationRequired)))),

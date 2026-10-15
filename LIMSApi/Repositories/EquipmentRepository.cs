@@ -44,6 +44,7 @@ namespace LIMSApi.Repositories
                 .Include(s => s.SOPs)
                 .Include(t => t.AnalysisTechniques)
                 .ThenInclude(a => a.AnalysisTechnique)
+                .Include(e => e.Supplier)
                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
@@ -61,8 +62,17 @@ namespace LIMSApi.Repositories
                          join et in _context.EquipmentTypeMasters on c.EquipmentTypeID equals et.ID into typeGroup
                          from et in typeGroup.DefaultIfEmpty()
 
+                         join s in _context.SupplierMasters on (c.SupplierID ?? c.OEMID) equals s.ID into supplierGroup
+                         from s in supplierGroup.DefaultIfEmpty()
+
                          join o in _context.OEMMasters on c.OEMID equals o.ID into oemGroup
                          from o in oemGroup.DefaultIfEmpty()
+
+                         join empMod in _context.EmployeeMasters on c.ModifiedBy equals empMod.ID into empModGroup
+                         from empMod in empModGroup.DefaultIfEmpty()
+                         join empCre in _context.EmployeeMasters on c.CreatedBy equals empCre.ID into empCreGroup
+                         from empCre in empCreGroup.DefaultIfEmpty()
+
                          where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
                          select new
                          {
@@ -73,12 +83,17 @@ namespace LIMSApi.Repositories
                              DepartmentName = d.Name,
                              c.EquipmentTypeID,
                              EquipmentType = et.Name,
+                             SupplierID = c.SupplierID ?? c.OEMID,
+                             SupplierName = s != null ? s.Name : (o != null ? o.Name : "-"),
                              c.OEMID,
-                             OEMName = o.Name,
+                             OEMName = s != null ? s.Name : (o != null ? o.Name : "-"),
                              c.NextCalibrationDueDate,
                              c.NextMaintenanceDueDate,
-                             c.ModifiedOn,
-                             c.CreatedOn
+                             c.CreatedBy,
+                             CreatedByName = empCre != null ? empCre.Name : "-",
+                             c.CreatedOn,
+                             ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : "-"),
+                             ModifiedOn = c.ModifiedOn ?? c.CreatedOn
                          };
             _query = _query.AsQueryable().ApplyFilters(filter.Filter);
 
@@ -89,9 +104,10 @@ namespace LIMSApi.Repositories
                 var search = filter.searchTerm.Trim();
                 _query = _query.Where(x => (x.Name != null && x.Name.Contains(search))
                 || x.EquipmentNo.Contains(search)
-                || x.DepartmentName != null && x.DepartmentName.Contains(search)
-                || x.EquipmentType != null && x.EquipmentType.Contains(search)
-                || x.OEMName != null && x.OEMName.Contains(search)
+                || (x.DepartmentName != null && x.DepartmentName.Contains(search))
+                || (x.EquipmentType != null && x.EquipmentType.Contains(search))
+                || (x.SupplierName != null && x.SupplierName.Contains(search))
+                || (x.OEMName != null && x.OEMName.Contains(search))
                 );
             }
 

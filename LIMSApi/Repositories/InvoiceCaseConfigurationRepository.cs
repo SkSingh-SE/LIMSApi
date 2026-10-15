@@ -1,4 +1,4 @@
-﻿using System.Linq.Dynamic.Core;
+using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -44,9 +44,33 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllInvoiceCaseConfigurations(PageFilter filter)
         {
-            var _query = from c in _context.InvoiceCaseConfigurations where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode select c;
+            var baseQuery = from c in _context.InvoiceCaseConfigurations
+                            where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
+                            join empMod in _context.EmployeeMasters on c.ModifiedBy equals empMod.ID into empModGroup
+                            from empMod in empModGroup.DefaultIfEmpty()
+                            join empCre in _context.EmployeeMasters on c.CreatedBy equals empCre.ID into empCreGroup
+                            from empCre in empCreGroup.DefaultIfEmpty()
+                            select new
+                            {
+                                c.ID,
+                                c.Name,
+                                c.AliasName,
+                                c.Value,
+                                c.Start,
+                                c.End,
+                                c.Unit,
+                                c.SelectionType,
+                                c.IsActive,
+                                c.CompanyCode,
+                                c.CreatedBy,
+                                CreatedByName = empCre != null ? empCre.Name : null,
+                                c.CreatedOn,
+                                c.ModifiedBy,
+                                ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : null),
+                                ModifiedOn = c.ModifiedOn ?? c.CreatedOn
+                            };
 
-            _query = _query.AsQueryable().ApplyFilters(filter.Filter);
+            var _query = baseQuery.AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {

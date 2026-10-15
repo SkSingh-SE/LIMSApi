@@ -145,11 +145,19 @@ namespace LIMSApi.Repositories
                     CurrentStageStatus = c.InwardStatus,
                     ActionStatus = ActionStatusResolver.Resolve(WorkflowListType.Inward, c.InwardStatus).ToString(),
 
-                    ModifiedOn = c.ModifiedOn,
+                    ModifiedOn = c.ModifiedOn ?? c.CreatedOn,
                     ModifiedBy = _context.EmployeeMasters
                                    .Where(e => e.ID == c.ModifiedBy)
                                    .Select(e => e.Name)
-                                   .FirstOrDefault()
+                                   .FirstOrDefault() ?? _context.EmployeeMasters.Where(e => e.ID == c.CreatedBy).Select(e => e.Name).FirstOrDefault() ?? "-",
+                    ModifiedByName = _context.EmployeeMasters
+                                   .Where(e => e.ID == c.ModifiedBy)
+                                   .Select(e => e.Name)
+                                   .FirstOrDefault() ?? _context.EmployeeMasters.Where(e => e.ID == c.CreatedBy).Select(e => e.Name).FirstOrDefault() ?? "-",
+                    CreatedByName = _context.EmployeeMasters
+                                   .Where(e => e.ID == c.CreatedBy)
+                                   .Select(e => e.Name)
+                                   .FirstOrDefault() ?? "-"
                 });
             query = query.AsQueryable().ApplyFilters(filter.Filter);
 
@@ -178,11 +186,19 @@ namespace LIMSApi.Repositories
                     PlanStatus = c.InwardStatus,
                     CurrentStageStatus = c.InwardStatus,
                     ActionStatus = ActionStatusResolver.Resolve(WorkflowListType.Planning, c.InwardStatus).ToString(),
-                    ModifiedOn = c.ModifiedOn,
+                    ModifiedOn = c.ModifiedOn ?? c.CreatedOn,
                     ModifiedBy = _context.EmployeeMasters
                                    .Where(e => e.ID == c.ModifiedBy)
                                    .Select(e => e.Name)
-                                   .FirstOrDefault()
+                                   .FirstOrDefault() ?? _context.EmployeeMasters.Where(e => e.ID == c.CreatedBy).Select(e => e.Name).FirstOrDefault() ?? "-",
+                    ModifiedByName = _context.EmployeeMasters
+                                   .Where(e => e.ID == c.ModifiedBy)
+                                   .Select(e => e.Name)
+                                   .FirstOrDefault() ?? _context.EmployeeMasters.Where(e => e.ID == c.CreatedBy).Select(e => e.Name).FirstOrDefault() ?? "-",
+                    CreatedByName = _context.EmployeeMasters
+                                   .Where(e => e.ID == c.CreatedBy)
+                                   .Select(e => e.Name)
+                                   .FirstOrDefault() ?? "-"
                 });
 
             query = query.AsQueryable().ApplyFilters(filter.Filter);
@@ -263,11 +279,19 @@ namespace LIMSApi.Repositories
                             })
                         : null,
 
-                    ModifiedOn = inward.ModifiedOn,
+                    ModifiedOn = inward.ModifiedOn ?? inward.CreatedOn,
                     ModifiedBy = _context.EmployeeMasters
                         .Where(e => e.ID == inward.ModifiedBy)
                         .Select(e => e.Name)
-                        .FirstOrDefault()
+                        .FirstOrDefault() ?? _context.EmployeeMasters.Where(e => e.ID == inward.CreatedBy).Select(e => e.Name).FirstOrDefault() ?? "-",
+                    ModifiedByName = _context.EmployeeMasters
+                        .Where(e => e.ID == inward.ModifiedBy)
+                        .Select(e => e.Name)
+                        .FirstOrDefault() ?? _context.EmployeeMasters.Where(e => e.ID == inward.CreatedBy).Select(e => e.Name).FirstOrDefault() ?? "-",
+                    CreatedByName = _context.EmployeeMasters
+                        .Where(e => e.ID == inward.CreatedBy)
+                        .Select(e => e.Name)
+                        .FirstOrDefault() ?? "-"
                 };
 
             query = query.AsQueryable().ApplyFilters(filter.Filter);
