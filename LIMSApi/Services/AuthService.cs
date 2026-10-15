@@ -137,7 +137,7 @@ namespace LIMSApi.Services
                 WorkingHours = user.WorkingHours,
 
                 ExpiresInSeconds = expireHours * 60 * 60,
-                ProfileImagePath = user.Employee?.ProfileImagePath
+                ProfileImagePath = user.Employee?.ProfileImagePath?.Replace('\\', '/')
             };
         }
 

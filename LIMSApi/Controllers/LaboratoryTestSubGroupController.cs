@@ -42,6 +42,14 @@ namespace LIMSApi.Controllers
         }
 
         [RequirePermission(Permissions.LaboratoryTestSubType.Read)]
+        [HttpGet("dropdown/{labTestId}")]
+        public async Task<IActionResult> Dropdown(long labTestId)
+        {
+            var data = await _service.GetDropdown(labTestId);
+            return data == null ? NoContent() : Ok(data);
+        }
+
+        [RequirePermission(Permissions.LaboratoryTestSubType.Read)]
         [HttpGet("test-method-specification/{subGroupId}")]
         [HttpGet("standards/{subGroupId}")]
         public async Task<IActionResult> GetTestMethodSpecificationBySubGroup(long subGroupId)

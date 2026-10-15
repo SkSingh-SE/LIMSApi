@@ -130,6 +130,36 @@ namespace LIMSApi.Helpers
                 .ToList();
         }
 
+        /// <summary>
+        /// Converts internal tokenized formula (e.g. "{P240} * 1000 / {P237}")
+        /// into human-readable display formula (e.g. "Yield Load * 1000 / Cross Section Area").
+        /// Never exposes raw parameter IDs to the UI.
+        /// </summary>
+        public static string FormatDisplayFormula(string? formula, IDictionary<long, string> paramNames)
+        {
+            if (string.IsNullOrWhiteSpace(formula)) return string.Empty;
+            string formatted = ParamTokenRegex.Replace(formula, m =>
+            {
+                if (long.TryParse(m.Groups[1].Value, out long id) && paramNames.TryGetValue(id, out var name) && !string.IsNullOrWhiteSpace(name))
+                {
+                    return name;
+                }
+                return m.Value;
+            });
+
+            // Also replace any unbracketed P<ID> tokens
+            formatted = Regex.Replace(formatted, @"\bP(\d+)\b", m =>
+            {
+                if (long.TryParse(m.Groups[1].Value, out long id) && paramNames.TryGetValue(id, out var name) && !string.IsNullOrWhiteSpace(name))
+                {
+                    return name;
+                }
+                return m.Value;
+            });
+
+            return formatted;
+        }
+
         // ──────────────────────────────────────────────────
         // Public: DetermineResultStatus
         // ──────────────────────────────────────────────────

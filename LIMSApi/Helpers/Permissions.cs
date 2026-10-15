@@ -291,6 +291,15 @@ namespace LIMSApi.Helpers
             public const string Manage = "CanManageLaboratoryTest";
         }
 
+        public static class TestLayout
+        {
+            public const string Read   = "CanReadTestLayout";
+            public const string Create = "CanCreateTestLayout";
+            public const string Update = "CanUpdateTestLayout";
+            public const string Delete = "CanDeleteTestLayout";
+            public const string Manage = "CanManageTestLayout";
+        }
+
         public static class TestMethodSpecification
         {
             public const string Read   = "CanReadTestMethodSpecification";

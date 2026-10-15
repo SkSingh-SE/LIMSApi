@@ -163,6 +163,7 @@ namespace LIMSApi.Dtos
         public long? ProductSizeID { get; set; }
         public string? ProductSizeName { get; set; }
         public long? SpecificationGradeID { get; set; }
+        public string? SpecificationGradeName { get; set; }
         public bool IsUnknownSample { get; set; }
         public long? AssignedGradeID { get; set; }
         public string? AssignedGradeName { get; set; }
@@ -193,6 +194,10 @@ namespace LIMSApi.Dtos
         public long? ApprovedById { get; set; }
         public string? ApprovedByName { get; set; }
         public DateTime? ApprovedAt { get; set; }
+        public long? PendingReplanRequestId { get; set; }
+        public string? PendingReplanReason { get; set; }
+        public string? PendingReplanRequestedByName { get; set; }
+        public DateTime? PendingReplanRequestedAt { get; set; }
         public List<PlanHistoryDto> PlanHistories { get; set; } = new();
         public List<GeneralTestDto> GeneralTests { get; set; } = new();
         public List<ChemicalTestDto> ChemicalTests { get; set; } = new();
@@ -218,7 +223,9 @@ namespace LIMSApi.Dtos
         public long SampleTestPlanID { get; set; }
         public string? SampleNo { get; set; }
         public long? Specification1 { get; set; }
+        public string? Specification1Name { get; set; }
         public long? Specification2 { get; set; }
+        public string? Specification2Name { get; set; }
         public long? LaboratoryTestSubGroupID { get; set; }
         public string? SubGroupName { get; set; }
         public string? LaboratoryTestName { get; set; }
@@ -283,7 +290,9 @@ namespace LIMSApi.Dtos
         public long? MetalClassificationID { get; set; }
         public string? MetalClassificationName { get; set; }
         public long? Specification1 { get; set; }
+        public string? Specification1Name { get; set; }
         public long? Specification2 { get; set; }
+        public string? Specification2Name { get; set; }
         public List<ChemicalTestMethodDto> Methods { get; set; } = new();
         public List<ChemicalTestElementDto> Elements { get; set; } = new();
     }

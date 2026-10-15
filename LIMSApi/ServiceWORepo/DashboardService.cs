@@ -527,14 +527,16 @@ namespace LIMSApi.ServiceWORepo
                 throw new ArgumentException("User role cannot be null or empty", nameof(userContext));
             }
 
+            // Name/Email claims can be empty for seeded or service accounts — default them
+            // instead of failing the whole dashboard with 400 (which surfaced as "0 Cards").
             if (string.IsNullOrWhiteSpace(userContext.Name))
             {
-                throw new ArgumentException("User name cannot be null or empty", nameof(userContext));
+                userContext.Name = $"User-{userContext.UserId}";
             }
 
             if (string.IsNullOrWhiteSpace(userContext.Email))
             {
-                throw new ArgumentException("User email cannot be null or empty", nameof(userContext));
+                userContext.Email = string.Empty;
             }
 
             // Validate role is a recognized role
@@ -543,8 +545,8 @@ namespace LIMSApi.ServiceWORepo
             //    throw new ArgumentException($"Invalid user role: {userContext.Role}", nameof(userContext));
             //}
 
-            // Additional validation for email format
-            if (!IsValidEmail(userContext.Email))
+            // Additional validation for email format (only when an email is present)
+            if (!string.IsNullOrWhiteSpace(userContext.Email) && !IsValidEmail(userContext.Email))
             {
                 throw new ArgumentException("Invalid email format", nameof(userContext));
             }

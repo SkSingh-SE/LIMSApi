@@ -245,7 +245,8 @@ namespace LIMSApi.Repositories
                                                 { "reportTestName", sg.ReportTestName },
                                                 { "testDuration", sg.TestDuration ?? 1 },
                                                 { "metalClassificationId", sg.MetalClassificationID ?? 0 },
-                                                { "isChemical", false }
+                                                { "isChemical", false },
+                                { "departmentName", "General" }
                                             }
                                         }).FirstOrDefaultAsync();
 
@@ -308,7 +309,8 @@ namespace LIMSApi.Repositories
                         AdditionalValues = new Dictionary<string, object>
                         {
                             { "masterTestId", masterGroup.Key.MasterTestID },
-                            { "isChemical", false }
+                            { "isChemical", false },
+                                { "departmentName", "General" }
                         }
                     });
 
@@ -332,7 +334,8 @@ namespace LIMSApi.Repositories
                                 { "reportTestName", sg.ReportTestName },
                                 { "testDuration", sg.TestDuration ?? 1 },
                                 { "metalClassificationId", sg.MetalClassificationID ?? 0 },
-                                { "isChemical", false }
+                                { "isChemical", false },
+                                { "departmentName", "General" }
                             }
                         });
                     }
@@ -367,7 +370,8 @@ namespace LIMSApi.Repositories
                         {
                             { "masterTestId", fb.ID },
                             { "masterTestName", fb.Name },
-                            { "isChemical", false }
+                            { "isChemical", false },
+                                { "departmentName", "General" }
                         }
                     });
                 }
@@ -408,6 +412,7 @@ namespace LIMSApi.Repositories
                                                 { "reportTestName", sg.ReportTestName },
                                                 { "metalClassificationId", at.MetalClassificationID ?? 0 },
                                                 { "isChemical", true },
+                                { "departmentName", "Chemical" },
                                                 { "techniqueIds", at.AllowedTechniques.Select(t => t.AnalysisTechniqueID).ToList() },
                                                 { "techniqueCodes", at.AllowedTechniques.Select(t => t.AnalysisTechnique != null ? t.AnalysisTechnique.Code ?? "" : "").Where(c => c != "").ToList() },
                                                 { "techniqueNames", at.AllowedTechniques.Select(t => t.AnalysisTechnique != null ? t.AnalysisTechnique.Name ?? "" : "").Where(n => n != "").ToList() }
@@ -481,7 +486,8 @@ namespace LIMSApi.Repositories
                         AdditionalValues = new Dictionary<string, object>
                         {
                             { "masterTestId", masterGroup.Key.MasterTestID },
-                            { "isChemical", true }
+                            { "isChemical", true },
+                                { "departmentName", "Chemical" }
                         }
                     });
 
@@ -505,7 +511,8 @@ namespace LIMSApi.Repositories
                                 { "masterTestId", masterGroup.Key.MasterTestID },
                                 { "subGroupId", sgGroup.Key.SubGroupID },
                                 { "reportTestName", sgGroup.Key.ReportTestName },
-                                { "isChemical", true }
+                                { "isChemical", true },
+                                { "departmentName", "Chemical" }
                             }
                         });
 
@@ -532,6 +539,7 @@ namespace LIMSApi.Repositories
                                     { "reportTestName", sgGroup.Key.ReportTestName },
                                     { "metalClassificationId", at.MetalClassificationID ?? 0 },
                                     { "isChemical", true },
+                                { "departmentName", "Chemical" },
                                     { "techniqueIds", at.TechniqueIDs },
                                     { "techniqueCodes", at.TechniqueCodes },
                                     { "techniqueNames", at.TechniqueNames }
@@ -570,7 +578,8 @@ namespace LIMSApi.Repositories
                         {
                             { "masterTestId", fb.ID },
                             { "masterTestName", fb.Name },
-                            { "isChemical", true }
+                            { "isChemical", true },
+                                { "departmentName", "Chemical" }
                         }
                     });
                 }
@@ -764,7 +773,8 @@ namespace LIMSApi.Repositories
                                              { "analysisTypeId", at.ID },
                                              { "fullDisplayName", $"{a.Name} - {sg.Name} ({at.Name})" },
                                              { "reportTestName", sg.ReportTestName ?? "" },
-                                             { "isChemical", true }
+                                             { "isChemical", true },
+                                { "departmentName", "Chemical" }
                                          }
                                      }).FirstOrDefaultAsync();
 
@@ -807,6 +817,8 @@ namespace LIMSApi.Repositories
 
                 // Check LaboratoryTest directly
                 var exactLt = await (from a in _context.LaboratoryTests
+                                     join d in _context.DepartmentMasters on a.LabDepartmentID equals d.ID into deptGroup
+                                     from d in deptGroup.DefaultIfEmpty()
                                      where a.ID == exactId && a.IsActive && a.CompanyCode == loggedInUser.CompanyCode
                                      select new DropdwonSelector
                                      {
@@ -822,8 +834,12 @@ namespace LIMSApi.Repositories
                                          {
                                              { "masterTestId", a.ID },
                                              { "masterTestName", a.Name },
-                                             { "fullDisplayName", a.Name },
-                                             { "isChemical", a.IsChemicalTest }
+                                             { "subGroupId", 0 },
+                                             { "subGroupName", "" },
+                                             { "leafName", a.Name },
+                                             { "fullDisplayName", $"{a.Name} ({((a.IsChemicalTest || (d != null && d.IsChemical)) ? "Chemical" : "General")})" },
+                                             { "isChemical", a.IsChemicalTest || (d != null && d.IsChemical) },
+                                             { "departmentName", (a.IsChemicalTest || (d != null && d.IsChemical)) ? "Chemical" : "General" }
                                          }
                                      }).FirstOrDefaultAsync();
 
@@ -882,7 +898,8 @@ namespace LIMSApi.Repositories
                         AdditionalValues = new Dictionary<string, object>
                         {
                             { "masterTestId", group.Key.MasterTestID },
-                            { "isChemical", false }
+                            { "isChemical", false },
+                                { "departmentName", "General" }
                         }
                     });
 
@@ -907,7 +924,8 @@ namespace LIMSApi.Repositories
                                 { "testId", item.SubGroupID },
                                 { "fullDisplayName", $"{group.Key.MasterTestName} - {item.SubGroupName}" },
                                 { "reportTestName", item.ReportTestName ?? "" },
-                                { "isChemical", false }
+                                { "isChemical", false },
+                                { "departmentName", "General" }
                             }
                         });
                     }
@@ -966,7 +984,8 @@ namespace LIMSApi.Repositories
                         AdditionalValues = new Dictionary<string, object>
                         {
                             { "masterTestId", masterGroup.Key.MasterTestID },
-                            { "isChemical", true }
+                            { "isChemical", true },
+                                { "departmentName", "Chemical" }
                         }
                     });
 
@@ -989,7 +1008,8 @@ namespace LIMSApi.Repositories
                                 { "masterTestId", masterGroup.Key.MasterTestID },
                                 { "subGroupId", sg.Key.SubGroupID },
                                 { "reportTestName", sg.Key.ReportTestName ?? "" },
-                                { "isChemical", true }
+                                { "isChemical", true },
+                                { "departmentName", "Chemical" }
                             }
                         });
 
@@ -1016,7 +1036,8 @@ namespace LIMSApi.Repositories
                                     { "testId", at.AnalysisTypeID },
                                     { "fullDisplayName", $"{masterGroup.Key.MasterTestName} - {sg.Key.SubGroupName} ({at.AnalysisTypeName})" },
                                     { "reportTestName", sg.Key.ReportTestName ?? "" },
-                                    { "isChemical", true }
+                                    { "isChemical", true },
+                                { "departmentName", "Chemical" }
                                 }
                             });
                         }
@@ -1074,7 +1095,8 @@ namespace LIMSApi.Repositories
                             AdditionalValues = new Dictionary<string, object>
                             {
                                 { "masterTestId", group.Key.MasterTestID },
-                                { "isChemical", true }
+                                { "isChemical", true },
+                                { "departmentName", "Chemical" }
                             }
                         });
                     }
@@ -1099,11 +1121,64 @@ namespace LIMSApi.Repositories
                                 { "testId", item.SubGroupID },
                                 { "fullDisplayName", $"{group.Key.MasterTestName} - {item.SubGroupName}" },
                                 { "reportTestName", item.ReportTestName ?? "" },
-                                { "isChemical", true }
+                                { "isChemical", true },
+                                { "departmentName", "Chemical" }
                             }
                         });
                     }
                 }
+            }
+
+            // 5. Standalone Tests without SubGroups (Direct Leaf Nodes, e.g. Spectro)
+            var standaloneTestQuery = from a in _context.LaboratoryTests
+                                      join d in _context.DepartmentMasters on a.LabDepartmentID equals d.ID into deptGroup
+                                      from d in deptGroup.DefaultIfEmpty()
+                                      where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode
+                                            && !_context.LaboratoryTestSubGroups.Any(sg => sg.LaboratoryTestID == a.ID && sg.IsActive)
+                                      select new
+                                      {
+                                          MasterTestID = a.ID,
+                                          MasterTestName = a.Name,
+                                          IsChemical = a.IsChemicalTest || (d != null && d.IsChemical),
+                                          DeptName = (a.IsChemicalTest || (d != null && d.IsChemical)) ? "Chemical" : "General"
+                                      };
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var s = searchTerm.Trim();
+                standaloneTestQuery = standaloneTestQuery.Where(x => (x.MasterTestName != null && x.MasterTestName.Contains(s))
+                                                                  || (x.DeptName != null && x.DeptName.Contains(s)));
+            }
+
+            var standaloneTestData = await standaloneTestQuery
+                .OrderBy(x => x.MasterTestName)
+                .ToListAsync();
+
+            foreach (var item in standaloneTestData)
+            {
+                result.Add(new DropdwonSelector
+                {
+                    Id = item.MasterTestID,
+                    Name = item.MasterTestName,
+                    Level = 1,
+                    Selectable = true,
+                    NodeType = "TestGroup",
+                    ParentId = 0,
+                    IsHeader = false,
+                    IsChild = false,
+                    AdditionalValues = new Dictionary<string, object>
+                    {
+                        { "masterTestId", item.MasterTestID },
+                        { "masterTestName", item.MasterTestName },
+                        { "subGroupId", 0 },
+                        { "subGroupName", "" },
+                        { "leafName", item.MasterTestName },
+                        { "testId", item.MasterTestID },
+                        { "fullDisplayName", $"{item.MasterTestName} ({item.DeptName})" },
+                        { "isChemical", item.IsChemical },
+                        { "departmentName", item.DeptName }
+                    }
+                });
             }
 
             return result;

@@ -37,6 +37,12 @@ namespace LIMSApi.Controllers
             return Ok(await _service.GetOrCreateBySampleAsync(sampleId));
         }
 
+        [HttpGet("by-inward/{inwardId}")]
+        public async Task<IActionResult> GetOrCreateByInward(long inwardId)
+        {
+            return Ok(await _service.GetOrCreateByInwardAsync(inwardId));
+        }
+
         [RequirePermission(Permissions.SamplePreparation.Create)]
         [HttpPost("create")]
         public async Task<IActionResult> Create([FromBody] SamplePreparationCreateDto dto)

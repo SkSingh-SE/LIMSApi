@@ -883,7 +883,10 @@ namespace LIMSApi.ServiceWORepo
 
                         // Cache lab test name (avoid N+1)
                         var labTestName = labTestId > 0
-                            ? (await _db.LaboratoryTests.FindAsync(labTestId))?.Name ?? "General Test"
+                            ? ((await _db.LaboratoryTestSubGroups.Where(sg => sg.ID == labTestId).Select(sg => sg.ReportTestName ?? sg.Name).FirstOrDefaultAsync())
+                               ?? (await _db.LaboratoryTestAnalysisTypes.Where(at => at.ID == labTestId).Select(at => at.Name).FirstOrDefaultAsync())
+                               ?? (await _db.LaboratoryTests.FindAsync(labTestId))?.Name
+                               ?? "General Test")
                             : "General Test";
 
                         // totalSpecimens = max of plan qty and actual header count (handles replan qty decrease)
@@ -901,6 +904,7 @@ namespace LIMSApi.ServiceWORepo
                                 var inputType = pm?.InputType ?? (p.ParameterType == "Qualitative" ? "Text" : "Decimal");
                                 var dropdownOpts = pm?.DropdownOptions?.Where(o => o.IsActive).OrderBy(o => o.DisplayOrder).Select(o => new { displayText = o.DisplayText, value = o.Value, isDefault = o.IsDefault }).ToList() ?? new();
                                 var formulaExpr = !string.IsNullOrWhiteSpace(p.Formula) ? p.Formula : pm?.Formula;
+                                var formulaDisplay = !string.IsNullOrWhiteSpace(pm?.FormulaDisplay) ? pm.FormulaDisplay : null;
 
                                 paramDtos.Add(new
                                 {
@@ -916,6 +920,7 @@ namespace LIMSApi.ServiceWORepo
                                     acceptanceCriteria = p.AcceptanceCriteria,
                                     p.Remarks,
                                     formulaExpression = formulaExpr,
+                                    formulaDisplay = formulaDisplay,
                                     isCalculated = isCalc,
                                     p.SpecificationLineID,
                                     isBillable = p.IsBillable,
@@ -943,6 +948,8 @@ namespace LIMSApi.ServiceWORepo
                                 laboratoryTest = labTestName,
                                 sequenceNo = header.SequenceNo,
                                 totalSpecimens = totalSpecimens,
+                                plannedQuantity = method.Quantity > 0 ? method.Quantity : 1,
+                                quantity = method.Quantity > 0 ? method.Quantity : 1,
                                 standard = method.StandardID,
                                 standardName = method.StandardID > 0
                                     ? (standardNameCache.TryGetValue(method.StandardID, out var sn) ? sn
@@ -1045,6 +1052,7 @@ namespace LIMSApi.ServiceWORepo
                                 var inputType = pm?.InputType ?? (p.ParameterType == "Qualitative" ? "Text" : "Decimal");
                                 var dropdownOpts = pm?.DropdownOptions?.Where(o => o.IsActive).OrderBy(o => o.DisplayOrder).Select(o => new { displayText = o.DisplayText, value = o.Value, isDefault = o.IsDefault }).ToList() ?? new();
                                 var formulaExpr = !string.IsNullOrWhiteSpace(p.Formula) ? p.Formula : pm?.Formula;
+                                var formulaDisplay = !string.IsNullOrWhiteSpace(pm?.FormulaDisplay) ? pm.FormulaDisplay : null;
 
                                 chemParamDtos.Add(new
                                 {
@@ -1060,6 +1068,7 @@ namespace LIMSApi.ServiceWORepo
                                     acceptanceCriteria = p.AcceptanceCriteria,
                                     p.Remarks,
                                     formulaExpression = formulaExpr,
+                                    formulaDisplay = formulaDisplay,
                                     isCalculated = isCalc,
                                     p.SpecificationLineID,
                                     p.IsAdditional,
@@ -1093,6 +1102,8 @@ namespace LIMSApi.ServiceWORepo
                                               ?? "Chemical Test",
                                 sequenceNo = 1,
                                 totalSpecimens = 1,
+                                plannedQuantity = 1,
+                                quantity = 1,
                                 testMethodId = (long?)(ct.Methods?.FirstOrDefault(m => !m.Cancel)?.TestMethodSpecificationID ?? ct.Methods?.FirstOrDefault()?.TestMethodSpecificationID),
                                 standard = (long?)(ct.Methods?.FirstOrDefault(m => !m.Cancel)?.TestMethodSpecificationID ?? ct.Methods?.FirstOrDefault()?.TestMethodSpecificationID),
                                 standardName = ctStandardName,
@@ -1402,8 +1413,8 @@ namespace LIMSApi.ServiceWORepo
         {
             var header = await _db.TestResultHeaders.FirstOrDefaultAsync(h => h.ID == dto.HeaderId)
                 ?? throw new KeyNotFoundException($"Test header {dto.HeaderId} not found.");
-            if (header.Status == "Verified" || header.Status == "PendingVerification")
-                throw new InvalidOperationException($"Cannot change method — test is in '{header.Status}' status. Reject verification first to make changes.");
+            if (header.Status != "Pending" && header.Status != "VerificationRejected")
+                throw new InvalidOperationException($"Cannot change method or specification — test configuration is locked in '{header.Status}' status.");
 
             var plan = await _db.TestPlans
                 .Include(p => p.GeneralTests).ThenInclude(g => g.Methods)
@@ -1512,6 +1523,9 @@ namespace LIMSApi.ServiceWORepo
                 .Include(h => h.Parameters)
                 .FirstOrDefaultAsync(h => h.ID == headerId)
                 ?? throw new KeyNotFoundException("Test header not found.");
+
+            if (header.Status != "Pending" && header.Status != "VerificationRejected")
+                throw new InvalidOperationException($"Cannot reload parameters — test configuration is locked in '{header.Status}' status.");
 
             var plan = await _db.TestPlans
                 .Include(p => p.GeneralTests)
@@ -1814,10 +1828,10 @@ namespace LIMSApi.ServiceWORepo
         {
             var result = new List<TestResultParameter>();
 
-            var labTest = await _db.LaboratoryTests
-                .FirstOrDefaultAsync(t => t.ID == labTestId);
+            var subGroup = labTestId > 0 ? await _db.LaboratoryTestSubGroups.FirstOrDefaultAsync(sg => sg.ID == labTestId) : null;
+            var labTest = labTestId > 0 ? await _db.LaboratoryTests.FirstOrDefaultAsync(t => t.ID == labTestId) : null;
 
-            var labTestName = labTest?.Name ?? $"LabTest#{labTestId}";
+            var labTestName = subGroup?.ReportTestName ?? subGroup?.Name ?? labTest?.Name ?? $"LabTest#{labTestId}";
 
             // Get specification lines (Type="mechanical") by grade
             var specLines = new List<SpecificationLine>();
@@ -1837,7 +1851,6 @@ namespace LIMSApi.ServiceWORepo
                     var targetTestIds = new HashSet<long> { labTestId };
 
                     // If labTestId is a SubGroup, include parent LaboratoryTestID
-                    var subGroup = await _db.LaboratoryTestSubGroups.FirstOrDefaultAsync(sg => sg.ID == labTestId);
                     if (subGroup != null)
                     {
                         targetTestIds.Add(subGroup.LaboratoryTestID);
@@ -2865,12 +2878,11 @@ namespace LIMSApi.ServiceWORepo
                 throw new Exception("TestResultHeader not found.");
 
             // Build dictionary for formula vars
-            Dictionary<string, double> vars = header.Parameters
-                .Where(x => x.Value.HasValue && x.Value > 0)
-                .ToDictionary(
-                    x => $"P{x.ParameterID}",
-                    x => (double)x.Value.Value
-                );
+            var vars = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+            foreach (var x in header.Parameters.Where(x => x.Value.HasValue && x.Value > 0))
+            {
+                vars[$"P{x.ParameterID}"] = (double)x.Value.Value;
+            }
 
             bool changed = true;
             int loopGuard = 0;
@@ -3006,8 +3018,8 @@ namespace LIMSApi.ServiceWORepo
             if (param == null) throw new KeyNotFoundException("Parameter not found.");
 
             var header = await _db.TestResultHeaders.FindAsync(param.TestResultHeaderID);
-            if (header != null && (header.Status == "Verified" || header.Status == "PendingVerification"))
-                throw new InvalidOperationException("Cannot delete parameter from a verified or pending verification test.");
+            if (header != null && header.Status != "Pending" && header.Status != "VerificationRejected")
+                throw new InvalidOperationException($"Cannot delete parameter — test configuration is locked in '{header.Status}' status.");
 
             _db.TestResultParameters.Remove(param);
             await _db.SaveChangesAsync();
@@ -3024,6 +3036,9 @@ namespace LIMSApi.ServiceWORepo
 
             if (header == null)
                 throw new Exception("TestResultHeader not found.");
+
+            if (header.Status != "Pending" && header.Status != "VerificationRejected")
+                throw new InvalidOperationException($"Cannot add parameter — test configuration is locked in '{header.Status}' status.");
 
             var param = new TestResultParameter
             {
@@ -3258,6 +3273,9 @@ namespace LIMSApi.ServiceWORepo
 
             if (header == null)
                 throw new KeyNotFoundException("TestResultHeader not found.");
+
+            if (header.Status != "Pending" && header.Status != "VerificationRejected")
+                throw new InvalidOperationException($"Cannot add parameter — test configuration is locked in '{header.Status}' status.");
 
             // Load the parameter from master
             var masterParam = await _db.ParameterMasters
@@ -3568,8 +3586,26 @@ namespace LIMSApi.ServiceWORepo
                     "Cannot submit for report review: No 'Report Review' workflow is configured. Contact administrator.");
 
             var report = await _db.ReportHeaders
-                .FirstOrDefaultAsync(r => r.SampleID == sampleId && r.IsActive)
-                ?? throw new InvalidOperationException("Report not found. Complete all tests first.");
+                .FirstOrDefaultAsync(r => r.SampleID == sampleId && r.IsActive);
+
+            if (report == null)
+            {
+                var anyHeader = await _db.TestResultHeaders
+                    .FirstOrDefaultAsync(h => h.SampleID == sampleId && h.IsActive);
+
+                report = new ReportHeader
+                {
+                    SampleID = sampleId,
+                    CertificateNo = anyHeader?.CertificateNo,
+                    Status = "Pending",
+                    CreatedOn = DateTime.UtcNow,
+                    CreatedBy = loggedInUser.EmployeeID,
+                    IsActive = true
+                };
+
+                _db.ReportHeaders.Add(report);
+                await _db.SaveChangesAsync();
+            }
 
             if (report.Status != "Pending")
                 throw new InvalidOperationException($"Report is already in '{report.Status}' state.");

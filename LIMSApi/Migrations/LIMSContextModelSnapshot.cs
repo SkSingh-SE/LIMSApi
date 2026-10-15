@@ -18701,6 +18701,153 @@ namespace LIMSApi.Migrations
                     b.ToTable("TestGroupMappings");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.TestLayoutTemplate", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<bool>("ApplyToLeaf")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ArchetypeSummary")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsGlobalDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<long?>("LaboratoryTestAnalysisTypeID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("LaboratoryTestID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("LaboratoryTestSubGroupID")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("LayoutCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("LayoutConfigJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("LayoutName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("LeafNode")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("OutputPayloadSchemaJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Revision")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("SectionCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("LaboratoryTestAnalysisTypeID");
+
+                    b.HasIndex("LaboratoryTestID");
+
+                    b.HasIndex("LaboratoryTestSubGroupID");
+
+                    b.ToTable("TestLayoutTemplates");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.TestLayoutTemplateMapping", b =>
+                {
+                    b.Property<long>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("ID"));
+
+                    b.Property<string>("CompanyCode")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<long>("CreatedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<long>("LaboratoryTestID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("LaboratoryTestSubGroupID")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("ModifiedBy")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ModifiedOn")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("TestLayoutTemplateID")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("LaboratoryTestID");
+
+                    b.HasIndex("LaboratoryTestSubGroupID");
+
+                    b.HasIndex("TestLayoutTemplateID");
+
+                    b.ToTable("TestLayoutTemplateMappings");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.TestMaster", b =>
                 {
                     b.Property<long>("ID")
@@ -22840,6 +22987,52 @@ namespace LIMSApi.Migrations
                     b.Navigation("TestMethod");
                 });
 
+            modelBuilder.Entity("LIMSApi.Models.TestLayoutTemplate", b =>
+                {
+                    b.HasOne("LIMSApi.Models.LaboratoryTestAnalysisType", "AnalysisType")
+                        .WithMany()
+                        .HasForeignKey("LaboratoryTestAnalysisTypeID");
+
+                    b.HasOne("LIMSApi.Models.LaboratoryTest", "LaboratoryTest")
+                        .WithMany()
+                        .HasForeignKey("LaboratoryTestID");
+
+                    b.HasOne("LIMSApi.Models.LaboratoryTestSubGroup", "SubGroup")
+                        .WithMany()
+                        .HasForeignKey("LaboratoryTestSubGroupID");
+
+                    b.Navigation("AnalysisType");
+
+                    b.Navigation("LaboratoryTest");
+
+                    b.Navigation("SubGroup");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.TestLayoutTemplateMapping", b =>
+                {
+                    b.HasOne("LIMSApi.Models.LaboratoryTest", "LaboratoryTest")
+                        .WithMany()
+                        .HasForeignKey("LaboratoryTestID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LIMSApi.Models.LaboratoryTestSubGroup", "SubGroup")
+                        .WithMany()
+                        .HasForeignKey("LaboratoryTestSubGroupID");
+
+                    b.HasOne("LIMSApi.Models.TestLayoutTemplate", "TestLayoutTemplate")
+                        .WithMany("Mappings")
+                        .HasForeignKey("TestLayoutTemplateID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("LaboratoryTest");
+
+                    b.Navigation("SubGroup");
+
+                    b.Navigation("TestLayoutTemplate");
+                });
+
             modelBuilder.Entity("LIMSApi.Models.TestMethodSpecificationMetalClassification", b =>
                 {
                     b.HasOne("LIMSApi.Models.MetalClassificationMaster", "MetalClassification")
@@ -23396,6 +23589,11 @@ namespace LIMSApi.Migrations
             modelBuilder.Entity("LIMSApi.Models.TestGroup", b =>
                 {
                     b.Navigation("TestGroupMappings");
+                });
+
+            modelBuilder.Entity("LIMSApi.Models.TestLayoutTemplate", b =>
+                {
+                    b.Navigation("Mappings");
                 });
 
             modelBuilder.Entity("LIMSApi.Models.TestMethodSpecification", b =>

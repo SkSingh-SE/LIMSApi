@@ -39,7 +39,18 @@ namespace LIMSApi.Services
                 {
                     await _hub.Clients.User(notification.UserID.ToString())
                         .SendAsync("ReceiveNotification", notification);
+                    // Mirror to the employee group (UserIdentifier mapping varies by auth setup)
+                    await _hub.Clients.Group($"employee-{notification.UserID}")
+                        .SendAsync("ReceiveNotification", notification);
                 }
+
+                // Nudge every open dashboard to refresh its live KPIs/charts.
+                await _hub.Clients.Group("dashboard-live").SendAsync("DashboardUpdated", new
+                {
+                    notificationId = notification.ID,
+                    title = notification.Title,
+                    at = DateTime.UtcNow
+                });
             }
             catch { /* SignalR push failed — notification is saved in DB, user will see it on next load */ }
 

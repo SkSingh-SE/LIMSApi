@@ -192,9 +192,16 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var search = searchTerm.Trim();
-                _query = _query.Where(x => (x.Name != null && x.Name.Contains(search))
-                || (x.EquipmentNo != null && x.EquipmentNo.Contains(search))
-                || (x.ModelNo != null && x.ModelNo.Contains(search)));
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    _query = _query.Where(x => (x.Name != null && x.Name.Contains(search))
+                    || (x.EquipmentNo != null && x.EquipmentNo.Contains(search))
+                    || (x.ModelNo != null && x.ModelNo.Contains(search)));
+                }
             }
 
             var skip = pageNo * pageSize;

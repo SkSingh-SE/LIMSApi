@@ -359,7 +359,7 @@ namespace LIMSApi.Services
                 .AsNoTracking()
                 .Include(m => m.TestMethodSpecification)
                 .Include(m => m.SubGroup)
-                .Where(m => m.SubGroup != null && m.SubGroup.LaboratoryTestID == labTestId && m.TestMethodSpecification != null && !m.TestMethodSpecification.IsDisabled)
+                .Where(m => m.SubGroup != null && (m.SubGroup.LaboratoryTestID == labTestId || m.SubGroup.ID == labTestId) && m.TestMethodSpecification != null && !m.TestMethodSpecification.IsDisabled)
                 .Select(m => new DropdwonSelector
                 {
                     Id = m.TestMethodSpecificationID,
@@ -377,7 +377,7 @@ namespace LIMSApi.Services
                 .Include(m => m.TestMethodSpecification)
                 .Include(m => m.AnalysisType)
                     .ThenInclude(at => at!.SubGroup)
-                .Where(m => m.AnalysisType != null && m.AnalysisType.SubGroup != null && m.AnalysisType.SubGroup.LaboratoryTestID == labTestId && m.TestMethodSpecification != null && !m.TestMethodSpecification.IsDisabled)
+                .Where(m => m.AnalysisType != null && m.AnalysisType.SubGroup != null && (m.AnalysisType.SubGroup.LaboratoryTestID == labTestId || m.AnalysisType.ID == labTestId || m.AnalysisType.LaboratoryTestSubGroupID == labTestId) && m.TestMethodSpecification != null && !m.TestMethodSpecification.IsDisabled)
                 .Select(m => new DropdwonSelector
                 {
                     Id = m.TestMethodSpecificationID,
@@ -394,7 +394,7 @@ namespace LIMSApi.Services
                 .AsNoTracking()
                 .Include(s => s.TestMethodSpecification)
                 .Include(s => s.LabScope)
-                .Where(s => s.LabScope != null && s.LabScope.LaboratoryTestID == labTestId && s.TestMethodSpecification != null && !s.TestMethodSpecification.IsDisabled && s.IsActive)
+                .Where(s => s.LabScope != null && (s.LabScope.LaboratoryTestID == labTestId || (s.LabScope.LaboratoryTestSubGroupID.HasValue && s.LabScope.LaboratoryTestSubGroupID.Value == labTestId)) && s.TestMethodSpecification != null && !s.TestMethodSpecification.IsDisabled && s.IsActive)
                 .Select(s => new DropdwonSelector
                 {
                     Id = s.TestMethodSpecificationID,
@@ -406,11 +406,22 @@ namespace LIMSApi.Services
                 })
                 .ToListAsync();
 
+            // Determine parent master test ID if labTestId is a SubGroup or AnalysisType
+            var parentLabTestId = await _context.LaboratoryTestSubGroups
+                .Where(sg => sg.ID == labTestId)
+                .Select(sg => (long?)sg.LaboratoryTestID)
+                .FirstOrDefaultAsync()
+                ?? await _context.LaboratoryTestAnalysisTypes
+                .Where(at => at.ID == labTestId && at.SubGroup != null)
+                .Select(at => (long?)at.SubGroup!.LaboratoryTestID)
+                .FirstOrDefaultAsync()
+                ?? labTestId;
+
             // 4. Test Method Specifications from SpecificationLineTestMethods
             var fromSpecLines = await _context.Set<SpecificationLineTestMethod>()
                 .AsNoTracking()
                 .Include(s => s.TestMethodSpecification)
-                .Where(s => s.LaboratoryTestID == labTestId && s.TestMethodSpecification != null && !s.TestMethodSpecification.IsDisabled)
+                .Where(s => (s.LaboratoryTestID == labTestId || s.LaboratoryTestID == parentLabTestId) && s.TestMethodSpecification != null && !s.TestMethodSpecification.IsDisabled)
                 .Select(s => new DropdwonSelector
                 {
                     Id = s.TestMethodSpecificationID ?? 0,

@@ -161,6 +161,9 @@ namespace LIMSApi.ServiceWORepo
 
             if (string.IsNullOrWhiteSpace(nablDto.NablTcNumber))
                 throw new ArgumentException("NABL Certificate/TC Number is required when NABL is enabled");
+
+            if (nablDto.IssueDate.HasValue && nablDto.ExpiryDate.HasValue && nablDto.ExpiryDate <= nablDto.IssueDate)
+                throw new ArgumentException("NABL Valid Until date must be after Valid From date");
         }
 
         // =====================
@@ -475,6 +478,9 @@ namespace LIMSApi.ServiceWORepo
             {
                 NablEnabled = nabl != null,
                 NablTcNumber = nabl?.CertificateNumber,
+                IssueDate = nabl?.IssueDate,
+                ExpiryDate = nabl?.ExpiryDate,
+                IsActive = nabl?.IsActive ?? true,
                 NablCertificate = nabl?.CertificatePath,
                 NablLogo = nabl?.LogoPath
             };
@@ -558,6 +564,9 @@ namespace LIMSApi.ServiceWORepo
             var (org, existingNabl, _, _, _, _) = await GetAllAsync(0, cancellationToken);
             var model = existingNabl ?? new NablAccreditation { OrganizationId = org.Id };
             model.CertificateNumber = nablDto.NablTcNumber?.Trim() ?? string.Empty;
+            if (nablDto.IssueDate.HasValue) model.IssueDate = nablDto.IssueDate.Value;
+            if (nablDto.ExpiryDate.HasValue) model.ExpiryDate = nablDto.ExpiryDate.Value;
+            model.IsActive = nablDto.IsActive;
             if (!string.IsNullOrWhiteSpace(nablDto.NablCertificate)) model.CertificatePath = nablDto.NablCertificate;
             if (!string.IsNullOrWhiteSpace(nablDto.NablLogo)) model.LogoPath = nablDto.NablLogo;
             return await SaveNablAsync(model, cancellationToken);
@@ -697,6 +706,9 @@ namespace LIMSApi.ServiceWORepo
             {
                 nabl = existingNabl ?? new NablAccreditation { OrganizationId = org.Id };
                 nabl.CertificateNumber = dto.NablAccreditation.NablTcNumber?.Trim() ?? string.Empty;
+                if (dto.NablAccreditation.IssueDate.HasValue) nabl.IssueDate = dto.NablAccreditation.IssueDate.Value;
+                if (dto.NablAccreditation.ExpiryDate.HasValue) nabl.ExpiryDate = dto.NablAccreditation.ExpiryDate.Value;
+                nabl.IsActive = dto.NablAccreditation.IsActive;
                 if (!string.IsNullOrWhiteSpace(dto.NablAccreditation.NablCertificate)) nabl.CertificatePath = dto.NablAccreditation.NablCertificate;
                 if (!string.IsNullOrWhiteSpace(dto.NablAccreditation.NablLogo)) nabl.LogoPath = dto.NablAccreditation.NablLogo;
             }

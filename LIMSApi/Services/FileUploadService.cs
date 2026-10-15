@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
@@ -57,7 +57,7 @@ namespace LIMSApi.Services
                     Directory.CreateDirectory(uploadDirectory);
 
                 string filePath = Path.Combine(uploadDirectory, newFileName);
-                string relativeFilePath = Path.Combine(relativeDirectory, newFileName);
+                string relativeFilePath = Path.Combine(relativeDirectory, newFileName).Replace('\\', '/');
 
                 using (var stream = new FileStream(filePath, FileMode.Create))
                 {

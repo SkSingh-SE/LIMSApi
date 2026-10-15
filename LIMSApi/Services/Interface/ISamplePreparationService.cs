@@ -7,6 +7,7 @@ namespace LIMSApi.Services.Interface
         Task<PagedResponse<SamplePreparationListDto>> GetAllAsync(PageFilter filter);
         Task<SamplePreparationDetailDto> GetByIdAsync(long id);
         Task<SamplePreparationDetailDto> GetOrCreateBySampleAsync(long sampleId);
+        Task<List<SamplePreparationDetailDto>> GetOrCreateByInwardAsync(long inwardId);
         Task<SamplePreparationDetailDto> CreateAsync(SamplePreparationCreateDto dto);
         Task<SamplePreparationDetailDto> UpdateAsync(SamplePreparationUpdateDto dto);
         Task UpdateStatusAsync(long id, SamplePreparationStatusDto dto);

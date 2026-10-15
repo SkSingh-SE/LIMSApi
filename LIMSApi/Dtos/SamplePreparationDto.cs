@@ -101,6 +101,9 @@ namespace LIMSApi.Dtos
 
         // Test-wise preparation items
         public List<SamplePreparationTestItemDto> Items { get; set; } = new();
+
+        // All planned tests for this sample (available if user chooses to enable preparation)
+        public List<SamplePreparationTestItemDto> AvailablePlanTests { get; set; } = new();
     }
 
     public class SamplePreparationCreateDto
@@ -159,11 +162,15 @@ namespace LIMSApi.Dtos
         public long PlannedTestMethodID { get; set; }
         public long LaboratoryTestID { get; set; }
         public string? LaboratoryTestName { get; set; }
+        public string? RootTestName { get; set; }
+        public string? SubGroupName { get; set; }
         public long? TestMethodSpecificationID { get; set; }
         public string? TestMethodName { get; set; }
         public long? SpecimenPreparationMasterID { get; set; }
         public string SpecimenSize { get; set; } = string.Empty;
         public string? SpecimenRawMaterialSize { get; set; }
+        public string? DrawingFilePath { get; set; }
+        public string? FileName { get; set; }
         public int Quantity { get; set; } = 1;
         public bool CuttingRequired { get; set; } = true;
         public bool MachiningRequired { get; set; } = true;

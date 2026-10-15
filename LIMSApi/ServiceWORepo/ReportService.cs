@@ -103,6 +103,7 @@ namespace LIMSApi.ServiceWORepo
 
                         select new
                         {
+                            ID = report != null ? report.ID : sample.ID,
                             ReportHeaderId = report != null ? report.ID : 0L,
                             AmendmentRequestId = amendment != null ? amendment.ID : 0L,
                             sampleId = sample.ID,
@@ -189,6 +190,10 @@ namespace LIMSApi.ServiceWORepo
             {
                 string order = filter.SortOrder == "asc" ? "ascending" : "descending";
                 query = query.OrderBy($"{filter.SortByColumn} {order}");
+            }
+            else
+            {
+                query = query.OrderByDescending(x => x.sampleId);
             }
 
             // ----------------------------------------------------------

@@ -153,6 +153,81 @@ namespace LIMSApi.Services
             _logger.LogInformation("Replan rejected for plan {PlanId}", plan.ID);
         }
 
+        public async Task ApproveReplanByPlanId(long planId, string? remarks)
+        {
+            var request = await _context.ReplanRequests
+                .Where(r => r.PlanId == planId && r.Status == "Pending")
+                .OrderByDescending(r => r.RequestedAt)
+                .FirstOrDefaultAsync();
+
+            if (request != null)
+            {
+                await ApproveReplan(request.Id, remarks);
+                return;
+            }
+
+            // Fallback direct approval if request record is not present but plan was set to ReplanRequested
+            var plan = await _context.TestPlans.FirstOrDefaultAsync(p => p.ID == planId);
+            if (plan == null)
+                throw new Exception($"Plan with ID {planId} not found.");
+
+            plan.Version += 1;
+            plan.ReplanCount += 1;
+            plan.PlanStatus = "Draft";
+            plan.ApprovedById = null;
+            plan.ApprovedByName = null;
+            plan.ApprovedAt = null;
+
+            await CreatePlanHistoryEntry(
+                plan.ID,
+                "ReplanApproved",
+                null,
+                null,
+                JsonSerializer.Serialize(new[]
+                {
+                    new { field = "Version", oldValue = (plan.Version - 1).ToString(), newValue = plan.Version.ToString() },
+                    new { field = "PlanStatus", oldValue = "ReplanRequested", newValue = "Draft" },
+                    new { field = "ReplanCount", oldValue = (plan.ReplanCount - 1).ToString(), newValue = plan.ReplanCount.ToString() }
+                }),
+                $"Replan approved. {(string.IsNullOrWhiteSpace(remarks) ? "" : $"Remarks: {remarks}")}"
+            );
+
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Replan approved directly for plan {PlanId}, new version {Version}", plan.ID, plan.Version);
+        }
+
+        public async Task RejectReplanByPlanId(long planId, string? remarks)
+        {
+            var request = await _context.ReplanRequests
+                .Where(r => r.PlanId == planId && r.Status == "Pending")
+                .OrderByDescending(r => r.RequestedAt)
+                .FirstOrDefaultAsync();
+
+            if (request != null)
+            {
+                await RejectReplan(request.Id, remarks);
+                return;
+            }
+
+            var plan = await _context.TestPlans.FirstOrDefaultAsync(p => p.ID == planId);
+            if (plan == null)
+                throw new Exception($"Plan with ID {planId} not found.");
+
+            plan.PlanStatus = "Approved";
+
+            await CreatePlanHistoryEntry(
+                plan.ID,
+                "ReplanRejected",
+                null,
+                null,
+                null,
+                $"Replan request rejected. {(string.IsNullOrWhiteSpace(remarks) ? "" : $"Remarks: {remarks}")}"
+            );
+
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Replan rejected directly for plan {PlanId}", plan.ID);
+        }
+
         public async Task CreatePlanHistoryEntry(long planId, string changeType, string? previousDataJson, string? newDataJson, string? fieldChangesJson, string? remarks)
         {
             var plan = await _context.TestPlans.AsNoTracking().FirstOrDefaultAsync(p => p.ID == planId);
