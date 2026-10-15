@@ -1,4 +1,4 @@
-﻿using LIMSApi.Data;
+using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
@@ -31,9 +31,10 @@ namespace LIMSApi.Services
                 throw new ArgumentException("Primary contact person name is required.");
             if (string.IsNullOrWhiteSpace(model.ContactNo1))
                 throw new ArgumentException("Primary contact number is required.");
-            var _phoneRegex = new System.Text.RegularExpressions.Regex(@"^[+]?\d{10,13}$");
-            if (!_phoneRegex.IsMatch(model.ContactNo1.Trim()))
-                throw new ArgumentException("Invalid primary contact number format. Must be 10-13 digits.");
+            var cleanPhone1 = System.Text.RegularExpressions.Regex.Replace(model.ContactNo1.Trim(), @"[\s-]", "");
+            var _phoneRegex = new System.Text.RegularExpressions.Regex(@"^[+]?\d{7,15}$");
+            if (!_phoneRegex.IsMatch(cleanPhone1))
+                throw new ArgumentException("Invalid primary contact number format. Must be 7-15 digits.");
             if (model.IsBlacklisted && string.IsNullOrWhiteSpace(model.ReasonForBlacklisting))
                 throw new ArgumentException("Reason for blacklisting is required when supplier is blacklisted.");
             if (model.IsBlacklisted && !model.BlacklistDate.HasValue)
@@ -70,9 +71,10 @@ namespace LIMSApi.Services
                 throw new ArgumentException("Primary contact person name is required.");
             if (string.IsNullOrWhiteSpace(model.ContactNo1))
                 throw new ArgumentException("Primary contact number is required.");
-            var _phoneRegex = new System.Text.RegularExpressions.Regex(@"^[+]?\d{10,13}$");
-            if (!_phoneRegex.IsMatch(model.ContactNo1.Trim()))
-                throw new ArgumentException("Invalid primary contact number format. Must be 10-13 digits.");
+            var cleanModPhone1 = System.Text.RegularExpressions.Regex.Replace(model.ContactNo1.Trim(), @"[\s-]", "");
+            var _modPhoneRegex = new System.Text.RegularExpressions.Regex(@"^[+]?\d{7,15}$");
+            if (!_modPhoneRegex.IsMatch(cleanModPhone1))
+                throw new ArgumentException("Invalid primary contact number format. Must be 7-15 digits.");
             if (model.IsBlacklisted && string.IsNullOrWhiteSpace(model.ReasonForBlacklisting))
                 throw new ArgumentException("Reason for blacklisting is required when supplier is blacklisted.");
             if (model.IsBlacklisted && !model.BlacklistDate.HasValue)
