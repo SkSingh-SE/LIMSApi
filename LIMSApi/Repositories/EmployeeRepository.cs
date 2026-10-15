@@ -69,6 +69,12 @@ namespace LIMSApi.Repositories
 
                          join ds in _context.DesignationMasters on e.DesignationID equals ds.ID into dsGroup
                          from ds in dsGroup.DefaultIfEmpty()
+
+                         join empMod in _context.EmployeeMasters on e.ModifiedBy equals empMod.ID into empModJoin
+                         from empMod in empModJoin.DefaultIfEmpty()
+
+                         join empCre in _context.EmployeeMasters on e.CreatedBy equals empCre.ID into empCreJoin
+                         from empCre in empCreJoin.DefaultIfEmpty()
                          select new
                          {
                              e.ID,
@@ -81,8 +87,12 @@ namespace LIMSApi.Repositories
                              DepartmentName = dp.Name,
                              e.DesignationID,
                              DesignationName = ds.Name,
-                             e.ModifiedOn,
-                             e.CreatedOn
+                             e.CreatedBy,
+                             e.CreatedOn,
+                             e.ModifiedBy,
+                             ModifiedOn = e.ModifiedOn ?? e.CreatedOn,
+                             CreatedByName = empCre != null ? empCre.Name : null,
+                             ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : null)
                          }).AsQueryable().ApplyFilters(filter.Filter);
 
             
@@ -97,6 +107,8 @@ namespace LIMSApi.Repositories
                     || (x.Gender != null && x.Gender.Contains(search))
                     || (x.DepartmentName != null && x.DepartmentName.Contains(search))
                     || (x.DesignationName != null && x.DesignationName.Contains(search))
+                    || (x.ModifiedByName != null && x.ModifiedByName.Contains(search))
+                    || (x.CreatedByName != null && x.CreatedByName.Contains(search))
                 );
             }
 

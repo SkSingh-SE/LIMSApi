@@ -74,6 +74,12 @@ namespace LIMSApi.Repositories
                           on c.StandardOrganizationID equals so.ID into soGroup
                           from so in soGroup.DefaultIfEmpty()
 
+                          join empMod in _context.EmployeeMasters on c.ModifiedBy equals empMod.ID into empModGroup
+                          from empMod in empModGroup.DefaultIfEmpty()
+
+                          join empCre in _context.EmployeeMasters on c.CreatedBy equals empCre.ID into empCreGroup
+                          from empCre in empCreGroup.DefaultIfEmpty()
+
                           where c.IsActive && c.IsCustom == false
 
                           select new
@@ -89,7 +95,12 @@ namespace LIMSApi.Repositories
                               c.StandardYear,
                               c.Version,
                               c.Title,
-                              c.ModifiedOn
+                              c.CreatedBy,
+                              CreatedByName = empCre != null ? empCre.Name : null,
+                              c.CreatedOn,
+                              c.ModifiedBy,
+                              ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : null),
+                              ModifiedOn = c.ModifiedOn ?? c.CreatedOn
                           }).AsQueryable().ApplyFilters(filter.Filter);
 
 
@@ -121,6 +132,12 @@ namespace LIMSApi.Repositories
                           on c.StandardOrganizationID equals so.ID into soGroup
                           from so in soGroup.DefaultIfEmpty()
 
+                          join empMod in _context.EmployeeMasters on c.ModifiedBy equals empMod.ID into empModGroup
+                          from empMod in empModGroup.DefaultIfEmpty()
+
+                          join empCre in _context.EmployeeMasters on c.CreatedBy equals empCre.ID into empCreGroup
+                          from empCre in empCreGroup.DefaultIfEmpty()
+
                           where c.IsActive && c.IsCustom == true
                           select new
                           {
@@ -135,7 +152,12 @@ namespace LIMSApi.Repositories
                               c.StandardYear,
                               c.Version,
                               c.Title,
-                              c.ModifiedOn
+                              c.CreatedBy,
+                              CreatedByName = empCre != null ? empCre.Name : null,
+                              c.CreatedOn,
+                              c.ModifiedBy,
+                              ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : null),
+                              ModifiedOn = c.ModifiedOn ?? c.CreatedOn
                           }).AsQueryable().ApplyFilters(filter.Filter);
 
 

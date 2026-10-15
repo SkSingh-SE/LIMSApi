@@ -69,6 +69,10 @@ namespace LIMSApi.Repositories
                          where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
                          join d in _context.DepartmentMasters on c.LabDepartmentID equals d.ID into dsGroup
                          from ds in dsGroup.DefaultIfEmpty()
+                         join empMod in _context.EmployeeMasters on c.ModifiedBy equals empMod.ID into empModGroup
+                         from empMod in empModGroup.DefaultIfEmpty()
+                         join empCre in _context.EmployeeMasters on c.CreatedBy equals empCre.ID into empCreGroup
+                         from empCre in empCreGroup.DefaultIfEmpty()
                          select new
                          {
                              c.ID,
@@ -76,8 +80,12 @@ namespace LIMSApi.Repositories
                              c.LabDepartmentID,
                              DepartmentName = ds.Name,
                              c.IsChemicalTest,
-                             c.ModifiedOn,
-                             c.CreatedOn
+                             c.CreatedBy,
+                             CreatedByName = empCre != null ? empCre.Name : null,
+                             c.CreatedOn,
+                             c.ModifiedBy,
+                             ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : null),
+                             ModifiedOn = c.ModifiedOn ?? c.CreatedOn
                          };
 
             _query = _query.AsQueryable().ApplyFilters(filter.Filter);

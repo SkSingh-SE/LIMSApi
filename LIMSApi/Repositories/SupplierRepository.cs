@@ -1,4 +1,4 @@
-﻿using System.Linq.Dynamic.Core;
+using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -51,7 +51,12 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllSuppliers(PageFilter filter)
         {
-            var _query = from c in _context.SupplierMasters where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode 
+            var _query = from c in _context.SupplierMasters
+                         join empMod in _context.EmployeeMasters on c.ModifiedBy equals empMod.ID into empModGroup
+                         from empMod in empModGroup.DefaultIfEmpty()
+                         join empCre in _context.EmployeeMasters on c.CreatedBy equals empCre.ID into empCreGroup
+                         from empCre in empCreGroup.DefaultIfEmpty()
+                         where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
                          select new
                          {
                              c.ID,
@@ -62,9 +67,13 @@ namespace LIMSApi.Repositories
                              c.EmailId1,
                              c.Address,
                              c.BlacklistDate,
-                             c.ModifiedOn
+                             c.CreatedBy,
+                             CreatedByName = empCre != null ? empCre.Name : "-",
+                             c.CreatedOn,
+                             ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : "-"),
+                             ModifiedOn = c.ModifiedOn ?? c.CreatedOn
                          };
-            _query = _query.ApplyFilters(filter.Filter);
+            _query = _query.AsQueryable().ApplyFilters(filter.Filter);
 
            
 

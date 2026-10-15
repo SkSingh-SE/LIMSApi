@@ -1,4 +1,4 @@
-﻿using System.Linq.Dynamic.Core;
+using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -55,8 +55,10 @@ namespace LIMSApi.Repositories
         {
             var _query = (from c in _context.DesignationMasters
                           where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
-                          join e in _context.EmployeeMasters on c.CreatedBy equals e.ID into emp
-                          from eg in emp.DefaultIfEmpty()
+                          join empMod in _context.EmployeeMasters on c.ModifiedBy equals empMod.ID into empModJoin
+                          from empMod in empModJoin.DefaultIfEmpty()
+                          join empCre in _context.EmployeeMasters on c.CreatedBy equals empCre.ID into empCreJoin
+                          from empCre in empCreJoin.DefaultIfEmpty()
                           join r in _context.RoleMasters on c.RoleID equals r.ID into role
                           from rg in role.DefaultIfEmpty()
                           select new
@@ -66,9 +68,12 @@ namespace LIMSApi.Repositories
                               c.Description,
                               c.RoleID,
                               RoleName = rg != null ? rg.Name : null,
+                              c.CreatedBy,
                               c.CreatedOn,
-                              c.ModifiedOn,
-                              CreatedBy = eg.Name
+                              c.ModifiedBy,
+                              ModifiedOn = c.ModifiedOn ?? c.CreatedOn,
+                              CreatedByName = empCre != null ? empCre.Name : null,
+                              ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : null)
 
                           }).AsQueryable()
                             .ApplyFilters(filter.Filter);
@@ -80,7 +85,8 @@ namespace LIMSApi.Repositories
                 _query = _query.Where(x => (x.Description != null && x.Description.Contains(search))
                                      || (x.Name != null && x.Name.Contains(search))
                                      || (x.RoleName != null && x.RoleName.Contains(search))
-                                     || (x.CreatedBy != null && x.CreatedBy.Contains(search)));
+                                     || (x.ModifiedByName != null && x.ModifiedByName.Contains(search))
+                                     || (x.CreatedByName != null && x.CreatedByName.Contains(search)));
             }
 
             if (filter.SortByColumn != null)

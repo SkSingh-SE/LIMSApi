@@ -25,8 +25,30 @@ namespace LIMSApi.Repositories
         public async Task UpdateProductConditionCategory(ProductConditionCategoryMaster model) { _context.ProductConditionCategoryMasters.Update(model); await _context.SaveChangesAsync(); }
 
         public async Task<PagedResponse<object>> GetAllProductConditionCategorys(PageFilter filter) {
-            var _query = (from c in _context.ProductConditionCategoryMasters where c.IsActive select c).AsQueryable().ApplyFilters(filter.Filter);
-            if (!string.IsNullOrWhiteSpace(filter.searchTerm)) { var search = filter.searchTerm.Trim(); _query = _query.Where(x => (x.Name != null && x.Name.Contains(search))); }
+            var baseQuery = from c in _context.ProductConditionCategoryMasters
+                            where c.IsActive
+                            join empMod in _context.EmployeeMasters on c.ModifiedBy equals empMod.ID into empModJoin
+                            from empMod in empModJoin.DefaultIfEmpty()
+                            join empCre in _context.EmployeeMasters on c.CreatedBy equals empCre.ID into empCreJoin
+                            from empCre in empCreJoin.DefaultIfEmpty()
+                            select new
+                            {
+                                c.ID,
+                                c.Name,
+                                c.IsActive,
+                                c.CreatedBy,
+                                c.CreatedOn,
+                                c.ModifiedBy,
+                                ModifiedOn = c.ModifiedOn ?? c.CreatedOn,
+                                CreatedByName = empCre != null ? empCre.Name : null,
+                                ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : null)
+                            };
+
+            var _query = baseQuery.AsQueryable().ApplyFilters(filter.Filter);
+            if (!string.IsNullOrWhiteSpace(filter.searchTerm)) {
+                var search = filter.searchTerm.Trim();
+                _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
+            }
             if (filter.SortByColumn != null) { _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}"); }
             return await _query.Cast<object>().ToPagedAsync(filter);
         }

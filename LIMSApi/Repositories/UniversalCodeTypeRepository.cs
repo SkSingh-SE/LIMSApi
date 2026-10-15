@@ -1,4 +1,4 @@
-﻿using System.Linq.Dynamic.Core;
+using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -48,14 +48,35 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllUniversalCodeTypes(PageFilter filter)
         {
-            var _query = (from c in _context.UniversalCodeTypeMasters where c.IsActive select c).AsQueryable().ApplyFilters(filter.Filter);
+            var baseQuery = from c in _context.UniversalCodeTypeMasters
+                            where c.IsActive
+                            join empMod in _context.EmployeeMasters on c.ModifiedBy equals empMod.ID into empModJoin
+                            from empMod in empModJoin.DefaultIfEmpty()
+                            join empCre in _context.EmployeeMasters on c.CreatedBy equals empCre.ID into empCreJoin
+                            from empCre in empCreJoin.DefaultIfEmpty()
+                            select new
+                            {
+                                c.ID,
+                                c.Name,
+                                c.IsActive,
+                                c.CreatedBy,
+                                c.CreatedOn,
+                                c.ModifiedBy,
+                                ModifiedOn = c.ModifiedOn ?? c.CreatedOn,
+                                CreatedByName = empCre != null ? empCre.Name : null,
+                                ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : null)
+                            };
 
-            _query = _query.AsQueryable().ApplyFilters(filter.Filter);
+            var _query = baseQuery.AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim();
-                _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)));
+                _query = _query.Where(x =>
+                    (x.Name != null && x.Name.Contains(search))
+                    || (x.ModifiedByName != null && x.ModifiedByName.Contains(search))
+                    || (x.CreatedByName != null && x.CreatedByName.Contains(search))
+                );
             }
 
             if (filter.SortByColumn != null)

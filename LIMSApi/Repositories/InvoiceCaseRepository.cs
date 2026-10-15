@@ -51,6 +51,10 @@ namespace LIMSApi.Repositories
                          from fy in fyGroup.DefaultIfEmpty()
                          join at in _context.LaboratoryTestAnalysisTypes on c.AnalysisTypeID equals at.ID into atGroup
                          from at in atGroup.DefaultIfEmpty()
+                         join empMod in _context.EmployeeMasters on c.ModifiedBy equals empMod.ID into empModGroup
+                         from empMod in empModGroup.DefaultIfEmpty()
+                         join empCre in _context.EmployeeMasters on c.CreatedBy equals empCre.ID into empCreGroup
+                         from empCre in empCreGroup.DefaultIfEmpty()
                          where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
                          select new
                          {
@@ -60,7 +64,12 @@ namespace LIMSApi.Repositories
                              LaboratoryTest = lt != null ? lt.Name : "",
                              AnalysisTypeName = at != null ? at.Name : "",
                              TierCount = _context.InvoiceCasePrices.Count(p => p.InvoiceCaseID == c.ID),
-                             c.ModifiedOn,
+                             c.CreatedBy,
+                             CreatedByName = empCre != null ? empCre.Name : null,
+                             c.CreatedOn,
+                             c.ModifiedBy,
+                             ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : null),
+                             ModifiedOn = c.ModifiedOn ?? c.CreatedOn,
                              Tiers = _context.InvoiceCasePrices
                                  .Where(p => p.InvoiceCaseID == c.ID)
                                  .Select(p => new { p.Name, p.Price, p.AliasName })

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -17,6 +17,7 @@ public partial class EquipmentMaster : AuditProperty
     public required string EquipmentNo { get; set; }
     public long DepartmentID { get; set; }
     public long EquipmentTypeID { get; set; }
+    public long? SupplierID { get; set; }
     public long OEMID { get; set; }
     public string? ModelNo { get; set; }
     public string PurchaseDate { get; set; }
@@ -49,6 +50,9 @@ public partial class EquipmentMaster : AuditProperty
 
     [ForeignKey("EquipmentTypeID")]
     public virtual EquipmentTypeMaster? EquipmentType { get; set; }
+
+    [ForeignKey(nameof(SupplierID))]
+    public virtual SupplierMaster? Supplier { get; set; }
 
     public virtual ICollection<EquipmentAnalysisTechnique> AnalysisTechniques { get; set; } = new List<EquipmentAnalysisTechnique>();
 }
