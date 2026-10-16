@@ -27,12 +27,7 @@ namespace LIMSApi.Services
             if (string.IsNullOrWhiteSpace(model.Name))
                 throw new ArgumentException("Courier name should not be empty!");
             model.Name = model.Name.Trim();
-            if (!string.IsNullOrWhiteSpace(model.ContactNo))
-            {
-                var phoneRegex = new System.Text.RegularExpressions.Regex(@"^[+]?\d{10,13}$");
-                if (!phoneRegex.IsMatch(model.ContactNo.Trim()))
-                    throw new ArgumentException("Invalid contact number. Must be 10-13 digits.");
-            }
+            // Phone validation is handled by the frontend phone-input component (single source of truth)
 
             bool exists = await _courierRepository.ExistsByName(model.Name);
             if (exists)
@@ -54,12 +49,7 @@ namespace LIMSApi.Services
             if (string.IsNullOrWhiteSpace(model.Name))
                 throw new ArgumentException("Courier name should not be empty!");
             model.Name = model.Name.Trim();
-            if (!string.IsNullOrWhiteSpace(model.ContactNo))
-            {
-                var phoneRegex = new System.Text.RegularExpressions.Regex(@"^[+]?\d{10,13}$");
-                if (!phoneRegex.IsMatch(model.ContactNo.Trim()))
-                    throw new ArgumentException("Invalid contact number. Must be 10-13 digits.");
-            }
+            // Phone validation is handled by the frontend phone-input component (single source of truth)
 
             bool exists = await _courierRepository.ExistsByNameAndNotId(model.Name, model.ID);
             if (exists)

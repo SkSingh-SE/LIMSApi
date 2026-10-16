@@ -29,12 +29,7 @@ namespace LIMSApi.Services
             model.Name = model.Name.Trim();
             if (string.IsNullOrWhiteSpace(model.ContactPerson1))
                 throw new ArgumentException("Primary contact person name is required.");
-            if (string.IsNullOrWhiteSpace(model.ContactNo1))
-                throw new ArgumentException("Primary contact number is required.");
-            var cleanPhone1 = System.Text.RegularExpressions.Regex.Replace(model.ContactNo1.Trim(), @"[\s-]", "");
-            var _phoneRegex = new System.Text.RegularExpressions.Regex(@"^[+]?\d{7,15}$");
-            if (!_phoneRegex.IsMatch(cleanPhone1))
-                throw new ArgumentException("Invalid primary contact number format. Must be 7-15 digits.");
+            // Phone validation is handled by the frontend phone-input component (single source of truth)
             if (model.IsBlacklisted && string.IsNullOrWhiteSpace(model.ReasonForBlacklisting))
                 throw new ArgumentException("Reason for blacklisting is required when supplier is blacklisted.");
             if (model.IsBlacklisted && !model.BlacklistDate.HasValue)
@@ -69,12 +64,7 @@ namespace LIMSApi.Services
             model.Name = model.Name.Trim();
             if (string.IsNullOrWhiteSpace(model.ContactPerson1))
                 throw new ArgumentException("Primary contact person name is required.");
-            if (string.IsNullOrWhiteSpace(model.ContactNo1))
-                throw new ArgumentException("Primary contact number is required.");
-            var cleanModPhone1 = System.Text.RegularExpressions.Regex.Replace(model.ContactNo1.Trim(), @"[\s-]", "");
-            var _modPhoneRegex = new System.Text.RegularExpressions.Regex(@"^[+]?\d{7,15}$");
-            if (!_modPhoneRegex.IsMatch(cleanModPhone1))
-                throw new ArgumentException("Invalid primary contact number format. Must be 7-15 digits.");
+            // Phone validation is handled by the frontend phone-input component (single source of truth)
             if (model.IsBlacklisted && string.IsNullOrWhiteSpace(model.ReasonForBlacklisting))
                 throw new ArgumentException("Reason for blacklisting is required when supplier is blacklisted.");
             if (model.IsBlacklisted && !model.BlacklistDate.HasValue)

@@ -36,13 +36,13 @@ public partial class EmployeeMaster : AuditProperty
     public required string PermanentPinCode { get; set; }
     public required long PermanentAreaID { get; set; }
 
-    [StringLength(15)]
+    [StringLength(25)]
     public string? MobileNo { get; set; }
 
     [StringLength(15)]
     public string? Gender { get; set; }
 
-    [StringLength(15)]
+    [StringLength(25)]
     public string? EmergencyMobileNo { get; set; }
 
     [StringLength(100)]

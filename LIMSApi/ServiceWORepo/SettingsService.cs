@@ -15,7 +15,6 @@ namespace LIMSApi.ServiceWORepo
         private readonly IFinancialYearService _fyService;
 
         private static readonly Regex EmailRegex = new(@"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", RegexOptions.Compiled);
-        private static readonly Regex PhoneRegex = new(@"^[\d\s\+\-\(\)]{7,20}$", RegexOptions.Compiled);
         private static readonly Regex GstinRegex = new(@"^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}[Z]{1}[A-Z\d]{1}$", RegexOptions.Compiled);
 
         public SettingsService(LIMSContext db, IWebHostEnvironment env, IFileUploadService fileUploadService, IFinancialYearService fyService)
@@ -56,10 +55,7 @@ namespace LIMSApi.ServiceWORepo
             else if (contactEmail.Length > 200)
                 errors.Add("Contact Email must not exceed 200 characters");
 
-            if (string.IsNullOrWhiteSpace(contactPhone))
-                errors.Add("Contact Phone is required");
-            else if (!PhoneRegex.IsMatch(contactPhone.Trim()))
-                errors.Add("Contact Phone format is invalid (7-20 digits allowed)");
+            // Phone validation is handled by the frontend phone-input component (single source of truth)
 
             if (errors.Count > 0)
                 throw new ArgumentException(string.Join("; ", errors));

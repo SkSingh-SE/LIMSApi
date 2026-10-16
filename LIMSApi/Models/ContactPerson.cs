@@ -19,12 +19,12 @@ namespace LIMSApi.Models
         [MaxLength(100)]
         public string? EmailId { get; set; }
 
-        [MaxLength(15)]
+        [MaxLength(25)]
         public string? MobileNo { get; set; }
 
         public bool IsWhatsappNo { get; set; } // No Longer Use, as we are using in dispatch mode.
 
-        [MaxLength(15)]
+        [MaxLength(25)]
         public string? TelephoneNo { get; set; }
 
         public bool SendBill { get; set; }

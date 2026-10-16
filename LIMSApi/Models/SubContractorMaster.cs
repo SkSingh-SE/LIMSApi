@@ -19,10 +19,10 @@ namespace LIMSApi.Models
         [EmailAddress, StringLength(100)]
         public string? EmailID { get; set; }
 
-        [Required, Phone, StringLength(15)]
+        [Required, Phone, StringLength(25)]
         public required string MobileNo { get; set; }
 
-        [Phone, StringLength(15)]
+        [Phone, StringLength(25)]
         public string? PhoneNo { get; set; }
 
         [Required, StringLength(50)]
