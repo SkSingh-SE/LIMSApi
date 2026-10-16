@@ -109,9 +109,17 @@ namespace LIMSApi.Services
                 existingSupplier.FileName = fileUploadResponse.OriginalFileName;
                 existingSupplier.UploadReferenceID = fileUploadResponse.ID;
             }
-            else if(string.IsNullOrEmpty(model.FileName) && existingSupplier.UploadReferenceID != null)
+            else if(string.IsNullOrEmpty(model.FileName))
             {
-                await _uploadService.RemoveFileAsync((long)existingSupplier.UploadReferenceID);
+                // Frontend signals file removal with an empty fileName. Physically delete the
+                // uploaded file AND clear the stored reference, otherwise the stale path/filename
+                // keeps reappearing when the record is reopened in edit mode.
+                if (existingSupplier.UploadReferenceID != null)
+                    await _uploadService.RemoveFileAsync((long)existingSupplier.UploadReferenceID);
+
+                existingSupplier.AgreementFilePath = null;
+                existingSupplier.FileName = null;
+                existingSupplier.UploadReferenceID = null;
             }
             await _supplierRepository.UpdateSupplier(existingSupplier);
             _logger.LogInformation("Supplier '{SupplierName}' updated successfully.", model.Name);

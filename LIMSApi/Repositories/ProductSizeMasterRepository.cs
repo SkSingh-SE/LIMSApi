@@ -47,11 +47,35 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllProductSizes(PageFilter filter)
         {
-            var _query = (from c in _context.ProductSizeMasters
-                              .Include(x => x.ParameterUnit)
-                              .Include(x => x.ParameterUnitEquivalent)
-                          where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
-                          select c).AsQueryable().ApplyFilters(filter.Filter);
+            var baseQuery = from c in _context.ProductSizeMasters
+                            where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
+                            join empMod in _context.EmployeeMasters on c.ModifiedBy equals empMod.ID into empModJoin
+                            from empMod in empModJoin.DefaultIfEmpty()
+                            join empCre in _context.EmployeeMasters on c.CreatedBy equals empCre.ID into empCreJoin
+                            from empCre in empCreJoin.DefaultIfEmpty()
+                            select new
+                            {
+                                c.ID,
+                                c.SizeType,
+                                c.MinValue,
+                                c.MaxValue,
+                                c.ParameterUnitID,
+                                c.ParameterUnitEquivalentID,
+                                UnitName = c.ParameterUnitEquivalent != null ? c.ParameterUnitEquivalent.Name : (c.ParameterUnit != null ? c.ParameterUnit.Name : null),
+                                ParameterUnitName = c.ParameterUnit != null ? c.ParameterUnit.Name : null,
+                                ParameterUnitEquivalentName = c.ParameterUnitEquivalent != null ? c.ParameterUnitEquivalent.Name : null,
+                                c.DisplayName,
+                                c.IsActive,
+                                c.CompanyCode,
+                                c.CreatedBy,
+                                c.CreatedOn,
+                                c.ModifiedBy,
+                                ModifiedOn = c.ModifiedOn ?? c.CreatedOn,
+                                CreatedByName = empCre != null ? empCre.Name : null,
+                                ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : null)
+                            };
+
+            var _query = baseQuery.AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
@@ -59,8 +83,10 @@ namespace LIMSApi.Repositories
                 _query = _query.Where(x =>
                     (x.DisplayName != null && x.DisplayName.Contains(search))
                     || (x.SizeType != null && x.SizeType.Contains(search))
-                    || (x.ParameterUnit != null && x.ParameterUnit.Name.Contains(search))
-                    || (x.ParameterUnitEquivalent != null && x.ParameterUnitEquivalent.Name.Contains(search))
+                    || (x.ParameterUnitName != null && x.ParameterUnitName.Contains(search))
+                    || (x.ParameterUnitEquivalentName != null && x.ParameterUnitEquivalentName.Contains(search))
+                    || (x.ModifiedByName != null && x.ModifiedByName.Contains(search))
+                    || (x.CreatedByName != null && x.CreatedByName.Contains(search))
                 );
             }
             if (filter.SortByColumn != null)
@@ -68,24 +94,7 @@ namespace LIMSApi.Repositories
                 _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
             }
 
-            var projected = _query.Select(x => new
-            {
-                x.ID,
-                x.SizeType,
-                x.MinValue,
-                x.MaxValue,
-                x.ParameterUnitID,
-                x.ParameterUnitEquivalentID,
-                UnitName = x.ParameterUnitEquivalent != null ? x.ParameterUnitEquivalent.Name : (x.ParameterUnit != null ? x.ParameterUnit.Name : null),
-                x.DisplayName,
-                x.CreatedBy,
-                x.CreatedOn,
-                x.ModifiedBy,
-                x.ModifiedOn,
-                x.IsActive
-            });
-
-            return await projected.Cast<object>().ToPagedAsync(filter);
+            return await _query.Cast<object>().ToPagedAsync(filter);
         }
 
         public async Task<List<DropdwonSelector>> GetProductSizeDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
