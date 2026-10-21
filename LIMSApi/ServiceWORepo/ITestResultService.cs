@@ -133,5 +133,12 @@ namespace LIMSApi.ServiceWORepo
         Task<MachiningChargeLineDto> UpdateMachiningItem(long itemId, MachiningChargeItemDto dto);
         Task DeleteMachiningItem(long itemId);
 
+        // -------------------------------------------------------------
+        // Execution Layout Hybrid Architecture Methods
+        // -------------------------------------------------------------
+        Task<RetestComparisonDto> CompareRetestResultsAsync(long retestHeaderId);
+        Task<object> ApprovalLockAndHashAsync(long headerId);
+        Task<List<TestResultAuditLogDto>> GetAuditLogsAsync(long headerId);
+        Task<object> PatchExecutionSectionAsync(long headerId, PatchExecutionSectionDto dto);
     }
 }

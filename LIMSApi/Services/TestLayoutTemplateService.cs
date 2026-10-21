@@ -134,9 +134,9 @@ namespace LIMSApi.Services
             return entity;
         }
 
-        public async Task<TestLayoutTemplate?> GetLayoutByHierarchy(long? testId, long? subGroupId, long? analysisTypeId, string? leafNode)
+        public async Task<TestLayoutTemplate?> GetLayoutByHierarchy(long? testId, long? subGroupId, long? analysisTypeId, string? leafNode, long? testMethodId = null, string? testMethodName = null)
         {
-            var entity = await _repository.GetLayoutByTestHierarchy(testId, subGroupId, analysisTypeId, leafNode);
+            var entity = await _repository.GetLayoutByTestHierarchy(testId, subGroupId, analysisTypeId, leafNode, testMethodId, testMethodName);
             if (entity != null)
             {
                 entity.MappedTestIDs = await _repository.GetMappedTestIds(entity.ID);

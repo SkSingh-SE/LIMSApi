@@ -88,15 +88,49 @@ namespace LIMSApi.Models
         [MaxLength(1000)]
         public string? Remarks { get; set; }
 
+        // ----- Layout Versioning & Historical Snapshot -----
+        public long? LayoutTemplateId { get; set; }
+        public int? LayoutVersion { get; set; }
+        public string? LayoutSnapshotJson { get; set; }
+
+        // ----- Retest Linkage (ISO 17025 Clause 7.7) -----
+        public long? RetestOfHeaderId { get; set; }
+        [MaxLength(50)]
+        public string? RetestReasonCode { get; set; }
+
+        // ----- Approval Lock & NABL Tamper-Evident Seal -----
+        [MaxLength(64)]
+        public string? ApprovalHash { get; set; }
+        public DateTime? ApprovedAt { get; set; }
+        public long? ApprovedById { get; set; }
+        public string? ReportSnapshotJson { get; set; }
+
+        // ----- UI State & Transient Extras -----
+        public string? ExecutionExtraJson { get; set; }
+
+        // ----- Optimistic Concurrency Token -----
+        [Timestamp]
+        public byte[]? RowVersion { get; set; }
+
         // Navigation Properties
         public ICollection<TestResultParameter> Parameters { get; set; } = new List<TestResultParameter>();
         public ICollection<TestResultImage> Images { get; set; } = new List<TestResultImage>();
         public ICollection<LongTermTest> LongTermTests { get; set; } = new List<LongTermTest>();
+        public ICollection<TestResultReading> Readings { get; set; } = new List<TestResultReading>();
+        public ICollection<TestResultLocation> Locations { get; set; } = new List<TestResultLocation>();
+        public ICollection<TestResultTraversePoint> TraversePoints { get; set; } = new List<TestResultTraversePoint>();
+        public ICollection<TestResultChecklistItem> ChecklistItems { get; set; } = new List<TestResultChecklistItem>();
+        public ICollection<TestResultObservation> Observations { get; set; } = new List<TestResultObservation>();
+        public ICollection<TestResultAuditLog> AuditLogs { get; set; } = new List<TestResultAuditLog>();
 
         [ForeignKey(nameof(LaboratoryTestID))]
         public virtual LaboratoryTest? LaboratoryTest { get; set; }
         [ForeignKey(nameof(SampleID))]
         public virtual SampleDetail? Sample { get; set; }
+        [ForeignKey(nameof(RetestOfHeaderId))]
+        public virtual TestResultHeader? RetestOfHeader { get; set; }
+        [ForeignKey(nameof(LayoutTemplateId))]
+        public virtual TestLayoutTemplate? LayoutTemplate { get; set; }
     }
 
 }

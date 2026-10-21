@@ -38,9 +38,11 @@ namespace LIMSApi.Controllers
             [FromQuery] long? testId,
             [FromQuery] long? subGroupId,
             [FromQuery] long? analysisTypeId,
-            [FromQuery] string? leafNode)
+            [FromQuery] string? leafNode,
+            [FromQuery] long? testMethodId,
+            [FromQuery] string? testMethodName)
         {
-            var entity = await _service.GetLayoutByHierarchy(testId, subGroupId, analysisTypeId, leafNode);
+            var entity = await _service.GetLayoutByHierarchy(testId, subGroupId, analysisTypeId, leafNode, testMethodId, testMethodName);
             return entity == null ? NoContent() : Ok(entity);
         }
 

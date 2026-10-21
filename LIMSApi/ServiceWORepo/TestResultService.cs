@@ -203,7 +203,13 @@ namespace LIMSApi.ServiceWORepo
             catch (Exception ex)
             {
                 await trx.RollbackAsync();
-                throw new Exception("Error saving test results: " + ex.Message);
+                var msg = ex.Message;
+                if (ex.InnerException != null)
+                {
+                    msg += " | Inner: " + ex.InnerException.Message;
+                }
+                _logger.LogError(ex, "SaveTestResult failed: {Message}", msg);
+                throw new Exception("Error saving test results: " + msg);
             }
         }
 
@@ -273,10 +279,12 @@ namespace LIMSApi.ServiceWORepo
                 }
                 else
                 {
+                    var rootLabId = await ResolveRootLaboratoryTestIdAsync(g.LaboratoryTestId);
                     header = new TestResultHeader
                     {
                         SampleID = sampleId,
-                        LaboratoryTestID = g.LaboratoryTestId,
+                        LaboratoryTestID = rootLabId,
+                        TestID = g.LaboratoryTestId,
                         TestPlanID = planId,
                         Status = "In-Progress",
                         CreatedBy = loggedInUser.EmployeeID,
@@ -304,6 +312,54 @@ namespace LIMSApi.ServiceWORepo
                     header.Remarks = g.Remarks;
                 }
 
+                // Execution Layout & Retest Fields (Hybrid Architecture)
+                if (g.LayoutTemplateId.HasValue && g.LayoutTemplateId.Value > 0)
+                {
+                    header.LayoutTemplateId = g.LayoutTemplateId.Value;
+                    header.LayoutVersion = g.LayoutVersion;
+                    if (!string.IsNullOrEmpty(g.LayoutSnapshotJson))
+                        header.LayoutSnapshotJson = g.LayoutSnapshotJson;
+                }
+                else if (!header.LayoutTemplateId.HasValue || header.LayoutTemplateId <= 0)
+                {
+                    var resolvedLayout = await _db.TestLayoutTemplates
+                        .AsNoTracking()
+                        .Where(x => x.IsActive && x.CompanyCode == loggedInUser.CompanyCode
+                                 && (x.LaboratoryTestID == header.LaboratoryTestID || x.IsGlobalDefault || x.IsDefault))
+                        .OrderByDescending(x => x.LaboratoryTestID == header.LaboratoryTestID)
+                        .ThenByDescending(x => x.IsGlobalDefault)
+                        .ThenByDescending(x => x.ID)
+                        .FirstOrDefaultAsync();
+
+                    if (resolvedLayout != null)
+                    {
+                        header.LayoutTemplateId = resolvedLayout.ID;
+                        header.LayoutVersion = resolvedLayout.Version;
+                        header.LayoutSnapshotJson = resolvedLayout.LayoutConfigJson;
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(g.ExecutionExtraJson))
+                {
+                    header.ExecutionExtraJson = g.ExecutionExtraJson;
+                }
+
+                if (g.RoomTemperature.HasValue)
+                {
+                    header.RoomTemperature = g.RoomTemperature;
+                }
+
+                if (g.RoomHumidity.HasValue)
+                {
+                    header.RoomHumidity = g.RoomHumidity;
+                }
+
+                if (g.RetestOfHeaderId.HasValue && g.RetestOfHeaderId.Value > 0)
+                {
+                    header.RetestOfHeaderId = g.RetestOfHeaderId;
+                    header.RetestReasonCode = g.RetestReasonCode;
+                }
+
                 // Save parameter values
                 foreach (var p in g.Parameters)
                 {
@@ -329,19 +385,33 @@ namespace LIMSApi.ServiceWORepo
                     param.Remarks = p.Remarks;
                     param.MinValue = p.MinValue;
                     param.MaxValue = p.MaxValue;
-                    param.IsBillable = p.IsBillable;
+                    param.IsBillable = p.IsBillable ?? true;
+                    param.IsReportable = p.IsReportable ?? true;
+                    param.ReportableOverrideReason = p.ReportableOverrideReason;
+                    if (p.FormulaVersion.HasValue)
+                    {
+                        param.FormulaVersion = p.FormulaVersion.Value;
+                    }
+
                     param.DecimalPrecision = p.DecimalPrecision;
                     param.ConversionFactor = p.ConversionFactor;
                     param.ConvertedValue = p.ConvertedValue;
                     param.SelectedUnit = p.SelectedUnit;
                     param.TestMethodUsed = p.TestMethodUsed;
 
+                    // Audit parameter value change
+                    var newVal = p.Value.HasValue ? Convert.ToDecimal(p.Value) : (decimal?)null;
+                    if (p.Id > 0 && param.Value != newVal)
+                    {
+                        await LogAuditInternalAsync(header.ID, "TestResultParameter", param.ID, "Value", param.Value?.ToString(), newVal?.ToString(), p.Remarks);
+                    }
+
                     // CRITICAL #3: Allow value==0 (valid for chemical trace elements)
                     // Only block null values for completed tests, not zero
                     if (header.Status == "Completed" && p.Value == null)
                         throw new InvalidOperationException($"Parameter '{p.ParameterName}' must have a value after test completion.");
 
-                    param.Value = p.Value.HasValue ? Convert.ToDecimal(p.Value) : p.Value;
+                    param.Value = newVal;
 
                     // Save formula expression if provided
                     if (!string.IsNullOrWhiteSpace(p.Formula))
@@ -351,6 +421,30 @@ namespace LIMSApi.ServiceWORepo
                 }
 
                 // HIGH #12: Flush changes before recalculation so it sees latest values
+                await _db.SaveChangesAsync();
+
+                // Synchronize hybrid child collections
+                if (g.Readings != null && g.Readings.Any())
+                {
+                    await SyncReadingsAsync(header.ID, g.Readings);
+                }
+                if (g.Locations != null && g.Locations.Any())
+                {
+                    await SyncLocationsAsync(header.ID, g.Locations);
+                }
+                if (g.TraversePoints != null && g.TraversePoints.Any())
+                {
+                    await SyncTraversePointsAsync(header.ID, g.TraversePoints);
+                }
+                if (g.Checklist != null && g.Checklist.Any())
+                {
+                    await SyncChecklistItemsAsync(header.ID, g.Checklist);
+                }
+                if (g.Observations != null && g.Observations.Any())
+                {
+                    await SyncObservationsAsync(header.ID, g.Observations);
+                }
+
                 await _db.SaveChangesAsync();
 
                 // Run calculations on current header
@@ -624,6 +718,8 @@ namespace LIMSApi.ServiceWORepo
                 .Where(s => s.ID == sampleId && s.SampleInward!.CompanyCode == loggedInUser.CompanyCode)
                 .Include(s => s.SampleInward)
                     .ThenInclude(c => c!.Customer)
+                .Include(s => s.SampleInward)
+                    .ThenInclude(c => c!.PurchaseOrder)
                 .Include(s => s.ProductMaster)
                 .Include(s => s.ProductSizeMaster)
                 .Include(s => s.AdditionalDetails)
@@ -654,7 +750,7 @@ namespace LIMSApi.ServiceWORepo
             ReportFormat? resolvedReportFormat = null;
             var sampleMethodIds = sample.TestPlans
                 .SelectMany(tp => tp.GeneralTests.SelectMany(gt => gt.Methods.Select(m => m.StandardID)))
-                .Concat(sample.TestPlans.SelectMany(tp => tp.ChemicalTests.SelectMany(ct => ct.Methods.Select(m => (long)m.TestMethodSpecificationID))))
+                .Concat(sample.TestPlans.SelectMany(tp => tp.ChemicalTests.SelectMany(ct => ct.Methods.Where(m => m.TestMethodSpecificationID.HasValue).Select(m => m.TestMethodSpecificationID!.Value))))
                 .Where(id => id > 0)
                 .Distinct()
                 .ToList();
@@ -816,6 +912,7 @@ namespace LIMSApi.ServiceWORepo
                     foreach (var method in gt.Methods)
                     {
                         var labTestId = method.LaboratoryTestID;
+                        var rootLabTestId = await ResolveRootLaboratoryTestIdAsync(labTestId);
 
                         // Fetch ALL headers for this method (supports Qty > 1)
                         var headers = await _db.TestResultHeaders
@@ -823,12 +920,22 @@ namespace LIMSApi.ServiceWORepo
                             .Include(i => i.Images)
                             .Where(h =>
                                 h.SampleID == sampleId &&
-                                h.LaboratoryTestID == labTestId &&
-                                h.TestPlanID == plan.ID)
+                                h.TestPlanID == plan.ID &&
+                                ((h.LaboratoryTestID == rootLabTestId && (h.TestID == null || h.TestID == labTestId)) ||
+                                 (h.LaboratoryTestID == labTestId)))
                             .OrderBy(h => h.SequenceNo)
                             .ToListAsync();
 
                         var quantity = method.Quantity > 0 ? method.Quantity : 1;
+
+                        // Ensure existing headers have TestID set
+                        foreach (var h in headers)
+                        {
+                            if (h.TestID == null && labTestId > 0)
+                            {
+                                h.TestID = labTestId;
+                            }
+                        }
 
                         // On-demand: create missing specimen headers
                         if (headers.Count < quantity)
@@ -841,7 +948,8 @@ namespace LIMSApi.ServiceWORepo
                                 var newHeader = new TestResultHeader
                                 {
                                     SampleID = sampleId,
-                                    LaboratoryTestID = labTestId,
+                                    LaboratoryTestID = rootLabTestId,
+                                    TestID = labTestId,
                                     TestPlanID = plan.ID,
                                     SequenceNo = maxSeq + (i - headers.Count) + 1,
                                     CreatedBy = loggedInUser.EmployeeID,
@@ -874,6 +982,61 @@ namespace LIMSApi.ServiceWORepo
                             await _db.SaveChangesAsync();
                         }
 
+                        // Populate parameters on existing empty or mismatched headers if needed
+                        var anyParamsAdded = false;
+                        foreach (var header in headers)
+                        {
+                            var needsRepopulation = !header.Parameters.Any();
+
+                            // Auto-heal: If existing pending header has parameters with all null values,
+                            // verify that its parameters actually belong to this laboratory test.
+                            // If they belong to a different test (e.g. Tensile parameters on a Hardness header), re-sync!
+                            if (!needsRepopulation && header.Status == "Pending" && header.Parameters.All(p => p.Value == null))
+                            {
+                                var currentParamIds = header.Parameters.Select(p => p.ParameterID).ToHashSet();
+                                var expectedParams = await BuildMechanicalParametersAsync(labTestId, specIds, new List<string>());
+                                var expectedParamIds = expectedParams.Select(p => p.ParameterID).ToHashSet();
+
+                                if (expectedParamIds.Any() && !currentParamIds.Intersect(expectedParamIds).Any())
+                                {
+                                    _db.TestResultParameters.RemoveRange(header.Parameters);
+                                    header.Parameters.Clear();
+                                    needsRepopulation = true;
+                                }
+                            }
+
+                            if (needsRepopulation)
+                            {
+                                var parameters = await BuildMechanicalParametersAsync(labTestId, specIds, new List<string>());
+                                foreach (var p in parameters)
+                                {
+                                    header.Parameters.Add(new TestResultParameter
+                                    {
+                                        ParameterID = p.ParameterID,
+                                        ParameterName = p.ParameterName,
+                                        Unit = p.Unit ?? string.Empty,
+                                        Value = null,
+                                        Formula = p.Formula,
+                                        IsCalculated = p.IsCalculated,
+                                        IsAdditional = false,
+                                        MinValue = p.MinValue,
+                                        MaxValue = p.MaxValue,
+                                        SpecMinValue = p.SpecMinValue,
+                                        SpecMaxValue = p.SpecMaxValue,
+                                        AcceptanceCriteria = p.AcceptanceCriteria,
+                                        SpecificationLineID = p.SpecificationLineID,
+                                        ParameterType = p.ParameterType,
+                                        IsReportable = p.IsReportable
+                                    });
+                                }
+                                anyParamsAdded = true;
+                            }
+                        }
+                        if (anyParamsAdded)
+                        {
+                            await _db.SaveChangesAsync();
+                        }
+
                         // Fallback: if still no headers (unlikely)
                         if (!headers.Any())
                         {
@@ -884,8 +1047,8 @@ namespace LIMSApi.ServiceWORepo
                         // Cache lab test name (avoid N+1)
                         var labTestName = labTestId > 0
                             ? ((await _db.LaboratoryTestSubGroups.Where(sg => sg.ID == labTestId).Select(sg => sg.ReportTestName ?? sg.Name).FirstOrDefaultAsync())
+                               ?? (await _db.LaboratoryTests.Where(t => t.ID == labTestId).Select(t => t.Name).FirstOrDefaultAsync())
                                ?? (await _db.LaboratoryTestAnalysisTypes.Where(at => at.ID == labTestId).Select(at => at.Name).FirstOrDefaultAsync())
-                               ?? (await _db.LaboratoryTests.FindAsync(labTestId))?.Name
                                ?? "General Test")
                             : "General Test";
 
@@ -924,6 +1087,9 @@ namespace LIMSApi.ServiceWORepo
                                     isCalculated = isCalc,
                                     p.SpecificationLineID,
                                     isBillable = p.IsBillable,
+                                    isReportable = p.IsReportable,
+                                    reportableOverrideReason = p.ReportableOverrideReason,
+                                    formulaVersion = p.FormulaVersion,
                                     isWithinLimit = p.IsWithinLimit,
                                     resultStatus = p.ResultStatus,
                                     isStandalone = p.IsStandalone,
@@ -939,12 +1105,17 @@ namespace LIMSApi.ServiceWORepo
                                 });
                             }
 
+                            var hybridGen = await LoadHybridCollectionsAsync(header.ID);
+
                             generalTests.Add(new
                             {
                                 headerId = header.ID,
                                 generalTestId = gt.ID,
                                 testMethodId = method.ID,
-                                laboratoryTestId = labTestId,
+                                laboratoryTestId = rootLabTestId,
+                                subGroupId = (rootLabTestId != labTestId ? labTestId : gt.LaboratoryTestSubGroupID),
+                                laboratoryTestSubGroupID = (rootLabTestId != labTestId ? labTestId : gt.LaboratoryTestSubGroupID),
+                                leafNode = labTestName,
                                 laboratoryTest = labTestName,
                                 sequenceNo = header.SequenceNo,
                                 totalSpecimens = totalSpecimens,
@@ -979,6 +1150,18 @@ namespace LIMSApi.ServiceWORepo
                                 roomTemperature = header.RoomTemperature,
                                 roomHumidity = header.RoomHumidity,
                                 labRoomId = header.LabRoomId,
+                                // Layout & Retest (Hybrid Architecture)
+                                layoutTemplateId = header.LayoutTemplateId,
+                                layoutVersion = header.LayoutVersion,
+                                layoutSnapshotJson = header.LayoutSnapshotJson,
+                                executionExtraJson = header.ExecutionExtraJson,
+                                retestOfHeaderId = header.RetestOfHeaderId,
+                                retestReasonCode = header.RetestReasonCode,
+                                readings = hybridGen.readings,
+                                locations = hybridGen.locations,
+                                traversePoints = hybridGen.traverse,
+                                checklist = hybridGen.checklist,
+                                observations = hybridGen.observations,
                                 // Timing & Equipment
                                 testStartTime = header.TestStartTime ?? header.StartedAt,
                                 testEndTime = header.TestEndTime ?? header.CompletedAt,
@@ -1073,6 +1256,9 @@ namespace LIMSApi.ServiceWORepo
                                     p.SpecificationLineID,
                                     p.IsAdditional,
                                     isBillable = p.IsBillable,
+                                    isReportable = p.IsReportable,
+                                    reportableOverrideReason = p.ReportableOverrideReason,
+                                    formulaVersion = p.FormulaVersion,
                                     isWithinLimit = p.IsWithinLimit,
                                     resultStatus = p.ResultStatus,
                                     parameterType = p.ParameterType ?? pm?.ParameterType ?? "",
@@ -1085,6 +1271,8 @@ namespace LIMSApi.ServiceWORepo
                                     dropdownOptions = dropdownOpts
                                 });
                             }
+
+                            var hybridChem = await LoadHybridCollectionsAsync(header.ID);
 
                             chemicalTests.Add(new
                             {
@@ -1131,6 +1319,18 @@ namespace LIMSApi.ServiceWORepo
                                 roomTemperature = header.RoomTemperature,
                                 roomHumidity = header.RoomHumidity,
                                 labRoomId = header.LabRoomId,
+                                // Layout & Retest (Hybrid Architecture)
+                                layoutTemplateId = header.LayoutTemplateId,
+                                layoutVersion = header.LayoutVersion,
+                                layoutSnapshotJson = header.LayoutSnapshotJson,
+                                executionExtraJson = header.ExecutionExtraJson,
+                                retestOfHeaderId = header.RetestOfHeaderId,
+                                retestReasonCode = header.RetestReasonCode,
+                                readings = hybridChem.readings,
+                                locations = hybridChem.locations,
+                                traversePoints = hybridChem.traverse,
+                                checklist = hybridChem.checklist,
+                                observations = hybridChem.observations,
                                 // Timing & Equipment
                                 testStartTime = header.TestStartTime ?? header.StartedAt,
                                 testEndTime = header.TestEndTime ?? header.CompletedAt,
@@ -1168,7 +1368,11 @@ namespace LIMSApi.ServiceWORepo
                     caseNo = inward?.CaseNo,
                     customerID = inward?.CustomerID,
                     customerName = inward?.Customer?.Name,
-                    receivedOn = inward?.CollectionTime
+                    poNo = inward?.PurchaseOrder?.PONumber,
+                    receivedOn = inward?.CollectionTime,
+                    statementOfConformity = inward?.StatementOfConformity,
+                    decisionRule = inward?.DecisionRule,
+                    sampleReceiptNote = inward?.SampleReceiptNote
                 },
                 sample = new
                 {
@@ -1176,6 +1380,8 @@ namespace LIMSApi.ServiceWORepo
                     sampleNo = sample.SampleNo,
                     sampleStatus = sample.SampleStatus,
                     details = sample.Details,
+                    stampedAs = sample.Details,
+                    natureOfSample = sample.ProductForm?.Name ?? sample.ProductMaster?.ProductName,
                     productMasterID = sample.ProductMasterID,
                     productMasterName = sample.ProductMaster?.ProductName,
                     productSizeMasterID = sample.ProductSizeMasterID,
@@ -1231,13 +1437,16 @@ namespace LIMSApi.ServiceWORepo
         /// </summary>
         private async Task<TestResultHeader> AutoCreateHeaderForLabTestAsync(long sampleId, long planId, long labTestId)
         {
+            var rootLabTestId = await ResolveRootLaboratoryTestIdAsync(labTestId);
+
             // Double-check: return existing header if another thread/request already created it
             var existing = await _db.TestResultHeaders
                 .Include(h => h.Parameters)
                 .FirstOrDefaultAsync(h =>
                     h.SampleID == sampleId &&
-                    h.LaboratoryTestID == labTestId &&
-                    h.TestPlanID == planId);
+                    h.TestPlanID == planId &&
+                    ((h.LaboratoryTestID == rootLabTestId && (h.TestID == null || h.TestID == labTestId)) ||
+                     (h.LaboratoryTestID == labTestId)));
 
             if (existing != null)
                 return existing;
@@ -1245,7 +1454,8 @@ namespace LIMSApi.ServiceWORepo
             var header = new TestResultHeader
             {
                 SampleID = sampleId,
-                LaboratoryTestID = labTestId,
+                LaboratoryTestID = rootLabTestId,
+                TestID = labTestId,
                 TestPlanID = planId,
                 SequenceNo = 1,
                 CreatedBy = loggedInUser.EmployeeID,
@@ -1260,22 +1470,39 @@ namespace LIMSApi.ServiceWORepo
         }
 
         /// <summary>
-        /// Resolve a chemical test-type id to its parent LaboratoryTest id.
-        /// Analysis-type ids live in LaboratoryTestAnalysisTypes, so storing one raw into
-        /// TestResultHeaders.LaboratoryTestID violates FK_TestResultHeaders_LaboratoryTests.
-        /// Map via SubGroup instead. Plain LaboratoryTest ids pass through after existence check.
-        /// Returns 0 when unresolvable.
+        /// Resolve any test ID (whether LaboratoryTest, SubGroup, or AnalysisType) to its root LaboratoryTest.ID.
+        /// Storing a SubGroup or AnalysisType ID into TestResultHeaders.LaboratoryTestID violates
+        /// the foreign key FK_TestResultHeaders_LaboratoryTests_LaboratoryTestID.
         /// </summary>
-        private async Task<long> ResolveChemicalParentLabTestIdAsync(long id)
+        private async Task<long> ResolveRootLaboratoryTestIdAsync(long id)
         {
+            if (id <= 0) return id;
+
+            // 1. Direct match on LaboratoryTests (Root tests like Charpy ID:8, Hardness Multi-Location ID:11, Tensile ID:1, Hardness ID:7)
+            if (await _db.LaboratoryTests.AnyAsync(t => t.ID == id))
+                return id;
+
+            // 2. Check if it's a SubGroup (e.g. Rockwell HRC ID:19 -> Hardness Test ID:7; Machined Round Bar ID:16 -> Tensile Test ID:1)
+            var subGroup = await _db.LaboratoryTestSubGroups.FirstOrDefaultAsync(sg => sg.ID == id);
+            if (subGroup != null && subGroup.LaboratoryTestID > 0)
+                return subGroup.LaboratoryTestID;
+
+            // 3. Check if it's an AnalysisType (Chemical)
             var analysisType = await _db.LaboratoryTestAnalysisTypes
                 .Include(a => a.SubGroup)
                 .FirstOrDefaultAsync(a => a.ID == id);
             if (analysisType?.SubGroup != null && analysisType.SubGroup.LaboratoryTestID > 0)
                 return analysisType.SubGroup.LaboratoryTestID;
-            if (await _db.LaboratoryTests.AnyAsync(t => t.ID == id))
-                return id;
-            return 0;
+
+            return id;
+        }
+
+        private async Task<long> ResolveChemicalParentLabTestIdAsync(long id)
+        {
+            var at = await _db.LaboratoryTestAnalysisTypes
+                .Include(a => a.SubGroup)
+                .FirstOrDefaultAsync(a => a.ID == id);
+            return at?.SubGroup?.LaboratoryTestID ?? await ResolveRootLaboratoryTestIdAsync(id);
         }
 
         /// <summary>
@@ -1716,12 +1943,14 @@ namespace LIMSApi.ServiceWORepo
                     if (method.LaboratoryTestID <= 0) continue;
 
                     var quantity = method.Quantity > 0 ? method.Quantity : 1;
+                    var rootLabTestId = await ResolveRootLaboratoryTestIdAsync(method.LaboratoryTestID);
 
                     // Count existing headers to avoid duplicates
                     var existingCount = await _db.TestResultHeaders.CountAsync(h =>
                         h.SampleID == sampleId &&
-                        h.LaboratoryTestID == method.LaboratoryTestID &&
-                        h.TestPlanID == planId);
+                        h.TestPlanID == planId &&
+                        ((h.LaboratoryTestID == rootLabTestId && (h.TestID == null || h.TestID == method.LaboratoryTestID)) ||
+                         (h.LaboratoryTestID == method.LaboratoryTestID)));
 
                     var headersToCreate = quantity - existingCount;
                     if (headersToCreate <= 0) continue;
@@ -1734,7 +1963,8 @@ namespace LIMSApi.ServiceWORepo
                         var header = new TestResultHeader
                         {
                             SampleID = sampleId,
-                            LaboratoryTestID = method.LaboratoryTestID,
+                            LaboratoryTestID = rootLabTestId,
+                            TestID = method.LaboratoryTestID,
                             TestPlanID = planId,
                             SequenceNo = existingCount + i + 1, // Specimen number (1-based)
                             CreatedBy = loggedInUser.EmployeeID,
@@ -1833,92 +2063,179 @@ namespace LIMSApi.ServiceWORepo
 
             var labTestName = subGroup?.ReportTestName ?? subGroup?.Name ?? labTest?.Name ?? $"LabTest#{labTestId}";
 
-            // Get specification lines (Type="mechanical") by grade
+            // 1. Target test identifiers
+            var targetSubGroupIds = new HashSet<long>();
+            var targetLabTestIds = new HashSet<long>();
+
+            if (subGroup != null)
+            {
+                targetSubGroupIds.Add(subGroup.ID);
+                targetLabTestIds.Add(subGroup.LaboratoryTestID);
+            }
+            if (labTest != null)
+            {
+                targetLabTestIds.Add(labTest.ID);
+                var childSubGroupIds = await _db.LaboratoryTestSubGroups
+                    .Where(sg => sg.LaboratoryTestID == labTest.ID)
+                    .Select(sg => sg.ID)
+                    .ToListAsync();
+                foreach (var id in childSubGroupIds) targetSubGroupIds.Add(id);
+            }
+            if (labTestId > 0)
+            {
+                targetLabTestIds.Add(labTestId);
+                targetSubGroupIds.Add(labTestId);
+            }
+
+            // 2. PRIMARY SOURCE OF TRUTH: Load parameters configured on the selected Laboratory Test / SubGroup
+            var labTestSubGroupParams = await _db.LaboratoryTestSubGroupParameters
+                .Include(p => p.Parameter).ThenInclude(pm => pm.ParameterUnit)
+                .Where(p => targetSubGroupIds.Contains(p.LaboratoryTestSubGroupID))
+                .OrderBy(p => p.Sequence)
+                .ToListAsync();
+
+            // 3. Load specification lines from the selected Material Specification
+            // ONLY consider lines that match this test explicitly or are unassigned (sl.LaboratoryTestID == null)
+            // NEVER grab lines that belong to a DIFFERENT laboratory test!
             var specLines = new List<SpecificationLine>();
             if (specIds.Any())
             {
-                var baseQuery = _db.SpecificationLines
-                    .Include(sl => sl.Parameter)
-                        .ThenInclude(p => p.ParameterUnit)
+                specLines = await _db.SpecificationLines
+                    .Include(sl => sl.Parameter).ThenInclude(p => p.ParameterUnit)
                     .Include(sl => sl.ParameterUnit)
                     .Where(sl => sl.SpecificationGradeID.HasValue
                         && specIds.Contains(sl.SpecificationGradeID.Value)
-                        && sl.Type == "mechanical"
-                        && sl.ParameterID.HasValue);
-
-                if (labTestId > 0)
-                {
-                    var targetTestIds = new HashSet<long> { labTestId };
-
-                    // If labTestId is a SubGroup, include parent LaboratoryTestID
-                    if (subGroup != null)
-                    {
-                        targetTestIds.Add(subGroup.LaboratoryTestID);
-                    }
-                    else
-                    {
-                        // If labTestId is a Master LaboratoryTest, include all its SubGroups
-                        var childSubGroupIds = await _db.LaboratoryTestSubGroups
-                            .Where(sg => sg.LaboratoryTestID == labTestId)
-                            .Select(sg => sg.ID)
-                            .ToListAsync();
-                        foreach (var id in childSubGroupIds) targetTestIds.Add(id);
-                    }
-
-                    var filteredLines = await baseQuery
-                        .Where(sl => sl.LaboratoryTestID.HasValue && targetTestIds.Contains(sl.LaboratoryTestID.Value))
-                        .ToListAsync();
-
-                    if (filteredLines.Any())
-                    {
-                        specLines = filteredLines;
-                    }
-                    else
-                    {
-                        specLines = await baseQuery.ToListAsync();
-                    }
-                }
-                else
-                {
-                    specLines = await baseQuery.ToListAsync();
-                }
+                        && (sl.Type == "mechanical" || sl.Type == "general")
+                        && sl.ParameterID.HasValue
+                        && (!sl.LaboratoryTestID.HasValue
+                            || targetLabTestIds.Contains(sl.LaboratoryTestID.Value)
+                            || targetSubGroupIds.Contains(sl.LaboratoryTestID.Value)))
+                    .ToListAsync();
             }
 
-            // Create TestResultParameter from each specification line
-            foreach (var specLine in specLines.Where(sl => sl.ParameterID.HasValue))
+            // 4. Map parameters: If labTestSubGroupParams exist, use them as source of truth and attach spec requirements
+            if (labTestSubGroupParams.Any())
             {
-                var pm = specLine.Parameter;
-                if (pm == null) continue;
-
-                var formulaExpr = !string.IsNullOrWhiteSpace(specLine.Equation) ? specLine.Equation.Trim() : pm.Formula;
-                var isCalc = !string.IsNullOrWhiteSpace(specLine.Equation) || pm.IsCalculated;
-
-                var unit = pm.ParameterUnit?.Name
-                    ?? specLine.ParameterUnit?.Name
-                    ?? string.Empty;
-
-                result.Add(new TestResultParameter
+                foreach (var sgp in labTestSubGroupParams)
                 {
-                    ParameterID = pm.ID,
-                    ParameterName = pm.Name,
-                    Unit = unit,
-                    Formula = formulaExpr,
-                    FormulaExpression = formulaExpr,
-                    IsCalculated = isCalc,
-                    Value = null,
-                    IsAdditional = false,
-                    MinValue = specLine.MinValue,
-                    MaxValue = specLine.MaxValue,
-                    SpecMinValue = specLine.MinValue,
-                    SpecMaxValue = specLine.MaxValue,
-                    SpecificationLineID = specLine.ID
-                });
+                    var pm = sgp.Parameter;
+                    if (pm == null) continue;
+
+                    var specLine = specLines.FirstOrDefault(sl => sl.ParameterID == sgp.ParameterID);
+                    var formulaExpr = !string.IsNullOrWhiteSpace(specLine?.Equation) ? specLine.Equation.Trim() : pm.Formula;
+                    var isCalc = !string.IsNullOrWhiteSpace(specLine?.Equation) || pm.IsCalculated;
+                    var unit = pm.ParameterUnit?.Name
+                        ?? specLine?.ParameterUnit?.Name
+                        ?? string.Empty;
+
+                    result.Add(new TestResultParameter
+                    {
+                        ParameterID = pm.ID,
+                        ParameterName = pm.Name,
+                        Unit = unit,
+                        Formula = formulaExpr,
+                        FormulaExpression = formulaExpr,
+                        IsCalculated = isCalc,
+                        Value = null,
+                        IsAdditional = false,
+                        MinValue = specLine?.MinValue,
+                        MaxValue = specLine?.MaxValue,
+                        SpecMinValue = specLine?.MinValue,
+                        SpecMaxValue = specLine?.MaxValue,
+                        AcceptanceCriteria = specLine?.Notes,
+                        SpecificationLineID = specLine?.ID,
+                        ParameterType = pm.ParameterType ?? "Quantitative",
+                        DecimalPrecision = pm.DecimalPrecision,
+                        IsReportable = sgp.IsReportable
+                    });
+                }
+
+                // Also attach any specification lines explicitly mapped to this laboratory test that weren't in subGroup params
+                var explicitTestSpecLines = specLines
+                    .Where(sl => sl.LaboratoryTestID.HasValue
+                        && (targetLabTestIds.Contains(sl.LaboratoryTestID.Value) || targetSubGroupIds.Contains(sl.LaboratoryTestID.Value))
+                        && !result.Any(r => r.ParameterID == sl.ParameterID))
+                    .ToList();
+
+                foreach (var specLine in explicitTestSpecLines)
+                {
+                    var pm = specLine.Parameter;
+                    if (pm == null) continue;
+
+                    var formulaExpr = !string.IsNullOrWhiteSpace(specLine.Equation) ? specLine.Equation.Trim() : pm.Formula;
+                    var isCalc = !string.IsNullOrWhiteSpace(specLine.Equation) || pm.IsCalculated;
+                    var unit = pm.ParameterUnit?.Name ?? specLine.ParameterUnit?.Name ?? string.Empty;
+
+                    result.Add(new TestResultParameter
+                    {
+                        ParameterID = pm.ID,
+                        ParameterName = pm.Name,
+                        Unit = unit,
+                        Formula = formulaExpr,
+                        FormulaExpression = formulaExpr,
+                        IsCalculated = isCalc,
+                        Value = null,
+                        IsAdditional = false,
+                        MinValue = specLine.MinValue,
+                        MaxValue = specLine.MaxValue,
+                        SpecMinValue = specLine.MinValue,
+                        SpecMaxValue = specLine.MaxValue,
+                        AcceptanceCriteria = specLine.Notes,
+                        SpecificationLineID = specLine.ID,
+                        ParameterType = pm.ParameterType ?? "Quantitative",
+                        DecimalPrecision = pm.DecimalPrecision,
+                        IsReportable = true
+                    });
+                }
+            }
+            else
+            {
+                // If no subGroup parameters configured in master, use specification lines that specifically match this test or unassigned
+                var applicableSpecLines = specLines
+                    .Where(sl => sl.LaboratoryTestID.HasValue && (targetLabTestIds.Contains(sl.LaboratoryTestID.Value) || targetSubGroupIds.Contains(sl.LaboratoryTestID.Value)))
+                    .ToList();
+
+                if (!applicableSpecLines.Any())
+                {
+                    applicableSpecLines = specLines.Where(sl => !sl.LaboratoryTestID.HasValue).ToList();
+                }
+
+                foreach (var specLine in applicableSpecLines)
+                {
+                    var pm = specLine.Parameter;
+                    if (pm == null) continue;
+
+                    var formulaExpr = !string.IsNullOrWhiteSpace(specLine.Equation) ? specLine.Equation.Trim() : pm.Formula;
+                    var isCalc = !string.IsNullOrWhiteSpace(specLine.Equation) || pm.IsCalculated;
+                    var unit = pm.ParameterUnit?.Name ?? specLine.ParameterUnit?.Name ?? string.Empty;
+
+                    result.Add(new TestResultParameter
+                    {
+                        ParameterID = pm.ID,
+                        ParameterName = pm.Name,
+                        Unit = unit,
+                        Formula = formulaExpr,
+                        FormulaExpression = formulaExpr,
+                        IsCalculated = isCalc,
+                        Value = null,
+                        IsAdditional = false,
+                        MinValue = specLine.MinValue,
+                        MaxValue = specLine.MaxValue,
+                        SpecMinValue = specLine.MinValue,
+                        SpecMaxValue = specLine.MaxValue,
+                        AcceptanceCriteria = specLine.Notes,
+                        SpecificationLineID = specLine.ID,
+                        ParameterType = pm.ParameterType ?? "Quantitative",
+                        DecimalPrecision = pm.DecimalPrecision,
+                        IsReportable = true
+                    });
+                }
             }
 
             // Warn if no parameters found
             if (!result.Any())
             {
-                warnings.Add($"No parameters defined in specification for '{labTestName}'. Verify specification setup.");
+                warnings.Add($"No parameters defined in specification or master for '{labTestName}'. Configure test parameters or specification setup.");
             }
 
             return result;
@@ -2276,7 +2593,7 @@ namespace LIMSApi.ServiceWORepo
                     throw new Exception("Test Result Header not found.");
 
                 // Status guard: only Started or In-Progress tests can be completed
-                if (header.Status != "Started" && header.Status != "In-Progress")
+                if (header.Status != "Started" && header.Status != "In-Progress" && header.Status != "In Progress")
                     throw new InvalidOperationException($"Cannot complete test in '{header.Status}' status. Only 'Started' or 'In-Progress' tests can be completed.");
 
                 // Validate parameter values completeness
@@ -4310,6 +4627,501 @@ namespace LIMSApi.ServiceWORepo
                 labRoomId = roomId,
                 labRoomName = roomName
             };
+        }
+
+        // =====================================================================
+        //  EXECUTION LAYOUT HYBRID ARCHITECTURE METHODS
+        // =====================================================================
+
+        public async Task<RetestComparisonDto> CompareRetestResultsAsync(long retestHeaderId)
+        {
+            var retestHeader = await _db.TestResultHeaders
+                .Include(h => h.Parameters)
+                .FirstOrDefaultAsync(h => h.ID == retestHeaderId);
+
+            if (retestHeader == null || !retestHeader.RetestOfHeaderId.HasValue)
+                throw new KeyNotFoundException($"Retest header {retestHeaderId} not found or has no linked original test.");
+
+            var originalHeader = await _db.TestResultHeaders
+                .Include(h => h.Parameters)
+                .FirstOrDefaultAsync(h => h.ID == retestHeader.RetestOfHeaderId.Value);
+
+            if (originalHeader == null)
+                throw new KeyNotFoundException($"Original header {retestHeader.RetestOfHeaderId.Value} not found.");
+
+            var primaryRetestParam = retestHeader.Parameters.FirstOrDefault(p => p.Value.HasValue);
+            var primaryOrigParam = primaryRetestParam != null
+                ? originalHeader.Parameters.FirstOrDefault(p => p.ParameterID == primaryRetestParam.ParameterID)
+                : null;
+
+            decimal? origVal = primaryOrigParam?.Value;
+            decimal? retVal = primaryRetestParam?.Value;
+            decimal? diff = (retVal.HasValue && origVal.HasValue) ? retVal.Value - origVal.Value : null;
+            decimal? pct = (diff.HasValue && origVal.HasValue && origVal.Value != 0) ? Math.Abs(diff.Value / origVal.Value) * 100 : null;
+
+            return new RetestComparisonDto
+            {
+                SpecimenCode = "S1",
+                ParameterCode = primaryRetestParam?.ParameterName ?? "Primary",
+                ReadingSequence = 1,
+                OriginalValue = origVal,
+                RetestValue = retVal,
+                Difference = diff,
+                PercentageDeviation = pct
+            };
+        }
+
+        public async Task<object> ApprovalLockAndHashAsync(long headerId)
+        {
+            var header = await _db.TestResultHeaders
+                .Include(h => h.Parameters)
+                .FirstOrDefaultAsync(h => h.ID == headerId)
+                ?? throw new KeyNotFoundException($"Header not found: {headerId}");
+
+            var canonicalBuilder = new System.Text.StringBuilder();
+            canonicalBuilder.Append($"HEADER:{header.ID}|SAMPLE:{header.SampleID}|STATUS:{header.Status}|NABL:{header.IsNabl}|PASS:{header.IsOverallPass}|");
+            foreach (var p in header.Parameters.OrderBy(p => p.ParameterID))
+            {
+                canonicalBuilder.Append($"P:{p.ParameterID}={p.Value}:{p.Unit}:{p.IsReportable}|");
+            }
+
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var hashBytes = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(canonicalBuilder.ToString()));
+            var hashString = Convert.ToHexString(hashBytes);
+
+            header.ApprovalHash = hashString;
+            header.ApprovedAt = DateTime.UtcNow;
+            header.ApprovedById = loggedInUser.EmployeeID;
+            header.Status = "Approved";
+
+            await _db.SaveChangesAsync();
+
+            await LogAuditInternalAsync(header.ID, "TestResultHeader", header.ID, "Status", "Verified", "Approved", $"Sealed with SHA-256 hash: {hashString}");
+
+            return new { Success = true, ApprovalHash = hashString, ApprovedAt = header.ApprovedAt };
+        }
+
+        public async Task<List<TestResultAuditLogDto>> GetAuditLogsAsync(long headerId)
+        {
+            var logs = await _db.TestResultAuditLogs
+                .Where(a => a.TestResultHeaderID == headerId)
+                .OrderByDescending(a => a.ChangedOn)
+                .ToListAsync();
+
+            var userIds = logs.Select(l => l.ChangedBy).Distinct().ToList();
+            var users = await _db.EmployeeMasters
+                .Where(e => userIds.Contains(e.ID))
+                .ToDictionaryAsync(e => e.ID, e => e.Name);
+
+            return logs.Select(l => new TestResultAuditLogDto
+            {
+                Id = l.ID,
+                TestResultHeaderId = l.TestResultHeaderID,
+                EntityName = l.EntityName,
+                EntityId = l.EntityID,
+                FieldName = l.FieldName,
+                OldValue = l.OldValue,
+                NewValue = l.NewValue,
+                ChangeReason = l.ChangeReason,
+                ChangedBy = l.ChangedBy,
+                ChangedByName = users.TryGetValue(l.ChangedBy, out var name) ? name : "User #" + l.ChangedBy,
+                ChangedOn = l.ChangedOn
+            }).ToList();
+        }
+
+        public async Task<object> PatchExecutionSectionAsync(long headerId, PatchExecutionSectionDto dto)
+        {
+            var header = await _db.TestResultHeaders
+                .FirstOrDefaultAsync(h => h.ID == headerId)
+                ?? throw new KeyNotFoundException($"Header not found: {headerId}");
+
+            var blockedStatuses = new[] { "Approved", "Verified" };
+            if (blockedStatuses.Contains(header.Status))
+                throw new InvalidOperationException($"Cannot patch section — test is in '{header.Status}' status.");
+
+            if (dto.Readings != null)
+            {
+                await SyncReadingsAsync(headerId, dto.Readings);
+            }
+            if (dto.Locations != null)
+            {
+                await SyncLocationsAsync(headerId, dto.Locations);
+            }
+            if (dto.TraversePoints != null)
+            {
+                await SyncTraversePointsAsync(headerId, dto.TraversePoints);
+            }
+            if (dto.Checklist != null)
+            {
+                await SyncChecklistItemsAsync(headerId, dto.Checklist);
+            }
+            if (dto.Observations != null)
+            {
+                await SyncObservationsAsync(headerId, dto.Observations);
+            }
+            if (!string.IsNullOrEmpty(dto.CustomSectionDataJson))
+            {
+                header.ExecutionExtraJson = dto.CustomSectionDataJson;
+            }
+
+            header.ModifiedBy = loggedInUser.EmployeeID;
+            header.ModifiedOn = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync();
+
+            await LogAuditInternalAsync(headerId, "TestResultHeader", headerId, "SectionPatch", dto.SectionType, "Updated", dto.ChangeReason ?? "Section patched via execution layout");
+
+            return new { Success = true, Message = $"Section {dto.SectionType} patched successfully." };
+        }
+
+        private async Task<(List<TestResultReadingDto> readings, List<TestResultLocationDto> locations, List<TestResultTraversePointDto> traverse, List<TestResultChecklistItemDto> checklist, List<TestResultObservationDto> observations)> LoadHybridCollectionsAsync(long headerId)
+        {
+            var readings = await _db.TestResultReadings
+                .Where(r => r.TestResultHeaderID == headerId && r.IsActive)
+                .OrderBy(r => r.SequenceNo)
+                .Select(r => new TestResultReadingDto
+                {
+                    Id = r.ID,
+                    TestResultParameterId = r.TestResultParameterID,
+                    ParameterCode = r.ParameterCode,
+                    SpecimenCode = r.SpecimenCode,
+                    LocationCode = r.LocationCode,
+                    SequenceNo = r.SequenceNo,
+                    Value = r.Value,
+                    Unit = r.Unit,
+                    IsVoided = r.IsVoided,
+                    VoidReason = r.VoidReason
+                }).ToListAsync();
+
+            var locations = await _db.TestResultLocations
+                .Where(l => l.TestResultHeaderID == headerId && l.IsActive)
+                .OrderBy(l => l.SequenceNo)
+                .Select(l => new TestResultLocationDto
+                {
+                    Id = l.ID,
+                    LocationCode = l.LocationCode,
+                    DisplayName = l.DisplayName,
+                    SequenceNo = l.SequenceNo,
+                    IsRuntimeAdded = l.IsRuntimeAdded,
+                    AddedReason = l.AddedReason,
+                    IsReportable = l.IsReportable,
+                    IsVoided = l.IsVoided,
+                    VoidReason = l.VoidReason
+                }).ToListAsync();
+
+            var traverse = await _db.TestResultTraversePoints
+                .Where(t => t.TestResultHeaderID == headerId && t.IsActive)
+                .OrderBy(t => t.SequenceNo)
+                .Select(t => new TestResultTraversePointDto
+                {
+                    Id = t.ID,
+                    SpecimenCode = t.SpecimenCode,
+                    SequenceNo = t.SequenceNo,
+                    Distance = t.Distance,
+                    HardnessValue = t.HardnessValue,
+                    HardnessUnit = t.HardnessUnit,
+                    IsBelowCutoff = t.IsBelowCutoff,
+                    IsVoided = t.IsVoided
+                }).ToListAsync();
+
+            var checklist = await _db.TestResultChecklistItems
+                .Where(c => c.TestResultHeaderID == headerId && c.IsActive)
+                .Select(c => new TestResultChecklistItemDto
+                {
+                    Id = c.ID,
+                    ItemCode = c.ItemCode,
+                    ItemDescription = c.ItemDescription,
+                    Status = c.Status,
+                    Remarks = c.Remarks,
+                    CheckedBy = c.CheckedBy,
+                    CheckedAt = c.CheckedAt,
+                    IsReportable = c.IsReportable,
+                    IsVoided = c.IsVoided
+                }).ToListAsync();
+
+            var observations = await _db.TestResultObservations
+                .Where(o => o.TestResultHeaderID == headerId && o.IsActive)
+                .Select(o => new TestResultObservationDto
+                {
+                    Id = o.ID,
+                    ObservationCode = o.ObservationCode,
+                    Category = o.Category,
+                    ObservationText = o.ObservationText,
+                    IsRuntimeAdded = o.IsRuntimeAdded,
+                    AddedReason = o.AddedReason,
+                    IsReportable = o.IsReportable,
+                    IsVoided = o.IsVoided,
+                    VoidReason = o.VoidReason
+                }).ToListAsync();
+
+            return (readings, locations, traverse, checklist, observations);
+        }
+
+        private async Task LogAuditInternalAsync(long headerId, string entityName, long entityId, string fieldName, string? oldVal, string? newVal, string? reason)
+        {
+            var log = new TestResultAuditLog
+            {
+                TestResultHeaderID = headerId,
+                EntityName = entityName,
+                EntityID = entityId,
+                FieldName = fieldName,
+                OldValue = oldVal,
+                NewValue = newVal,
+                ChangeReason = reason,
+                ChangedBy = loggedInUser.EmployeeID,
+                ChangedOn = DateTime.UtcNow
+            };
+            _db.TestResultAuditLogs.Add(log);
+        }
+
+        private async Task SyncReadingsAsync(long headerId, List<TestResultReadingDto> dtos)
+        {
+            var existing = await _db.TestResultReadings
+                .Where(r => r.TestResultHeaderID == headerId && r.IsActive)
+                .ToListAsync();
+
+            var headerParams = await _db.TestResultParameters
+                .Where(p => p.TestResultHeaderID == headerId)
+                .ToListAsync();
+            var validParamSet = new HashSet<long>(headerParams.Select(p => p.ID));
+
+            foreach (var dto in dtos)
+            {
+                long? validParamId = null;
+                if (dto.TestResultParameterId.HasValue && validParamSet.Contains(dto.TestResultParameterId.Value))
+                {
+                    validParamId = dto.TestResultParameterId.Value;
+                }
+                else if (!string.IsNullOrWhiteSpace(dto.ParameterCode))
+                {
+                    var matched = headerParams.FirstOrDefault(p =>
+                        string.Equals(p.ParameterName, dto.ParameterCode, StringComparison.OrdinalIgnoreCase));
+                    if (matched != null)
+                    {
+                        validParamId = matched.ID;
+                    }
+                }
+
+                if (dto.Id > 0)
+                {
+                    var match = existing.FirstOrDefault(r => r.ID == dto.Id);
+                    if (match != null)
+                    {
+                        if (match.Value != dto.Value)
+                        {
+                            await LogAuditInternalAsync(headerId, "TestResultReading", match.ID, "Value", match.Value?.ToString(), dto.Value?.ToString(), dto.VoidReason);
+                        }
+                        if (validParamId.HasValue) match.TestResultParameterID = validParamId;
+                        match.Value = dto.Value;
+                        match.Unit = dto.Unit;
+                        match.IsVoided = dto.IsVoided ?? false;
+                        match.VoidReason = dto.VoidReason;
+                        match.ModifiedBy = loggedInUser.EmployeeID;
+                        match.ModifiedOn = DateTime.UtcNow;
+                    }
+                }
+                else
+                {
+                    var newReading = new TestResultReading
+                    {
+                        TestResultHeaderID = headerId,
+                        TestResultParameterID = validParamId,
+                        ParameterCode = dto.ParameterCode,
+                        SpecimenCode = string.IsNullOrWhiteSpace(dto.SpecimenCode) ? "S1" : dto.SpecimenCode,
+                        LocationCode = dto.LocationCode,
+                        SequenceNo = dto.SequenceNo,
+                        Value = dto.Value,
+                        Unit = dto.Unit,
+                        IsVoided = dto.IsVoided ?? false,
+                        VoidReason = dto.VoidReason,
+                        CreatedBy = loggedInUser.EmployeeID,
+                        CreatedOn = DateTime.UtcNow,
+                        CompanyCode = loggedInUser.CompanyCode ?? "LIMS",
+                        IsActive = true
+                    };
+                    _db.TestResultReadings.Add(newReading);
+                }
+            }
+        }
+
+        private async Task SyncLocationsAsync(long headerId, List<TestResultLocationDto> dtos)
+        {
+            var existing = await _db.TestResultLocations
+                .Where(l => l.TestResultHeaderID == headerId && l.IsActive)
+                .ToListAsync();
+
+            foreach (var dto in dtos)
+            {
+                if (dto.Id > 0)
+                {
+                    var match = existing.FirstOrDefault(l => l.ID == dto.Id);
+                    if (match != null)
+                    {
+                        match.DisplayName = dto.DisplayName;
+                        match.SequenceNo = dto.SequenceNo;
+                        match.IsReportable = dto.IsReportable ?? true;
+                        match.IsVoided = dto.IsVoided ?? false;
+                        match.VoidReason = dto.VoidReason;
+                        match.ModifiedBy = loggedInUser.EmployeeID;
+                        match.ModifiedOn = DateTime.UtcNow;
+                    }
+                }
+                else
+                {
+                    var newLoc = new TestResultLocation
+                    {
+                        TestResultHeaderID = headerId,
+                        LocationCode = dto.LocationCode,
+                        DisplayName = dto.DisplayName,
+                        SequenceNo = dto.SequenceNo,
+                        IsRuntimeAdded = dto.IsRuntimeAdded ?? false,
+                        AddedReason = dto.AddedReason,
+                        IsReportable = dto.IsReportable ?? true,
+                        IsVoided = dto.IsVoided ?? false,
+                        VoidReason = dto.VoidReason,
+                        CreatedBy = loggedInUser.EmployeeID,
+                        CreatedOn = DateTime.UtcNow,
+                        CompanyCode = loggedInUser.CompanyCode ?? "LIMS",
+                        IsActive = true
+                    };
+                    _db.TestResultLocations.Add(newLoc);
+                }
+            }
+        }
+
+        private async Task SyncTraversePointsAsync(long headerId, List<TestResultTraversePointDto> dtos)
+        {
+            var existing = await _db.TestResultTraversePoints
+                .Where(t => t.TestResultHeaderID == headerId && t.IsActive)
+                .ToListAsync();
+
+            foreach (var dto in dtos)
+            {
+                if (dto.Id > 0)
+                {
+                    var match = existing.FirstOrDefault(t => t.ID == dto.Id);
+                    if (match != null)
+                    {
+                        match.Distance = dto.Distance;
+                        match.HardnessValue = dto.HardnessValue;
+                        match.HardnessUnit = dto.HardnessUnit;
+                        match.IsBelowCutoff = dto.IsBelowCutoff ?? false;
+                        match.IsVoided = dto.IsVoided ?? false;
+                        match.ModifiedBy = loggedInUser.EmployeeID;
+                        match.ModifiedOn = DateTime.UtcNow;
+                    }
+                }
+                else
+                {
+                    var newPoint = new TestResultTraversePoint
+                    {
+                        TestResultHeaderID = headerId,
+                        SpecimenCode = string.IsNullOrWhiteSpace(dto.SpecimenCode) ? "S1" : dto.SpecimenCode,
+                        SequenceNo = dto.SequenceNo,
+                        Distance = dto.Distance,
+                        HardnessValue = dto.HardnessValue,
+                        HardnessUnit = string.IsNullOrWhiteSpace(dto.HardnessUnit) ? "HV 0.5" : dto.HardnessUnit,
+                        IsBelowCutoff = dto.IsBelowCutoff ?? false,
+                        IsVoided = dto.IsVoided ?? false,
+                        CreatedBy = loggedInUser.EmployeeID,
+                        CreatedOn = DateTime.UtcNow,
+                        CompanyCode = loggedInUser.CompanyCode ?? "LIMS",
+                        IsActive = true
+                    };
+                    _db.TestResultTraversePoints.Add(newPoint);
+                }
+            }
+        }
+
+        private async Task SyncChecklistItemsAsync(long headerId, List<TestResultChecklistItemDto> dtos)
+        {
+            var existing = await _db.TestResultChecklistItems
+                .Where(c => c.TestResultHeaderID == headerId && c.IsActive)
+                .ToListAsync();
+
+            foreach (var dto in dtos)
+            {
+                if (dto.Id > 0)
+                {
+                    var match = existing.FirstOrDefault(c => c.ID == dto.Id);
+                    if (match != null)
+                    {
+                        match.Status = dto.Status;
+                        match.Remarks = dto.Remarks;
+                        match.CheckedBy = dto.CheckedBy ?? loggedInUser.EmployeeID;
+                        match.CheckedAt = DateTime.UtcNow;
+                        match.IsReportable = dto.IsReportable ?? false;
+                        match.IsVoided = dto.IsVoided ?? false;
+                        match.ModifiedBy = loggedInUser.EmployeeID;
+                        match.ModifiedOn = DateTime.UtcNow;
+                    }
+                }
+                else
+                {
+                    var newItem = new TestResultChecklistItem
+                    {
+                        TestResultHeaderID = headerId,
+                        ItemCode = dto.ItemCode,
+                        ItemDescription = dto.ItemDescription,
+                        Status = dto.Status,
+                        Remarks = dto.Remarks,
+                        CheckedBy = dto.CheckedBy ?? loggedInUser.EmployeeID,
+                        CheckedAt = DateTime.UtcNow,
+                        IsReportable = dto.IsReportable ?? false,
+                        IsVoided = dto.IsVoided ?? false,
+                        CreatedBy = loggedInUser.EmployeeID,
+                        CreatedOn = DateTime.UtcNow,
+                        CompanyCode = loggedInUser.CompanyCode ?? "LIMS",
+                        IsActive = true
+                    };
+                    _db.TestResultChecklistItems.Add(newItem);
+                }
+            }
+        }
+
+        private async Task SyncObservationsAsync(long headerId, List<TestResultObservationDto> dtos)
+        {
+            var existing = await _db.TestResultObservations
+                .Where(o => o.TestResultHeaderID == headerId && o.IsActive)
+                .ToListAsync();
+
+            foreach (var dto in dtos)
+            {
+                if (dto.Id > 0)
+                {
+                    var match = existing.FirstOrDefault(o => o.ID == dto.Id);
+                    if (match != null)
+                    {
+                        match.Category = dto.Category;
+                        match.ObservationText = dto.ObservationText;
+                        match.IsReportable = dto.IsReportable ?? true;
+                        match.IsVoided = dto.IsVoided ?? false;
+                        match.VoidReason = dto.VoidReason;
+                        match.ModifiedBy = loggedInUser.EmployeeID;
+                        match.ModifiedOn = DateTime.UtcNow;
+                    }
+                }
+                else
+                {
+                    var newObs = new TestResultObservation
+                    {
+                        TestResultHeaderID = headerId,
+                        ObservationCode = string.IsNullOrWhiteSpace(dto.ObservationCode) ? "OBS_" + Guid.NewGuid().ToString("N")[..6] : dto.ObservationCode,
+                        Category = dto.Category,
+                        ObservationText = dto.ObservationText,
+                        IsRuntimeAdded = dto.IsRuntimeAdded ?? false,
+                        AddedReason = dto.AddedReason,
+                        IsReportable = dto.IsReportable ?? true,
+                        IsVoided = dto.IsVoided ?? false,
+                        VoidReason = dto.VoidReason,
+                        CreatedBy = loggedInUser.EmployeeID,
+                        CreatedOn = DateTime.UtcNow,
+                        CompanyCode = loggedInUser.CompanyCode ?? "LIMS",
+                        IsActive = true
+                    };
+                    _db.TestResultObservations.Add(newObs);
+                }
+            }
         }
     }
 }

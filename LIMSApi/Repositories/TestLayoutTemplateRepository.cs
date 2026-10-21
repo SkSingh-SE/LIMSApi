@@ -72,7 +72,7 @@ namespace LIMSApi.Repositories
             return entity;
         }
 
-        public async Task<TestLayoutTemplate?> GetLayoutByTestHierarchy(long? testId, long? subGroupId, long? analysisTypeId, string? leafNode)
+        public async Task<TestLayoutTemplate?> GetLayoutByTestHierarchy(long? testId, long? subGroupId, long? analysisTypeId, string? leafNode, long? testMethodId = null, string? testMethodName = null)
         {
             if (testId.HasValue && testId.Value > 0)
             {
@@ -102,6 +102,21 @@ namespace LIMSApi.Repositories
                     .Where(x => x.IsActive && x.CompanyCode == loggedInUser.CompanyCode &&
                                (x.LaboratoryTestID == testId.Value || mappedTemplateIds.Contains(x.ID)));
 
+                // ── TIER 1: EXACT MATCH (Leaf Node + Test Method Specification) ──
+                if ((testMethodId.HasValue && testMethodId.Value > 0) || !string.IsNullOrWhiteSpace(testMethodName))
+                {
+                    var cleanMethodName = testMethodName?.Trim().ToLowerInvariant();
+                    var methodExactMatch = await query
+                        .Where(x => (testMethodId.HasValue && x.TestMethodSpecificationID == testMethodId.Value) ||
+                                    (!string.IsNullOrEmpty(cleanMethodName) && x.TestMethodName != null && x.TestMethodName.Trim().ToLower() == cleanMethodName))
+                        .OrderByDescending(x => x.IsDefault)
+                        .ThenByDescending(x => x.ID)
+                        .FirstOrDefaultAsync();
+
+                    if (methodExactMatch != null) return methodExactMatch;
+                }
+
+                // ── TIER 2: MATCH BY LEAF NODE (Generic across methods) ──
                 // Level 1: Strict match on AnalysisType (Chemical / 3-Level Leaf node)
                 if (analysisTypeId.HasValue && analysisTypeId.Value > 0)
                 {
@@ -155,12 +170,14 @@ namespace LIMSApi.Repositories
                 if (recentMatch != null) return recentMatch;
             }
 
-            // Level 6 (Global Fallback): Return the global fallback default template for any unmapped test
+            // ── TIER 3: GLOBAL DEFAULT FALLBACK ──
             var globalDefault = await _context.TestLayoutTemplates
                 .AsNoTracking()
                 .Where(x => x.IsActive && x.CompanyCode == loggedInUser.CompanyCode
-                         && (x.LaboratoryTestID == null || x.IsGlobalDefault) && x.IsDefault)
-                .OrderByDescending(x => x.ID)
+                         && (x.IsGlobalDefault || x.LaboratoryTestID == null || x.IsDefault))
+                .OrderByDescending(x => x.IsGlobalDefault)
+                .ThenByDescending(x => x.IsDefault)
+                .ThenByDescending(x => x.ID)
                 .FirstOrDefaultAsync();
 
             return globalDefault;

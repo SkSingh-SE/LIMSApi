@@ -947,13 +947,14 @@ namespace LIMSApi.ServiceWORepo
                 };
 
                 // ---------------- Result Table ----------------
-                if (testHeader.Parameters.Any())
+                var reportableParameters = testHeader.Parameters.Where(p => p.IsReportable).ToList();
+                if (reportableParameters.Any())
                 {
                     testPayload.ResultTable = new TablePayload
                     {
                         Title = "Test Results",
                         Columns = new[] { "Parameter", "Result", "Unit", "Min", "Max" },
-                        Rows = testHeader.Parameters.Select(p => new TableRowPayload
+                        Rows = reportableParameters.Select(p => new TableRowPayload
                         {
                             Parameter = p.ParameterName,
                             Result = p.Value?.ToString(),
@@ -1352,7 +1353,7 @@ namespace LIMSApi.ServiceWORepo
                 parameterCount = h.Parameters.Count,
                 allPassed = h.Parameters.All(p => p.IsWithinLimit != false),
                 status = h.Status,
-                parameters = h.Parameters.OrderBy(p => p.ID).Select(p => new
+                parameters = h.Parameters.Where(p => p.IsReportable).OrderBy(p => p.ID).Select(p => new
                 {
                     name = p.ParameterName,
                     unit = p.Unit,
@@ -1555,6 +1556,7 @@ namespace LIMSApi.ServiceWORepo
                         ?? header.LaboratoryTest?.Name,
                     DateOfTesting = header.CompletedAt?.ToString("dd-MM-yyyy") ?? "",
                     Parameters = header.Parameters
+                        .Where(p => p.IsReportable)
                         .OrderBy(p => p.ID)
                         .Select(p => new ReportDataParameter
                         {

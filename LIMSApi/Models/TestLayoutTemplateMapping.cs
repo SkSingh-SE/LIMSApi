@@ -19,6 +19,11 @@ namespace LIMSApi.Models
 
         public long? LaboratoryTestAnalysisTypeID { get; set; }
 
+        public long? TestMethodSpecificationID { get; set; }
+
+        [MaxLength(250)]
+        public string? TestMethodName { get; set; }
+
         [MaxLength(250)]
         public string? LeafNode { get; set; }
 

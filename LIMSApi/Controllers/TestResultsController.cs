@@ -551,5 +551,38 @@ namespace LIMSApi.Controllers
             var result = await _service.GetDailyEnvironmentAsync(labRoomId);
             return Ok(result);
         }
+
+        // =============================================================
+        // Execution Layout Hybrid Architecture Endpoints
+        // =============================================================
+        [HttpGet("retest-comparison/{headerId}")]
+        public async Task<IActionResult> GetRetestComparison(long headerId)
+        {
+            var result = await _service.CompareRetestResultsAsync(headerId);
+            return Ok(result);
+        }
+
+        [HttpGet("audit-logs/{headerId}")]
+        public async Task<IActionResult> GetAuditLogs(long headerId)
+        {
+            var result = await _service.GetAuditLogsAsync(headerId);
+            return Ok(result);
+        }
+
+        [HttpPost("approval-lock/{headerId}")]
+        [RequirePermission(Permissions.Testing.VerifyResult)]
+        public async Task<IActionResult> ApprovalLockAndHash(long headerId)
+        {
+            var result = await _service.ApprovalLockAndHashAsync(headerId);
+            return Ok(result);
+        }
+
+        [HttpPatch("patch-section/{headerId}")]
+        [RequirePermission(Permissions.Testing.SaveResult)]
+        public async Task<IActionResult> PatchExecutionSection(long headerId, [FromBody] PatchExecutionSectionDto dto)
+        {
+            var result = await _service.PatchExecutionSectionAsync(headerId, dto);
+            return Ok(result);
+        }
     }
 }
