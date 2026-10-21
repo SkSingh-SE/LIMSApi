@@ -18,12 +18,22 @@ namespace LIMSApi.Helpers
         }
         public async Task<bool> SendWhatsAppMessageAsync(string toPhoneNumber, string message)
         {
+            // Stored value already carries the country code (e.g. "+91 9876543210").
+            // Normalize to compact E.164 (e.g. "+919876543210") — Twilio rejects spaces
+            // and the country code must NOT be hardcoded anymore.
+            var toE164 = PhoneHelper.ToE164(toPhoneNumber);
+            if (string.IsNullOrEmpty(toE164))
+            {
+                Console.WriteLine("WhatsApp Message Skipped: phone number is empty.");
+                return false;
+            }
+
             try
             {
                 var whatsappMessage = await MessageResource.CreateAsync(
                     body: message,
                     from: new Twilio.Types.PhoneNumber(_configuration["TwilioWhatsAPP:FromWhatsAppNumber"]),
-                    to: new Twilio.Types.PhoneNumber($"whatsapp:+91{toPhoneNumber}")
+                    to: new Twilio.Types.PhoneNumber($"whatsapp:{toE164}")
                 );
 
                 Console.WriteLine($"WhatsApp Message Sent - SID: {whatsappMessage.Sid}");
@@ -38,9 +48,16 @@ namespace LIMSApi.Helpers
 
         public async Task<bool> SendWhatsAppMessageAsync(string toPhoneNumber, string message, List<string> mediaUrls)
         {
+            var toE164 = PhoneHelper.ToE164(toPhoneNumber);
+            if (string.IsNullOrEmpty(toE164))
+            {
+                Console.WriteLine("WhatsApp Message Skipped: phone number is empty.");
+                return false;
+            }
+
             try
             {
-                var messageOptions = new CreateMessageOptions(new PhoneNumber($"whatsapp:{toPhoneNumber}"))
+                var messageOptions = new CreateMessageOptions(new PhoneNumber($"whatsapp:{toE164}"))
                 {
                     From = new PhoneNumber(_configuration["TwilioWhatsAPP:FromWhatsAppNumber"]),
                     Body = message

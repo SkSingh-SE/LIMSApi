@@ -29,12 +29,7 @@ namespace LIMSApi.Services
             model.Name = model.Name.Trim();
             if (string.IsNullOrWhiteSpace(model.ContactPerson1))
                 throw new ArgumentException("Primary contact person name is required.");
-            if (string.IsNullOrWhiteSpace(model.ContactNo1))
-                throw new ArgumentException("Primary contact number is required.");
-            var cleanPhone1 = System.Text.RegularExpressions.Regex.Replace(model.ContactNo1.Trim(), @"[\s-]", "");
-            var _phoneRegex = new System.Text.RegularExpressions.Regex(@"^[+]?\d{7,15}$");
-            if (!_phoneRegex.IsMatch(cleanPhone1))
-                throw new ArgumentException("Invalid primary contact number format. Must be 7-15 digits.");
+            // Phone validation is handled by the frontend phone-input component (single source of truth)
             if (model.IsBlacklisted && string.IsNullOrWhiteSpace(model.ReasonForBlacklisting))
                 throw new ArgumentException("Reason for blacklisting is required when supplier is blacklisted.");
             if (model.IsBlacklisted && !model.BlacklistDate.HasValue)
@@ -69,12 +64,7 @@ namespace LIMSApi.Services
             model.Name = model.Name.Trim();
             if (string.IsNullOrWhiteSpace(model.ContactPerson1))
                 throw new ArgumentException("Primary contact person name is required.");
-            if (string.IsNullOrWhiteSpace(model.ContactNo1))
-                throw new ArgumentException("Primary contact number is required.");
-            var cleanModPhone1 = System.Text.RegularExpressions.Regex.Replace(model.ContactNo1.Trim(), @"[\s-]", "");
-            var _modPhoneRegex = new System.Text.RegularExpressions.Regex(@"^[+]?\d{7,15}$");
-            if (!_modPhoneRegex.IsMatch(cleanModPhone1))
-                throw new ArgumentException("Invalid primary contact number format. Must be 7-15 digits.");
+            // Phone validation is handled by the frontend phone-input component (single source of truth)
             if (model.IsBlacklisted && string.IsNullOrWhiteSpace(model.ReasonForBlacklisting))
                 throw new ArgumentException("Reason for blacklisting is required when supplier is blacklisted.");
             if (model.IsBlacklisted && !model.BlacklistDate.HasValue)
@@ -119,9 +109,17 @@ namespace LIMSApi.Services
                 existingSupplier.FileName = fileUploadResponse.OriginalFileName;
                 existingSupplier.UploadReferenceID = fileUploadResponse.ID;
             }
-            else if(string.IsNullOrEmpty(model.FileName) && existingSupplier.UploadReferenceID != null)
+            else if(string.IsNullOrEmpty(model.FileName))
             {
-                await _uploadService.RemoveFileAsync((long)existingSupplier.UploadReferenceID);
+                // Frontend signals file removal with an empty fileName. Physically delete the
+                // uploaded file AND clear the stored reference, otherwise the stale path/filename
+                // keeps reappearing when the record is reopened in edit mode.
+                if (existingSupplier.UploadReferenceID != null)
+                    await _uploadService.RemoveFileAsync((long)existingSupplier.UploadReferenceID);
+
+                existingSupplier.AgreementFilePath = null;
+                existingSupplier.FileName = null;
+                existingSupplier.UploadReferenceID = null;
             }
             await _supplierRepository.UpdateSupplier(existingSupplier);
             _logger.LogInformation("Supplier '{SupplierName}' updated successfully.", model.Name);

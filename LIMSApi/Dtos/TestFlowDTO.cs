@@ -35,6 +35,10 @@ namespace LIMSApi.Dtos
         public long TestMethodId { get; set; }      // General/Chemical Method ID
         public long LaboratoryTestId { get; set; }  // LaboratoryTests table ID
 
+        // Environmental Conditions (ISO 17025)
+        public decimal? RoomTemperature { get; set; }
+        public decimal? RoomHumidity { get; set; }
+
         // Equipment tracking (ISO 17025)
         public string? EquipmentIdsJson { get; set; }
 
@@ -42,7 +46,27 @@ namespace LIMSApi.Dtos
         public string? TestPurpose { get; set; }
         public string? Remarks { get; set; }
 
+        // Layout Template & Snapshot
+        public long? LayoutTemplateId { get; set; }
+        public int? LayoutVersion { get; set; }
+        public string? LayoutSnapshotJson { get; set; }
+
+        // Retest Linkage
+        public long? RetestOfHeaderId { get; set; }
+        public string? RetestReasonCode { get; set; }
+
+        // UI transient state & SVG curves
+        public string? ExecutionExtraJson { get; set; }
+
+        // Concurrency token
+        public byte[]? RowVersion { get; set; }
+
         public List<TestResultParameterDto> Parameters { get; set; } = new();
+        public List<TestResultReadingDto> Readings { get; set; } = new();
+        public List<TestResultLocationDto> Locations { get; set; } = new();
+        public List<TestResultTraversePointDto> TraversePoints { get; set; } = new();
+        public List<TestResultChecklistItemDto> Checklist { get; set; } = new();
+        public List<TestResultObservationDto> Observations { get; set; } = new();
     }
     public class TestResultParameterDto
     {
@@ -63,18 +87,26 @@ namespace LIMSApi.Dtos
 
         // Evaluation flags
         public bool? IsWithinLimit { get; set; } = false;     // true / false based on min-max
-        public bool Altered { get; set; } = false;   // edited after initial entry
+        public bool? Altered { get; set; } = false;   // edited after initial entry
 
         // Formula / calculation metadata
         public string? Formula { get; set; }
-        public bool IsCalculated { get; set; }
+        public bool? IsCalculated { get; set; }
+        public int? FormulaVersion { get; set; }
 
         // Extra / optional parameters
-        public bool IsAdditional { get; set; }
+        public bool? IsAdditional { get; set; }
         public long? SpecificationLineID { get; set; }
 
         // Billable flag (observed parameters excluded from pricing)
-        public bool IsBillable { get; set; } = true;
+        public bool? IsBillable { get; set; } = true;
+
+        // Reportability flag (Reportable on customer certificate vs Internal audit only)
+        public bool? IsReportable { get; set; } = true;
+        public string? ReportableOverrideReason { get; set; }
+
+        // Concurrency token
+        public byte[]? RowVersion { get; set; }
 
         // Unit conversion & display (for Report)
         public int DecimalPrecision { get; set; } = 2;
@@ -82,6 +114,115 @@ namespace LIMSApi.Dtos
         public decimal? ConvertedValue { get; set; }
         public string? SelectedUnit { get; set; }
         public string? TestMethodUsed { get; set; }
+    }
+
+    public class TestResultReadingDto
+    {
+        public long Id { get; set; }
+        public long? TestResultParameterId { get; set; }
+        public string ParameterCode { get; set; } = string.Empty;
+        public string SpecimenCode { get; set; } = "S1";
+        public string? LocationCode { get; set; }
+        public int SequenceNo { get; set; } = 1;
+        public decimal? Value { get; set; }
+        public string? Unit { get; set; }
+        public bool? IsVoided { get; set; } = false;
+        public string? VoidReason { get; set; }
+        public byte[]? RowVersion { get; set; }
+    }
+
+    public class TestResultLocationDto
+    {
+        public long Id { get; set; }
+        public string LocationCode { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+        public int SequenceNo { get; set; } = 1;
+        public bool? IsRuntimeAdded { get; set; } = false;
+        public string? AddedReason { get; set; }
+        public bool? IsReportable { get; set; } = true;
+        public bool? IsVoided { get; set; } = false;
+        public string? VoidReason { get; set; }
+        public byte[]? RowVersion { get; set; }
+    }
+
+    public class TestResultTraversePointDto
+    {
+        public long Id { get; set; }
+        public string SpecimenCode { get; set; } = "S1";
+        public int SequenceNo { get; set; } = 1;
+        public decimal Distance { get; set; }
+        public decimal? HardnessValue { get; set; }
+        public string HardnessUnit { get; set; } = "HV 0.5";
+        public bool? IsBelowCutoff { get; set; } = false;
+        public bool? IsVoided { get; set; } = false;
+        public byte[]? RowVersion { get; set; }
+    }
+
+    public class TestResultChecklistItemDto
+    {
+        public long Id { get; set; }
+        public string ItemCode { get; set; } = string.Empty;
+        public string ItemDescription { get; set; } = string.Empty;
+        public string Status { get; set; } = "NA";
+        public string? Remarks { get; set; }
+        public long? CheckedBy { get; set; }
+        public DateTime? CheckedAt { get; set; }
+        public bool? IsReportable { get; set; } = false;
+        public bool? IsVoided { get; set; } = false;
+        public byte[]? RowVersion { get; set; }
+    }
+
+    public class TestResultObservationDto
+    {
+        public long Id { get; set; }
+        public string ObservationCode { get; set; } = string.Empty;
+        public string Category { get; set; } = "Remarks";
+        public string ObservationText { get; set; } = string.Empty;
+        public bool? IsRuntimeAdded { get; set; } = false;
+        public string? AddedReason { get; set; }
+        public bool? IsReportable { get; set; } = true;
+        public bool? IsVoided { get; set; } = false;
+        public string? VoidReason { get; set; }
+        public byte[]? RowVersion { get; set; }
+    }
+
+    public class RetestComparisonDto
+    {
+        public string SpecimenCode { get; set; } = string.Empty;
+        public string? LocationCode { get; set; }
+        public string ParameterCode { get; set; } = string.Empty;
+        public int ReadingSequence { get; set; }
+        public decimal? OriginalValue { get; set; }
+        public decimal? RetestValue { get; set; }
+        public decimal? Difference { get; set; }
+        public decimal? PercentageDeviation { get; set; }
+    }
+
+    public class TestResultAuditLogDto
+    {
+        public long Id { get; set; }
+        public long TestResultHeaderId { get; set; }
+        public string EntityName { get; set; } = string.Empty;
+        public long EntityId { get; set; }
+        public string FieldName { get; set; } = string.Empty;
+        public string? OldValue { get; set; }
+        public string? NewValue { get; set; }
+        public string? ChangeReason { get; set; }
+        public long ChangedBy { get; set; }
+        public string? ChangedByName { get; set; }
+        public DateTime ChangedOn { get; set; }
+    }
+
+    public class PatchExecutionSectionDto
+    {
+        public string SectionType { get; set; } = string.Empty;
+        public List<TestResultReadingDto>? Readings { get; set; }
+        public List<TestResultLocationDto>? Locations { get; set; }
+        public List<TestResultTraversePointDto>? TraversePoints { get; set; }
+        public List<TestResultChecklistItemDto>? Checklist { get; set; }
+        public List<TestResultObservationDto>? Observations { get; set; }
+        public string? CustomSectionDataJson { get; set; }
+        public string? ChangeReason { get; set; }
     }
 
     public class MoveToLongTermDto

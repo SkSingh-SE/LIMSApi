@@ -9,7 +9,7 @@ namespace LIMSApi.Repositories.Interface
         Task UpdateLayoutTemplate(TestLayoutTemplate model);
         Task DeleteLayoutTemplate(TestLayoutTemplate model);
         Task<TestLayoutTemplate?> GetLayoutTemplateById(long id);
-        Task<TestLayoutTemplate?> GetLayoutByTestHierarchy(long? testId, long? subGroupId, long? analysisTypeId, string? leafNode);
+        Task<TestLayoutTemplate?> GetLayoutByTestHierarchy(long? testId, long? subGroupId, long? analysisTypeId, string? leafNode, long? testMethodId = null, string? testMethodName = null);
         Task<PagedResponse<object>> GetAllLayoutTemplates(PageFilter filter);
         Task<List<DropdwonSelector>> GetLayoutDropdown(long? testId, string? searchTerm, int pageNo, int pageSize);
         Task ResetDefaultLayouts(long? testId, long? analysisTypeId, long currentId);

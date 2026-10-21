@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.ComponentModel.DataAnnotations;
 
 namespace LIMSApi.Models
@@ -99,9 +99,22 @@ namespace LIMSApi.Models
         [MaxLength(50)]
         public string? SelectedUnit { get; set; }
 
+        // ----- Multi-Level Reportability -----
+        public bool IsReportable { get; set; } = true;
+        [MaxLength(500)]
+        public string? ReportableOverrideReason { get; set; }
+
+        // ----- Formula Version Tracking -----
+        public int? FormulaVersion { get; set; }
+
+        // ----- Optimistic Concurrency Token -----
+        [Timestamp]
+        public byte[]? RowVersion { get; set; }
+
         [ForeignKey(nameof(TestResultHeaderID))]
         public TestResultHeader? TestResultHeader { get; set; }
 
+        public ICollection<TestResultReading> Readings { get; set; } = new List<TestResultReading>();
     }
 
 }

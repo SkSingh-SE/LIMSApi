@@ -160,6 +160,12 @@ public partial class LIMSContext : DbContext
     public DbSet<TestResultHeader> TestResultHeaders { get; set; }
     public DbSet<TestResultParameter> TestResultParameters { get; set; }
     public DbSet<TestResultImage> TestResultImages { get; set; }
+    public DbSet<TestResultReading> TestResultReadings { get; set; }
+    public DbSet<TestResultLocation> TestResultLocations { get; set; }
+    public DbSet<TestResultTraversePoint> TestResultTraversePoints { get; set; }
+    public DbSet<TestResultChecklistItem> TestResultChecklistItems { get; set; }
+    public DbSet<TestResultObservation> TestResultObservations { get; set; }
+    public DbSet<TestResultAuditLog> TestResultAuditLogs { get; set; }
     public DbSet<GeneralTest> GeneralTests { get; set; }
     public DbSet<GeneralTestMethod> GeneralTestMethods { get; set; }
     public DbSet<ChemicalTest> ChemicalTests { get; set; }

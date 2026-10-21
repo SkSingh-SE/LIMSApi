@@ -43,12 +43,7 @@ namespace LIMSApi.Services
                 if (!emailRegex.IsMatch(model.EmailId.Trim()))
                     throw new ArgumentException("Invalid email address format.");
             }
-            if (!string.IsNullOrWhiteSpace(model.MobileNo))
-            {
-                var phoneRegex = new System.Text.RegularExpressions.Regex(@"^[+]?\d{10,13}$");
-                if (!phoneRegex.IsMatch(model.MobileNo.Trim()))
-                    throw new ArgumentException("Invalid mobile number. Must be 10-13 digits.");
-            }
+            // Phone validation is handled by the frontend phone-input component (single source of truth)
             if (!model.DepartmentID.HasValue || model.DepartmentID.Value <= 0)
                 throw new ArgumentException("Department is required.");
             if (!model.DesignationID.HasValue || model.DesignationID.Value <= 0)
@@ -125,12 +120,7 @@ namespace LIMSApi.Services
                 if (!emailRegex.IsMatch(model.EmailId.Trim()))
                     throw new ArgumentException("Invalid email address format.");
             }
-            if (!string.IsNullOrWhiteSpace(model.MobileNo))
-            {
-                var phoneRegex = new System.Text.RegularExpressions.Regex(@"^[+]?\d{10,13}$");
-                if (!phoneRegex.IsMatch(model.MobileNo.Trim()))
-                    throw new ArgumentException("Invalid mobile number. Must be 10-13 digits.");
-            }
+            // Phone validation is handled by the frontend phone-input component (single source of truth)
             if (!model.DepartmentID.HasValue || model.DepartmentID.Value <= 0)
                 throw new ArgumentException("Department is required.");
             if (!model.DesignationID.HasValue || model.DesignationID.Value <= 0)

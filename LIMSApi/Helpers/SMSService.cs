@@ -18,12 +18,20 @@ namespace LIMSApi.Helpers
 
         public async Task<bool> SendSmsAsync(string toPhoneNumber, string message)
         {
+            // Normalize to compact E.164 (e.g. "+919876543210"); Twilio rejects spaces.
+            var toE164 = PhoneHelper.ToE164(toPhoneNumber);
+            if (string.IsNullOrEmpty(toE164))
+            {
+                Console.WriteLine("SMS Skipped: phone number is empty.");
+                return false;
+            }
+
             try
             {
                 var smsMessage = await MessageResource.CreateAsync(
                     body: message,
                     from: new Twilio.Types.PhoneNumber(_configuration["TwilioSMS:FromPhoneNumber"]),
-                    to: new Twilio.Types.PhoneNumber(toPhoneNumber)
+                    to: new Twilio.Types.PhoneNumber(toE164)
                 );
 
                 Console.WriteLine($"SMS sent with SID: {smsMessage.Sid}");
