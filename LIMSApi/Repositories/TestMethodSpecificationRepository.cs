@@ -628,7 +628,7 @@ namespace LIMSApi.Repositories
                                       join s in _context.TestMethodSpecifications on v.TestMethodSpecificationID equals s.ID
                                       join so in _context.StandardOrganizationMasters on s.StandardOrganizationID equals so.ID into soGroup
                                       from so in soGroup.DefaultIfEmpty()
-                                      where v.ID == exactId && (v.Status == VersionStatus.Active || v.Status == VersionStatus.Superseded) && s.IsActive && !s.IsDisabled
+                                      where v.ID == exactId && (v.Status == VersionStatus.Active || v.Status != VersionStatus.Superseded) && s.IsActive && !s.IsDisabled
                                       select new
                                       {
                                           v.ID,
