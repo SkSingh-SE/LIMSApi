@@ -45,6 +45,8 @@ namespace LIMSApi.Services
             existing.Name = model.Name;
             existing.Unit = model.Unit;
             existing.IsRange = model.IsRange;
+            existing.ValueSource = model.ValueSource;
+            existing.SampleField = model.SampleField;
             existing.Description = model.Description;
             existing.SortOrder = model.SortOrder;
             existing.ModifiedOn = DateTime.UtcNow;

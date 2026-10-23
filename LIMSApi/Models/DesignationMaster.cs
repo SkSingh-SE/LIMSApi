@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -10,9 +10,10 @@ public partial class DesignationMaster :AuditProperty
     [Key]
     public long ID { get; set; }
 
-    [StringLength(100)]
+    [StringLength(150)]
     public required string Name { get; set; }
 
+    [MaxLength(3000)]
     public string? Description { get; set; }
 
     /// <summary>
@@ -28,9 +29,9 @@ public partial class DesignationMaster :AuditProperty
 
     public int? MinExperience { get; set; }  // in years
 
-    [MaxLength(1000)]
+    [MaxLength(3000)]
     public string? PersonalityTraits { get; set; }
 
-    [MaxLength(2000)]
+    [MaxLength(3000)]
     public string? RolesAndResponsibilities { get; set; }
 }

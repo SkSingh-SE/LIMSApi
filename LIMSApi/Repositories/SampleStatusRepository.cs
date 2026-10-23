@@ -15,10 +15,10 @@ namespace LIMSApi.Repositories
         }
 
         public Task<SampleDetail> GetSample(long sampleId)
-            => _db.SampleDetails.Include(x => x.SampleInward).FirstOrDefaultAsync(x => x.ID == sampleId);
+            => _db.SampleDetails.FirstOrDefaultAsync(x => x.ID == sampleId);
 
         public Task<SampleInward> GetInward(long inwardId)
-            => _db.SampleInwards.Include(x => x.SampleDetails).FirstOrDefaultAsync(x => x.ID == inwardId);
+            => _db.SampleInwards.FirstOrDefaultAsync(x => x.ID == inwardId);
 
         public Task Save() => _db.SaveChangesAsync();
     }

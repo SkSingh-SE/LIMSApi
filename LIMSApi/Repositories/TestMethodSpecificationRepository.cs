@@ -41,7 +41,8 @@ namespace LIMSApi.Repositories
         public async Task<TestMethodSpecification?> GetTestMethodSpecificationById(long id)
         {
             var spec = await _context.TestMethodSpecifications
-                .Include(x => x.Versions)
+                .Include(x => x.Versions).ThenInclude(v => v.Parameters).ThenInclude(p => p.Parameter)
+                .Include(x => x.MetalClassifications).ThenInclude(m => m.MetalClassification)
                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
 
             if (spec != null)
@@ -59,6 +60,21 @@ namespace LIMSApi.Repositories
 
         public async Task UpdateTestMethodSpecification(TestMethodSpecification model)
         {
+            var specId = model.ID;
+            var defaultVersionId = model.Versions.FirstOrDefault(v => v.IsDefault)?.ID ?? 0;
+
+            // To avoid unique constraint violation on (TestMethodSpecificationID, IsDefault),
+            // we must clear IsDefault on all other versions first before updating.
+            // This prevents EF from trying to set multiple versions as default simultaneously.
+            if (defaultVersionId > 0)
+            {
+                // Clear IsDefault on all versions for this spec except the one we're setting as default
+                await _context.TestMethodSpecificationVersions
+                    .Where(v => v.TestMethodSpecificationID == specId && v.ID != defaultVersionId && v.IsDefault)
+                    .ExecuteUpdateAsync(s => s.SetProperty(v => v.IsDefault, false));
+            }
+
+            // Now update the specification and its versions
             _context.TestMethodSpecifications.Update(model);
             await _context.SaveChangesAsync();
         }
@@ -68,16 +84,17 @@ namespace LIMSApi.Repositories
             var _query = from c in _context.TestMethodSpecifications
                          join s in _context.StandardOrganizationMasters on c.StandardOrganizationID equals s.ID
                          where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
-                         let activeVersion = c.Versions.FirstOrDefault(v => v.Status == VersionStatus.Active)
+                         let defaultVersion = c.Versions.FirstOrDefault(v => v.IsDefault)
                          select new
                          {
                              c.ID,
                              c.Name,
+                             c.DisplayTitle,
                              c.StandardOrganizationID,
                              StandardOrganizationName = s.Name,
                              c.TestMethodStandard,
-                             CurrentVersion = activeVersion != null ? activeVersion.Version : "",
-                             CurrentVersionYear = activeVersion != null ? activeVersion.Year : (string?)null,
+                             DefaultVersion = defaultVersion != null ? defaultVersion.Version : "",
+                             DefaultVersionYear = defaultVersion != null ? defaultVersion.Year : (string?)null,
                              c.IsDisabled,
                              c.CreatedBy,
                              c.CreatedOn,
@@ -92,8 +109,8 @@ namespace LIMSApi.Repositories
                 _query = _query.Where(x => (x.Name != null && x.Name.Contains(search))
                                      || (x.StandardOrganizationName != null && x.StandardOrganizationName.Contains(search))
                                      || (x.TestMethodStandard != null && x.TestMethodStandard.Contains(search))
-                                     || (x.CurrentVersion != null && x.CurrentVersion.Contains(search))
-                                     || (x.CurrentVersionYear != null && x.CurrentVersionYear.ToString()!.Contains(search))
+                                     || (x.DefaultVersion != null && x.DefaultVersion.Contains(search))
+                                     || (x.DefaultVersionYear != null && x.DefaultVersionYear.ToString()!.Contains(search))
                                      || (x.IsDisabled ? "disabled" : "active").Contains(search));
             }
 
@@ -129,7 +146,7 @@ namespace LIMSApi.Repositories
             var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
             {
                 Id = x.ID,
-                Name = x.Name,
+                Name = x!.DisplayTitle ?? x.Name,
             })).ToListAsync();
 
             return data;
@@ -157,13 +174,45 @@ namespace LIMSApi.Repositories
             return _query.ToListAsync();
         }
 
+        public async Task<List<DropdwonSelector>> GetTestMethodsByMetalClassification(long metalClassificationId, string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            // Specs explicitly linked to this metal classification, plus specs with no metal-classification
+            // link at all (treated as universal — applicable to any classification).
+            var _query = from a in _context.TestMethodSpecifications
+                         where a.IsActive && !a.IsDisabled && a.CompanyCode == loggedInUser.CompanyCode
+                            && (a.MetalClassifications.Any(m => m.MetalClassificationID == metalClassificationId)
+                                || !a.MetalClassifications.Any())
+                         select a;
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => x.Name != null && x.Name.Contains(search));
+                }
+            }
+
+            var skip = pageNo * pageSize;
+
+            return await _query.OrderBy(x => x.Name).Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
+            {
+                Id = x.ID,
+                Name = !string.IsNullOrEmpty(x.DisplayTitle) ? x.DisplayTitle : x.Name,
+            }).ToListAsync();
+        }
+
         public async Task<int> GetVersionImpactCount(long versionId)
         {
-            var productSpecCount = await _context.ProductSpecifications
-                .CountAsync(p => p.TestMethodSpecificationVersionID == versionId && p.IsActive);
             var labScopeCount = await _context.LabScopeSpecifications
                 .CountAsync(l => l.TestMethodSpecificationVersionID == versionId);
-            return productSpecCount + labScopeCount;
+            return labScopeCount;
         }
 
         public async Task<List<TestMethodSpecificationVersion>> GetVersionsDueForReview(DateTime cutoffDate)
@@ -177,14 +226,113 @@ namespace LIMSApi.Repositories
                 .ToListAsync();
         }
 
-        public async Task<List<DropdwonSelector>> GetActiveVersionsBySpecId(long specId)
+        public async Task<List<DropdwonSelector>> GetVersionsBySpecId(long specId, bool includeAll = false)
         {
-            return await _context.TestMethodSpecificationVersions
-                .Where(v => v.TestMethodSpecificationID == specId && v.Status == VersionStatus.Active)
+            var query = _context.TestMethodSpecificationVersions
+                .Where(v => v.TestMethodSpecificationID == specId);
+
+            if (!includeAll)
+                query = query.Where(v => v.Status == VersionStatus.Active);
+
+            return await query
+                .OrderBy(v => v.IsDefault ? 0 :
+                              v.Status == VersionStatus.Active ? 1 :
+                              v.Status == VersionStatus.Draft ? 2 :
+                              v.Status == VersionStatus.Superseded ? 3 : 4)
                 .Select(v => new DropdwonSelector
                 {
                     Id = v.ID,
-                    Name = v.Version + (v.Year != null ? " (" + v.Year.ToString() + ")" : ""),
+                    Name = v.Version + (v.Year != null ? " (" + v.Year + ")" : "")
+                         + (v.IsDefault ? " ★" : "")
+                         + (v.Status != VersionStatus.Active ? " [" + v.Status + "]" : ""),
+                })
+                .ToListAsync();
+        }
+
+        public async Task<bool> ExistsByOrgAndStandard(long orgId, string testMethodStandard, string? part)
+        {
+            return await _context.TestMethodSpecifications
+                .AnyAsync(x => x.StandardOrganizationID == orgId
+                            && x.TestMethodStandard == testMethodStandard
+                            && x.Part == part
+                            && x.IsActive
+                            && x.CompanyCode == loggedInUser.CompanyCode);
+        }
+
+        public async Task<List<DropdwonSelector>> GetAllStandardOrganizations()
+        {
+            return await _context.StandardOrganizationMasters
+                .Where(x => x.IsActive && x.CompanyCode == loggedInUser.CompanyCode)
+                .OrderBy(x => x.Name)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = x.Name,
+                })
+                .ToListAsync();
+        }
+
+        public async Task AddRangeAsync(List<TestMethodSpecification> specs)
+        {
+            await _context.TestMethodSpecifications.AddRangeAsync(specs);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task UpdateVersionFileRef(long versionId, string filePath, string originalFileName, long uploadRefId)
+        {
+            var version = await _context.TestMethodSpecificationVersions.FindAsync(versionId);
+            if (version != null)
+            {
+                version.StandardFilePath = filePath;
+                version.StandardFile = originalFileName;
+                version.UploadReferenceID = uploadRefId;
+                await _context.SaveChangesAsync();
+            }
+        }
+
+        public async Task<List<DropdwonSelector>> GetTestMethodSpecificationVersionDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20, long metalId = 0)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var query = _context.TestMethodSpecificationVersions
+                .Include(v => v.TestMethodSpecification)
+                .Where(v => v.Status == VersionStatus.Active 
+                    && v.TestMethodSpecification != null 
+                    && v.TestMethodSpecification.IsActive 
+                    && !v.TestMethodSpecification.IsDisabled
+                    && v.TestMethodSpecification.CompanyCode == loggedInUser.CompanyCode);
+
+            if (metalId > 0)
+            {
+                query = query.Where(v => v.TestMethodSpecification!.MetalClassifications.Any(m => m.MetalClassificationID == metalId)
+                    || !v.TestMethodSpecification!.MetalClassifications.Any());
+            }
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var search = searchTerm.Trim().ToLower();
+                query = query.Where(v => (v.TestMethodSpecification.Name != null && v.TestMethodSpecification.Name.Contains(search)) 
+                    || (v.Version != null && v.Version.Contains(search)));
+            }
+
+            var skip = pageNo * pageSize;
+
+            return await query
+                .OrderBy(v => v.TestMethodSpecification.Name)
+                .ThenByDescending(v => v.CreatedOn)
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(v => new DropdwonSelector
+                {
+                    Id = v.ID,
+                    Name = v.TestMethodSpecification.Name + " (" + v.Version + ")",
+                    AdditionalValues = new Dictionary<string, object>
+                    {
+                        { "TestMethodStandard", v.TestMethodSpecification.TestMethodStandard },
+                        { "Name", v.TestMethodSpecification.Name },
+                        { "Version", v.Version },
+                        { "TestMethodSpecificationID", v.TestMethodSpecificationID }
+                    }
                 })
                 .ToListAsync();
         }

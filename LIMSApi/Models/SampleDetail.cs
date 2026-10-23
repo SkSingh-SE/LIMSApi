@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
@@ -15,11 +15,19 @@ namespace LIMSApi.Models
         public string Details { get; set; } = string.Empty;
         public long? MetalClassificationID { get; set; }
         public long? ProductConditionID { get; set; }
+        // UI hidden per client requirement — field retained for data integrity
         public long? SpecimenOrientationID { get; set; } = null;
+        // UI hidden per client requirement — field retained for data integrity
         public long? ProductFormID { get; set; }
         public string? Remarks { get; set; }
         public int Quantity { get; set; }
-        public bool Disabled { get; set; }
+        public bool IsCancelled { get; set; }
+
+        // Cancellation tracking (populated only when IsCancelled = true)
+        public DateTime? CancelledOn { get; set; }
+        public long? CancelledBy { get; set; }
+        [MaxLength(500)]
+        public string? CancellationReason { get; set; }
 
         public bool PreparationRequired { get; set; }
         public bool MachiningRequired { get; set; }
@@ -50,6 +58,7 @@ namespace LIMSApi.Models
         [ForeignKey("ProductConditionID")]
         public virtual ProductConditionMaster? ProductCondition { get; set; }
 
+        // UI hidden per client requirement — navigation property retained for DB integrity
         [ForeignKey("SpecimenOrientationID")]
         public virtual SpecimenOrientationMaster? SpecimenOrientation { get; set; }
 

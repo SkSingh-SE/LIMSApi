@@ -84,6 +84,9 @@ namespace LIMSApi.Dtos
         public string? EquipmentUsed { get; set; }
         public decimal? CrossSectionArea { get; set; }
         public decimal? GaugeLength { get; set; }
+
+        // True when sample is TESTING_VERIFIED and no Report Review workflow has been started yet
+        public bool CanSubmitForReportApproval { get; set; }
     }
     public class ReportAmendmentPreviewDto
     {

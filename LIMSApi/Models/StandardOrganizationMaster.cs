@@ -12,6 +12,4 @@ public partial class StandardOrganizationMaster : AuditProperty
     [StringLength(100)]
     public required string Name { get; set; }
 
-    [StringLength(20)]
-    public string NumberType { get; set; } = "None"; // UNS, SteelNumber, None
 }

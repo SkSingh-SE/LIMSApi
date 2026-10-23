@@ -116,6 +116,24 @@ namespace LIMSApi.Repositories
         {
             return await _context.CurrencyMasters.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive);
         }
+
+        public async Task<CurrencyMaster?> GetDefaultCurrency()
+        {
+            return await _context.CurrencyMasters.FirstOrDefaultAsync(x => x.IsDefault && x.IsActive);
+        }
+
+        public async Task SetDefaultCurrency(long id)
+        {
+            var toUnset = await _context.CurrencyMasters.Where(x => x.IsDefault && x.IsActive).ToListAsync();
+            toUnset.ForEach(x => x.IsDefault = false);
+
+            var currency = await _context.CurrencyMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
+            if (currency == null)
+                throw new KeyNotFoundException("Currency not found.");
+
+            currency.IsDefault = true;
+            await _context.SaveChangesAsync();
+        }
     }
 }
 

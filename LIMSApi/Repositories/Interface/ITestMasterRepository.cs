@@ -12,6 +12,8 @@ namespace LIMSApi.Repositories.Interface
         Task<PagedResponse<object>> GetAllTestMasters(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetTestMasterDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<DropdwonSelector>> GetGeneralTestMasterDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<DropdwonSelector>> GetChemicalTestMasterDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<bool> ExistsByName(string name);
         Task<bool> ExistsByNameAndNotId(string name, long Id);
     }

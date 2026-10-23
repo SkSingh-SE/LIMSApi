@@ -9,10 +9,12 @@ namespace LIMSApi.Services.Interface
     public interface IPriceCalculationService
     {
         /// <summary>
-        /// Calculate prices for a case and create ChargeEvents with DRAFT status
-        /// Returns detailed result with per-test success/failure info
+        /// Calculate prices for a case and create ChargeEvents with DRAFT status.
+        /// Returns detailed result with per-test success/failure info.
+        /// If the sample's inward FY differs from the current default FY and confirmed=false,
+        /// returns early with RequiresConfirmation=true instead of calculating.
         /// </summary>
-        Task<PriceCalculationResultDto> CalculateAndCreateChargeEventsAsync(long inwardId);
+        Task<PriceCalculationResultDto> CalculateAndCreateChargeEventsAsync(long inwardId, bool confirmed = false);
 
         /// <summary>
         /// Validate pricing without saving — dry run returning what would succeed/fail

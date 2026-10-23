@@ -23,7 +23,7 @@ namespace LIMSApi.Middleware
             _isDevelopment = env.IsDevelopment();
         }
 
-        public async Task Invoke(
+        public async Task Invoke(   
      HttpContext context,
      LoggedInUserProvider userProvider,
      ISiteActivityService siteActivityService,

@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.ComponentModel.DataAnnotations;
 
 namespace LIMSApi.Models
@@ -16,6 +16,7 @@ namespace LIMSApi.Models
         public long CustomerID { get; set; }
 
         // Amounts (finalized)
+        [Column(TypeName = "decimal(18,2)")]
         public decimal SubTotal { get; set; } = 0;       // Original sum of ChargeEvents (pre-discount)
 
         // Customer discount (applied before GST)
@@ -24,9 +25,16 @@ namespace LIMSApi.Models
         [Column(TypeName = "decimal(18,2)")]
         public decimal DiscountAmount { get; set; } = 0;  // SubTotal × DiscountPercentage / 100
 
+        [Column(TypeName = "decimal(18,2)")]
         public decimal CGST { get; set; } = 0;
+        
+        [Column(TypeName = "decimal(18,2)")]
         public decimal SGST { get; set; } = 0;
+        
+        [Column(TypeName = "decimal(18,2)")]
         public decimal IGST { get; set; } = 0;
+        
+        [Column(TypeName = "decimal(18,2)")]
         public decimal GrandTotal { get; set; } = 0;      // (SubTotal - DiscountAmount) + GST
 
         public string Status { get; set; } = "Generated";
@@ -46,6 +54,16 @@ namespace LIMSApi.Models
         // HSN/SAC code for GST compliance (SAC 998346 = Technical testing and analysis services)
         [MaxLength(10)]
         public string SACCode { get; set; } = "998346";
+
+        // Currency snapshot — captured at invoice generation time
+        [MaxLength(10)]
+        public string CurrencySymbol { get; set; } = "₹";
+
+        [Column(TypeName = "decimal(18,6)")]
+        public decimal? ExchangeRate { get; set; }           // 1 ForeignUnit = X INR; null for INR invoices
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal? ForeignCurrencyGrandTotal { get; set; } // GrandTotal / ExchangeRate
 
         // Financial Year linkage
         public long? FinancialYearId { get; set; }

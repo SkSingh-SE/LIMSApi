@@ -59,7 +59,10 @@
         // --- FINAL APPROVAL & CLOSURE ---
         FINAL_REPORT_APPROVED,
         REPORT_DISPATCHED,
-        CASE_CLOSED
+        CASE_CLOSED,
+
+        // --- CANCELLED (terminal state) ---
+        SAMPLE_CANCELLED
     }
 
 

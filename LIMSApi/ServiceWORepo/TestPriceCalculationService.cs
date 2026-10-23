@@ -1,5 +1,6 @@
 using LIMSApi.Data;
 using LIMSApi.Dtos;
+using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
 using Microsoft.EntityFrameworkCore;
@@ -16,6 +17,11 @@ namespace LIMSApi.ServiceWORepo
         private readonly ILogger<TestPriceCalculationService> _logger;
         private readonly IFinancialYearService _fyService;
 
+        private static readonly HashSet<string> RangeSelectionTypes = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "HoursRange", "SizeRange", "WeightRange", "TempratureRange", "TemperatureRange", "LoadRange"
+        };
+
         public TestPriceCalculationService(LIMSContext db, ILogger<TestPriceCalculationService> logger, IFinancialYearService fyService)
         {
             _db = db;
@@ -24,41 +30,38 @@ namespace LIMSApi.ServiceWORepo
         }
 
         /// <summary>
-        /// Get InvoiceCase for a lab test with FY filtering.
-        /// Tries current FY first, falls back to any active case if no FY match.
+        /// Resolves the InvoiceCase price version for a lab test by the sample inward date:
+        /// greatest EffectiveFrom ≤ inwardDate, falling back to the earliest version.
         /// </summary>
-        private async Task<InvoiceCase?> GetInvoiceCaseForTestAsync(long laboratoryTestId)
+        private async Task<InvoiceCase?> GetInvoiceCaseForTestAsync(long laboratoryTestId, DateTime inwardDate)
         {
-            // Find the current FY entity
-            var currentFYEntity = await _db.FinancialYears.FirstOrDefaultAsync(f => f.IsCurrent);
-
-            // Try current FY first (if one is set)
-            InvoiceCase? invoiceCase = null;
-            if (currentFYEntity != null)
-            {
-                invoiceCase = await _db.InvoiceCases
-                    .Where(ic => ic.LaboratoryTestID == laboratoryTestId && ic.IsActive && ic.FinancialYearId == currentFYEntity.Id)
-                    .Include(ic => ic.InvoiceCasePrices)
-                        .ThenInclude(p => p.Configuration)
-                    .Include(ic => ic.FinancialYearEntity)
-                    .FirstOrDefaultAsync();
-            }
-
-            if (invoiceCase != null) return invoiceCase;
-
-            // Fallback: any active case (log warning)
-            invoiceCase = await _db.InvoiceCases
+            var versions = await _db.InvoiceCases
                 .Where(ic => ic.LaboratoryTestID == laboratoryTestId && ic.IsActive)
                 .Include(ic => ic.InvoiceCasePrices)
                     .ThenInclude(p => p.Configuration)
                 .Include(ic => ic.FinancialYearEntity)
-                .FirstOrDefaultAsync();
+                .ToListAsync();
 
-            if (invoiceCase != null)
-                _logger.LogWarning("No InvoiceCase for current FY and LabTest {LabTestId}. Using fallback FY {FallbackFY}.",
-                    laboratoryTestId, invoiceCase.FinancialYearEntity?.Year);
+            var invoiceCase = PriceVersionResolver.Resolve(versions, v => v.EffectiveFrom, inwardDate);
+
+            if (invoiceCase != null && invoiceCase.EffectiveFrom.Date > inwardDate.Date)
+                _logger.LogWarning("Sample inward date {InwardDate:d} precedes all InvoiceCase versions for LabTest {LabTestId}. Using earliest version (FY {FY}).",
+                    inwardDate, laboratoryTestId, invoiceCase.FinancialYearEntity?.Year);
 
             return invoiceCase;
+        }
+
+        /// <summary>
+        /// Resolves the sample inward date (CollectionTime) for a TestResultHeader's sample.
+        /// Falls back to DateTime.UtcNow when the sample has no inward link.
+        /// </summary>
+        private async Task<DateTime> ResolveInwardDateAsync(TestResultHeader header)
+        {
+            var inwardId = header.Sample?.InwardID ?? 0;
+            if (inwardId == 0)
+                return DateTime.UtcNow;
+
+            return await PriceVersionResolver.ResolveInwardDate(_db, inwardId);
         }
 
         /// <inheritdoc />
@@ -72,8 +75,9 @@ namespace LIMSApi.ServiceWORepo
             if (header == null)
                 throw new Exception($"TestResultHeader {headerId} not found");
 
-            // Get InvoiceCase for this LaboratoryTest (FY-filtered with fallback)
-            var invoiceCase = await GetInvoiceCaseForTestAsync(header.LaboratoryTestID);
+            // Get InvoiceCase for this LaboratoryTest, resolved by the sample inward date
+            var inwardDate = await ResolveInwardDateAsync(header);
+            var invoiceCase = await GetInvoiceCaseForTestAsync(header.LaboratoryTestID, inwardDate);
 
             decimal calculatedTotal = 0;
             string? message = null;
@@ -100,7 +104,16 @@ namespace LIMSApi.ServiceWORepo
                 var pricingType = header.SelectedPricingType ?? invoiceCase.DefaultPricingType;
                 var pricesToUse = FilterPricesByType(invoiceCase.InvoiceCasePrices, pricingType);
 
-                var breakdown = BuildPriceBreakdown(header.Parameters, pricesToUse, testName, header.Sample, header.PricingDimensionValue);
+                var dimTypes = await _db.PriceDimensionTypes
+                    .Where(d => d.IsActive)
+                    .ToDictionaryAsync(d => d.Name, StringComparer.OrdinalIgnoreCase);
+
+                var paramIds = header.Parameters.Select(p => p.ParameterID).ToList();
+                var paramDetailsDict = await _db.ParameterMasters
+                    .Where(p => paramIds.Contains(p.ID) && p.IsActive)
+                    .ToDictionaryAsync(p => p.ID, p => p.ElementType ?? "normal");
+
+                var breakdown = BuildPriceBreakdown(header.Parameters, pricesToUse, testName, header.Sample, header.PricingDimensionValue, header, dimTypes, labTest, paramDetailsDict);
                 calculatedTotal = breakdown.Sum(b => b.Amount);
 
                 if (calculatedTotal == 0)
@@ -139,12 +152,24 @@ namespace LIMSApi.ServiceWORepo
             if (header == null)
                 throw new Exception($"TestResultHeader {headerId} not found");
 
-            var invoiceCase = await GetInvoiceCaseForTestAsync(header.LaboratoryTestID);
+            var inwardDate = await ResolveInwardDateAsync(header);
+            var invoiceCase = await GetInvoiceCaseForTestAsync(header.LaboratoryTestID, inwardDate);
 
             if (invoiceCase == null || !invoiceCase.InvoiceCasePrices.Any())
                 return new List<PriceBreakdownDto>();
 
-            return BuildPriceBreakdown(header.Parameters, invoiceCase.InvoiceCasePrices, "Test", header.Sample, header.PricingDimensionValue);
+            var labTest = await _db.LaboratoryTests.FirstOrDefaultAsync(t => t.ID == header.LaboratoryTestID);
+
+            var dimTypes = await _db.PriceDimensionTypes
+                .Where(d => d.IsActive)
+                .ToDictionaryAsync(d => d.Name, StringComparer.OrdinalIgnoreCase);
+
+            var paramIds = header.Parameters.Select(p => p.ParameterID).ToList();
+            var paramDetailsDict = await _db.ParameterMasters
+                .Where(p => paramIds.Contains(p.ID) && p.IsActive)
+                .ToDictionaryAsync(p => p.ID, p => p.ElementType ?? "normal");
+
+            return BuildPriceBreakdown(header.Parameters, invoiceCase.InvoiceCasePrices, labTest?.Name ?? "Test", header.Sample, header.PricingDimensionValue, header, dimTypes, labTest, paramDetailsDict);
         }
 
         /// <inheritdoc />
@@ -196,7 +221,8 @@ namespace LIMSApi.ServiceWORepo
 
             // Build breakdown
             var breakdown = new List<PriceBreakdownDto>();
-            var invoiceCase = await GetInvoiceCaseForTestAsync(header.LaboratoryTestID);
+            var inwardDate = await ResolveInwardDateAsync(header);
+            var invoiceCase = await GetInvoiceCaseForTestAsync(header.LaboratoryTestID, inwardDate);
 
             string? message = null;
 
@@ -220,7 +246,11 @@ namespace LIMSApi.ServiceWORepo
 
                 var pricesToUse = FilterPricesByType(invoiceCase.InvoiceCasePrices, pricingType);
 
-                breakdown = BuildPriceBreakdown(header.Parameters, pricesToUse, testName, header.Sample, header.PricingDimensionValue);
+                var dimTypes = await _db.PriceDimensionTypes
+                    .Where(d => d.IsActive)
+                    .ToDictionaryAsync(d => d.Name, StringComparer.OrdinalIgnoreCase);
+
+                breakdown = BuildPriceBreakdown(header.Parameters, pricesToUse, testName, header.Sample, header.PricingDimensionValue, header, dimTypes, labTest);
             }
 
             return new PriceSummaryDto
@@ -313,7 +343,8 @@ namespace LIMSApi.ServiceWORepo
                 ?? throw new KeyNotFoundException($"TestResultHeader {headerId} not found");
 
             var labTest = await _db.LaboratoryTests.FirstOrDefaultAsync(t => t.ID == header.LaboratoryTestID);
-            var invoiceCase = await GetInvoiceCaseForTestAsync(header.LaboratoryTestID);
+            var inwardDate = await ResolveInwardDateAsync(header);
+            var invoiceCase = await GetInvoiceCaseForTestAsync(header.LaboratoryTestID, inwardDate);
 
             var result = new PricingRecommendationDto
             {
@@ -388,9 +419,10 @@ namespace LIMSApi.ServiceWORepo
                     break;
 
                 case "Weight": case "WeightRange":
+                case "Load": case "LoadRange":
                     var wt = FindParameterValueByName(billableParams, "weight", "load", "force", "capacity");
                     if (wt.HasValue) { score += 35; reasons.Add($"Load {wt}kN"); rec.AutoDetectedValue = wt; rec.ValueSource = "Parameter"; }
-                    rec.RequiredInput = "Weight/Load"; rec.InputHint = "Load in kN"; rec.Unit = "kN";
+                    rec.RequiredInput = "Load"; rec.InputHint = "Load in kN"; rec.Unit = "kN";
                     break;
 
                 case "Hours": case "HoursRange":
@@ -400,6 +432,7 @@ namespace LIMSApi.ServiceWORepo
                     break;
 
                 case "Temprature": case "TempratureRange":
+                case "Temperature": case "TemperatureRange":
                     var tmp = FindParameterValueByName(billableParams, "temperature", "temp");
                     if (tmp.HasValue) { score += 35; reasons.Add($"Temperature {tmp}°C"); rec.AutoDetectedValue = tmp; rec.ValueSource = "Parameter"; }
                     rec.RequiredInput = "Temperature"; rec.InputHint = "Test temperature"; rec.Unit = "°C";
@@ -414,11 +447,51 @@ namespace LIMSApi.ServiceWORepo
                     rec.RequiredInput = "Size + Load"; rec.InputHint = "Size (mm) and Load (kN)"; rec.Unit = "mm / kN";
                     break;
 
+                case "PerIndent": case "Indent":
+                    // UserInputAtEntry — quantity entered at test result entry, no auto-detect
+                    score += 10; reasons.Add("Per indent (user input at entry)");
+                    rec.RequiredInput = "UserInputAtEntry"; rec.Unit = "×"; rec.Status = "needs_input";
+                    break;
+
+                case "PerLocation": case "Location": case "NoOfLocations": case "PerDolly":
+                    // UserInputAtEntry — quantity entered at test result entry, no auto-detect
+                    score += 10; reasons.Add("Per location/dolly (user input at entry)");
+                    rec.RequiredInput = "UserInputAtEntry"; rec.Unit = "×"; rec.Status = "needs_input";
+                    break;
+
+                case "PerField": case "FieldWise": case "EachField":
+                    // UserInputAtEntry — quantity entered at test result entry, no auto-detect
+                    score += 10; reasons.Add("Per field (user input at entry)");
+                    rec.RequiredInput = "UserInputAtEntry"; rec.Unit = "×"; rec.Status = "needs_input";
+                    break;
+
+                case "WithImage":
+                    // UserInputAtEntry — user confirms image was captured (Yes=1/No=0) at test result entry
+                    score += 10; reasons.Add("With image (user confirms at entry)");
+                    rec.RequiredInput = "UserInputAtEntry"; rec.Unit = ""; rec.Status = "needs_input";
+                    break;
+
+                case "WithExtenso":
+                    // UserInputAtEntry — user confirms extensometer was used (Yes=1/No=0) at test result entry
+                    score += 10; reasons.Add("With extensometer (user confirms at entry)");
+                    rec.RequiredInput = "UserInputAtEntry"; rec.Unit = ""; rec.Status = "needs_input";
+                    break;
+
                 case "SpectroCombination":
-                    var specialElements = new[] { "N", "B", "Ca", "Nb", "Ti", "V", "Al" };
-                    var found = billableParams.Where(p => specialElements.Any(e => string.Equals(p.ParameterName?.Trim(), e, StringComparison.OrdinalIgnoreCase))).Select(p => p.ParameterName?.Trim()).ToList();
-                    var combo = found.Any() ? "Full + " + string.Join(" + ", found) : "Full";
-                    score += 35; reasons.Add($"Detected: {combo}"); rec.AutoDetectedValue = null; rec.ValueSource = combo;
+                    var specPrices = FilterPricesByType(invoiceCase.InvoiceCasePrices, "SpectroCombination");
+                    var billableIdSet = billableParams.Select(p => p.ParameterID).ToHashSet();
+                    var bestMatchCount = specPrices
+                        .Where(p => !string.IsNullOrWhiteSpace(p.Configuration?.SourceParameterIDs))
+                        .Select(p =>
+                        {
+                            var ids = ParseLinkedIds(p.Configuration!.SourceParameterIDs);
+                            return ids.Count(id => billableIdSet.Contains(id));
+                        })
+                        .DefaultIfEmpty(0).Max();
+                    var spectroCombo = bestMatchCount > 0 ? $"Full + {bestMatchCount} matching element(s)" : "Full";
+                    score += 35; reasons.Add($"Detected: {spectroCombo}");
+                    rec.AutoDetectedValue = bestMatchCount > 0 ? (decimal?)bestMatchCount : null;
+                    rec.ValueSource = spectroCombo;
                     break;
 
                 case "FlatRate": case "Other":
@@ -442,16 +515,27 @@ namespace LIMSApi.ServiceWORepo
             return rec;
         }
 
-        private static string GetDisplayName(string type) => type switch
+        private static string GetDisplayName(string? type) => type switch
         {
             "Element" => "Parameter Count",
             "Hours" => "Hours", "HoursRange" => "Hours Range",
             "Size" => "Size", "SizeRange" => "Size Range",
-            "Weight" => "Weight/Load", "WeightRange" => "Weight Range",
+            "Load" => "Load", "LoadRange" => "Load Range",
+            "Weight" => "Load", "WeightRange" => "Load Range",
+            "Temperature" => "Temperature", "TemperatureRange" => "Temperature Range",
             "Temprature" => "Temperature", "TempratureRange" => "Temperature Range",
+            "DayWise" => "Day Wise", "Days" => "Day Wise",
             "SizeLoad" => "Size + Load", "SizeAndLoad" => "Size + Load Range",
             "SpectroCombination" => "Spectro Combination",
-            "FlatRate" => "Flat Rate", "Other" => "Other",
+            "PerIndent" => "Per Indent", "Indent" => "Per Indent",
+            "PerLocation" => "Per Location", "Location" => "Per Location", "NoOfLocations" => "Per Location",
+            "PerField" => "Per Field", "FieldWise" => "Per Field", "EachField" => "Per Field",
+            "PerDolly" => "Per Dolly",
+            "WithImage" => "With Image",
+            "WithExtenso" => "With Extensometer",
+            "Algorithm" => "Algorithm Based",
+            "FlatRate" => "Flat Rate", "Other" => "Flat Rate",
+            null => "Auto",
             _ => type
         };
 
@@ -468,7 +552,11 @@ namespace LIMSApi.ServiceWORepo
             ICollection<InvoiceCasePrice> prices,
             string testName = "Test",
             SampleDetail? sample = null,
-            string? dimensionOverride = null)
+            string? dimensionOverride = null,
+            TestResultHeader? header = null,
+            IReadOnlyDictionary<string, PriceDimensionType>? dimTypes = null,
+            LaboratoryTest? labTest = null,
+            Dictionary<long, string>? paramDetailsDict = null)
         {
             var breakdown = new List<PriceBreakdownDto>();
 
@@ -483,6 +571,27 @@ namespace LIMSApi.ServiceWORepo
 
             // Only billable parameters participate in pricing
             var billableParams = parameters.Where(p => p.IsBillable).ToList();
+
+            // GROUP 0: FlatRate — applies immediately, no dimension matching needed
+            var flatRatePrices = prices.Where(p =>
+                p.Configuration != null &&
+                string.Equals(p.Configuration.SelectionType, "FlatRate", StringComparison.OrdinalIgnoreCase)).ToList();
+
+            if (flatRatePrices.Any())
+            {
+                foreach (var frp in flatRatePrices)
+                {
+                    breakdown.Add(new PriceBreakdownDto
+                    {
+                        ParameterId = 0,
+                        ParameterName = frp.Name ?? frp.Configuration!.Name ?? "Flat Rate",
+                        UnitPrice = frp.Price,
+                        Quantity = 1,
+                        Amount = frp.Price
+                    });
+                }
+                return breakdown;
+            }
 
             // GROUP 1: Element count pricing (auto-detect for chemical tests)
             var elementPrices = prices.Where(p =>
@@ -528,14 +637,16 @@ namespace LIMSApi.ServiceWORepo
 
             if (dimensionalPrices.Any())
             {
-                // --- GROUP 2a: Quantity-based pricing (PerIndent, Location, FieldWise) ---
-                var quantitySelectionTypes = new[] { "PerIndent", "Indent", "Location", "NoOfLocations", "FieldWise", "EachField" };
+                // --- GROUP 2a: Legacy quantity alias types only ---
+                // New Per* types (PerIndent, PerLocation, PerField, PerDolly) use ValueSource=UserInputAtEntry
+                // and are handled by GROUP 2e (slab matching against dimSize). Only old aliases remain here.
+                var quantitySelectionTypes = new[] { "Indent", "Location", "NoOfLocations", "FieldWise", "EachField" };
                 var quantityPrices = dimensionalPrices.Where(p =>
                     quantitySelectionTypes.Contains(p.Configuration!.SelectionType, StringComparer.OrdinalIgnoreCase)).ToList();
 
                 foreach (var qPrice in quantityPrices)
                 {
-                    decimal? qty = FindParameterValueForDimension(billableParams, qPrice.Configuration!);
+                    decimal? qty = dimSize ?? FindParameterValueForDimension(billableParams, qPrice.Configuration!);
                     if (qty == null || qty <= 0) qty = 1;
 
                     breakdown.Add(new PriceBreakdownDto
@@ -586,14 +697,20 @@ namespace LIMSApi.ServiceWORepo
 
                 if (sizeLoadPrices.Any())
                 {
-                    // First dimension: use Start/End fields for size range
-                    // Second dimension: use Value field for load threshold/range
+                    // First dimension (size): from sample SampleDetail, then keyword name fallback
+                    // Second dimension (load): prefer SourceParameterIDs-linked parameter, then keyword name fallback
                     // SizeLoad: Value = max load capacity (single number)
                     // SizeAndLoad: Value = "minLoad-maxLoad" (range string)
                     decimal? sizeValue = dimSize
                         ?? sample?.Diameter ?? sample?.Thickness ?? sample?.Width
                         ?? FindParameterValueByName(billableParams, "size", "diameter", "width", "thickness");
+
+                    // Load: use linked param IDs from first SizeLoad config if present, else keyword scan
+                    var firstSizeLoadConfig = sizeLoadPrices.First().Configuration!;
                     decimal? loadValue = dimLoad
+                        ?? (!string.IsNullOrWhiteSpace(firstSizeLoadConfig.SourceParameterIDs)
+                            ? FindParameterValueByLinkedIds(billableParams, firstSizeLoadConfig.SourceParameterIDs)
+                            : null)
                         ?? FindParameterValueByName(billableParams, "load", "force", "capacity");
 
                     if (sizeValue != null && loadValue != null)
@@ -639,54 +756,116 @@ namespace LIMSApi.ServiceWORepo
                     }
                 }
 
-                // --- GROUP 2d: Fixed + Algorithm pricing ---
-                var fixedAlgoTypes = new[] { "FixedWithAlgorithm" };
-                var fixedAlgoPrices = dimensionalPrices.Where(p =>
-                    fixedAlgoTypes.Contains(p.Configuration!.SelectionType, StringComparer.OrdinalIgnoreCase)).ToList();
+                // --- GROUP 2d: Element Count Formula pricing ---
+                var ecfPrices = dimensionalPrices.Where(p =>
+                    string.Equals(p.Configuration!.SelectionType, "ElementCountFormula", StringComparison.OrdinalIgnoreCase)).ToList();
 
-                foreach (var fap in fixedAlgoPrices)
+                if (ecfPrices.Any())
                 {
-                    var basePrice = fap.Price;
-                    decimal additional = 0;
+                    var elementCount = billableParams.Count;
+                    var baseTierPrices = ecfPrices.Where(p => Helpers.ConditionMatcher.IsBaseTier(p.Configuration!.Value)).ToList();
+                    var overridePrices = ecfPrices.Where(p => Helpers.ConditionMatcher.IsOverride(p.Configuration!.Value)).ToList();
 
-                    // If config Value contains a formula, evaluate it using parameter values
-                    var formula = fap.Configuration!.Value;
-                    if (!string.IsNullOrWhiteSpace(formula) && !decimal.TryParse(formula, out _))
+                    // Match Base Tier
+                    var matchedBase = baseTierPrices
+                        .FirstOrDefault(p => Helpers.ConditionMatcher.MatchesCount(p.Configuration!.Value, elementCount));
+
+                    int baseCountLimit = 0;
+                    if (matchedBase != null)
                     {
-                        var variables = new Dictionary<string, double>();
-                        foreach (var param in billableParams)
+                        baseCountLimit = Helpers.ConditionMatcher.ParseCountLimit(matchedBase.Configuration!.Value);
+                        breakdown.Add(new PriceBreakdownDto
                         {
-                            if (param.Value.HasValue && !string.IsNullOrWhiteSpace(param.ParameterName))
-                            {
-                                var key = param.ParameterName.Trim().Replace(" ", "_");
-                                variables[key] = (double)param.Value.Value;
-                            }
-                        }
-
-                        var evaluator = new Helpers.FormulaEvaluator();
-                        var result = evaluator.Evaluate(formula, variables);
-                        if (result.HasValue)
-                            additional = (decimal)result.Value;
+                            ParameterId = 0,
+                            ParameterName = $"{matchedBase.Configuration!.Name} ({elementCount} elements)",
+                            UnitPrice = matchedBase.Price,
+                            Quantity = 1,
+                            Amount = matchedBase.Price
+                        });
                     }
 
-                    var total = basePrice + additional;
-                    breakdown.Add(new PriceBreakdownDto
+                    // Get Unit Deduction (from ==1 or <=1 tier)
+                    decimal baseUnitDeduction = 0;
+                    var oneElementTier = baseTierPrices.FirstOrDefault(t => Helpers.ConditionMatcher.ParseCountLimit(t.Configuration!.Value) == 1);
+                    if (oneElementTier != null)
                     {
-                        ParameterId = 0,
-                        ParameterName = additional > 0
-                            ? $"{fap.Name ?? fap.Configuration!.Name} (Base:{basePrice} + Calc:{additional})"
-                            : fap.Name ?? fap.Configuration!.Name ?? "Fixed Fee",
-                        UnitPrice = total,
-                        Quantity = 1,
-                        Amount = total
-                    });
+                        baseUnitDeduction = oneElementTier.Price;
+                    }
+
+                    // Apply Overrides with Subsumed Deductions
+                    var specialOrSuperParamIds = paramDetailsDict != null
+                        ? paramDetailsDict
+                            .Where(kv => string.Equals(kv.Value, "special", StringComparison.OrdinalIgnoreCase) ||
+                                         string.Equals(kv.Value, "super", StringComparison.OrdinalIgnoreCase))
+                            .Select(kv => kv.Key)
+                            .ToList()
+                        : new List<long>();
+
+                    var selectedElementParamIds = billableParams.Select(p => p.ParameterID).ToList();
+                    var sortedSelectedParamIds = selectedElementParamIds.OrderBy(id => {
+                        bool isOverride = overridePrices.Any(op => {
+                            var cfg = op.Configuration!;
+                            if (string.IsNullOrEmpty(cfg.OverrideParameterIDs))
+                                return specialOrSuperParamIds.Contains(id);
+                            var ids = cfg.OverrideParameterIDs.Split(',').Select(idStr => long.TryParse(idStr.Trim(), out var pId) ? pId : 0).ToList();
+                            return ids.Contains(id);
+                        });
+                        return isOverride ? 1 : 0;
+                    }).ToList();
+
+                    for (int i = 0; i < sortedSelectedParamIds.Count; i++)
+                    {
+                        long paramId = sortedSelectedParamIds[i];
+
+                        // 1. Check for specific override config
+                        var op = overridePrices.FirstOrDefault(o => {
+                            var cfg = o.Configuration!;
+                            if (string.IsNullOrEmpty(cfg.OverrideParameterIDs)) return false;
+                            var ids = cfg.OverrideParameterIDs.Split(',').Select(idStr => long.TryParse(idStr.Trim(), out var pId) ? pId : 0).ToList();
+                            return ids.Contains(paramId);
+                        });
+
+                        // 2. Fallback to wildcard override if param is special/super
+                        if (op == null && specialOrSuperParamIds.Contains(paramId))
+                        {
+                            op = overridePrices.FirstOrDefault(o => string.IsNullOrEmpty(o.Configuration!.OverrideParameterIDs));
+                        }
+
+                        if (op != null)
+                        {
+                            int position = i + 1;
+                            decimal finalAmount = op.Price;
+                            string labelExt = "";
+
+                            // Subsume deduction if within base limit
+                            if (position <= baseCountLimit)
+                            {
+                                finalAmount -= baseUnitDeduction;
+                                labelExt = $" (Subsumed -{baseUnitDeduction})";
+                            }
+
+                            breakdown.Add(new PriceBreakdownDto
+                            {
+                                ParameterId = paramId,
+                                ParameterName = $"{op.Configuration!.Name} (Override Surcharge){labelExt}",
+                                UnitPrice = finalAmount,
+                                Quantity = 1,
+                                Amount = finalAmount
+                            });
+                        }
+                    }
                 }
 
                 // --- GROUP 2e: Standard range/slab pricing (remaining dimensional prices) ---
+                // Exclude types handled by other groups to prevent double-processing.
+                // SpectroCombination is excluded here — it has its own two-step ID-match logic in GROUP 2f.
+                // Element is excluded — handled by GROUP 1 (slab on billable param count).
+                // FlatRate is excluded — handled by GROUP 0 (always-applies, returns early).
                 var handledTypes = quantitySelectionTypes
                     .Concat(daysSelectionTypes)
                     .Concat(sizeLoadTypes)
-                    .Concat(fixedAlgoTypes)
+                    .Concat(new[] { "ElementCountFormula" })
+                    .Concat(new[] { "Element", "SpectroCombination", "FlatRate" })
                     .ToArray();
 
                 var remainingDimensionalPrices = dimensionalPrices.Where(p =>
@@ -697,11 +876,55 @@ namespace LIMSApi.ServiceWORepo
                 foreach (var group in groups)
                 {
                     var selectionType = group.Key!;
-                    var isRange = selectionType.EndsWith("Range", StringComparison.OrdinalIgnoreCase);
+                    var firstConfig = group.First().Configuration!;
+                    var dimType = dimTypes?.GetValueOrDefault(selectionType);
+                    var valueSource = dimType?.ValueSource ?? "ParameterLinked";
+                    var isRange = dimType?.IsRange ?? RangeSelectionTypes.Contains(selectionType);
 
-                    // Find the parameter value that matches this dimension
-                    decimal? paramValue = FindParameterValueForDimension(billableParams, group.First().Configuration!);
+                    decimal? paramValue = valueSource switch
+                    {
+                        // SampleDimension: auto-read from sample first; dimSize is the manual override fallback
+                        "SampleDimension" => GetSampleFieldValue(sample, dimType!.SampleField) ?? dimSize,
+                        "ParameterCount"  => (decimal?)billableParams.Count,
+                        // TestDuration: read standard duration (days) from LaboratoryTest master.
+                        // For Hours/HoursRange configs (unit="hr"), multiply days × 24.
+                        "TestDuration"    => labTest?.TestDuration.HasValue == true
+                                              ? (decimal?)(dimType?.Unit?.Equals("hr", StringComparison.OrdinalIgnoreCase) == true
+                                                  ? labTest.TestDuration!.Value * 24
+                                                  : labTest.TestDuration!.Value)
+                                              : null,
+                        // UserInputAtEntry / UserInput: value always comes from the user-provided override
+                        "UserInputAtEntry" or "UserInput" => dimSize,
+                        // ParameterLinked (default): ID-based lookup first; if FallbackToUserInput, use dimSize when no param found
+                        _ => !string.IsNullOrWhiteSpace(firstConfig.SourceParameterIDs)
+                                ? (FindParameterValueByLinkedIds(billableParams, firstConfig.SourceParameterIDs)
+                                   ?? (firstConfig.FallbackToUserInput ? dimSize : null))
+                                : FindParameterValueForDimension(billableParams, firstConfig)
+                    };
+
                     if (paramValue == null) continue;
+
+                    // Binary conditional types (WithImage, WithExtenso): exact value match only.
+                    // Slab-up logic (v >= paramValue) would wrongly match the "With Image" tier when user enters 0.
+                    var binaryExactTypes = new[] { "WithImage", "WithExtenso" };
+                    if (binaryExactTypes.Contains(selectionType, StringComparer.OrdinalIgnoreCase))
+                    {
+                        var exactMatched = group.FirstOrDefault(p =>
+                            decimal.TryParse(p.Configuration!.Value, out var v) && v == paramValue);
+                        if (exactMatched != null)
+                        {
+                            var unit = exactMatched.Configuration?.Unit ?? "";
+                            breakdown.Add(new PriceBreakdownDto
+                            {
+                                ParameterId = 0,
+                                ParameterName = $"{exactMatched.Configuration!.Name} ({(paramValue == 1 ? "Yes" : "No")} {unit})".Trim(),
+                                UnitPrice = exactMatched.Price,
+                                Quantity = 1,
+                                Amount = exactMatched.Price
+                            });
+                        }
+                        continue;
+                    }
 
                     InvoiceCasePrice? matched = null;
                     if (isRange)
@@ -735,6 +958,72 @@ namespace LIMSApi.ServiceWORepo
                             Quantity = 1,
                             Amount = matched.Price
                         });
+                    }
+                }
+
+                // --- GROUP 2f: SpectroCombination — two-step matching (extra-tier first, base-tier fallback) ---
+                // Runs independently of other groups — SpectroCombination is excluded from GROUP 2e.
+                {
+                    var spectroPrices = dimensionalPrices.Where(p =>
+                        string.Equals(p.Configuration!.SelectionType, "SpectroCombination", StringComparison.OrdinalIgnoreCase)).ToList();
+
+                    if (spectroPrices.Any())
+                    {
+                        var billableIds = billableParams.Select(p => p.ParameterID).ToHashSet();
+
+                        // Step 1: Extra-tier configs (IsBaseConfig = false, has SourceParameterIDs)
+                        // Pick the most specific match — all extra IDs must be present in billable params.
+                        var matched = spectroPrices
+                            .Where(p => !p.Configuration!.IsBaseConfig && !string.IsNullOrWhiteSpace(p.Configuration!.SourceParameterIDs))
+                            .Select(p =>
+                            {
+                                var configIds = ParseLinkedIds(p.Configuration!.SourceParameterIDs);
+                                var matchCount = configIds.Count(id => billableIds.Contains(id));
+                                return new { Price = p, ConfigIdCount = configIds.Count, MatchCount = matchCount };
+                            })
+                            .Where(x => x.ConfigIdCount > 0 && x.MatchCount == x.ConfigIdCount)
+                            .OrderByDescending(x => x.ConfigIdCount)
+                            .Select(x => x.Price)
+                            .FirstOrDefault();
+
+                        // Step 2: Base config (IsBaseConfig = true) — all standard element IDs must be present
+                        if (matched == null)
+                        {
+                            matched = spectroPrices
+                                .Where(p => p.Configuration!.IsBaseConfig && !string.IsNullOrWhiteSpace(p.Configuration!.SourceParameterIDs))
+                                .FirstOrDefault(p =>
+                                {
+                                    var ids = ParseLinkedIds(p.Configuration!.SourceParameterIDs);
+                                    return ids.Count > 0 && ids.All(id => billableIds.Contains(id));
+                                });
+                        }
+
+                        // Step 3: Legacy fallback — any SpectroCombination config with empty SourceParameterIDs
+                        matched ??= spectroPrices.FirstOrDefault(p =>
+                            string.IsNullOrWhiteSpace(p.Configuration!.SourceParameterIDs));
+
+                        if (matched != null)
+                        {
+                            var linkedIds = ParseLinkedIds(matched.Configuration!.SourceParameterIDs).ToHashSet();
+                            var matchedParamNames = billableParams
+                                .Where(p => linkedIds.Contains(p.ParameterID))
+                                .Select(p => p.ParameterName?.Trim())
+                                .Where(n => !string.IsNullOrWhiteSpace(n))
+                                .ToList();
+                            var label = matchedParamNames.Any()
+                                ? $"Spectro Full + {string.Join(" + ", matchedParamNames)}"
+                                : "Spectro Full";
+
+                            breakdown.Add(new PriceBreakdownDto
+                            {
+                                ParameterId = 0,
+                                ParameterName = label,
+                                UnitPrice = matched.Price,
+                                Quantity = 1,
+                                Amount = matched.Price
+                            });
+                            return breakdown;
+                        }
                     }
                 }
             }
@@ -798,8 +1087,47 @@ namespace LIMSApi.ServiceWORepo
         }
 
         /// <summary>
+        /// Parse a comma-separated string of ParameterMaster IDs into a list of longs.
+        /// </summary>
+        private static List<long> ParseLinkedIds(string? sourceParameterIDs)
+        {
+            if (string.IsNullOrWhiteSpace(sourceParameterIDs)) return new List<long>();
+            return sourceParameterIDs
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => long.TryParse(s.Trim(), out var id) ? id : 0L)
+                .Where(id => id > 0)
+                .ToList();
+        }
+
+        /// <summary>
+        /// Find parameter value by matching ParameterMaster IDs from SourceParameterIDs against billable params.
+        /// Returns the value of the first matching param, ordered by ParameterID for deterministic selection.
+        /// </summary>
+        private decimal? FindParameterValueByLinkedIds(
+            List<TestResultParameter> billableParams, string? sourceParameterIDs)
+        {
+            if (string.IsNullOrWhiteSpace(sourceParameterIDs)) return null;
+            var ids = ParseLinkedIds(sourceParameterIDs).ToHashSet();
+            return billableParams
+                .Where(p => ids.Contains(p.ParameterID) && p.Value.HasValue)
+                .OrderBy(p => p.ParameterID)
+                .Select(p => p.Value)
+                .FirstOrDefault();
+        }
+
+        private static decimal? GetSampleFieldValue(SampleDetail? sample, string? field) => field switch
+        {
+            "Diameter"  => sample?.Diameter,
+            "Thickness" => sample?.Thickness,
+            "Width"     => sample?.Width,
+            "Length"    => sample?.Length,
+            _           => null
+        };
+
+        /// <summary>
         /// Find parameter value for a dimensional pricing configuration.
         /// Matches config Name/AliasName against parameter names and returns the parameter's value.
+        /// Legacy fallback used when SourceParameterIDs is not configured.
         /// </summary>
         private decimal? FindParameterValueForDimension(
             List<TestResultParameter> billableParams,

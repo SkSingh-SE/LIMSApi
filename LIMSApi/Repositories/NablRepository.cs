@@ -6,11 +6,16 @@ using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
+using Razorpay.Api;
 using System.Collections.Concurrent;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Linq;
 using System.Linq.Dynamic.Core;
 using System.Reflection;
 using System.Text.Json;
+using Twilio.TwiML.Messaging;
+using static LIMSApi.Helpers.Permissions;
+using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace LIMSApi.Repositories
@@ -101,11 +106,14 @@ namespace LIMSApi.Repositories
                 "Retesting" => await GetAllTyped<NablRetesting>(filter),
                 "RiskAssessment" => await GetAllTyped<NablRiskAssessment>(filter),
                 "DocumentChangeRequest" => await GetAllTyped<NablDocumentChangeRequest>(filter),
-                "DocumentReview" => await GetAllTyped<NablDocumentReview>(filter),
+                "DocumentReview" => await GetDocumentReviewList(filter),
                 "MasterDocument" => await GetAllTyped<NablMasterDocument>(filter),
                 "MeasurementUncertainty" => await GetAllTyped<NablMeasurementUncertainty>(filter),
                 "PtIlcPlan" => await GetAllTyped<NablPtIlcPlan>(filter),
                 "InventoryMaster" => await GetInventoryMasterList(filter),
+                "RoleWiseSkillsMaster" => await GetRoleWiseSkillsMasterList(filter),
+                "QuestionSetMaster" => await GetQuestionSetMasterList(filter),
+                "MyEvaluations" => await GetMyEvaluationsList(filter),
                 _ => throw new ArgumentException($"Unknown form type: {formType}")
             };
         }
@@ -125,7 +133,6 @@ namespace LIMSApi.Repositories
                 "SkillMatrixDecision" => await GetByIdTyped<NablSkillMatrixDecision>(id),
                 "TrainingPlan" => await GetByIdTyped<NablTrainingPlan>(id),
                 "TrainingAttendance" => await GetByIdTyped<NablTrainingAttendance>(id),
-                "TrainingEffectiveness" => await GetByIdTyped<NablTrainingEffectiveness>(id),
                 "EnvironmentMonitoring" => await GetByIdTyped<NablEnvironmentMonitoring>(id),
                 "QualityControlPlan" => await GetQualityControlPlanByIdTyped(id),
                 "TestRequest" => await GetByIdTyped<NablTestRequest>(id),
@@ -154,8 +161,8 @@ namespace LIMSApi.Repositories
                 "Complaint" => await GetByIdTyped<NablComplaint>(id),
                 "CustomerFeedback" => await GetByIdTyped<NablCustomerFeedback>(id),
                 "FeedbackAnalysis" => await GetByIdTyped<NablFeedbackAnalysis>(id),
-                "AuditPlan" => await GetByIdTyped<NablAuditPlan>(id),
-                "AuditChecklist" => await GetByIdTyped<NablAuditChecklist>(id),
+                "AuditPlan" => await GetByAuditPlanIdTyped(id),
+                "AuditChecklist" => await GetByAuditChecklistTyped(id),
                 "AuditSummary" => await GetByIdTyped<NablAuditSummary>(id),
                 "InternalAuditor" => await GetByIdTyped<NablInternalAuditor>(id),
                 "MeetingAgenda" => await GetByIdTyped<NablMeetingAgenda>(id),
@@ -165,11 +172,14 @@ namespace LIMSApi.Repositories
                 "Retesting" => await GetNablRetesting(id),
                 "RiskAssessment" => await GetByIdTyped<NablRiskAssessment>(id),
                 "DocumentChangeRequest" => await GetByIdTyped<NablDocumentChangeRequest>(id),
-                "DocumentReview" => await GetByIdTyped<NablDocumentReview>(id),
-                "MasterDocument" => await GetByIdTyped<NablMasterDocument>(id),
+                "DocumentReview" => await GetByDocumentReviewId(id),
+                "MasterDocument" => await GetMasterDocumentById(id),
                 "MeasurementUncertainty" => await GetByIdTyped<NablMeasurementUncertainty>(id),
                 "PtIlcPlan" => await GetByIdTyped<NablPtIlcPlan>(id),
                 "InventoryMaster" => await GetInventoryMaster(id),
+                "RoleWiseSkillsMaster" => await GetRoleWiseSkillsMaster(id),
+                "QuestionSetMaster" => await GetQuestionSetMaster(id),
+                "TrainingEffectiveness" => await GetTrainingEffectiveness(id),
                 _ => throw new ArgumentException($"Unknown form type: {formType}")
             };
         }
@@ -234,6 +244,9 @@ namespace LIMSApi.Repositories
                 "MeasurementUncertainty" => await AddTyped((NablMeasurementUncertainty)model),
                 "PtIlcPlan" => await AddTyped((NablPtIlcPlan)model),
                 "InventoryMaster" => await AddInventoryMaster((InventoryManagement)model),
+                "QuestionSetMaster" => await AddQuestionSetMaster((QuestionSetMaster)model),
+                "MyEvaluations" => await AddMyEvaluations((MyEvaluation)model),
+                "RoleWiseSkillsMaster" => await AddRoleWiseSkillsMaster((RoleWiseSkill)model),
                 _ => throw new ArgumentException($"Unknown form type: {formType}")
             };
         }
@@ -409,6 +422,12 @@ namespace LIMSApi.Repositories
                     break;
                 case "InventoryMaster":
                     await UpdateInventoryMaster((InventoryManagement)model);
+                    break;
+                case "RoleWiseSkillsMaster":
+                    await UpdateRoleWiseSkillsMaster((RoleWiseSkill)model);
+                    break;
+                case "QuestionSetMaster":
+                    await UpdateQuestionSetMaster((QuestionSetMaster)model);
                     break;
                 default:
                     throw new ArgumentException($"Unknown form type: {formType}");
@@ -587,6 +606,12 @@ namespace LIMSApi.Repositories
                 case "InventoryMaster":
                     await DeleteInventoryMaster<InventoryManagement>(id);
                     break;
+                case "RoleWiseSkillsMaster":
+                    await DeleteRoleWiseSkillsMaster<RoleWiseSkill>(id);
+                    break;
+                case "QuestionSetMaster":
+                    await DeleteQuestionSetMaster<QuestionSetMaster>(id);
+                    break;
                 default:
                     throw new ArgumentException($"Unknown form type: {formType}");
             }
@@ -746,7 +771,7 @@ namespace LIMSApi.Repositories
             }
         }
 
-        public async Task<List<DropdwonSelector>> GetTraningPlanDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> GetTraningPlanDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20, long? recordId = null)
         {
             if (pageNo < 0) pageNo = 0;
 
@@ -769,6 +794,7 @@ namespace LIMSApi.Repositories
                     _query = _query.Where(x => x.TrainingTopic.Contains(search));
                 }
             }
+            _query = _query.Where(plan => !_context.NablTrainingAttendances.Any(report => report.TrainingPlanId == plan.ID && report.IsActive && (!recordId.HasValue || report.ID != recordId.Value)));
 
             var skip = pageNo * pageSize;
 
@@ -822,28 +848,35 @@ namespace LIMSApi.Repositories
 
             return data;
         }
-        public async Task<List<DropdwonSelector>> Supplierlist(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> Supplierlist(string? searchTearm, int pageNo = 0, int pageSize = 20, long? recordId = null)
         {
             if (pageNo < 0)
                 pageNo = 0;
 
-
             var query = _context.NablSupplierRegistrations
-                .Where(x => x.IsActive && !string.IsNullOrWhiteSpace(x.SupplierName));
+                .Where(x => x.IsActive &&
+                            !string.IsNullOrWhiteSpace(x.SupplierName));
 
-            if (!string.IsNullOrWhiteSpace(searchTerm))
+            if (!string.IsNullOrWhiteSpace(searchTearm))
             {
-                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                if (FilterHelper.IsExactIdSearch(searchTearm, out long exactId))
                 {
                     query = query.Where(x => x.ID == exactId);
                 }
                 else
                 {
-                    var search = searchTerm.Trim();
+                    var search = searchTearm.Trim();
                     query = query.Where(x => x.SupplierName.Contains(search));
                 }
             }
 
+            // Exclude suppliers already used in other records
+            query = query.Where(supplier =>
+                !_context.NablApprovedSuppliers.Any(record =>
+                    record.SupplierRegisterId == supplier.ID &&
+                    record.IsActive &&
+                    (!recordId.HasValue || record.ID != recordId.Value)
+                ));
 
             var supplierList = await query.ToListAsync();
 
@@ -855,7 +888,9 @@ namespace LIMSApi.Repositories
 
                     try
                     {
-                        var documents = JsonConvert.DeserializeObject<DocumentsSubmitted>(x.DocumentsSubmittedJson);
+                        var documents =
+                            JsonConvert.DeserializeObject<DocumentsSubmitted>(
+                                x.DocumentsSubmittedJson);
 
                         return documents?.SupplierApproved == true;
                     }
@@ -875,22 +910,24 @@ namespace LIMSApi.Repositories
                 {
                     Id = x.ID,
                     Name = x.SupplierName,
+
                     AdditionalValues = new Dictionary<string, object>
                     {
                 { "ContactPerson", x.ContactPerson ?? "" },
                 { "MobileNo", x.MobileNo ?? "" },
                 { "Email", x.Email ?? "" },
                 { "RegisterNo", x.RegisterNo ?? "" },
-                {"GSTNo",x.GstNo?? "" },
-                {"Address",x.Address ?? "" },
-                {"ProductsServicesOffered",x.ProductsServicesOffered ?? "" }
+                { "GSTNo", x.GstNo ?? "" },
+                { "Address", x.Address ?? "" },
+                { "ProductsServicesOffered", x.ProductsServicesOffered ?? "" }
                     }
                 })
                 .ToList();
+
             return data;
         }
 
-        public async Task<List<DropdwonSelector>> AllSupplierlist(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> AllSupplierlist(string? searchTerm, int pageNo = 0, int pageSize = 20, long? recordId = null)
         {
             if (pageNo < 0)
                 pageNo = 0;
@@ -913,7 +950,7 @@ namespace LIMSApi.Repositories
                     query = query.Where(x => x.SupplierName.Contains(search));
                 }
             }
-
+            query = query.Where(supplier => !_context.NablSupplierEvaluations.Any(record => record.SupplierRegisterId == supplier.ID && record.IsActive && (!recordId.HasValue || record.ID != recordId.Value)));
             var approvedSuppliers = await query
                 .OrderBy(x => x.SupplierName)
                 .Skip(pageNo * pageSize)
@@ -961,30 +998,27 @@ namespace LIMSApi.Repositories
 
             return data;
         }
-        public async Task<List<DropdwonSelector>> IndentNoList(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> IndentNoList(string? searchTearm, int pageNo = 0, int pageSize = 20, long? recordId = null)
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.NablPurchaseIndents
-                         where a.IsActive
-                         select a;
+            var _query = _context.NablPurchaseIndents.Where(c => c.IsActive && !string.IsNullOrWhiteSpace(c.IndentorName));
 
 
-            _query = _query.Where(x => !string.IsNullOrWhiteSpace(x.PINo));
-
-            if (!string.IsNullOrWhiteSpace(searchTerm))
+            if (!string.IsNullOrWhiteSpace(searchTearm))
             {
-                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                if (FilterHelper.IsExactIdSearch(searchTearm, out long exactId))
                 {
                     _query = _query.Where(x => x.ID == exactId);
                 }
                 else
                 {
-                    var search = searchTerm.Trim();
-                    _query = _query.Where(x => x.PINo.Contains(search));
+                    var search = searchTearm.Trim();
+                    _query = _query.Where(x => x.IndentorName.Contains(search));
                 }
             }
 
+            _query = _query.Where(indent => !_context.NablPurchaseOrders.Any(record => record.PurchaseIndentId == indent.ID && record.IsActive && (!recordId.HasValue || record.ID != recordId.Value)));
             var skip = pageNo * pageSize;
 
             var data = await _query
@@ -1051,7 +1085,7 @@ namespace LIMSApi.Repositories
                 .ToList();
             return data;
         }
-        public async Task<List<DropdwonSelector>> Alltestmethodlist(string formType, string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> Alltestmethodlist(string formType, string? searchTerm, int pageNo = 0, int pageSize = 20, long? recordId = null)
         {
 
 
@@ -1059,50 +1093,64 @@ namespace LIMSApi.Repositories
             switch (formType)
             {
                 case "MethodVerification":
-                    var query = _context.NablTestMethods
-                        .Where(x => x.IsActive && !string.IsNullOrWhiteSpace(x.TestMethodJson));
-
-                    var allMethods = new List<TestMethodEntryDto>();
-                    foreach (var method in await query.ToListAsync())
                     {
+                        var query = _context.NablTestMethods
+                            .Where(x => x.IsActive &&
+                                        !string.IsNullOrWhiteSpace(x.TestMethodJson));
 
-                        var methods = System.Text.Json.JsonSerializer.Deserialize<List<TestMethodEntryDto>>(
-                    method.TestMethodJson,
-                    new JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true
-                    });
+                        var allMethods = new List<TestMethodEntryDto>();
 
-                        if (methods != null && methods.Any())
+                        foreach (var method in await query.ToListAsync())
                         {
-                            allMethods.AddRange(methods);
+                            var methods =
+                                System.Text.Json.JsonSerializer.Deserialize<List<TestMethodEntryDto>>(
+                                    method.TestMethodJson,
+                                    new JsonSerializerOptions
+                                    {
+                                        PropertyNameCaseInsensitive = true
+                                    });
+
+                            if (methods != null && methods.Any())
+                            {
+                                allMethods.AddRange(methods);
+                            }
                         }
-                        allMethods = allMethods.Where(x => x.Status == "Active").ToList();
-                    }
 
+                        // Only active Test Methods from master JSON
+                        allMethods = allMethods
+                            .Where(x => string.Equals(
+                                x.Status?.Trim(),
+                                "Active",
+                                StringComparison.OrdinalIgnoreCase))
+                            .ToList();
 
-                    var skip = pageNo * pageSize;
+                        // IMPORTANT:
+                        // Do not exclude already-saved methods here.
+                        // Duplicate validation will be handled on the frontend.
 
+                        var skip = pageNo * pageSize;
 
-                    var data = allMethods
-                        .Skip(skip)
-                        .Take(pageSize)
-                        .Select((x, index) => new DropdwonSelector
-                        {
-                            Id = skip + index +1,
-                            Name = x.SpecificationCode,
-                            AdditionalValues = new Dictionary<string, object>
-                        {
+                        var data = allMethods
+                            .Skip(skip)
+                            .Take(pageSize)
+                            .Select((x, index) => new DropdwonSelector
+                            {
+                                Id = skip + index + 1,
+                                Name = x.SpecificationCode?.Trim() ?? "",
+                                AdditionalValues = new Dictionary<string, object>
+                                {
                 { "MethodName", x.MethodName ?? "" },
-                { "SpecificationCode", x.SpecificationCode ?? "" },
+                { "SpecificationCode", x.SpecificationCode?.Trim() ?? "" },
                 { "ReferenceStandard", x.ReferenceStandard ?? "" },
                 { "RevisionNo", x.RevisionNo ?? "" },
                 { "EffectiveDate", x.EffectiveDate },
-                { "Status", x.Status ?? "" },
-                        }
-                        })
-                        .ToList();
-                    return data;
+                { "Status", x.Status ?? "" }
+                                }
+                            })
+                            .ToList();
+
+                        return data;
+                    }
 
                 case "MethodValidation":
                     var _query = await _context.NablMethodVerifications.Where(x => x.IsActive && x.VerificationStatus == "Verified").ToListAsync();
@@ -1172,7 +1220,7 @@ namespace LIMSApi.Repositories
                 .ToList();
             return data;
         }
-        public async Task<List<DropdwonSelector>> PONoListDetailslist(string? formType, string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> PONoListDetailslist(string? formType, string? searchTearm, int pageNo = 0, int pageSize = 20, long? recordId = null)
         {
 
             if (pageNo < 0) pageNo = 0;
@@ -1188,18 +1236,19 @@ namespace LIMSApi.Repositories
 
                     _query = _query.Where(x => !string.IsNullOrWhiteSpace(x.PONo));
 
-                    if (!string.IsNullOrWhiteSpace(searchTerm))
+                    if (!string.IsNullOrWhiteSpace(searchTearm))
                     {
-                        if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                        if (FilterHelper.IsExactIdSearch(searchTearm, out long exactId))
                         {
                             _query = _query.Where(x => x.ID == exactId);
                         }
                         else
                         {
-                            var search = searchTerm.Trim();
+                            var search = searchTearm.Trim();
                             _query = _query.Where(x => x.PONo.Contains(search));
                         }
                     }
+                    _query = _query.Where(porder => !_context.NablIncomingMaterials.Any(record => record.PoNo == porder.ID  && record.IsActive && (!recordId.HasValue || record.ID != recordId.Value)));
                     var skip = pageNo * pageSize;
 
                     var data = _query
@@ -1226,6 +1275,7 @@ namespace LIMSApi.Repositories
                     return data;
 
                 case "PurchaseMaterialVerification":
+
                     var query =
                         from im in _context.NablIncomingMaterials
                         join po in _context.NablPurchaseOrders
@@ -1239,15 +1289,15 @@ namespace LIMSApi.Repositories
                             PurchaseOrder = po
                         };
 
-                    if (!string.IsNullOrWhiteSpace(searchTerm))
+                    if (!string.IsNullOrWhiteSpace(searchTearm))
                     {
-                        if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                        if (FilterHelper.IsExactIdSearch(searchTearm, out long exactId))
                         {
                             query = query.Where(x => x.Incoming.ID == exactId);
                         }
                         else
                         {
-                            var search = searchTerm.Trim();
+                            var search = searchTearm.Trim();
 
                             query = query.Where(x =>
                                 x.Incoming.PurchaseOrderNo.Contains(search) ||
@@ -1257,6 +1307,20 @@ namespace LIMSApi.Repositories
                         }
                     }
 
+                    query = query.Where(porder =>
+                        !_context.NablPurchaseMaterialVerifications.Any(record =>
+                            record.PurchaseOrderNo == porder.Incoming.PurchaseOrderNo &&
+                            record.IsActive &&
+                            (recordId == null || recordId <= 0 || record.ID != recordId)
+                        ));
+                    var debugData = await query
+                        .Select(x => new
+                        {
+                            IncomingID = x.Incoming.ID,
+                            PurchaseOrderID = x.PurchaseOrder.ID,
+                            PONo = x.PurchaseOrder.PONo
+                        })
+                        .ToListAsync();
                     var skipped = pageNo * pageSize;
 
                     var obj = await query
@@ -1266,28 +1330,28 @@ namespace LIMSApi.Repositories
                         .Select(x => new DropdwonSelector
                         {
                             Id = x.Incoming.ID,
-
-
                             Name = x.Incoming.PurchaseOrderNo ?? "",
 
                             AdditionalValues = new Dictionary<string, object>
                             {
-                            // From Purchase Order table
-                            { "Deviations", x.Incoming.Deviations?? "" },
-                            { "CorrectiveActions", x.Incoming.CorrectiveActions?? "" },
-                            { "SupplierName", x.PurchaseOrder.SupplierName ?? "" },
-                            { "Email", x.PurchaseOrder.Email ?? "" },
-                            { "PhoneNo", x.PurchaseOrder.PhoneNo ?? "" },
-                            { "GSTNo", x.PurchaseOrder.GSTNo ?? "" },
-                            { "OrderType", x.PurchaseOrder.OrderType ?? "" },
-                            { "SupplierAddress", x.PurchaseOrder.SupplierAddress ?? "" },
-                            { "PurchaseOrderNo", x.PurchaseOrder.PONo ?? "" },
-                            { "PODate", x.PurchaseOrder.PODate },
-                            { "ItemsJson", x.Incoming.ItemsParametersJson ?? "" },
-                            { "InspectionBy", x.Incoming.InspectionBy ?? "" },
-                            { "ReceivedBy", x.Incoming.ReceivedBy ?? "" }
+                { "Deviations", x.Incoming.Deviations ?? "" },
+                { "CorrectiveActions", x.Incoming.CorrectiveActions ?? "" },
+                { "SupplierName", x.PurchaseOrder.SupplierName ?? "" },
+                { "Email", x.PurchaseOrder.Email ?? "" },
+                { "PhoneNo", x.PurchaseOrder.PhoneNo ?? "" },
+                { "GSTNo", x.PurchaseOrder.GSTNo ?? "" },
+                { "OrderType", x.PurchaseOrder.OrderType ?? "" },
+                { "SupplierAddress", x.PurchaseOrder.SupplierAddress ?? "" },
+                { "PurchaseOrderNo", x.PurchaseOrder.PONo ?? "" },
+                { "PODate", x.PurchaseOrder.PODate },
+                { "ItemsJson", x.Incoming.ItemsParametersJson ?? "" },
+                { "InspectionBy", x.Incoming.InspectionBy ?? "" },
+                { "ReceivedBy", x.Incoming.ReceivedBy ?? "" },
+                { "PurchaseOrderId", x.PurchaseOrder.ID }
                             }
-                        }).ToListAsync();
+                        })
+                        .ToListAsync();
+
                     return obj;
 
             }
@@ -1923,7 +1987,7 @@ namespace LIMSApi.Repositories
 
             return new List<DropdwonSelector>();
         }
-        public async Task<List<DropdwonSelector>> GetQcplannoDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> GetQcplannoDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20, long? recordId = null)
         {
             if (pageNo < 0) pageNo = 0;
 
@@ -1943,6 +2007,8 @@ namespace LIMSApi.Repositories
                     _query = _query.Where(x => x.PlanNo.Contains(search));
                 }
             }
+
+            _query = _query.Where(testing => !_context.NablRetestings.Any(record => record.QcPlanNoId == testing.ID && record.IsActive && (!recordId.HasValue || record.ID != recordId.Value)));
 
             var skip = pageNo * pageSize;
 
@@ -1995,7 +2061,7 @@ namespace LIMSApi.Repositories
 
             };
         }
-        public async Task<List<DropdwonSelector>> GetCustomerDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> GetCustomerDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20, long? recordId = null)
         {
             if (pageNo < 0) pageNo = 0;
 
@@ -2015,6 +2081,7 @@ namespace LIMSApi.Repositories
                     _query = _query.Where(x => x.CompanyName.Contains(search));
                 }
             }
+            _query = _query.Where(customer => !_context.NablFeedbackAnalyses.Any(report => report.CustomerID== customer.ID && report.IsActive &&(!recordId.HasValue || report.ID!= recordId.Value)));
 
             var skip = pageNo * pageSize;
 
@@ -2060,7 +2127,7 @@ namespace LIMSApi.Repositories
             };
 
         }
-        public async Task<List<DropdwonSelector>> GetMeetinglist(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        public async Task<List<DropdwonSelector>> GetMeetinglist(string? searchTerm, int pageNo = 0, int pageSize = 20, long? recordId = null)
         {
             if (pageNo < 0) pageNo = 0;
 
@@ -2083,6 +2150,7 @@ namespace LIMSApi.Repositories
                     _query = _query.Where(x => x.MeetingNo.Contains(search));
                 }
             }
+            _query = _query.Where(meeting => !_context.NablMeetingMinutes.Any(report => report.MeetingId== meeting.ID && report.IsActive &&(!recordId.HasValue || report.ID!= recordId.Value)));
 
             var skip = pageNo * pageSize;
 
@@ -2416,7 +2484,7 @@ namespace LIMSApi.Repositories
 
         private async Task<NablNonConformingWork> GetByIdNonConformingWork(long id)
         {
-            var data = await _context.NablNonConformingWorks.Include(c=>c.Investigation).Include(c=>c.CorrectiveAction).Include(c=>c.Verification).Include(c=>c.Closure).FirstOrDefaultAsync(c => c.ID == id && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
+            var data = await _context.NablNonConformingWorks.Include(c => c.Investigation).Include(c => c.CorrectiveAction).Include(c => c.Verification).Include(c => c.Closure).FirstOrDefaultAsync(c => c.ID == id && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
             return data;
         }
         public async Task<PagedResponse<object>> NcPrintList(PageFilter filter)
@@ -2479,6 +2547,1598 @@ namespace LIMSApi.Repositories
             });
 
             return await result.Cast<object>().ToPagedAsync(filter);
+
+        }
+        public async Task<List<DropdwonSelector>> Documentlist(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0)
+                pageNo = 0;
+
+
+            var query = _context.NablMasterDocuments
+                .Where(x => x.IsActive && !string.IsNullOrWhiteSpace(x.DocumentCode));
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    query = query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    query = query.Where(x => x.DocumentCode.Contains(search));
+                }
+            }
+
+
+
+            var skip = pageNo * pageSize;
+
+            var data = query
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = (x.DocumentCode ?? "")  + "/" + (x.DocumentTitle ?? ""),
+                    AdditionalValues = new Dictionary<string, object>
+                    {
+                { "DocumentType", x.DocumentType ?? "" },
+                { "DepartmentName", x.DepartmentName ?? "" },
+                { "CurrentIssue", x.CurrentIssue ?? "" },
+                { "CurrentRevision", x.CurrentRevision ?? "" },
+                {"EffectiveDate",x.EffectiveDate},
+                {"NextReviewDate",x.NextReviewDate},
+                {"DocumentOwner",x.DocumentOwner},
+                {"DocumentName",(x.DocumentCode) + "/" + (x.DocumentTitle)}
+                    }
+                })
+                .ToList();
+            return data;
+        }
+        public async Task<List<DropdwonSelector>> GetAuditorsDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = from a in _context.NablInternalAuditors
+                         where a.IsActive
+                         select a;
+
+
+            _query = _query.Where(x => !string.IsNullOrWhiteSpace(x.EmployeeName));
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => x.EmployeeName.Contains(search));
+                }
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await _query
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = x.EmployeeName
+                })
+                .ToListAsync();
+
+            return data;
+        }
+        public async Task<List<DropdwonSelector>> GetEligibleAuditors(
+         long departmentId,
+         string isoClauseIds,
+         DateTime scheduleDate)
+        {
+            int pageNo = 0;
+            int pageSize = 20;
+
+            var selectedClauseIds = isoClauseIds
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => int.TryParse(x.Trim(), out var id) ? id : 0)
+                .Where(id => id > 0)
+                .Distinct()
+                .ToList();
+
+            if (selectedClauseIds.Count == 0)
+                return new List<DropdwonSelector>();
+
+            // First fetch only active and date-valid auditors.
+            // Department eligibility will be checked from DepartmentListJson.
+            var auditors = await _context.NablInternalAuditors
+                .Where(x =>
+                    x.IsActive &&
+                    x.EmployeeId.HasValue &&
+                    x.AuthorizationValidUpto.HasValue &&
+                    x.AuthorizationValidUpto.Value.Date >= scheduleDate.Date &&
+                    !string.IsNullOrWhiteSpace(x.EmployeeName) &&
+                    !string.IsNullOrWhiteSpace(x.ISOClausesJson) &&
+                    !string.IsNullOrWhiteSpace(x.DepartmentListJson))
+                .ToListAsync();
+
+            foreach (var auditor in auditors)
+            {
+                auditor.IsoClauses =
+                    !string.IsNullOrWhiteSpace(auditor.ISOClausesJson)
+                        ? JsonSerializer.Deserialize<List<IsoClauses>>(
+                            auditor.ISOClausesJson
+                          ) ?? new List<IsoClauses>()
+                        : new List<IsoClauses>();
+
+                auditor.DepartmentList =
+                    !string.IsNullOrWhiteSpace(auditor.DepartmentListJson)
+                        ? JsonSerializer.Deserialize<List<DepartmentList>>(
+                            auditor.DepartmentListJson
+                          ) ?? new List<DepartmentList>()
+                        : new List<DepartmentList>();
+            }
+
+            var eligibleAuditors = auditors.Where(a =>
+            {
+                if (a.DepartmentList == null || a.DepartmentList.Count == 0)
+                    return false;
+
+                if (a.IsoClauses == null || a.IsoClauses.Count == 0)
+                    return false;
+
+                // Selected department must exist in auditor's Authorized Areas list.
+                var departmentMatched = a.DepartmentList.Any(d =>
+                    d.DepartmentId.HasValue &&
+                    d.DepartmentId.Value == departmentId);
+
+                if (!departmentMatched)
+                    return false;
+
+                // Auditor must be authorized for all selected ISO clauses.
+                var auditorClauseIds = a.IsoClauses
+                    .Where(x => x.ClauseId.HasValue)
+                    .Select(x => x.ClauseId!.Value)
+                    .Distinct()
+                    .ToHashSet();
+
+                return selectedClauseIds.All(id =>
+                    auditorClauseIds.Contains(id));
+            });
+
+            return eligibleAuditors
+                .Skip(pageNo * pageSize)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.EmployeeId!.Value,
+                    Name = x.EmployeeName!
+                })
+                .ToList();
+        }
+        private async Task<NablAuditPlan> GetByAuditPlanIdTyped(long id)
+        {
+            var auditPlan = await _context.NablAuditPlans
+                .Include(x => x.ScheduleItems)
+                .FirstOrDefaultAsync(x =>
+                    x.ID == id &&
+                    x.IsActive &&
+                    x.CompanyCode == loggedInUser.CompanyCode
+                );
+
+            if (auditPlan == null)
+                throw new ArgumentException("Audit Plan not found.");
+
+            foreach (var scheduleItem in auditPlan.ScheduleItems)
+            {
+                scheduleItem.IsoClauses =
+                    !string.IsNullOrWhiteSpace(scheduleItem.ISOClausesJson)
+                        ? JsonSerializer.Deserialize<List<AuditScheduleIsoClause>>(
+                            scheduleItem.ISOClausesJson
+                          ) ?? new List<AuditScheduleIsoClause>()
+                        : new List<AuditScheduleIsoClause>();
+            }
+
+            return auditPlan;
+        }
+        public async Task<AuditChecklistDto?> GetScheduleSession(long scheduleItemId)
+        {
+            var schedule = await _context.ScheduleItems
+                .FirstOrDefaultAsync(x => x.ID == scheduleItemId && x.IsActive == true);
+            var scheduleplan = await _context.NablAuditPlans.FirstOrDefaultAsync(x => x.ID == schedule.AuditPlanId && x.IsActive == true);
+            if (schedule == null)
+                return null;
+
+            var dto = new AuditChecklistDto
+            {
+                AuditPlanId = schedule.AuditPlanId,
+                ScheduleItemId = schedule.ID,
+                AuditPlanNo = schedule.AuditPlan?.PlanNo,
+                DepartmentId = schedule.DepartmentId,
+                DepartmentName = schedule.DepartmentName,
+                AuditorId = schedule.AuditorId,
+                AuditorName = schedule.AuditorName,
+                AuditeeId = schedule.AuditeeId,
+                AuditeeName = schedule.AuditeeName,
+                ScheduleDate = schedule.ScheduleDate,
+                PlanNo= scheduleplan.PlanNo,
+            };
+
+            if (!string.IsNullOrWhiteSpace(schedule.ISOClausesJson))
+            {
+                dto.IsoClauses =
+                    JsonSerializer.Deserialize<List<AuditChecklistIsoClauseDto>>(
+                        schedule.ISOClausesJson
+                    ) ?? new List<AuditChecklistIsoClauseDto>();
+            }
+
+            return dto;
+        }
+        private async Task<NablAuditChecklist> GetByAuditChecklistTyped(long id)
+        {
+            var auditChecklist = await _context.NablAuditChecklists
+      .Include(x => x.Items.Where(item => item.IsActive)) // Filters the related Items collection
+      .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            if (auditChecklist == null)
+                throw new ArgumentException("Audit checklist not found.");
+
+            var ncIds = auditChecklist.Items
+      .Where(x =>
+          x.IsActive &&
+          x.NcId.HasValue
+      )
+      .Select(x => x.NcId!.Value)
+      .Distinct()
+      .ToList();
+
+            if (ncIds.Any())
+            {
+                var ncrData = await _context.NablNonConformingWorks
+                    .Where(x =>
+                        ncIds.Contains(x.ID) &&
+                        x.IsActive
+                    )
+                    .Select(x => new
+                    {
+                        x.ID,
+                        x.CurrentStep,
+                        x.Status
+                    })
+                    .ToListAsync();
+
+                foreach (var item in auditChecklist.Items)
+                {
+                    if (!item.NcId.HasValue)
+                        continue;
+
+                    var ncr = ncrData.FirstOrDefault(x =>
+                        x.ID == item.NcId.Value
+                    );
+
+                    if (ncr != null)
+                    {
+                        item.NcCurrentStep = ncr.CurrentStep;
+                        item.NcStatus = ncr.Status;
+                    }
+                }
+            }
+            return auditChecklist;
+        }
+        public async Task<AuditChecklistNcrDto?> GetAuditChecklistNcr(long checklistItemId)
+        {
+            var item = await _context.AuditChecklistItems
+                .Include(x => x.Checklist)
+                .FirstOrDefaultAsync(x =>
+                    x.ID == checklistItemId &&
+                    x.IsActive
+                );
+
+            if (item == null || item.Checklist == null)
+                return null;
+
+            var checklist = item.Checklist;
+
+            var dto = new AuditChecklistNcrDto
+            {
+                ChecklistId = checklist.ID,
+                ChecklistItemId = item.ID,
+                ChecklistNo = checklist.ChecklistNo,
+                AuditPlanId = checklist.AuditPlanId,
+                ScheduleItemId = checklist.ScheduleItemId,
+                DepartmentId = checklist.DepartmentId,
+                DepartmentName = checklist.DepartmentName,
+                AuditorId = checklist.AuditorId,
+                AuditorName = checklist.AuditorName,
+                FindingType = item.FindingType,
+                AuditQuestion = item.AuditQuestion,
+                ObjectiveEvidence = item.ObjectiveEvidence,
+            };
+
+            return dto;
+        }
+        public async Task<AuditSummaryDto?> GetAuditplan(long auditPlanId)
+        {
+            var auditPlan = await _context.NablAuditPlans
+                .Include(x => x.ScheduleItems)
+                .FirstOrDefaultAsync(x =>
+                    x.ID == auditPlanId &&
+                    x.IsActive
+                );
+
+            if (auditPlan == null)
+                return null;
+
+            var scheduleItems = auditPlan.ScheduleItems
+                .Where(x => x.IsActive == true)
+                .ToList();
+
+            // Schedule Item IDs
+            var scheduleItemIds = scheduleItems
+                .Select(x => x.ID)
+                .ToList();
+
+            // Linked Checklists
+            var checklists = await _context.NablAuditChecklists
+                .Where(x =>
+                    scheduleItemIds.Contains(x.ScheduleItemId) &&
+                    x.IsActive
+                )
+                .ToListAsync();
+
+            var checklistIds = checklists
+                .Select(x => x.ID)
+                .ToList();
+
+            // Checklist Items
+            var checklistItems = await _context.AuditChecklistItems
+                .Where(x =>
+                    checklistIds.Contains(x.ChecklistId) &&
+                    x.IsActive
+                )
+                .ToListAsync();
+
+            // NCR IDs
+            var ncIds = checklistItems
+                .Where(x => x.NcId.HasValue)
+                .Select(x => x.NcId!.Value)
+                .Distinct()
+                .ToList();
+
+            // NCR Records
+            var ncrs = await _context.NablNonConformingWorks
+                .Where(x =>
+                    ncIds.Contains(x.ID) &&
+                    x.IsActive
+                )
+                .ToListAsync();
+
+            // Counts
+            var totalAudits = scheduleItems.Count;
+
+            var completed = scheduleItems.Count(x =>
+                x.Status == "Completed"
+            );
+
+            var inProgress = scheduleItems.Count(x =>
+                x.Status == "InProgress"
+            );
+
+            var scheduled = scheduleItems.Count(x =>
+                x.Status == "Scheduled"
+            );
+
+            var majorNcrs = checklistItems.Count(x =>
+                x.FindingType == "Major NC"
+            );
+
+            var minorNcrs = checklistItems.Count(x =>
+                x.FindingType == "Minor NC"
+            );
+
+            var observations = checklistItems.Count(x =>
+                x.FindingType == "Observation"
+            );
+
+            var totalNcrs =
+                majorNcrs + minorNcrs;
+
+            var closedNcrs = ncrs.Count(x =>
+                x.Status == "Completed"
+            );
+
+            var pendingNcrs = ncrs.Count(x =>
+                x.Status != "Completed"
+            );
+
+            var departmentSummary = new List<AuditDepartmentSummaryDto>();
+
+            var departmentGroups = scheduleItems
+                .GroupBy(x => new
+                {
+                    x.DepartmentId,
+                    x.DepartmentName
+                });
+
+            foreach (var group in departmentGroups)
+            {
+                var departmentSchedules = group.ToList();
+
+                var departmentScheduleIds = departmentSchedules
+                    .Select(x => x.ID)
+                    .ToList();
+
+                // Department ke schedule items se linked checklists
+                var departmentChecklists = checklists
+                    .Where(x =>
+                        departmentScheduleIds.Contains(x.ScheduleItemId)
+                    )
+                    .ToList();
+
+                // Department ke checklist IDs
+                var departmentChecklistIds = departmentChecklists
+                    .Select(x => x.ID)
+                    .ToList();
+
+                // Department ke checklist items
+                var departmentItems = checklistItems
+                    .Where(x =>
+                        departmentChecklistIds.Contains(x.ChecklistId)
+                    )
+                    .ToList();
+
+                departmentSummary.Add(
+                    new AuditDepartmentSummaryDto
+                    {
+                        DepartmentId = group.Key.DepartmentId,
+                        DepartmentName = group.Key.DepartmentName,
+
+                        TotalAudits = departmentSchedules.Count,
+
+                        Completed = departmentSchedules.Count(x =>
+                            x.Status == "Completed"
+                        ),
+
+                        InProgress = departmentSchedules.Count(x =>
+                            x.Status == "InProgress"
+                        ),
+
+                        Scheduled = departmentSchedules.Count(x =>
+                            x.Status == "Scheduled"
+                        ),
+
+                        MajorNcrs = departmentItems.Count(x =>
+                            x.FindingType == "Major NC"
+                        ),
+
+                        MinorNcrs = departmentItems.Count(x =>
+                            x.FindingType == "Minor NC"
+                        ),
+
+                        Observations = departmentItems.Count(x =>
+                            x.FindingType == "Observation"
+                        )
+                    }
+                );
+            }
+            var dto = new AuditSummaryDto
+            {
+                AuditPlanId = auditPlan.ID,
+
+                AuditPlanNo = auditPlan.PlanNo,
+                AuditType = auditPlan.AuditType,
+                PlanningYear = auditPlan.AuditYear,
+
+                LeadAuditor = auditPlan.LeadAuditorName,
+
+                AuditFrom = auditPlan.ScheduleDateFrom,
+                AuditTo = auditPlan.ScheduleDateTo,
+
+                AuditCriteria = auditPlan.AuditCriteria,
+                ScopeOfAudit = auditPlan.AuditScope,
+                AuditObjective = auditPlan.AuditObjective,
+
+                TotalAudits = totalAudits,
+                Completed = completed,
+                InProgress = inProgress,
+                Scheduled = scheduled,
+
+                TotalNcrs = totalNcrs,
+                MajorNcrs = majorNcrs,
+                MinorNcrs = minorNcrs,
+                Observations = observations,
+
+                ClosedNcrs = closedNcrs,
+                PendingNcrs = pendingNcrs,
+                DepartmentSummary = departmentSummary
+            };
+
+            return dto;
+        }
+        private async Task<NablMasterDocument> GetMasterDocumentById(long id)
+        {
+            var data = await _context.NablMasterDocuments.FirstOrDefaultAsync(c => c.ID == id && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
+            if (data == null)
+                return null;
+
+            var review = await _context.NablDocumentReviews.Where(x => x.DocumentId == data.ID && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode).OrderByDescending(x => x.ID).FirstOrDefaultAsync();
+            if (review != null)
+            {
+                data.HasReview = true;
+                data.ReviewId = review.ID;
+                data.ReviewStatus = review.Status;
+            }
+            return data;
+        }
+        private async Task<NablDocumentReview?> GetByDocumentReviewId(long id)
+        {
+            var data = await _context.NablDocumentReviews
+                .FirstOrDefaultAsync(c =>
+                    c.ID == id &&
+                    c.IsActive &&
+                    c.CompanyCode == loggedInUser.CompanyCode
+                );
+
+            if (data == null)
+                return null;
+
+
+            // Change Required = No
+            // No reviewer restriction
+            if (data.ChangeRequired != true)
+            {
+                data.CanEditReview = true;
+                return data;
+            }
+
+
+            // Change Required = Yes
+            // Check linked DCR
+            var dcr = await _context.NablDocumentChangeRequests
+                .FirstOrDefaultAsync(x =>
+                    x.SourceReviewId == data.ID &&
+                    x.IsActive &&
+                    x.CompanyCode == loggedInUser.CompanyCode
+                );
+
+
+            // DCR abhi create nahi hua
+            // Review editable rahega
+            if (dcr == null)
+            {
+                data.CanEditReview = true;
+                return data;
+            }
+
+
+            // DCR created
+            // Selected reviewer must match logged-in user
+            data.CanEditReview =
+                dcr.ReviewedById == loggedInUser.EmployeeID;
+
+
+            return data;
+        }
+        public async Task<List<DropdwonSelector>> GetDocumentsAvailableForReview(
+    string? searchTerm,
+    int pageNo = 0,
+    int pageSize = 20)
+        {
+            if (pageNo < 0)
+                pageNo = 0;
+
+            var query = _context.NablMasterDocuments
+                .Where(x =>
+                    x.IsActive &&
+                    !string.IsNullOrWhiteSpace(x.DocumentCode) &&
+
+                    !_context.NablDocumentReviews.Any(r =>
+                        r.DocumentId == x.ID &&
+                        r.IsActive
+                    )
+                );
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    query = query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+
+                    query = query.Where(x =>
+                        x.DocumentCode.Contains(search)
+                    );
+                }
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = query
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+
+                    Name =
+                        (x.DocumentCode ?? "") +
+                        "/" +
+                        (x.DocumentTitle ?? ""),
+
+                    AdditionalValues =
+                        new Dictionary<string, object>
+                        {
+                    { "DocumentType", x.DocumentType ?? "" },
+                    { "DepartmentName", x.DepartmentName ?? "" },
+                    { "CurrentIssue", x.CurrentIssue ?? "" },
+                    { "CurrentRevision", x.CurrentRevision ?? "" },
+                    { "EffectiveDate", x.EffectiveDate },
+                    { "NextReviewDate", x.NextReviewDate },
+                    { "DocumentOwner", x.DocumentOwner ?? "" },
+                    {
+                        "DocumentName",
+                        (x.DocumentCode ?? "") +
+                        "/" +
+                        (x.DocumentTitle ?? "")
+                    }
+                        }
+                })
+                .ToList();
+
+            return data;
+        }
+        private async Task<PagedResponse<object>> GetDocumentReviewList(PageFilter filter)
+        {
+            var query = _context.NablDocumentReviews
+                .Where(c =>
+                    c.IsActive &&
+                    c.CompanyCode == loggedInUser.CompanyCode
+                );
+
+            if (filter.Filter != null)
+            {
+                query = query
+                    .AsQueryable()
+                    .ApplyFilters(filter.Filter);
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.searchTerm))
+            {
+                var search = filter.searchTerm.Trim();
+
+                query = query.Where(x =>
+                    (x.ReviewNo != null && x.ReviewNo.Contains(search)) ||
+                    (x.ReviewType != null && x.ReviewType.Contains(search)) ||
+                    (x.DocumentName != null && x.DocumentName.Contains(search)) ||
+                    (x.DepartmentName != null && x.DepartmentName.Contains(search)) ||
+                    (x.Status != null && x.Status.Contains(search))
+                );
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.SortByColumn))
+            {
+                string direction =
+                    filter.SortOrder?.ToLower() == "asc"
+                        ? "ascending"
+                        : "descending";
+
+                query = query.OrderBy(
+                    $"{filter.SortByColumn} {direction}"
+                );
+            }
+            else
+            {
+                query = query.OrderByDescending(x => x.ID);
+            }
+
+            var resultQuery = query.Select(x => new NablDocumentReview
+            {
+                ID = x.ID,
+                ReviewNo = x.ReviewNo,
+                ReviewType = x.ReviewType,
+                DocumentName = x.DocumentName,
+                DepartmentName = x.DepartmentName,
+                ChangeRequired = x.ChangeRequired,
+                NextReviewDate = x.NextReviewDate,
+                Status = x.Status,
+
+                CanEditReview =
+         // Case 1: Change Required = No
+         x.ChangeRequired != true
+
+         ||
+
+         // Case 2: Change Required = Yes,
+         // but DCR abhi create hi nahi hua
+         !_context.NablDocumentChangeRequests.Any(dcr =>
+             dcr.SourceReviewId == x.ID &&
+             dcr.IsActive &&
+             dcr.CompanyCode == loggedInUser.CompanyCode
+         )
+
+         ||
+
+         // Case 3: DCR created hai
+         // and selected reviewer = logged-in user
+         _context.NablDocumentChangeRequests.Any(dcr =>
+             dcr.SourceReviewId == x.ID &&
+             dcr.IsActive &&
+             dcr.CompanyCode == loggedInUser.CompanyCode &&
+             dcr.ReviewedById == loggedInUser.EmployeeID
+         )
+            });
+
+            return await resultQuery
+                .Cast<object>()
+                .ToPagedAsync(filter);
+        }
+        public async Task<List<MasterDocumentPrintDto>> GetMasterDocumentPrintList()
+        {
+            var documents = await _context.NablMasterDocuments
+                .Where(x => x.IsActive)
+                .OrderByDescending(x => x.CreatedOn)
+                .ToListAsync();
+
+            if (!documents.Any())
+                return new List<MasterDocumentPrintDto>();
+
+            var result = new List<MasterDocumentPrintDto>();
+
+            foreach (var document in documents)
+            {
+                var controlledCopies = string.IsNullOrWhiteSpace(document.ControlledCopiesJson)
+                    ? new List<ControlledCopyPrintDto>()
+                    : JsonSerializer.Deserialize<List<ControlledCopyPrintDto>>(
+                        document.ControlledCopiesJson
+                      ) ?? new List<ControlledCopyPrintDto>();
+
+                var copyHolders = string.Join(
+                    ", ",
+                    controlledCopies
+                        .Where(x => !string.IsNullOrWhiteSpace(x.HolderName))
+                        .Select(x => x.HolderName!.Trim())
+                );
+
+                result.Add(new MasterDocumentPrintDto
+                {
+
+                    DocumentCode = document.DocumentCode,
+                    DocumentTitle = document.DocumentTitle,
+                    DocumentNo = document.DocumentNo,
+                    DocumentType = document.DocumentType,
+                    DocumentOwner = document.DocumentOwner,
+                    IssueNo = document.IssueNo,
+                    RevNo = document.RevNo,
+                    CopyHolders = copyHolders
+                });
+            }
+
+            return result;
+        }
+        public async Task<List<DropdwonSelector>> GetCompetencereportDropdown(string formType, string? searchTerm, int pageNo = 0, int pageSize = 20, long? recordId = null)
+        {
+            if (pageNo < 0)
+                pageNo = 0;
+
+            if (pageSize <= 0)
+                pageSize = 20;
+
+            var query = _context.EmployeeMasters
+                .Where(x =>
+                    x.IsActive &&
+                    !string.IsNullOrWhiteSpace(x.Name));
+
+            // Search
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    query = query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+
+                    query = query.Where(x =>
+                        x.Name.Contains(search));
+                }
+            }
+
+            // Form-specific duplicate employee filter
+            if (formType == "EmployeeCompetence")
+            {
+                query = query.Where(employee =>
+                    !_context.NablEmployeeCompetences.Any(report =>
+                        report.EmployeeId == employee.ID && report.IsActive &&
+                        (!recordId.HasValue || report.ID != recordId.Value)
+                    ));
+            }
+            else if (formType == "SkillMatrix")
+            {
+                query = query.Where(employee =>
+                    !_context.NablSkillMatrices.Any(report =>
+                        report.EmployeeId == employee.ID && report.IsActive &&
+                        (!recordId.HasValue || report.ID != recordId.Value)
+                    ));
+            }
+
+            var skip = pageNo * pageSize;
+
+            return await query
+                .OrderBy(x => x.Name)
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = x.Name
+                })
+                .ToListAsync();
+        }
+        public async Task<List<DropdwonSelector>> GetDesignationDetails(string formType, string? searchTerm, int pageNo = 0, int pageSize = 20, long? recordId = null)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var query = _context.DesignationMasters.Where(x => x.IsActive && !string.IsNullOrWhiteSpace(x.Name));
+
+            // Search
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    query = query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+
+                    query = query.Where(x =>
+                        x.Name.Contains(search));
+                }
+            }
+
+            if (formType == "JobDescription")
+            {
+                query = query.Where(designation => !_context.NablJobDescriptions.Any(report => report.DesignationId  == designation.ID && report.IsActive && (!recordId.HasValue || report.ID != recordId.Value)));
+            }
+
+            if (formType == "ResponsibilityAuthority")
+            {
+                query = query.Where(ra => !_context.NablResponsibilityAuthorities.Any(report1 => report1.DesignationId == ra.ID && report1.IsActive && (!recordId.HasValue || report1.ID != recordId.Value)));
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await query
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = x.Name
+                })
+                .ToListAsync();
+
+            return data;
+        }
+        private async Task<PagedResponse<object>> GetRoleWiseSkillsMasterList(PageFilter filter)
+        {
+            var query = _context.RoleWiseSkills
+                .Where(c => c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
+
+            if (filter.Filter != null)
+            {
+                query = query.AsQueryable().ApplyFilters(filter.Filter);
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.searchTerm))
+            {
+                var search = filter.searchTerm.Trim();
+
+
+                query = query.Where(x =>
+                    (x.RoleWiseSkillNo != null && x.RoleWiseSkillNo.Contains(search)) ||
+                    (x.Date != null && x.Date.ToString().Contains(search)) ||
+                    (x.DesignationName != null && x.DesignationName.Contains(search)) ||
+                    (x.DepartmentName!= null && x.DepartmentName.Contains(search))
+                );
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.SortByColumn))
+            {
+                string direction = filter.SortOrder?.ToLower() == "asc" ? "ascending" : "descending";
+                query = query.OrderBy($"{filter.SortByColumn} {direction}");
+            }
+            else
+            {
+                query = query.OrderByDescending(x => x.Id);
+            }
+
+            return await query.Cast<object>().ToPagedAsync(filter);
+        }
+        private async Task<long> AddRoleWiseSkillsMaster(RoleWiseSkill obj)
+        {
+            await _context.RoleWiseSkills.AddAsync(obj);
+            await _context.SaveChangesAsync();
+
+            return obj.Id;
+        }
+        private async Task UpdateRoleWiseSkillsMaster(RoleWiseSkill obj)
+        {
+            _context.RoleWiseSkills.Update(obj);
+            await _context.SaveChangesAsync();
+        }
+        private async Task<RoleWiseSkill> GetRoleWiseSkillsMaster(long id)
+        {
+            var data = await _context.RoleWiseSkills.FirstOrDefaultAsync(c => c.Id == id && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
+            return data;
+        }
+        private async Task DeleteRoleWiseSkillsMaster<T>(long id)
+        {
+            var entity = await _context.RoleWiseSkills
+                .FirstOrDefaultAsync(x => x.Id == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+
+            if (entity != null)
+            {
+                entity.IsActive = false;
+                entity.ModifiedOn = DateTime.UtcNow;
+                entity.ModifiedBy = loggedInUser.EmployeeID;
+                _context.RoleWiseSkills.Update(entity);
+                await _context.SaveChangesAsync();
+            }
+        }
+        public async Task<RoleWiseSkill> GetEmployeerolewiseskillsDetails(int employeeId)
+        {
+            var employee = await _context.EmployeeMasters.FirstOrDefaultAsync(c => c.ID == employeeId && c.IsActive);
+
+            if (employee == null)
+                return null;
+
+            var roleWiseSkills = await _context.RoleWiseSkills.FirstOrDefaultAsync(c => c.DesignationId == employee.DesignationID && c.IsActive);
+
+            if (roleWiseSkills == null)
+                return null;
+
+
+            if (!string.IsNullOrWhiteSpace(roleWiseSkills.SkillJson))
+            {
+                roleWiseSkills.Skills =
+                    JsonSerializer.Deserialize<List<Skills>>(
+                        roleWiseSkills.SkillJson
+                    ) ?? new List<Skills>();
+            }
+            return roleWiseSkills;
+        }
+        public async Task<List<DropdwonSelector>> GetRolewiseDesignationsDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20, long? roleWiseSkillsMasterId = null)
+        {
+            if (pageNo < 0)
+                pageNo = 0;
+
+            if (pageSize <= 0)
+                pageSize = 20;
+
+            var query = _context.DesignationMasters
+                .Where(x =>
+                    x.IsActive &&
+                    !string.IsNullOrWhiteSpace(x.Name));
+
+            // Search
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    query = query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+
+                    query = query.Where(x =>
+                        x.Name.Contains(search));
+                }
+            }
+
+            query = query.Where(employee =>
+                !_context.RoleWiseSkills.Any(report =>
+                    report.DesignationId == employee.ID && report.IsActive &&
+                    (!roleWiseSkillsMasterId.HasValue || report.Id != roleWiseSkillsMasterId.Value)
+                ));
+
+
+            var skip = pageNo * pageSize;
+
+            return await query
+                .OrderBy(x => x.Name)
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = x.Name
+                })
+                .ToListAsync();
+        }
+        public async Task<SkillMatrixEmployeeCheckDto> GetcheckSkillmatrixEmployeeDetails(int employeeId)
+        {
+            var employee = await _context.NablSkillMatrices.FirstOrDefaultAsync(c => c.EmployeeId == employeeId && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
+
+            if (employee == null)
+            {
+                return new SkillMatrixEmployeeCheckDto
+                {
+                    Exists = false,
+                    RecordId = null
+                };
+            }
+
+            return new SkillMatrixEmployeeCheckDto
+            {
+                Exists = true,
+                RecordId = employee.ID
+            };
+        }
+        public async Task<List<DropdwonSelector>> Equipmentslist(string? searchTerm, int pageNo, int pageSize, long? recordId = null)
+        {
+            if (pageNo < 0)
+                pageNo = 0;
+
+
+            var query = _context.EquipmentMasters
+                .Where(x => x.IsActive &&  x.IntermediateCheckRequired);
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    query = query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    query = query.Where(x => x.Name.Contains(search));
+                }
+            }
+            query = query.Where(equipment =>
+        !_context.NablIntermediateChecks.Any(report =>
+            report.EquipmentId== equipment.ID && report.IsActive &&
+            (!recordId.HasValue || report.ID!= recordId.Value)
+        ));
+
+            var skip = pageNo * pageSize;
+
+            var data = query
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = x.Name,
+                })
+                .ToList();
+            return data;
+        }
+        public async Task<EquipmentDetailsDto> GetEquipmentDetails(int equipmentId)
+        {
+            var equipment = await _context.EquipmentMasters
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.ID == equipmentId &&
+                    x.IsActive &&
+                    x.CompanyCode == loggedInUser.CompanyCode && x.IntermediateCheckRequired);
+            if (equipment == null)
+            {
+                return null;
+            }
+            var department = await _context.DepartmentMasters.FirstOrDefaultAsync(c => c.ID == equipment.DepartmentID && c.CompanyCode == loggedInUser.CompanyCode);
+            var equipmentType = await _context.EquipmentTypeMasters.FirstOrDefaultAsync(c => c.ID == equipment.EquipmentTypeID && c.CompanyCode == loggedInUser.CompanyCode);
+            var oEMMaster = await _context.OEMMasters.FirstOrDefaultAsync(c => c.ID == equipment.OEMID && c.CompanyCode == loggedInUser.CompanyCode);
+
+            return new EquipmentDetailsDto
+            {
+                EquipmentName =equipment.Name,
+                EquipmentNo = equipment.EquipmentNo,
+                DepartmmentName = department.Name,
+                EquipmentType = equipmentType.Name,
+                OEMName = oEMMaster.Name,
+                LastCalibrationDate = equipment.LastCalibrationDate,
+                NextCalibrationDueDate = equipment.NextCalibrationDueDate,
+                IntermediateCheckInterval = equipment.IntermediateCheckInterval,
+                ModelNumber = equipment.ModelNo,
+                CalibrationFrequencyDays = equipment.CalibrationFrequencyDays
+            };
+        }
+        public async Task<string> GetEmployeeDesignationDetails(int employeeId)
+        {
+            var employee = await _context.EmployeeMasters.FirstOrDefaultAsync(c => c.ID == employeeId && c.IsActive);
+
+            if (employee == null)
+                return null;
+            var designation = await _context.DesignationMasters.FirstOrDefaultAsync(c => c.ID == employee.DesignationID && c.CompanyCode == loggedInUser.CompanyCode);
+
+
+
+
+            return designation.Name;
+
+        }
+
+        private async Task<PagedResponse<object>> GetQuestionSetMasterList(PageFilter filter)
+        {
+            var query = _context.QuestionSetMasters
+                .Where(c => c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
+
+            if (filter.Filter != null)
+            {
+                query = query.AsQueryable().ApplyFilters(filter.Filter);
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.searchTerm))
+            {
+                var search = filter.searchTerm.Trim();
+
+
+                query = query.Where(x =>
+                    (x.QuestionNo != null && x.QuestionNo.Contains(search)) ||
+                    (x.Date != null && x.Date.ToString().Contains(search)) ||
+                    (x.Title != null && x.Title.Contains(search)) ||
+                    (x.Description!= null && x.Description.Contains(search))
+                );
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter.SortByColumn))
+            {
+                string direction = filter.SortOrder?.ToLower() == "asc" ? "ascending" : "descending";
+                query = query.OrderBy($"{filter.SortByColumn} {direction}");
+            }
+            else
+            {
+                query = query.OrderByDescending(x => x.Id);
+            }
+
+            return await query.Cast<object>().ToPagedAsync(filter);
+        }
+        private async Task<long> AddQuestionSetMaster(QuestionSetMaster obj)
+        {
+            await _context.QuestionSetMasters.AddAsync(obj);
+            await _context.SaveChangesAsync();
+
+            return obj.Id;
+        }
+        private async Task<long> AddMyEvaluations(MyEvaluation obj)
+        {
+            await _context.MyEvaluations.AddAsync(obj);
+            await _context.SaveChangesAsync();
+
+            return obj.Id;
+        }
+        private async Task UpdateQuestionSetMaster(QuestionSetMaster obj)
+        {
+            _context.QuestionSetMasters.Update(obj);
+            await _context.SaveChangesAsync();
+        }
+        private async Task<QuestionSetMaster> GetQuestionSetMaster(long id)
+        {
+            var data = await _context.QuestionSetMasters.FirstOrDefaultAsync(c => c.Id == id && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
+            return data;
+        }
+        private async Task DeleteQuestionSetMaster<T>(long id)
+        {
+            var entity = await _context.QuestionSetMasters
+                .FirstOrDefaultAsync(x => x.Id == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+
+            if (entity != null)
+            {
+                entity.IsActive = false;
+                entity.ModifiedOn = DateTime.UtcNow;
+                entity.ModifiedBy = loggedInUser.EmployeeID;
+                _context.QuestionSetMasters.Update(entity);
+                await _context.SaveChangesAsync();
+            }
+        }
+        public async Task<List<DropdwonSelector>> GetQuestionsetsDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = from a in _context.QuestionSetMasters
+                         where a.IsActive
+                         select a;
+
+
+            _query = _query.Where(x => !string.IsNullOrWhiteSpace(x.Title));
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.Id == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => x.Title.Contains(search));
+                }
+            }
+
+            var skip = pageNo * pageSize;
+
+            var data = await _query
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.Id,
+                    Name = x.Title
+                })
+                .ToListAsync();
+
+            return data;
+        }
+        public async Task<TrainingPlanDetailsDto> GetTrainingPlanDetails(int planId)
+        {
+            var plan = await _context.NablTrainingPlans.Where(c => c.ID == planId && c.IsActive).Select(plan => new TrainingPlanDetailsDto
+            {
+                TrainingPlanId = plan.ID,
+                TrainingTopic = plan.TrainingTopic,
+                Agency = plan.Agency,
+                Audience = plan.TargetAudience,
+                EvaluationRequired = plan.EvaluationRequired,
+                Month = plan.PlanMonth,
+                PlanningYear = plan.PlanningYear,
+                ProviderAgencyId = plan.AgencyId,
+                ProviderAgencyName = plan.Provider,
+                QuestionSet = plan.QuestionSetName,
+                QuestionSetId  = plan.QuestionSetId,
+                PlanDate  = plan.Date,
+            }).FirstOrDefaultAsync();
+
+            return plan;
+
+        }
+        public async Task<TrainingEffectivenessDto> EvaluationQuestionDetails(long attendanceId, long trainingPlanId, long questionSetId)
+        {
+            var attendance = await _context.NablTrainingAttendances.FirstOrDefaultAsync(c => c.ID == attendanceId && c.IsActive);
+            if (attendance == null)
+                return null;
+
+            var trainingPlan = await _context.NablTrainingPlans.FirstOrDefaultAsync(c => c.ID == trainingPlanId && c.IsActive);
+            if (trainingPlan == null)
+                return null;
+
+            var questionSet = await _context.QuestionSetMasters.FirstOrDefaultAsync(c => c.Id == questionSetId && c.IsActive);
+            if (questionSet == null)
+                return null;
+
+            var questions = string.IsNullOrEmpty(questionSet.QuestionSetJson) ? new List<QuestionSetQuestion>() :
+                JsonSerializer.Deserialize<List<QuestionSetQuestion>>(questionSet.QuestionSetJson) ?? new List<QuestionSetQuestion>();
+
+            var result = new TrainingEffectivenessDto
+            {
+                AttendanceId = attendanceId,
+                TrainingPlanId = trainingPlanId,
+                QuestionSetId = questionSetId,
+
+                // Training Information
+                TrainingPlan = trainingPlan.TrainingTopic,
+                TrainingDate = trainingPlan.Date,
+                PlanningYear = trainingPlan.PlanningYear,
+                Month = trainingPlan.PlanMonth,
+                Agency = trainingPlan.Agency,
+                ProviderName = trainingPlan.Provider,
+                TrainingVenue = trainingPlan.VenueMode,
+                QuestionSet= questionSet.Title,
+                FacultyName = attendance.TrainerName,
+                TrainingDatetime = attendance.TrainingDatetime,
+
+                Questions = questions.Select(q => new TrainingEffectivenessQuestionDto
+                {
+                    QuestionNo = q.QuestionNo,
+                    Question = q.Question,
+                    OptionA = q.OptionA,
+                    OptionB = q.OptionB,
+                    OptionC = q.OptionC,
+                    OptionD = q.OptionD
+                }).ToList()
+            };
+            return result;
+        }
+
+        public async Task<List<DropdwonSelector>> GetEmployeeDropdown(string formType, string? searchTerm, int pageNo = 0, int pageSize = 20, long? recordId = null, long? trainingPlanId = null)
+        {
+            if (pageNo < 0)
+                pageNo = 0;
+
+            if (pageSize <= 0)
+                pageSize = 20;
+
+            var query = _context.EmployeeMasters
+                .Where(x =>
+                    x.IsActive &&
+                    !string.IsNullOrWhiteSpace(x.Name));
+
+            // Search
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    query = query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+
+                    query = query.Where(x =>
+                        x.Name.Contains(search));
+                }
+            }
+
+            // Get already used employees for same Training Plan
+            var attendanceRecords = await _context.NablTrainingAttendances
+                .Where(report =>
+                    report.IsActive &&
+                    report.TrainingPlanId == trainingPlanId &&
+                    (!recordId.HasValue || report.ID != recordId.Value) &&
+                    !string.IsNullOrEmpty(report.AttendeesJson))
+                .Select(report => report.AttendeesJson)
+                .ToListAsync();
+
+            var usedParticipantIds = attendanceRecords
+                .SelectMany(json =>
+                {
+                    try
+                    {
+                        return JsonSerializer.Deserialize<List<Participates>>(json!)
+                            ?? new List<Participates>();
+                    }
+                    catch
+                    {
+                        return new List<Participates>();
+                    }
+                })
+                .Where(p =>
+                    p.ParticipantId.HasValue &&
+                    p.ParticipantId.Value > 0)
+                .Select(p => p.ParticipantId!.Value)
+                .Distinct()
+                .ToList();
+
+            // Remove employees already used in another attendance
+            if (usedParticipantIds.Any())
+            {
+                query = query.Where(employee =>
+                    !usedParticipantIds.Contains(employee.ID));
+            }
+
+            var skip = pageNo * pageSize;
+
+            return await query
+                .OrderBy(x => x.Name)
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = x.Name
+                })
+                .ToListAsync();
+        }
+        private async Task<PagedResponse<object>> GetMyEvaluationsList(PageFilter filter)
+        {
+            var employeeId = loggedInUser.EmployeeID;
+
+            var attendanceList = await _context.NablTrainingAttendances
+                .Where(x =>
+                    x.IsActive &&
+                    x.CompanyCode == loggedInUser.CompanyCode &&
+                    !string.IsNullOrEmpty(x.AttendeesJson))
+                .ToListAsync();
+
+            var result = new List<MyEvaluationDto>();
+
+            foreach (var attendance in attendanceList)
+            {
+                var trainingPlan = await _context.NablTrainingPlans
+                    .FirstOrDefaultAsync(x =>
+                        x.ID == attendance.TrainingPlanId.Value);
+
+                if (trainingPlan.EvaluationRequired == false)
+                {
+                    continue;
+                }
+
+                var participants = JsonSerializer.Deserialize<List<Participates>>(
+                    attendance.AttendeesJson!
+                ) ?? new List<Participates>();
+
+                var participant = participants.FirstOrDefault(p =>
+                    p.ParticipantId == employeeId &&
+                    p.TypesofParticipant == "Internal" &&
+                    p.Status == "Present");
+
+                if (participant == null)
+                    continue;
+
+                if (!attendance.TrainingPlanId.HasValue)
+                    continue;
+
+                if (trainingPlan == null)
+                    continue;
+                result.Add(new MyEvaluationDto
+                {
+                    EvaluationId = participant.EvaluationId,
+                    AttendanceId = attendance.ID,
+                    TrainingPlanId = attendance.TrainingPlanId.Value,
+                    QuestionSetId = trainingPlan.QuestionSetId,
+                    TrainingPlanName = trainingPlan.TrainingTopic,
+                    TrainingDate = attendance.TrainingDatetime,
+                    QuestionSetName = trainingPlan.QuestionSetName,
+                    ParticipantName = participant.ParticipantName,
+                    ParticipantId = participant.ParticipantId,
+                    Designation = participant.Designation,
+                    IsEvaluationCompleted =
+                        participant.EvaluationId.HasValue &&
+                        participant.EvaluationId.Value > 0
+                });
+            }
+
+            // Filter
+            if (filter.Filter != null)
+            {
+                result = result
+                    .AsQueryable()
+                    .ApplyFilters(filter.Filter)
+                    .ToList();
+            }
+
+            // Search
+            if (!string.IsNullOrWhiteSpace(filter.searchTerm))
+            {
+                var search = filter.searchTerm.Trim();
+
+                result = result
+                    .Where(x =>
+                        (x.TrainingPlanName?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                        (x.QuestionSetName?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                        (x.ParticipantName?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                        (x.Designation?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false))
+                    .ToList();
+            }
+
+            // Sort
+            if (!string.IsNullOrWhiteSpace(filter.SortByColumn))
+            {
+                string direction =
+                    filter.SortOrder?.ToLower() == "asc"
+                        ? "ascending"
+                        : "descending";
+
+                result = result
+                    .AsQueryable()
+                    .OrderBy($"{filter.SortByColumn} {direction}")
+                    .ToList();
+            }
+            else
+            {
+                result = result
+                    .OrderByDescending(x => x.AttendanceId)
+                    .ToList();
+            }
+
+            // Pagination
+            if (filter.PageNumber < 1)
+                filter.PageNumber = 1;
+
+            if (filter.PageSize < 1)
+                filter.PageSize = 10;
+
+            if (filter.PageSize > 500)
+                filter.PageSize = 500;
+
+            int totalRecords = result.Count;
+
+            int totalPages = (int)Math.Ceiling(
+                (double)totalRecords / filter.PageSize);
+
+            if (filter.PageNumber > totalPages && totalPages > 0)
+                filter.PageNumber = 1;
+
+            var items = result
+                .Skip((filter.PageNumber - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .Cast<object>()
+                .ToList();
+
+            return new PagedResponse<object>(
+                items,
+                totalRecords,
+                filter.PageNumber,
+                filter.PageSize);
+        }
+        private async Task<MyEvaluation> GetTrainingEffectiveness(long id)
+        {
+            var data = await _context.MyEvaluations.FirstOrDefaultAsync(c => c.Id == id && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
+            return data;
+        }
+        public async Task<TrainingAttendancePrintDto?> GettrainingAttendanceDetails(long id)
+        {
+            var trainingAttendance = await _context.NablTrainingAttendances.FirstOrDefaultAsync(c => c.ID == id && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
+
+            if (trainingAttendance== null)
+                return null;
+
+            var plan = await _context.NablTrainingPlans.FirstOrDefaultAsync(c => c.ID == trainingAttendance.TrainingPlanId && c.IsActive && c.CompanyCode == loggedInUser.CompanyCode);
+            if (plan == null)
+            {
+                return null;
+            }
+
+            return new TrainingAttendancePrintDto
+            {
+                TrainingPlanId = plan.ID,
+                TrainingTopic = plan.TrainingTopic,
+                Agency = plan.Agency,
+                Audience = plan.TargetAudience,
+                EvaluationRequired = plan.EvaluationRequired,
+                Month = plan.PlanMonth,
+                PlanningYear = plan.PlanningYear,
+                ProviderAgencyId = plan.AgencyId,
+                ProviderAgencyName = plan.Provider,
+                QuestionSet = plan.QuestionSetName,
+                QuestionSetId  = plan.QuestionSetId,
+                PlanDate  = plan.Date,
+                TrainerName = trainingAttendance.TrainerName,
+                VenueMode = trainingAttendance.VenueMode,
+                Participants =   JsonSerializer.Deserialize<List<Participates>>(trainingAttendance.AttendeesJson),
+                TrainingDatetime = trainingAttendance.TrainingDatetime,
+                PreparedBy = trainingAttendance.PreparedBy,
+                ApprovedBy = trainingAttendance.ApprovedBy,
+                ReviewedBy = trainingAttendance.ReviewedBy
+
+            };
+        }
+        public async Task<List<DropdwonSelector>> GetEmployeesDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20, long? recordId = null)
+        {
+            if (pageNo < 0) pageNo = 0;
+
+            var _query = from a in _context.EmployeeMasters
+                         where a.IsActive
+                         select a;
+
+
+            _query = _query.Where(x => !string.IsNullOrWhiteSpace(x.Name));
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                if (FilterHelper.IsExactIdSearch(searchTerm, out long exactId))
+                {
+                    _query = _query.Where(x => x.ID == exactId);
+                }
+                else
+                {
+                    var search = searchTerm.Trim();
+                    _query = _query.Where(x => x.Name.Contains(search));
+                }
+            }
+            _query = _query.Where(auditor => !_context.NablInternalAuditors.Any(report => report.EmployeeId == auditor.ID && report.IsActive && (!recordId.HasValue || report.ID != recordId.Value)));
+
+            var skip = pageNo * pageSize;
+
+            var data = await _query
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(x => new DropdwonSelector
+                {
+                    Id = x.ID,
+                    Name = (x.Name ?? "")
+                })
+                .ToListAsync();
+
+            return data;
         }
     }
 

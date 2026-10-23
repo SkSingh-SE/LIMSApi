@@ -255,6 +255,31 @@ namespace LIMSApi.Repositories
                 .Where(x => x.MenuID == menuId)
                 .ToListAsync();
         }
+
+        public async Task<List<MenuMaster>> GetMenuTree()
+        {
+            // Single query — build tree in memory to avoid N+1
+            var all = await _context.MenuMasters
+                .AsNoTracking()
+                .OrderBy(m => m.ID)
+                .ToListAsync();
+
+            var dict = all.ToDictionary(m => m.ID);
+            var roots = new List<MenuMaster>();
+
+            foreach (var menu in all)
+                menu.SubMenu = new List<MenuMaster>();
+
+            foreach (var menu in all)
+            {
+                if (menu.ParentID == null)
+                    roots.Add(menu);
+                else if (dict.TryGetValue(menu.ParentID.Value, out var parent))
+                    parent.SubMenu.Add(menu);
+            }
+
+            return roots;
+        }
         public async Task<PagedResponse<object>> GetAllSubMenus(PageFilter filter)
         {
             var _query = from c in _context.MenuMasters where c.ParentID != null select c;

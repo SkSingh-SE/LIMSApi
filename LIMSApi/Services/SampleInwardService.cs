@@ -1,4 +1,4 @@
-﻿using System.Xml.Linq;
+using System.Xml.Linq;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -12,6 +12,8 @@ using LIMSApi.ServiceWORepo;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.DotNet.Scaffolding.Shared.CodeModifier.CodeChange;
 using Microsoft.EntityFrameworkCore;
+using LIMSApi.Reporting;
+using QuestPDF.Fluent;
 using System.Text.Json;
 
 namespace LIMSApi.Services
@@ -94,11 +96,18 @@ namespace LIMSApi.Services
                     model.HoldTestingUntilPIApproved = true;
                 }
 
+                // Derive the financial year from CollectionTime for FY-aware pricing.
+                var inwardFyId = await _context.FinancialYears
+                    .Where(f => f.StartDate <= model.CollectionTime && f.EndDate >= model.CollectionTime)
+                    .Select(f => (long?)f.Id)
+                    .FirstOrDefaultAsync();
+
                 var entity = new SampleInward
                 {
                     CaseNo = caseAndSample.caseNo,
                     CustomerID = model.CustomerID,
                     PurchaseOrderId = model.PurchaseOrderId,
+                    FinancialYearId = inwardFyId,
                     Address = model.Address,
                     Area = model.Area,
                     State = model.State,
@@ -139,36 +148,38 @@ namespace LIMSApi.Services
                     }).ToList(),
 
                     Addresses = new List<SampleInwardAddressInfo>
-               {
-                   new SampleInwardAddressInfo
-                   {
-                       ContactPersonName = model.ReportingTo.ContactPersonName,
-                       ContactPersonID = model.ReportingTo.ContactPersonID,
-                       Address = model.ReportingTo.Address,
-                       PinCode = model.ReportingTo.PinCode,
-                       Area = model.ReportingTo.Area,
-                       City = model.ReportingTo.City,
-                       State = model.ReportingTo.State,
-                       Country = model.ReportingTo.Country,
-                       Type = model.ReportingTo.Type,
-                       MobileNo = model.ReportingTo.MobileNo,
-                          EmailId = model.ReportingTo.EmailId
-                   },
-                   new SampleInwardAddressInfo
-                   {
-                       ContactPersonName = model.BillingTo.ContactPersonName,
-                       ContactPersonID = model.BillingTo.ContactPersonID,
-                       Address = model.BillingTo.Address,
-                       PinCode = model.BillingTo.PinCode,
-                       Area = model.BillingTo.Area,
-                       City = model.BillingTo.City,
-                       State = model.BillingTo.State,
-                       Country = model.BillingTo.Country,
-                       Type = model.BillingTo.Type,
-                          MobileNo = model.BillingTo.MobileNo,
-                              EmailId = model.BillingTo.EmailId
-                   }
-               },
+                    {
+                        new SampleInwardAddressInfo
+                        {
+                            ContactPersonName = model.ReportingTo?.ContactPersonName ?? string.Empty,
+                            ContactPersonID = model.ReportingTo?.ContactPersonID ?? 0,
+                            Address = model.ReportingTo?.Address ?? string.Empty,
+                            PinCode = model.ReportingTo?.PinCode ?? string.Empty,
+                            Area = model.ReportingTo?.Area ?? string.Empty,
+                            City = model.ReportingTo?.City ?? string.Empty,
+                            State = model.ReportingTo?.State ?? string.Empty,
+                            Country = model.ReportingTo?.Country ?? string.Empty,
+                            Type = model.ReportingTo?.Type ?? "reporting",
+                            MobileNo = model.ReportingTo?.MobileNo ?? string.Empty,
+                            EmailId = model.ReportingTo?.EmailId ?? string.Empty,
+                            CustomerID = model.ReportingTo?.CustomerID
+                        },
+                        new SampleInwardAddressInfo
+                        {
+                            ContactPersonName = model.BillingTo?.ContactPersonName ?? string.Empty,
+                            ContactPersonID = model.BillingTo?.ContactPersonID ?? 0,
+                            Address = model.BillingTo?.Address ?? string.Empty,
+                            PinCode = model.BillingTo?.PinCode ?? string.Empty,
+                            Area = model.BillingTo?.Area ?? string.Empty,
+                            City = model.BillingTo?.City ?? string.Empty,
+                            State = model.BillingTo?.State ?? string.Empty,
+                            Country = model.BillingTo?.Country ?? string.Empty,
+                            Type = model.BillingTo?.Type ?? "billing",
+                            MobileNo = model.BillingTo?.MobileNo ?? string.Empty,
+                            EmailId = model.BillingTo?.EmailId ?? string.Empty,
+                            CustomerID = model.BillingTo?.CustomerID
+                        }
+                    },
 
                     SampleDetails = model.SampleDetails.Select((s, index) => new SampleDetail
                     {
@@ -212,6 +223,13 @@ namespace LIMSApi.Services
 
                 var statusJobs = new List<Func<Task>>();
 
+                // Validate mandatory information before queuing status jobs so
+                // sample status can match the inward status at creation time.
+                var isComplete = ValidateMandatoryInformation(entity);
+                var initialSampleStatus = isComplete
+                    ? SampleStatus.INWARD_COMPLETED
+                    : SampleStatus.SAMPLE_INWARD_REGISTERED;
+
                 if (entity.SampleDetails.Any())
                 {
                     foreach (var sampleDetail in entity.SampleDetails)
@@ -225,19 +243,17 @@ namespace LIMSApi.Services
                             sampleDetail.FileName = fileUploadResponse.OriginalFileName;
                             sampleDetail.UploadReferenceID = fileUploadResponse.ID;
                         }
-                        // Queue status update job
+                        var capturedSample = sampleDetail;
                         statusJobs.Add(async () =>
                         {
                             await _sampleStatusService.ForceAutoStatusAsync(
-                                sampleDetail.ID,
-                                SampleStatus.SAMPLE_INWARD_REGISTERED,
+                                capturedSample.ID,
+                                initialSampleStatus,
                                 loggedInUser.EmployeeID
                             );
                         });
                     }
                 }
-                // Validate mandatory information
-                var isComplete = ValidateMandatoryInformation(entity);
 
                 await using var trx = await _context.Database.BeginTransactionAsync();
                 try
@@ -467,36 +483,44 @@ namespace LIMSApi.Services
 
                 // Sync Addresses
                 entity.Addresses.Clear();
-                entity.Addresses.Add(new SampleInwardAddressInfo
+                if (model.ReportingTo != null)
                 {
-                    InwardID = entity.ID,
-                    ContactPersonName = model.ReportingTo.ContactPersonName,
-                    ContactPersonID = model.ReportingTo.ContactPersonID,
-                    Address = model.ReportingTo.Address,
-                    PinCode = model.ReportingTo.PinCode,
-                    Area = model.ReportingTo.Area,
-                    City = model.ReportingTo.City,
-                    State = model.ReportingTo.State,
-                    Country = model.ReportingTo.Country,
-                    Type = model.ReportingTo.Type,
-                    MobileNo = model.ReportingTo.MobileNo,
-                    EmailId = model.ReportingTo.EmailId
-                });
-                entity.Addresses.Add(new SampleInwardAddressInfo
+                    entity.Addresses.Add(new SampleInwardAddressInfo
+                    {
+                        InwardID = entity.ID,
+                        ContactPersonName = model.ReportingTo.ContactPersonName ?? string.Empty,
+                        ContactPersonID = model.ReportingTo.ContactPersonID ?? 0,
+                        Address = model.ReportingTo.Address ?? string.Empty,
+                        PinCode = model.ReportingTo.PinCode ?? string.Empty,
+                        Area = model.ReportingTo.Area ?? string.Empty,
+                        City = model.ReportingTo.City ?? string.Empty,
+                        State = model.ReportingTo.State ?? string.Empty,
+                        Country = model.ReportingTo.Country ?? string.Empty,
+                        Type = string.IsNullOrEmpty(model.ReportingTo.Type) ? "reporting" : model.ReportingTo.Type,
+                        MobileNo = model.ReportingTo.MobileNo ?? string.Empty,
+                        EmailId = model.ReportingTo.EmailId ?? string.Empty,
+                        CustomerID = model.ReportingTo.CustomerID
+                    });
+                }
+                if (model.BillingTo != null)
                 {
-                    InwardID = entity.ID,
-                    ContactPersonName = model.BillingTo.ContactPersonName,
-                    ContactPersonID = model.BillingTo.ContactPersonID,
-                    Address = model.BillingTo.Address,
-                    PinCode = model.BillingTo.PinCode,
-                    Area = model.BillingTo.Area,
-                    City = model.BillingTo.City,
-                    State = model.BillingTo.State,
-                    Country = model.BillingTo.Country,
-                    Type = model.BillingTo.Type,
-                    MobileNo = model.BillingTo.MobileNo,
-                    EmailId = model.BillingTo.EmailId
-                });
+                    entity.Addresses.Add(new SampleInwardAddressInfo
+                    {
+                        InwardID = entity.ID,
+                        ContactPersonName = model.BillingTo.ContactPersonName ?? string.Empty,
+                        ContactPersonID = model.BillingTo.ContactPersonID ?? 0,
+                        Address = model.BillingTo.Address ?? string.Empty,
+                        PinCode = model.BillingTo.PinCode ?? string.Empty,
+                        Area = model.BillingTo.Area ?? string.Empty,
+                        City = model.BillingTo.City ?? string.Empty,
+                        State = model.BillingTo.State ?? string.Empty,
+                        Country = model.BillingTo.Country ?? string.Empty,
+                        Type = string.IsNullOrEmpty(model.BillingTo.Type) ? "billing" : model.BillingTo.Type,
+                        MobileNo = model.BillingTo.MobileNo ?? string.Empty,
+                        EmailId = model.BillingTo.EmailId ?? string.Empty,
+                        CustomerID = model.BillingTo.CustomerID
+                    });
+                }
 
                 //  Only fetch next sample number if a new sample will be added
                 int nextSampleNumber = 0;
@@ -510,7 +534,7 @@ namespace LIMSApi.Services
                 if (newSamples.Any())
                 {
                     dynamic caseAndSample = await _SampleInwardRepository.GetCaseNoAndSampleNo();
-                    nextSampleNumber = caseAndSample.nextSampleCounter;
+                    nextSampleNumber = (int)caseAndSample.nextSampleCounter;
                 }
                 var statusJobs = new List<Func<Task>>();
 
@@ -558,14 +582,25 @@ namespace LIMSApi.Services
                             });
                         }
 
-                        //  Queue status update job for existing sample
+                        // Only push sample to INWARD_COMPLETED if it is still at an early
+                        // registration status. Any sample that has progressed to planning
+                        // or beyond must keep its current status — do not regress it.
+                        var earlyRegistrationStatuses = new HashSet<string>
+                        {
+                            SampleStatus.SAMPLE_INWARD_REGISTERED.ToString(),
+                            SampleStatus.AWAITING_MISSING_INFORMATION.ToString()
+                        };
+                        var capturedSample = existingSample;
                         statusJobs.Add(async () =>
                         {
-                            await _sampleStatusService.ForceAutoStatusAsync(
-                                existingSample.ID,
-                                SampleStatus.INWARD_COMPLETED,
-                                loggedInUser.EmployeeID
-                            );
+                            if (earlyRegistrationStatuses.Contains(capturedSample.SampleStatus ?? ""))
+                            {
+                                await _sampleStatusService.ForceAutoStatusAsync(
+                                    capturedSample.ID,
+                                    SampleStatus.INWARD_COMPLETED,
+                                    loggedInUser.EmployeeID
+                                );
+                            }
                         });
                     }
                     else
@@ -800,7 +835,45 @@ namespace LIMSApi.Services
                         sample.TestPlans.Add(plan);
                     }
 
-                    int ulrCounter = 1;
+                    // Start counter from max existing ULR counter + 1 to avoid
+                    // re-using numbers from any previously generated (and possibly removed) methods.
+                    // Must be scanned BEFORE methods are cleared in the UPSERT blocks below.
+                    int maxExistingCounter = 0;
+                    foreach (var existingGt in plan.GeneralTests)
+                        foreach (var m in existingGt.Methods)
+                        {
+                            int c = ParseUlrCounter(m.UlrNo, tcPrefix, year, labLocation, sample.SampleNo);
+                            if (c > maxExistingCounter) maxExistingCounter = c;
+                        }
+                    foreach (var existingCt in plan.ChemicalTests)
+                    {
+                        int c = ParseUlrCounter(existingCt.UlrNo, tcPrefix, year, labLocation, sample.SampleNo);
+                        if (c > maxExistingCounter) maxExistingCounter = c;
+                    }
+                    int ulrCounter = maxExistingCounter > 0 ? maxExistingCounter + 1 : 1;
+
+                    // Delete GeneralTests removed from the form (not present in incoming DTO)
+                    var incomingGeneralIds = (planDto.GeneralTests ?? new())
+                        .Where(g => g.ID > 0).Select(g => g.ID).ToHashSet();
+                    var generalTestsToDelete = plan.GeneralTests
+                        .Where(g => g.ID > 0 && !incomingGeneralIds.Contains(g.ID)).ToList();
+                    foreach (var gt in generalTestsToDelete)
+                    {
+                        _context.GeneralTestMethods.RemoveRange(gt.Methods);
+                        _context.GeneralTests.Remove(gt);
+                    }
+
+                    // Delete ChemicalTests removed from the form (not present in incoming DTO)
+                    var incomingChemicalIds = (planDto.ChemicalTests ?? new())
+                        .Where(c => c.ID > 0).Select(c => c.ID).ToHashSet();
+                    var chemTestsToDelete = plan.ChemicalTests
+                        .Where(c => c.ID > 0 && !incomingChemicalIds.Contains(c.ID)).ToList();
+                    foreach (var ct in chemTestsToDelete)
+                    {
+                        _context.ChemicalTestElements.RemoveRange(ct.Elements);
+                        _context.ChemicalTestTypes.RemoveRange(ct.TestTypes);
+                        _context.ChemicalTests.Remove(ct);
+                    }
 
                     #region GENERAL TEST (UPSERT)
 
@@ -843,7 +916,8 @@ namespace LIMSApi.Services
                                 UlrNo = GenerateUlr(
                                     m.UlrNo, tcPrefix, year, labLocation,
                                     sample.SampleNo, ref ulrCounter),
-                                Cancel = m.Cancel
+                                Cancel = m.Cancel,
+                                StandardID = m.StandardID ?? 0
                             });
                         }
                     }
@@ -901,12 +975,8 @@ namespace LIMSApi.Services
                             });
                         }
 
-                        var addedLabTestIds = new HashSet<long>();
-                        foreach (var kvp in cDto.TestTypes)
+                        foreach (var labTestId in cDto.TestTypeIds ?? new List<long>())
                         {
-                            if (!long.TryParse(kvp.Key, out var labTestId)) continue;
-                            if (!addedLabTestIds.Add(labTestId)) continue; // skip duplicates
-
                             var labTest = await _context.LaboratoryTests
                                 .FirstOrDefaultAsync(x => x.ID == labTestId);
 
@@ -914,7 +984,7 @@ namespace LIMSApi.Services
                             {
                                 LaboratoryTestID = labTestId,
                                 Name = labTest?.Name ?? "",
-                                IsSelected = kvp.Value
+                                IsSelected = true
                             });
                         }
                     }
@@ -948,6 +1018,20 @@ namespace LIMSApi.Services
                 foreach (var job in statusJobs)
                     await job();
 
+                // Move each sample to UNDER_PLANNING only if still in early inward stages.
+                // Samples already in review/testing/reporting are not downgraded.
+                var earlyStatuses = new HashSet<string>
+                {
+                    SampleStatus.SAMPLE_INWARD_REGISTERED.ToString(),
+                    SampleStatus.INWARD_COMPLETED.ToString()
+                };
+                foreach (var sample in entity.SampleDetails.Where(s => s.IsActive && !s.IsCancelled))
+                {
+                    if (earlyStatuses.Contains(sample.SampleStatus ?? ""))
+                        await _sampleStatusService.ForceAutoStatusAsync(
+                            sample.ID, SampleStatus.UNDER_PLANNING, loggedInUser.EmployeeID);
+                }
+
                 await _sampleStatusService.UpdateInwardStatus(
                     entity.ID,
                     InwardStatus.UNDER_PLANNING,
@@ -969,10 +1053,21 @@ namespace LIMSApi.Services
             if (string.IsNullOrWhiteSpace(reportNo))
                 return $"{tcPrefix}{year}{labLocation}{sampleNo.Split('-')[1].PadLeft(8, '0')}{ulrCounter++}F";
             else
-            {
-                ulrCounter++;
-                return reportNo;
-            }
+                return reportNo; // Preserved — do not advance counter (its slot is already accounted for in maxExistingCounter)
+        }
+
+        int ParseUlrCounter(string? ulrNo, string tcPrefix, string year, string labLocation, string sampleNo)
+        {
+            if (string.IsNullOrWhiteSpace(ulrNo)) return 0;
+            var sampleParts = sampleNo.Split('-');
+            if (sampleParts.Length < 2) return 0;
+            var paddedSample = sampleParts[1].PadLeft(8, '0');
+            var prefix = $"{tcPrefix}{year}{labLocation}{paddedSample}";
+            if (!ulrNo.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return 0;
+            var tail = ulrNo.Substring(prefix.Length);
+            if (tail.EndsWith("F", StringComparison.OrdinalIgnoreCase))
+                tail = tail[..^1];
+            return int.TryParse(tail, out var n) ? n : 0;
         }
 
 
@@ -991,7 +1086,7 @@ namespace LIMSApi.Services
             var hasAnyTest = model.SampleDetails?.Any(s =>
                 s.TestPlans?.Any(tp =>
                     (tp.GeneralTests?.Any(gt => gt.Methods?.Any(m => m.Cancel != true) == true) == true) ||
-                    (tp.ChemicalTests?.Any(ct => ct.TestTypes?.Any(t => t.Value) == true || ct.Elements?.Count > 0) == true)
+                    (tp.ChemicalTests?.Any(ct => (ct.TestTypeIds?.Count > 0) == true || ct.Elements?.Count > 0) == true)
                 ) == true
             ) == true;
 
@@ -1007,11 +1102,11 @@ namespace LIMSApi.Services
                     throw new Exception("Sample Inward not found");
 
                 entity.ReviewStatus = "Pending for Approval";
-                entity.ReviewedBy = loggedInUser.EmployeeID;
-                entity.ReviewedOn = DateTime.UtcNow;
+                //entity.ReviewedBy = loggedInUser.EmployeeID;
+                //entity.ReviewedOn = DateTime.UtcNow;
 
-                // Update PlanStatus on all test plans to Submitted
-                foreach (var sample in entity.SampleDetails)
+                // Update PlanStatus on all active (non-cancelled) test plans to Submitted
+                foreach (var sample in entity.SampleDetails.Where(s => !s.IsCancelled))
                 {
                     foreach (var tp in sample.TestPlans)
                     {
@@ -1032,28 +1127,30 @@ namespace LIMSApi.Services
                 }
                 await _context.SaveChangesAsync();
 
-                var statusJobs = new List<Func<Task>>();
-
-                foreach (var sample in entity.SampleDetails)
-                {
-                    statusJobs.Add(() =>
-                        _sampleStatusService.ForceAutoStatusAsync(
-                            sample.ID,
-                            SampleStatus.UNDER_REVIEW_REQUEST,
-                            loggedInUser.EmployeeID
-                        )
-                    );
-                }
-
                 await _workflowService.StartWorkflow(entity.ID, WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Request_Review));
 
                 await _SampleInwardRepository.UpdateSampleInward(entity);
 
-                foreach (var job in statusJobs)
+                // Re-read the inward status after StartWorkflow — self-approval may have already
+                // advanced the inward to REVIEW_COMPLETED. Only push statuses if still UNDER_PLANNING.
+                var freshInwardStatus = await _context.SampleInwards
+                    .Where(s => s.ID == entity.ID)
+                    .Select(s => s.InwardStatus)
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync();
+
+                if (freshInwardStatus == InwardStatus.UNDER_PLANNING.ToString())
                 {
-                    await job();
+                    foreach (var sample in entity.SampleDetails.Where(s => !s.IsCancelled))
+                    {
+                        await _sampleStatusService.ForceAutoStatusAsync(
+                            sample.ID,
+                            SampleStatus.UNDER_REVIEW_REQUEST,
+                            loggedInUser.EmployeeID
+                        );
+                    }
+                    await _sampleStatusService.UpdateInwardStatus(entity.ID, InwardStatus.UNDER_REVIEW, loggedInUser.EmployeeID);
                 }
-                await _sampleStatusService.UpdateInwardStatus(entity.ID, InwardStatus.UNDER_REVIEW, loggedInUser.EmployeeID);
 
                 await trx.CommitAsync();
                 _logger.LogInformation("Plan submitted for review for inward {ID}", model.ID);
@@ -1115,6 +1212,10 @@ namespace LIMSApi.Services
                 UploadReferenceID = sampleInward.UploadReferenceID,
                 Status = sampleInward.InwardStatus,
                 CollectionTime = sampleInward.CollectionTime,
+                StatementOfConformity = sampleInward.StatementOfConformity,
+                DecisionRule = sampleInward.DecisionRule,
+                IsReportStopped = sampleInward.IsReportStopped,
+                StopReportReason = sampleInward.StopReportReason,
 
                 DispatchModes = sampleInward.DispatchModes
                     .Select(d => new DispatchModeDto
@@ -1152,7 +1253,8 @@ namespace LIMSApi.Services
                         Country = a.Country,
                         Type = a.Type,
                         MobileNo = a.MobileNo,
-                        EmailId = a.EmailId
+                        EmailId = a.EmailId,
+                        CustomerID = a.CustomerID
                     })
                     .FirstOrDefault(),
 
@@ -1172,7 +1274,8 @@ namespace LIMSApi.Services
                         Country = a.Country,
                         Type = a.Type,
                         MobileNo = a.MobileNo,
-                        EmailId = a.EmailId
+                        EmailId = a.EmailId,
+                        CustomerID = a.CustomerID
                     })
                     .FirstOrDefault(),
 
@@ -1188,6 +1291,11 @@ namespace LIMSApi.Services
                         SpecimenOrientationID = s.SpecimenOrientationID,
                         Remarks = s.Remarks,
                         Quantity = s.Quantity,
+                        IsCancelled = s.IsCancelled,
+                        SampleStatus = s.SampleStatus,
+                        CancelledOn = s.CancelledOn,
+                        CancelledBy = s.CancelledBy,
+                        CancellationReason = s.CancellationReason,
                         UploadReferenceID = s.UploadReferenceID,
                         SampleFilePath = s.SampleFilePath,
                         FileName = s.FileName,
@@ -1261,6 +1369,31 @@ namespace LIMSApi.Services
             if (sampleInward == null)
                 throw new InvalidOperationException("SampleInward not found!");
 
+            var tpiIds = sampleInward.SampleDetails
+                .Where(s => s.TpiAgencyID.HasValue)
+                .Select(s => s.TpiAgencyID!.Value)
+                .Distinct()
+                .ToList();
+            var tpiMap = tpiIds.Count > 0
+                ? await _context.TPIMasters
+                    .Where(t => tpiIds.Contains(t.ID))
+                    .ToDictionaryAsync(t => t.ID, t => t)
+                : new Dictionary<long, TPIMaster>();
+
+            var standardIds = sampleInward.SampleDetails
+                .SelectMany(s => s.TestPlans)
+                .SelectMany(tp => tp.GeneralTests)
+                .SelectMany(gt => gt.Methods)
+                .Where(m => m.StandardID != 0)
+                .Select(m => m.StandardID)
+                .Distinct()
+                .ToList();
+            var standardMap = standardIds.Count > 0
+                ? await _context.TestMethodSpecifications
+                    .Where(s => standardIds.Contains(s.ID))
+                    .ToDictionaryAsync(s => s.ID, s => s.Name ?? string.Empty)
+                : new Dictionary<long, string>();
+
             var dto = new SampleInwardDto
             {
                 ID = sampleInward.ID,
@@ -1294,6 +1427,8 @@ namespace LIMSApi.Services
                 ReviewStatus = sampleInward.ReviewStatus,
                 ReviewedBy = sampleInward.ReviewedBy,
                 ReviewedOn = sampleInward.ReviewedOn,
+                IsReportStopped = sampleInward.IsReportStopped,
+                StopReportReason = sampleInward.StopReportReason,
 
                 DispatchModes = sampleInward.DispatchModes
                     .Select(d => new DispatchModeDto
@@ -1333,7 +1468,8 @@ namespace LIMSApi.Services
                         Country = a.Country,
                         Type = a.Type,
                         MobileNo = a.MobileNo,
-                        EmailId = a.EmailId
+                        EmailId = a.EmailId,
+                        CustomerID = a.CustomerID
                     })
                     .FirstOrDefault(),
 
@@ -1353,11 +1489,13 @@ namespace LIMSApi.Services
                         Country = a.Country,
                         Type = a.Type,
                         MobileNo = a.MobileNo,
-                        EmailId = a.EmailId
+                        EmailId = a.EmailId,
+                        CustomerID = a.CustomerID
                     })
                     .FirstOrDefault(),
 
                 SampleDetails = sampleInward.SampleDetails
+                    .Where(s => !s.IsCancelled)
                     .Select(s => new SampleDetailDto
                     {
                         ID = s.ID,
@@ -1372,6 +1510,11 @@ namespace LIMSApi.Services
                         SpecimenOrientationID = s.SpecimenOrientationID,
                         Remarks = s.Remarks,
                         Quantity = s.Quantity,
+                        IsCancelled = s.IsCancelled,
+                        SampleStatus = s.SampleStatus,
+                        CancelledOn = s.CancelledOn,
+                        CancelledBy = s.CancelledBy,
+                        CancellationReason = s.CancellationReason,
                         UploadReferenceID = s.UploadReferenceID,
                         SampleFilePath = s.SampleFilePath,
                         FileName = s.FileName,
@@ -1382,6 +1525,9 @@ namespace LIMSApi.Services
                         OtherPreparationCharge = s.OtherPreparationCharge,
                         TpiRequired = s.TpiRequired,
                         TpiAgencyID = s.TpiAgencyID,
+                        TpiAgencyName = s.TpiAgencyID.HasValue && tpiMap.ContainsKey(s.TpiAgencyID.Value) ? tpiMap[s.TpiAgencyID.Value].AgencyName : null,
+                        TpiEmailId = s.TpiAgencyID.HasValue && tpiMap.ContainsKey(s.TpiAgencyID.Value) ? tpiMap[s.TpiAgencyID.Value].EmailId : null,
+                        TpiContactNo = s.TpiAgencyID.HasValue && tpiMap.ContainsKey(s.TpiAgencyID.Value) ? tpiMap[s.TpiAgencyID.Value].ContactNo : null,
                         Specimen = s.Specimen,
                         TestInstructions = s.TestInstructions,
                         Thickness = s.Thickness,
@@ -1403,7 +1549,7 @@ namespace LIMSApi.Services
 
                 //  NEW: Sample Test Plans
                 SampleTestPlans = sampleInward.SampleDetails
-                    .Where(s => s.TestPlans.Any())
+                    .Where(s => !s.IsCancelled && s.TestPlans.Any())
                     .SelectMany(s => s.TestPlans.Select(tp => new SampleTestPlanDto
                     {
                         ID = tp.ID,
@@ -1430,7 +1576,9 @@ namespace LIMSApi.Services
                                 Quantity = m.Quantity,
                                 ReportNo = m.ReportNo,
                                 UlrNo = m.UlrNo,
-                                Cancel = m.Cancel
+                                Cancel = m.Cancel,
+                                StandardID = m.StandardID != 0 ? m.StandardID : null,
+                                StandardName = m.StandardID != 0 && standardMap.ContainsKey(m.StandardID) ? standardMap[m.StandardID] : null
                             }).ToList()
                         }).ToList(),
                         ChemicalTests = tp.ChemicalTests.Select(ct => new ChemicalTestDto
@@ -1442,9 +1590,9 @@ namespace LIMSApi.Services
                             MetalClassificationID = ct.MetalClassificationID,
                             Specification1 = ct.Specification1,
                             Specification2 = ct.Specification2,
-                            TestTypes = ct.TestTypes
-                                .GroupBy(tt => tt.LaboratoryTestID.ToString())
-                                .ToDictionary(g => g.Key, g => g.First().IsSelected),
+                            TestTypeIds = ct.TestTypes
+                                .Select(tt => tt.LaboratoryTestID ?? 0)
+                                .ToList(),
                             Elements = ct.Elements.Select(e => new ChemicalTestElementDto
                             {
                                 ID = e.ID,
@@ -1554,5 +1702,319 @@ namespace LIMSApi.Services
         {
             return await _proformaInvoiceRepository.GeneratePIPdfAsync(piId);
         }
+
+        public async Task CancelSampleAsync(long sampleDetailId, string reason)
+        {
+            var user = LoggedInUserProvider.CurrentUser
+                ?? throw new UnauthorizedAccessException("User context not available.");
+
+            var sample = await _context.SampleDetails
+                .Include(s => s.SampleInward)
+                .Include(s => s.TestPlans)
+                .FirstOrDefaultAsync(s => s.ID == sampleDetailId && s.IsActive)
+                ?? throw new KeyNotFoundException("Sample not found.");
+
+            if (sample.IsCancelled)
+                throw new ArgumentException("Sample is already cancelled.");
+
+            if (sample.IsTestingCompleted)
+                throw new InvalidOperationException("Sample testing is already completed. Cannot cancel.");
+
+            if (sample.SampleInward?.IsInvoiceGenerated == true)
+                throw new InvalidOperationException("Tax invoice has been generated for this inward. Cannot cancel sample.");
+
+            if (sample.SampleInward?.PIReceived == true)
+            {
+                var hasPILine = await _context.ProformaInvoiceDetails
+                    .AnyAsync(d => d.SampleID == sampleDetailId);
+                if (hasPILine)
+                    throw new InvalidOperationException("Proforma Invoice is approved and includes this sample. Cannot cancel.");
+            }
+
+            var reportFinalized = await _context.ReportHeaders
+                .AnyAsync(r => r.SampleID == sampleDetailId &&
+                               (r.Status == "Final" || r.Status == "Approved" || r.Status == "Dispatched"));
+            if (reportFinalized)
+                throw new InvalidOperationException("Test report has been finalized for this sample. Cannot cancel.");
+
+            // Cancel all test plans for this sample
+            foreach (var plan in sample.TestPlans)
+                plan.PlanStatus = "Cancelled";
+
+            // Soft-cancel the sample (IsActive stays true — row remains visible)
+            var previousStatus = sample.SampleStatus;
+            sample.IsCancelled = true;
+            sample.SampleStatus = SampleStatus.SAMPLE_CANCELLED.ToString();
+            sample.CancelledOn = DateTime.UtcNow;
+            sample.CancelledBy = user.EmployeeID;
+            sample.CancellationReason = reason;
+            sample.ModifiedBy = user.EmployeeID;
+            sample.ModifiedOn = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            // Immutable audit entry with cancellation reason in Remarks
+            await _sampleStatusService.LogStatusChangePublic(
+                "Sample", sampleDetailId, previousStatus,
+                SampleStatus.SAMPLE_CANCELLED.ToString(),
+                user.EmployeeID, "CancelSampleAsync", reason);
+
+            // Auto-update inward status if all samples are now cancelled
+            var anyActiveLeft = await _context.SampleDetails
+                .AnyAsync(s => s.InwardID == sample.InwardID && s.IsActive && !s.IsCancelled);
+            if (!anyActiveLeft)
+                await _sampleStatusService.UpdateInwardStatus(
+                    sample.InwardID, InwardStatus.INWARD_COMPLETED, user.EmployeeID);
+        }
+
+        public async Task DeleteSampleAsync(long sampleDetailId)
+        {
+            var user = LoggedInUserProvider.CurrentUser
+                ?? throw new UnauthorizedAccessException("User context not available.");
+
+            var sample = await _context.SampleDetails
+                .Include(s => s.TestPlans)
+                .FirstOrDefaultAsync(s => s.ID == sampleDetailId && s.IsActive)
+                ?? throw new KeyNotFoundException("Sample not found.");
+
+            if (sample.IsCancelled)
+                throw new ArgumentException("Cancelled samples cannot be deleted. Use the cancel feature.");
+
+            var hasPlans = sample.TestPlans.Any();
+            if (hasPlans)
+                throw new InvalidOperationException("Sample has test plans and cannot be deleted. Use the cancel option instead.");
+
+            var hasTestResults = await _context.TestResultHeaders
+                .AnyAsync(t => t.SampleID == sampleDetailId);
+            if (hasTestResults)
+                throw new InvalidOperationException("Sample has test results and cannot be deleted.");
+
+            // Soft-delete
+            sample.IsActive = false;
+            sample.ModifiedBy = user.EmployeeID;
+            sample.ModifiedOn = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<PaymentInfoDto> UpdatePaymentInfoAsync(long id, PaymentInfoDto dto)
+        {
+            var entity = await _context.SampleInwards.FindAsync(id)
+                ?? throw new KeyNotFoundException("Sample Inward not found.");
+
+            if (dto.PurchaseOrderId.HasValue)
+            {
+                var po = await _context.CustomerPurchaseOrders
+                    .FirstOrDefaultAsync(p => p.ID == dto.PurchaseOrderId.Value && p.IsActive)
+                    ?? throw new ArgumentException("Selected Purchase Order not found.");
+                if (po.CustomerId != entity.CustomerID)
+                    throw new ArgumentException("Purchase Order does not belong to the selected customer.");
+                if (po.Status != "Active")
+                    throw new ArgumentException($"Purchase Order {po.PONumber} is {po.Status}. Only active POs can be linked.");
+                if (po.ValidUntil.HasValue && po.ValidUntil.Value < DateTime.UtcNow)
+                    throw new ArgumentException($"Purchase Order {po.PONumber} has expired on {po.ValidUntil.Value:dd-MMM-yyyy}.");
+            }
+
+            entity.PurchaseOrderId = dto.PurchaseOrderId;
+            entity.AdvancePayment = dto.AdvancePayment;
+            entity.BillRequired = dto.BillRequired;
+            entity.AdvancePIRequired = dto.AdvancePIRequired;
+            entity.HoldTestingUntilPIApproved = dto.HoldTestingUntilPIApproved;
+
+            var user = LoggedInUserProvider.CurrentUser;
+            if (user != null)
+            {
+                entity.ModifiedBy = user.EmployeeID;
+                entity.ModifiedOn = DateTime.UtcNow;
+            }
+
+            await _context.SaveChangesAsync();
+
+            return new PaymentInfoDto
+            {
+                PurchaseOrderId = entity.PurchaseOrderId,
+                AdvancePayment = entity.AdvancePayment,
+                BillRequired = entity.BillRequired,
+                AdvancePIRequired = entity.AdvancePIRequired,
+                HoldTestingUntilPIApproved = entity.HoldTestingUntilPIApproved
+            };
+        }
+
+        public async Task UpdateSamplePrepAsync(long sampleId, SamplePrepReviewDto dto)
+        {
+            var sample = await _context.SampleDetails.FindAsync(sampleId)
+                ?? throw new KeyNotFoundException($"Sample with ID {sampleId} not found.");
+
+            sample.PreparationRequired = dto.PreparationRequired;
+            sample.MachiningRequired = dto.MachiningRequired;
+            sample.MachiningAmount = dto.MachiningAmount;
+            sample.Specimen = dto.Specimen;
+            sample.OtherPreparation = dto.OtherPreparation;
+            sample.OtherPreparationCharge = dto.OtherPreparationCharge;
+            sample.TestInstructions = dto.TestInstructions;
+            sample.TpiRequired = dto.TpiRequired;
+            sample.TpiAgencyID = dto.TpiAgencyID;
+            sample.ModifiedBy = loggedInUser.EmployeeID;
+            sample.ModifiedOn = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task StopReportAsync(long inwardId, string reason)
+        {
+            var inward = await _context.SampleInwards.FindAsync(inwardId)
+                ?? throw new KeyNotFoundException($"SampleInward with ID {inwardId} not found.");
+
+            inward.IsReportStopped = true;
+            inward.StopReportReason = reason;
+            inward.StopReportOn = DateTime.UtcNow;
+            inward.StopReportBy = loggedInUser.EmployeeID;
+            inward.ModifiedBy = loggedInUser.EmployeeID;
+            inward.ModifiedOn = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task UnstopReportAsync(long inwardId)
+        {
+            var inward = await _context.SampleInwards.FindAsync(inwardId)
+                ?? throw new KeyNotFoundException($"SampleInward with ID {inwardId} not found.");
+
+            inward.IsReportStopped = false;
+            inward.StopReportReason = null;
+            inward.StopReportOn = null;
+            inward.ModifiedBy = loggedInUser.EmployeeID;
+            inward.ModifiedOn = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<byte[]> GenerateInwardChallanPdfAsync(long inwardId)
+        {
+            var inwardDto = await GetSampleInwardDetails(inwardId);
+            if (inwardDto == null)
+                throw new KeyNotFoundException($"SampleInward with ID {inwardId} not found.");
+
+            var document = new SampleInwardChallanDocument(inwardDto);
+            return document.GeneratePdf();
+        }
+
+        public async Task VerifyAndLockReviewOfRequestAsync(long inwardId)
+        {
+            var inward = await _context.SampleInwards
+                .Include(i => i.SampleDetails)
+                    .ThenInclude(sd => sd.TestPlans)
+                .FirstOrDefaultAsync(i => i.ID == inwardId && i.IsActive);
+
+            if (inward == null)
+                throw new KeyNotFoundException($"SampleInward with ID {inwardId} not found.");
+
+            inward.ReviewStatus = "Verified & Approved";
+            inward.ReviewedBy = loggedInUser.EmployeeID;
+            inward.ReviewedOn = DateTime.UtcNow;
+            inward.ModifiedBy = loggedInUser.EmployeeID;
+            inward.ModifiedOn = DateTime.UtcNow;
+
+            foreach (var sample in inward.SampleDetails.Where(s => !s.IsCancelled))
+            {
+                foreach (var plan in sample.TestPlans)
+                {
+                    plan.PlanStatus = "Approved";
+                    plan.ApprovedById = loggedInUser.EmployeeID;
+                    plan.ApprovedByName = loggedInUser.Name;
+                    plan.ApprovedAt = DateTime.UtcNow;
+
+                    await _planService.CreatePlanHistoryEntry(
+                        plan.ID,
+                        "Approved",
+                        null,
+                        null,
+                        JsonSerializer.Serialize(new[]
+                        {
+                            new { field = "PlanStatus", oldValue = "Submitted", newValue = "Approved" }
+                        }),
+                        "Review of request verified and locked."
+                    );
+                }
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task RequestReplanAsync(long inwardId, string reason)
+        {
+            if (string.IsNullOrWhiteSpace(reason))
+                throw new ArgumentException("A valid reason must be provided to request a re-plan.");
+
+            var inward = await _context.SampleInwards
+                .Include(i => i.SampleDetails)
+                    .ThenInclude(sd => sd.TestPlans)
+                .FirstOrDefaultAsync(i => i.ID == inwardId && i.IsActive);
+
+            if (inward == null)
+                throw new KeyNotFoundException($"SampleInward with ID {inwardId} not found.");
+
+            foreach (var sample in inward.SampleDetails.Where(s => !s.IsCancelled))
+            {
+                foreach (var plan in sample.TestPlans)
+                {
+                    plan.PlanStatus = "ReplanRequested";
+                    var request = new ReplanRequest
+                    {
+                        PlanId = plan.ID,
+                        RequestedById = loggedInUser.EmployeeID,
+                        RequestedByName = loggedInUser.Name,
+                        RequestedAt = DateTime.UtcNow,
+                        Reason = reason,
+                        Status = "Pending"
+                    };
+                    _context.ReplanRequests.Add(request);
+                }
+            }
+
+            inward.ReviewStatus = "Re-Plan Requested";
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task ApproveReplanAsync(long replanRequestId, string remarks)
+        {
+            var request = await _context.ReplanRequests
+                .Include(r => r.SampleTestPlan)
+                .FirstOrDefaultAsync(r => r.Id == replanRequestId);
+
+            if (request == null)
+                throw new KeyNotFoundException($"ReplanRequest with ID {replanRequestId} not found.");
+
+            request.Status = "Approved";
+            request.ApprovedById = loggedInUser.EmployeeID;
+            request.ApprovedByName = loggedInUser.Name;
+            request.ApprovedAt = DateTime.UtcNow;
+            request.ApprovalRemarks = remarks;
+
+            if (request.SampleTestPlan != null)
+            {
+                request.SampleTestPlan.PlanStatus = "Draft";
+                request.SampleTestPlan.Version += 1;
+                request.SampleTestPlan.ReplanCount += 1;
+
+                await _planService.CreatePlanHistoryEntry(
+                    request.SampleTestPlan.ID,
+                    "ReplanApproved",
+                    null,
+                    null,
+                    JsonSerializer.Serialize(new[]
+                    {
+                        new { field = "PlanStatus", oldValue = "ReplanRequested", newValue = "Draft" },
+                        new { field = "Version", oldValue = (request.SampleTestPlan.Version - 1).ToString(), newValue = request.SampleTestPlan.Version.ToString() }
+                    }),
+                    $"Re-plan approved. Version incremented to {request.SampleTestPlan.Version}. Remarks: {remarks}"
+                );
+            }
+
+            await _context.SaveChangesAsync();
+
+        }
     }
 }
+
+

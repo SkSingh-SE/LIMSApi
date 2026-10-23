@@ -85,6 +85,7 @@ namespace LIMSApi.Models
 
         public int CurrentStep { get; set; }
         public string? NcNo { get; set; }
+        public long? ChecklistId { get; set; }
 
         // Navigation Properties
 

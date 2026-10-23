@@ -35,6 +35,11 @@ namespace LIMSApi.Dtos
         public decimal AdvanceAdjusted { get; set; }
         public decimal BalancePayable { get; set; }
 
+        // Currency
+        public string CurrencySymbol { get; set; } = "₹";
+        public decimal? ExchangeRate { get; set; }
+        public decimal? ForeignCurrencyGrandTotal { get; set; }
+
         // PO
         public string? PurchaseOrderNo { get; set; }
 

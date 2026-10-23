@@ -35,9 +35,14 @@ namespace LIMSApi.Models
     {
         public int? SlNo { get; set; }
         public string? Feedback { get; set; }
+        public string? TypesofParticipant { get; set; }
         public string? FilePath { get; set; }
         public string? FileName{ get; set; }
+        public long? ParticipantId{ get; set; }
         public string? ParticipantName { get; set; }
         public int? UploadReferenceID { get; set; }
+        public long? EvaluationId { get; set; }
+        public string? Designation { get; set; }
+        public string? Status { get; set; }
     }
 }

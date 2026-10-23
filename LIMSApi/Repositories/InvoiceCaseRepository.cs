@@ -1,4 +1,4 @@
-﻿using System.Linq.Dynamic.Core;
+using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -49,6 +49,8 @@ namespace LIMSApi.Repositories
                          from lt in ltGroup.DefaultIfEmpty()
                          join fy in _context.FinancialYears on c.FinancialYearId equals fy.Id into fyGroup
                          from fy in fyGroup.DefaultIfEmpty()
+                         join at in _context.LaboratoryTestAnalysisTypes on c.AnalysisTypeID equals at.ID into atGroup
+                         from at in atGroup.DefaultIfEmpty()
                          where c.IsActive && c.CompanyCode == loggedInUser.CompanyCode
                          select new
                          {
@@ -56,6 +58,7 @@ namespace LIMSApi.Repositories
                              c.FinancialYearId,
                              FinancialYear = fy != null ? fy.Year : "",
                              LaboratoryTest = lt != null ? lt.Name : "",
+                             AnalysisTypeName = at != null ? at.Name : "",
                              TierCount = _context.InvoiceCasePrices.Count(p => p.InvoiceCaseID == c.ID),
                              c.ModifiedOn,
                              Tiers = _context.InvoiceCasePrices
@@ -125,14 +128,109 @@ namespace LIMSApi.Repositories
             return await _context.InvoiceCases.Include(y => y.InvoiceCasePrices).AnyAsync(x => x.FinancialYearId == financialYearId && x.InvoiceCasePrices.Any(p => p.Name == name) && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
-        public async Task<bool> ExistsByFinancialYearAndTest(long? financialYearId, long laboratoryTestId)
+        public async Task<bool> ExistsByFinancialYearAndTest(long? financialYearId, long laboratoryTestId, long? analysisTypeId)
         {
-            return await _context.InvoiceCases.AnyAsync(x => x.FinancialYearId == financialYearId && x.LaboratoryTestID == laboratoryTestId && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.InvoiceCases.AnyAsync(x => x.FinancialYearId == financialYearId && x.LaboratoryTestID == laboratoryTestId && x.AnalysisTypeID == analysisTypeId && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
-        public async Task<bool> ExistsByFinancialYearAndTestNotId(long? financialYearId, long laboratoryTestId, long excludeId)
+        public async Task<bool> ExistsByFinancialYearAndTestNotId(long? financialYearId, long laboratoryTestId, long? analysisTypeId, long excludeId)
         {
-            return await _context.InvoiceCases.AnyAsync(x => x.FinancialYearId == financialYearId && x.LaboratoryTestID == laboratoryTestId && x.ID != excludeId && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+            return await _context.InvoiceCases.AnyAsync(x => x.FinancialYearId == financialYearId && x.LaboratoryTestID == laboratoryTestId && x.AnalysisTypeID == analysisTypeId && x.ID != excludeId && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+        }
+
+        public async Task<List<InvoiceCase>> GetByLabTest(long laboratoryTestId, long? analysisTypeId)
+        {
+            return await _context.InvoiceCases
+                .Include(x => x.InvoiceCasePrices)
+                .Include(x => x.LaboratoryTest)
+                .Include(x => x.FinancialYearEntity)
+                .Include(x => x.AnalysisType)
+                .Where(x => x.LaboratoryTestID == laboratoryTestId && x.AnalysisTypeID == analysisTypeId && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode)
+                .OrderByDescending(x => x.EffectiveFrom)
+                .AsNoTracking()
+                .ToListAsync();
+        }
+
+        public async Task SaveAllVersions(long laboratoryTestId, long? analysisTypeId, List<InvoiceCase> incoming)
+        {
+            var existing = await _context.InvoiceCases
+                .Include(x => x.InvoiceCasePrices)
+                .Where(x => x.LaboratoryTestID == laboratoryTestId && x.AnalysisTypeID == analysisTypeId && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode)
+                .ToListAsync();
+
+            var incomingIds = incoming.Where(v => v.ID != 0).Select(v => v.ID).ToHashSet();
+
+            // Soft-delete versions removed from the form
+            foreach (var ex in existing.Where(e => !incomingIds.Contains(e.ID)))
+            {
+                ex.IsActive = false;
+                ex.ModifiedOn = DateTime.UtcNow;
+            }
+
+            foreach (var v in incoming)
+            {
+                var match = v.ID != 0 ? existing.FirstOrDefault(e => e.ID == v.ID) : null;
+
+                if (match == null)
+                {
+                    v.AnalysisTypeID = analysisTypeId;
+                    _context.InvoiceCases.Add(v);
+                }
+                else
+                {
+                    match.EffectiveFrom = v.EffectiveFrom;
+                    match.FinancialYearId = v.FinancialYearId;
+                    match.DefaultPricingType = v.DefaultPricingType;
+                    match.ModifiedOn = DateTime.UtcNow;
+                    match.AnalysisTypeID = analysisTypeId;
+
+                    // Remove price rows dropped from the form
+                    var toRemove = match.InvoiceCasePrices
+                        .Where(p => !v.InvoiceCasePrices.Any(np => np.ID == p.ID))
+                        .ToList();
+                    foreach (var p in toRemove)
+                        match.InvoiceCasePrices.Remove(p);
+
+                    // Add or update price rows
+                    foreach (var np in v.InvoiceCasePrices)
+                    {
+                        var pMatch = np.ID != 0
+                            ? match.InvoiceCasePrices.FirstOrDefault(p => p.ID == np.ID)
+                            : null;
+
+                        if (pMatch == null)
+                        {
+                            match.InvoiceCasePrices.Add(np);
+                        }
+                        else
+                        {
+                            pMatch.InvoiceCaseConfigID = np.InvoiceCaseConfigID;
+                            pMatch.Name = np.Name;
+                            pMatch.AliasName = np.AliasName;
+                            pMatch.Price = np.Price;
+                            pMatch.ElementPrices = np.ElementPrices;
+                        }
+                    }
+                }
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<long?> GetFinancialYearIdForDate(DateTime date)
+        {
+            return await _context.FinancialYears
+                .Where(f => f.StartDate <= date && f.EndDate >= date)
+                .Select(f => (long?)f.Id)
+                .FirstOrDefaultAsync();
+        }
+
+        public async Task<long?> GetCurrentFinancialYearId()
+        {
+            return await _context.FinancialYears
+                .Where(f => f.IsCurrent)
+                .Select(f => (long?)f.Id)
+                .FirstOrDefaultAsync();
         }
     }
 }

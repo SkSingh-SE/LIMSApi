@@ -13,6 +13,11 @@
         public string ReportStatus { get; set; } = "";
         public bool HasPendingPayment { get; set; }
 
+        // Customer currency info — used by frontend to decide if exchange rate modal is needed
+        public string CustomerCurrencyCode { get; set; } = "INR";
+        public string CustomerCurrencySymbol { get; set; } = "₹";
+        public bool CustomerCurrencyIsDefault { get; set; } = true;
+
         // PI details (null if not generated)
         public ProformaInvoiceSummary? ProformaInvoice { get; set; }
 

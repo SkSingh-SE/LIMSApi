@@ -109,6 +109,12 @@ public partial class EmployeeMaster : AuditProperty
     [StringLength(100)]
     public string? CompetencyLevel { get; set; }
 
+    /// <summary>
+    /// System administrator employee — hidden from all lists/dropdowns.
+    /// Used for super-admin accounts that must remain invisible in UI.
+    /// </summary>
+    public bool IsSystemAdmin { get; set; }
+
     // Foreign Key Relations
     [ForeignKey("DepartmentID")]
     public virtual DepartmentMaster? Department { get; set; }

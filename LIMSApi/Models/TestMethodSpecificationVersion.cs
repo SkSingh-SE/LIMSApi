@@ -47,8 +47,14 @@ namespace LIMSApi.Models
         [NotMapped]
         public IFormFile? file { get; set; }
 
+        // True if this version is the spec's default (auto-selected in inward/plan dropdowns).
+        public bool IsDefault { get; set; }
+
         [ForeignKey("TestMethodSpecificationID")]
         [System.Text.Json.Serialization.JsonIgnore]
         public virtual TestMethodSpecification? TestMethodSpecification { get; set; }
+
+        // Parameters this edition reports (version-level so old editions keep their own set).
+        public ICollection<TestMethodSpecificationParameter> Parameters { get; set; } = new List<TestMethodSpecificationParameter>();
     }
 }

@@ -67,5 +67,19 @@ namespace LIMSApi.Controllers
             return data == null ? NoContent(): Ok(data);
         }
 
+        [HttpGet("default")]
+        public async Task<IActionResult> GetDefaultCurrency()
+        {
+            var currency = await _currencyService.GetDefaultCurrency();
+            return currency == null ? NoContent() : Ok(new { id = currency.ID, name = currency.Code != null ? $"{currency.Name}-({currency.Code})" : currency.Name });
+        }
+
+        [HttpPut("set-default/{id}")]
+        public async Task<IActionResult> SetDefaultCurrency(long id)
+        {
+            await _currencyService.SetDefaultCurrency(id);
+            return Ok(new { message = "Default currency updated successfully." });
+        }
+
     }
 }

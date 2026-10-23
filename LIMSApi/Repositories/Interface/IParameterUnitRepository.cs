@@ -1,4 +1,4 @@
-﻿using LIMSApi.Dtos;
+using LIMSApi.Dtos;
 using LIMSApi.Models;
 
 namespace LIMSApi.Repositories.Interface
@@ -12,6 +12,7 @@ namespace LIMSApi.Repositories.Interface
         Task<PagedResponse<object>> GetAllParameterUnits(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetParameterUnitDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<GroupedUnitDropdownOption>> GetGroupedParameterUnitDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<bool> ExistsByName(string name);
         Task<bool> ExistsByNameAndNotId(string name, long Id);
     }

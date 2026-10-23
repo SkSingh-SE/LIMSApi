@@ -16,10 +16,10 @@ namespace LIMSApi.Helpers.StatusFlow
                     GetByPriority(4),
 
                 WorkflowListType.Testing =>
-                    GetByPriority(5, 99),
+                    GetByPriority(5, 6, 7, 99),
 
                 WorkflowListType.Reporting =>
-                    GetByPriority(6, 99),
+                    GetByPriority(6, 7, 99),
 
                 WorkflowListType.Completed =>
                     GetByPriority(7),

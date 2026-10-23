@@ -69,6 +69,11 @@ namespace LIMSApi.Models
         public string? TargetAudience { get; set; }
         public string? Objectives { get; set; }
         public string? Agency { get; set; }
+        public long? QuestionSetId { get; set; }
+        public long? AgencyId { get; set; }
+        public string? QuestionSetName { get; set; }
+        public bool? EvaluationRequired { get; set; }
+
        
     }
 }

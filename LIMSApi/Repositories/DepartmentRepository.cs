@@ -59,8 +59,9 @@ namespace LIMSApi.Repositories
                           select new
                           {
                               c.ID,
-                              c.Name,
+                              c.Name,   
                               c.Description,
+                              c.IsChemical,
                               c.CreatedOn,
                               c.ModifiedOn,
                               CreatedBy = eg.Name
@@ -111,6 +112,7 @@ namespace LIMSApi.Repositories
             {
                 Id = x.ID,
                 Name = x.Name,
+                AdditionalValues = new Dictionary<string, object> { { "isChemical", x.IsChemical } }
             })).ToListAsync();
 
             return data;

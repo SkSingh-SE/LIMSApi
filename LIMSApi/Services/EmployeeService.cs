@@ -1,4 +1,4 @@
-﻿using LIMSApi.Data;
+using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
@@ -49,7 +49,19 @@ namespace LIMSApi.Services
                 if (!phoneRegex.IsMatch(model.MobileNo.Trim()))
                     throw new ArgumentException("Invalid mobile number. Must be 10-13 digits.");
             }
-            if (!string.IsNullOrWhiteSpace(model.PANNumber))
+            if (!model.DepartmentID.HasValue || model.DepartmentID.Value <= 0)
+                throw new ArgumentException("Department is required.");
+            if (!model.DesignationID.HasValue || model.DesignationID.Value <= 0)
+                throw new ArgumentException("Designation is required.");
+            if (!model.ReportingManagerID.HasValue || model.ReportingManagerID.Value <= 0)
+                throw new ArgumentException("Reporting Manager is required.");
+            if (model.DateOfBirth == default)
+                throw new ArgumentException("Date of birth is required.");
+            if (model.DateOfJoin == default)
+                throw new ArgumentException("Date of joining is required.");
+            if (string.IsNullOrWhiteSpace(model.PANNumber))
+                throw new ArgumentException("PAN number is required.");
+            else
             {
                 var panRegex = new System.Text.RegularExpressions.Regex(@"^[A-Z]{5}\d{4}[A-Z]{1}$");
                 if (!panRegex.IsMatch(model.PANNumber.Trim().ToUpper()))
@@ -66,6 +78,10 @@ namespace LIMSApi.Services
             if (exists)
                 throw new InvalidOperationException("Employee already exists!");
 
+            // Prevent creating system admin through normal employee creation
+            if (model.IsSystemAdmin)
+                throw new InvalidOperationException("System administrator account can only be created through database seed script.");
+
             // Derive RoleID from Designation
             var designation = model.DesignationID.HasValue
                 ? await _designationRepository.GetDesignationById(model.DesignationID.Value)
@@ -81,7 +97,7 @@ namespace LIMSApi.Services
             {
                 EmployeeID = createdEmployee.ID,
                 UserName = model.Name,
-                Password = _authService.GetHashedPassword(model.Password),
+                Password = model.Password,
                 EmailId = model.EmailId,
                 RoleID = designation?.RoleID,
                 RoleName = role?.Name,
@@ -115,7 +131,19 @@ namespace LIMSApi.Services
                 if (!phoneRegex.IsMatch(model.MobileNo.Trim()))
                     throw new ArgumentException("Invalid mobile number. Must be 10-13 digits.");
             }
-            if (!string.IsNullOrWhiteSpace(model.PANNumber))
+            if (!model.DepartmentID.HasValue || model.DepartmentID.Value <= 0)
+                throw new ArgumentException("Department is required.");
+            if (!model.DesignationID.HasValue || model.DesignationID.Value <= 0)
+                throw new ArgumentException("Designation is required.");
+            if (!model.ReportingManagerID.HasValue || model.ReportingManagerID.Value <= 0)
+                throw new ArgumentException("Reporting Manager is required.");
+            if (model.DateOfBirth == default)
+                throw new ArgumentException("Date of birth is required.");
+            if (model.DateOfJoin == default)
+                throw new ArgumentException("Date of joining is required.");
+            if (string.IsNullOrWhiteSpace(model.PANNumber))
+                throw new ArgumentException("PAN number is required.");
+            else
             {
                 var panRegex = new System.Text.RegularExpressions.Regex(@"^[A-Z]{5}\d{4}[A-Z]{1}$");
                 if (!panRegex.IsMatch(model.PANNumber.Trim().ToUpper()))
@@ -135,6 +163,10 @@ namespace LIMSApi.Services
             var existingEmployee = await _employeeRepository.GetEmployeeById(model.ID);
             if (existingEmployee == null)
                 throw new InvalidOperationException("Employee not found!");
+
+            // Prevent modification of system admin flag through normal employee update
+            if (existingEmployee.IsSystemAdmin && model.IsSystemAdmin != existingEmployee.IsSystemAdmin)
+                throw new InvalidOperationException("System administrator flag cannot be modified.");
 
             existingEmployee.Name = model.Name;
             existingEmployee.Gender = model.Gender;
@@ -236,9 +268,9 @@ namespace LIMSApi.Services
             return await _employeeRepository.GetAllEmployees(filter);
         }
 
-        public async Task<List<DropdwonSelector>> GetEmployeeDropdown(string? searchTerm, int pageNo, int pageSize, int departmentId)
+        public async Task<List<DropdwonSelector>> GetEmployeeDropdown(string? searchTerm, int pageNo, int pageSize, int departmentId, long? recordId = null)
         {
-            return await _employeeRepository.GetEmployeeDropdown(searchTerm, pageNo, pageSize, departmentId); 
+            return await _employeeRepository.GetEmployeeDropdown(searchTerm, pageNo, pageSize, departmentId,recordId); 
         }
 
         public async Task<List<DropdwonSelector>> GetEquipmentDropdown(string? searchTerm, int pageNo, int pageSize)

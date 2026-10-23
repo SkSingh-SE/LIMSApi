@@ -15,8 +15,14 @@ namespace LIMSApi.Repositories.Interface
         Task<bool> ExistsByName(string name);
         Task<bool> ExistsByNameAndNotId(string name, long Id);
         Task<List<DropdwonSelector>> GetTestMethodSpecificationsByStandard(long standardId);
+        Task<List<DropdwonSelector>> GetTestMethodsByMetalClassification(long metalClassificationId, string? searchTerm, int pageNo, int pageSize);
         Task<int> GetVersionImpactCount(long versionId);
         Task<List<TestMethodSpecificationVersion>> GetVersionsDueForReview(DateTime cutoffDate);
-        Task<List<DropdwonSelector>> GetActiveVersionsBySpecId(long specId);
+        Task<List<DropdwonSelector>> GetVersionsBySpecId(long specId, bool includeAll = false);
+        Task<List<DropdwonSelector>> GetTestMethodSpecificationVersionDropdown(string? searchTerm, int pageNo, int pageSize, long metalId = 0);
+        Task<bool> ExistsByOrgAndStandard(long orgId, string testMethodStandard, string? part);
+        Task<List<DropdwonSelector>> GetAllStandardOrganizations();
+        Task AddRangeAsync(List<TestMethodSpecification> specs);
+        Task UpdateVersionFileRef(long versionId, string filePath, string originalFileName, long uploadRefId);
     }
 }

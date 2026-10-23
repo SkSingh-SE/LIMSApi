@@ -1,5 +1,6 @@
 using LIMSApi.Data;
 using LIMSApi.Dtos;
+using LIMSApi.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 
@@ -22,25 +23,35 @@ namespace LIMSApi.ServiceWORepo
 
         public async Task<List<SuggestedTestDto>> GetSuggestedTestsBySpecification(long specificationGradeId)
         {
-            // ProductSpecification maps Grade → LaboratoryTest (no join table needed)
-            var tests = await _context.ProductSpecifications
-                .Where(ps => ps.GradeID == specificationGradeId && ps.IsActive)
-                .Join(_context.LaboratoryTests,
-                    ps => ps.LaboratoryTestID,
-                    lt => lt.ID,
-                    (ps, lt) => new SuggestedTestDto
-                    {
-                        LaboratoryTestID = lt.ID,
-                        LaboratoryTestName = lt.Name,
-                        SubGroup = lt.SubGroup,
-                        Source = "Specification",
-                        IsPerBatch = false,
-                        TestMethodStandardID = null,
-                        TestMethodStandardName = null
-                    })
+            var subgroupTests = await _context.Set<LaboratoryTestSubGroupSpecification>()
+                .Where(s => s.SpecificationGradeID == specificationGradeId && s.SubGroup != null && s.SubGroup.LaboratoryTest != null && s.SubGroup.LaboratoryTest.IsActive)
+                .Select(s => new SuggestedTestDto
+                {
+                    LaboratoryTestID = s.SubGroup!.LaboratoryTestID,
+                    LaboratoryTestName = s.SubGroup!.LaboratoryTest!.Name,
+                    SubGroup = s.SubGroup!.Name,
+                    Source = "Specification",
+                    IsPerBatch = false,
+                    TestMethodStandardID = null,
+                    TestMethodStandardName = null
+                })
                 .ToListAsync();
 
-            return tests
+            var analysisTypeTests = await _context.Set<LaboratoryTestAnalysisTypeSpecification>()
+                .Where(s => s.SpecificationGradeID == specificationGradeId && s.AnalysisType != null && s.AnalysisType.SubGroup != null && s.AnalysisType.SubGroup.LaboratoryTest != null && s.AnalysisType.SubGroup.LaboratoryTest.IsActive)
+                .Select(s => new SuggestedTestDto
+                {
+                    LaboratoryTestID = s.AnalysisType!.SubGroup!.LaboratoryTestID,
+                    LaboratoryTestName = s.AnalysisType!.SubGroup!.LaboratoryTest!.Name,
+                    SubGroup = s.AnalysisType!.Name,
+                    Source = "Specification",
+                    IsPerBatch = false,
+                    TestMethodStandardID = null,
+                    TestMethodStandardName = null
+                })
+                .ToListAsync();
+
+            return subgroupTests.Concat(analysisTypeTests)
                 .GroupBy(t => t.LaboratoryTestID)
                 .Select(g => g.First())
                 .ToList();
@@ -48,23 +59,61 @@ namespace LIMSApi.ServiceWORepo
 
         public async Task<List<SuggestedTestDto>> GetSuggestedTestsByProductSpec(long productSpecificationId)
         {
-            var tests = await _context.ProductTestGroups
-                .Where(ptg => ptg.ProductSpecificationID == productSpecificationId && ptg.IsActive)
-                .Include(ptg => ptg.LaboratoryTest)
-                .Include(ptg => ptg.TestMethodStandard)
-                .Select(ptg => new SuggestedTestDto
+            // 1. Direct Product Master mappings in LaboratoryTestSubGroupSpecification
+            var directSubgroupTests = await _context.Set<LaboratoryTestSubGroupSpecification>()
+                .Where(s => s.ProductMasterID == productSpecificationId && s.SubGroup != null && s.SubGroup.LaboratoryTest != null && s.SubGroup.LaboratoryTest.IsActive)
+                .Select(s => new SuggestedTestDto
                 {
-                    LaboratoryTestID = ptg.LaboratoryTestID,
-                    LaboratoryTestName = ptg.LaboratoryTest != null ? ptg.LaboratoryTest.Name : string.Empty,
-                    SubGroup = ptg.LaboratoryTest != null ? ptg.LaboratoryTest.SubGroup : string.Empty,
-                    Source = "ProductTestGroup",
-                    IsPerBatch = ptg.IsPerBatch,
-                    TestMethodStandardID = ptg.TestMethodStandardID,
-                    TestMethodStandardName = ptg.TestMethodStandard != null ? ptg.TestMethodStandard.Name : null
+                    LaboratoryTestID = s.SubGroup!.LaboratoryTestID,
+                    LaboratoryTestName = s.SubGroup!.LaboratoryTest!.Name,
+                    SubGroup = s.SubGroup!.Name,
+                    Source = "ProductMasterMapping",
+                    IsPerBatch = false,
+                    TestMethodStandardID = null,
+                    TestMethodStandardName = null
                 })
                 .ToListAsync();
 
-            return tests;
+            // 2. Direct Product Master mappings in LaboratoryTestAnalysisTypeSpecification
+            var directAnalysisTests = await _context.Set<LaboratoryTestAnalysisTypeSpecification>()
+                .Where(s => s.ProductMasterID == productSpecificationId && s.AnalysisType != null && s.AnalysisType.SubGroup != null && s.AnalysisType.SubGroup.LaboratoryTest != null && s.AnalysisType.SubGroup.LaboratoryTest.IsActive)
+                .Select(s => new SuggestedTestDto
+                {
+                    LaboratoryTestID = s.AnalysisType!.SubGroup!.LaboratoryTestID,
+                    LaboratoryTestName = s.AnalysisType!.SubGroup!.LaboratoryTest!.Name,
+                    SubGroup = s.AnalysisType!.Name,
+                    Source = "ProductMasterMapping",
+                    IsPerBatch = false,
+                    TestMethodStandardID = null,
+                    TestMethodStandardName = null
+                })
+                .ToListAsync();
+
+            // 3. Traversal via Product Master Active Version Grades
+            var gradeIds = await _context.Set<ProductMasterVersionGrade>()
+                .Where(g => (g.ProductMasterVersionID == productSpecificationId || g.ID == productSpecificationId || g.ProductMasterVersion.ProductMasterID == productSpecificationId) && g.IsActive)
+                .Select(g => g.SpecificationGradeID)
+                .Distinct()
+                .ToListAsync();
+
+            var allTests = new List<SuggestedTestDto>();
+            allTests.AddRange(directSubgroupTests);
+            allTests.AddRange(directAnalysisTests);
+
+            foreach (var gradeId in gradeIds)
+            {
+                var gradeTests = await GetSuggestedTestsBySpecification(gradeId);
+                allTests.AddRange(gradeTests);
+            }
+
+            return allTests
+                .GroupBy(t => t.LaboratoryTestID)
+                .Select(g => {
+                    var item = g.First();
+                    item.Source = "ProductMaster";
+                    return item;
+                })
+                .ToList();
         }
 
         public async Task<TestAutoSuggestResult> GetUnifiedSuggestions(long? specificationGradeId, long? productSpecificationId)
@@ -82,27 +131,19 @@ namespace LIMSApi.ServiceWORepo
                 productTests = await GetSuggestedTestsByProductSpec(productSpecificationId.Value);
             }
 
-            // Merge: prefer ProductTestGroup entries when the same LaboratoryTestID appears in both sources
-            // because ProductTestGroup carries TestMethodStandard info
-            var productTestIds = new HashSet<long>(productTests.Select(t => t.LaboratoryTestID));
-
-            var mergedTests = new List<SuggestedTestDto>(productTests);
-
-            foreach (var specTest in specTests)
-            {
-                if (!productTestIds.Contains(specTest.LaboratoryTestID))
-                {
-                    mergedTests.Add(specTest);
-                }
-            }
+            var merged = productTests.Concat(specTests)
+                .GroupBy(t => t.LaboratoryTestID)
+                .Select(g => g.First())
+                .ToList();
 
             return new TestAutoSuggestResult
             {
-                SuggestedTests = mergedTests.OrderBy(t => t.SubGroup).ThenBy(t => t.LaboratoryTestName).ToList(),
+                SuggestedTests = merged,
                 SpecificationTestCount = specTests.Count,
                 ProductTestGroupCount = productTests.Count
             };
         }
+
 
         public async Task<SmartSuggestResult> GetSmartSuggestions(SmartSuggestRequest request)
         {
@@ -169,7 +210,7 @@ namespace LIMSApi.ServiceWORepo
                         {
                             LaboratoryTestID = stat.LaboratoryTestID,
                             LaboratoryTestName = stat.LaboratoryTest.Name,
-                            SubGroup = stat.LaboratoryTest.SubGroup,
+                            SubGroup = stat.LaboratoryTest.SubGroups.Select(x => x.Name).FirstOrDefault() ?? "",
                             Source = "LabScope",
                             Score = 0,
                             Tags = new List<string>()
@@ -202,7 +243,7 @@ namespace LIMSApi.ServiceWORepo
                         {
                             LaboratoryTestID = stat.LaboratoryTestID,
                             LaboratoryTestName = stat.LaboratoryTest.Name,
-                            SubGroup = stat.LaboratoryTest.SubGroup,
+                            SubGroup = stat.LaboratoryTest.SubGroups.Select(x => x.Name).FirstOrDefault() ?? "",
                             Source = "CustomerHistory",
                             Score = 0,
                             Tags = new List<string>()
@@ -237,7 +278,7 @@ namespace LIMSApi.ServiceWORepo
                         {
                             LaboratoryTestID = stat.LaboratoryTestID,
                             LaboratoryTestName = stat.LaboratoryTest.Name,
-                            SubGroup = stat.LaboratoryTest.SubGroup,
+                            SubGroup = stat.LaboratoryTest.SubGroups.Select(x => x.Name).FirstOrDefault() ?? "",
                             Source = "GlobalFrequency",
                             Score = 0,
                             Tags = new List<string>()

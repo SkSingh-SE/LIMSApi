@@ -18,6 +18,11 @@ namespace LIMSApi.Helpers
 
         private static readonly char[] NameSeparators = { ' ', '-', '_' };
 
+        private static readonly HashSet<string> RangeSelectionTypes = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "HoursRange", "SizeRange", "WeightRange", "TempratureRange", "LoadRange"
+        };
+
         public PricingEngine(LIMSContext db, IFinancialYearService fyService, ILogger<PricingEngine> logger)
         {
             _db = db;
@@ -80,12 +85,10 @@ namespace LIMSApi.Helpers
                         continue;
 
                     var paramName = paramMaster.Name?.ToLower().Trim() ?? "";
-                    var paramAlias = paramMaster.AliasName?.ToLower().Trim() ?? "";
                     var trpParamName = trp.ParameterName?.ToLower().Trim() ?? "";
 
                     // Strict matching: try each name variant against config
                     bool matched = StrictMatchesName(paramName, configNameLower, configAliasLower)
-                                || (!string.IsNullOrEmpty(paramAlias) && StrictMatchesName(paramAlias, configNameLower, configAliasLower))
                                 || (!string.IsNullOrEmpty(trpParamName) && StrictMatchesName(trpParamName, configNameLower, configAliasLower));
 
                     if (matched && trp.Value.HasValue)
@@ -103,10 +106,8 @@ namespace LIMSApi.Helpers
                 if (specLine.Parameter == null) continue;
 
                 var paramName = specLine.Parameter.Name?.ToLower().Trim() ?? "";
-                var paramAlias = specLine.Parameter.AliasName?.ToLower().Trim() ?? "";
 
-                bool matched = StrictMatchesName(paramName, configNameLower, configAliasLower)
-                            || (!string.IsNullOrEmpty(paramAlias) && StrictMatchesName(paramAlias, configNameLower, configAliasLower));
+                bool matched = StrictMatchesName(paramName, configNameLower, configAliasLower);
 
                 if (matched)
                 {
@@ -124,34 +125,26 @@ namespace LIMSApi.Helpers
         public async Task<(decimal Rate, long ConfigId)> MatchConfigAndGetRateAsync(
             long laboratoryTestId,
             InvoiceCaseConfiguration config,
-            decimal usedValue)
+            decimal usedValue,
+            DateTime inwardDate,
+            long? analysisTypeId = null)
         {
-            // FY-filtered InvoiceCase lookup with fallback
-            var currentFYEntity = await _db.FinancialYears.FirstOrDefaultAsync(f => f.IsCurrent);
-            InvoiceCase? invoiceCase = null;
-            if (currentFYEntity != null)
-            {
-                invoiceCase = await _db.InvoiceCases
-                    .Where(x => x.LaboratoryTestID == laboratoryTestId && x.IsActive && x.FinancialYearId == currentFYEntity.Id)
-                    .Include(x => x.InvoiceCasePrices)
-                    .FirstOrDefaultAsync();
-            }
+            // Date-effective InvoiceCase resolution: pick the version with the greatest
+            // EffectiveFrom ≤ the sample inward date, falling back to the earliest version.
+            var versions = await _db.InvoiceCases
+                .Where(x => x.LaboratoryTestID == laboratoryTestId && x.AnalysisTypeID == analysisTypeId && x.IsActive)
+                .Include(x => x.InvoiceCasePrices)
+                .Include(x => x.FinancialYearEntity)
+                .ToListAsync();
 
-            if (invoiceCase == null)
-            {
-                invoiceCase = await _db.InvoiceCases
-                    .Where(x => x.LaboratoryTestID == laboratoryTestId && x.IsActive)
-                    .Include(x => x.InvoiceCasePrices)
-                    .Include(x => x.FinancialYearEntity)
-                    .FirstOrDefaultAsync();
-
-                if (invoiceCase != null)
-                    _logger.LogWarning("No InvoiceCase for current FY and LabTest {LabTestId}. Using fallback FY {FallbackFY}.",
-                        laboratoryTestId, invoiceCase.FinancialYearEntity?.Year);
-            }
+            var invoiceCase = PriceVersionResolver.Resolve(versions, v => v.EffectiveFrom, inwardDate);
 
             if (invoiceCase == null)
                 throw new Exception($"No invoice case found for LaboratoryTest {laboratoryTestId}");
+
+            if (invoiceCase.EffectiveFrom.Date > inwardDate.Date)
+                _logger.LogWarning("Sample inward date {InwardDate:d} precedes all InvoiceCase versions for LabTest {LabTestId}. Using earliest version (FY {FY}).",
+                    inwardDate, laboratoryTestId, invoiceCase.FinancialYearEntity?.Year);
 
             var configPrice = invoiceCase.InvoiceCasePrices
                 .FirstOrDefault(p => p.InvoiceCaseConfigID == config.ID);
@@ -159,7 +152,7 @@ namespace LIMSApi.Helpers
             if (configPrice == null)
                 throw new Exception($"Configuration {config.ID} not found in invoice case prices");
 
-            var isRangeType = config.SelectionType.EndsWith("Range", StringComparison.OrdinalIgnoreCase);
+            var isRangeType = RangeSelectionTypes.Contains(config.SelectionType);
 
             if (isRangeType)
             {
@@ -179,14 +172,16 @@ namespace LIMSApi.Helpers
             else
             {
                 // Slab match: find nearest slab >= usedValue
-                var allConfigsForType = await _db.LaboratoryTestInvoiceCase
-                    .Where(lt => lt.LabTestID == laboratoryTestId)
-                    .Include(lt => lt.InvoiceCaseConfiguration)
-                    .Where(lt => lt.InvoiceCaseConfiguration != null
-                                && lt.InvoiceCaseConfiguration.IsActive
-                                && lt.InvoiceCaseConfiguration.SelectionType == config.SelectionType)
-                    .Select(lt => lt.InvoiceCaseConfiguration!)
-                    .Where(c => !string.IsNullOrWhiteSpace(c.Value))
+                var subgroupConfigs = _db.LaboratoryTestSubGroupInvoiceCases
+                    .Where(lt => lt.SubGroup != null && lt.SubGroup.LaboratoryTestID == laboratoryTestId)
+                    .Select(lt => lt.InvoiceCaseConfiguration!);
+
+                var analysisConfigs = _db.LaboratoryTestAnalysisTypeInvoiceCases
+                    .Where(lt => lt.AnalysisType != null && lt.AnalysisType.SubGroup != null && lt.AnalysisType.SubGroup.LaboratoryTestID == laboratoryTestId)
+                    .Select(lt => lt.InvoiceCaseConfiguration!);
+
+                var allConfigsForType = await subgroupConfigs.Union(analysisConfigs)
+                    .Where(c => c.IsActive && c.SelectionType == config.SelectionType && !string.IsNullOrWhiteSpace(c.Value))
                     .ToListAsync();
 
                 var matchingConfig = allConfigsForType

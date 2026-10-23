@@ -15,6 +15,16 @@ namespace LIMSApi.Models
 
         public bool IsRange { get; set; }
 
+        // Where the engine reads the dimension value from.
+        // "ParameterLinked" | "TestDuration" | "SampleDimension" | "ParameterCount" | "ParameterPresence" | "UserInputAtEntry" | "UserInput"
+        [MaxLength(50)]
+        public string ValueSource { get; set; } = "ParameterLinked";
+
+        // Which SampleDetail field to read when ValueSource = "SampleDimension".
+        // "Diameter" | "Thickness" | "Width" | "Length"
+        [MaxLength(20)]
+        public string? SampleField { get; set; }
+
         [MaxLength(500)]
         public string? Description { get; set; }
 

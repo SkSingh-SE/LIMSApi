@@ -1,3 +1,5 @@
+using LIMSApi.Models;
+
 namespace LIMSApi.Services.Interface
 {
     public interface IFinancialYearService
@@ -19,5 +21,11 @@ namespace LIMSApi.Services.Interface
         /// Unsets old IsCurrent, sets new, logs change to FinancialYearChangeLog.
         /// </summary>
         Task SetCurrentFinancialYearAsync(long financialYearId, long changedById, string? reason = null);
+
+        /// <summary>
+        /// Returns the FinancialYear entity whose StartDate–EndDate range contains the given date.
+        /// Returns null if no FY covers that date (caller should fall back to the default FY).
+        /// </summary>
+        Task<FinancialYear?> GetFinancialYearEntityForDate(DateTime date);
     }
 }

@@ -112,5 +112,26 @@ namespace LIMSApi.Repositories
         {
             return await _context.InvoiceCaseConfigurations.AnyAsync(x => x.Name == name && x.ID != Id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
+
+        public async Task<bool> ExistsByNameAndSelectionType(string name, string selectionType)
+        {
+            return await _context.InvoiceCaseConfigurations.AnyAsync(x =>
+                x.Name == name && x.SelectionType == selectionType &&
+                x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+        }
+
+        public async Task<bool> ExistsByNameAndSelectionTypeAndNotId(string name, string selectionType, long id)
+        {
+            return await _context.InvoiceCaseConfigurations.AnyAsync(x =>
+                x.Name == name && x.SelectionType == selectionType &&
+                x.ID != id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+        }
+
+        public async Task<bool> ExistsBaseSpectroConfig()
+        {
+            return await _context.InvoiceCaseConfigurations.AnyAsync(x =>
+                x.SelectionType == "SpectroCombination" && x.IsBaseConfig &&
+                x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+        }
     }
 }

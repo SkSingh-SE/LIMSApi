@@ -1,10 +1,11 @@
-﻿using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using Microsoft.EntityFrameworkCore;
+using System.Linq.Dynamic.Core;
+using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 
 namespace LIMSApi.Repositories
 {
@@ -63,27 +64,27 @@ namespace LIMSApi.Repositories
         public async Task<PagedResponse<object>> GetAllEmployees(PageFilter filter)
         {
             var _query = (from e in _context.EmployeeMasters
-                          where e.IsActive && e.CompanyCode == loggedInUser.CompanyCode
-                          join d in _context.DepartmentMasters on e.DepartmentID equals d.ID into dpGroup
-                          from dp in dpGroup.DefaultIfEmpty()
+                         where e.IsActive && e.CompanyCode == loggedInUser.CompanyCode && !e.IsSystemAdmin
+                         join d in _context.DepartmentMasters on e.DepartmentID equals d.ID into dpGroup
+                         from dp in dpGroup.DefaultIfEmpty()
 
-                          join ds in _context.DesignationMasters on e.DesignationID equals ds.ID into dsGroup
-                          from ds in dsGroup.DefaultIfEmpty()
-                          select new
-                          {
-                              e.ID,
-                              e.Name,
-                              e.EmailId,
-                              e.DateOfJoin,
-                              e.DateOfBirth,
-                              e.Gender,
-                              e.DepartmentID,
-                              DepartmentName = dp.Name,
-                              e.DesignationID,
-                              DesignationName = ds.Name,
-                              e.ModifiedOn,
-                              e.CreatedOn
-                          }).AsQueryable().ApplyFilters(filter.Filter);
+                         join ds in _context.DesignationMasters on e.DesignationID equals ds.ID into dsGroup
+                         from ds in dsGroup.DefaultIfEmpty()
+                         select new
+                         {
+                             e.ID,
+                             e.Name,
+                             e.EmailId,
+                             e.DateOfJoin,
+                             e.DateOfBirth,
+                             e.Gender,
+                             e.DepartmentID,
+                             DepartmentName = dp.Name,
+                             e.DesignationID,
+                             DesignationName = ds.Name,
+                             e.ModifiedOn,
+                             e.CreatedOn
+                         }).AsQueryable().ApplyFilters(filter.Filter);
 
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
@@ -108,11 +109,11 @@ namespace LIMSApi.Repositories
             return await _query.Cast<object>().ToPagedAsync(filter);
         }
 
-        public async Task<List<DropdwonSelector>> GetEmployeeDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20, int departmentId= 0)
+        public async Task<List<DropdwonSelector>> GetEmployeeDropdown(string? searchTerm, int pageNo = 0, int pageSize = 20, int departmentId= 0, long? recordId = null)
         {
             if (pageNo < 0) pageNo = 0;
 
-            var _query = from a in _context.EmployeeMasters where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode select a;
+            var _query = from a in _context.EmployeeMasters where a.IsActive && a.CompanyCode == loggedInUser.CompanyCode && !a.IsSystemAdmin select a;
 
             if(departmentId > 0)
             {
@@ -130,7 +131,10 @@ namespace LIMSApi.Repositories
                     _query = _query.Where(x => x.Name != null && x.Name.Contains(search));
                 }
             }
-
+            _query = _query.Where(equipment =>
+             !_context.NablEmployeeAuthorizations.Any(report =>
+               report.EmployeeId == equipment.ID && report.IsActive &&
+             (!recordId.HasValue || report.ID!= recordId.Value)));
             var skip = pageNo * pageSize;
 
             var data = await (_query.Skip(skip).Take(pageSize).Select(x => new DropdwonSelector
@@ -340,6 +344,7 @@ namespace LIMSApi.Repositories
         {
             long rootEmployeeId = loggedInUser.EmployeeID;
             var employees = await _context.EmployeeMasters
+                .Where(e => !e.IsSystemAdmin)
                 .Include(e => e.Department)
                 .Include(e => e.Designation)
                 .AsNoTracking()
@@ -374,7 +379,7 @@ namespace LIMSApi.Repositories
         public async Task<List<OrgNodeDto>> GetDirectReportsAsync(long managerId)
         {
             return await _context.EmployeeMasters
-                .Where(e => e.ReportingManagerID == managerId)
+                .Where(e => e.ReportingManagerID == managerId && !e.IsSystemAdmin)
                 .Include(e => e.Department)
                 .Include(e => e.Designation)
                 .Select(e => new OrgNodeDto

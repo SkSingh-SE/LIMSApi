@@ -16,5 +16,6 @@ namespace LIMSApi.Services.Interface
         Task<List<CustomDropdown>> GetSubMenuDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<bool> UpdateMenuPermission(long menuId, List<PermissionMaster> updatedPermissions);
         Task<List<PermissionMaster>> GetMenuPermissions(long menuId);
+        Task<List<MenuMaster>> GetMenuTree();
     }
 }

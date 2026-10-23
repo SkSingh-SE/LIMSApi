@@ -42,7 +42,7 @@ namespace LIMSApi.Models
         public string? CorrectiveActions { get; set; }
         public string? Deviations { get; set; }
         public string? PurchaseOrderNo { get; set; }
-        public string? PoNo { get; set; }
+        public long  PoNo { get; set; }
         public string? InspectionBy { get; set; }
         [NotMapped]
         public List<DescriptionParameters>? ItemsParameters{ get; set; }

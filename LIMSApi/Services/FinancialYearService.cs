@@ -68,5 +68,11 @@ namespace LIMSApi.Services
             _logger.LogInformation("Financial year changed from {OldFY} to {NewFY} by user {UserId}",
                 oldYear, newFy.Year, changedById);
         }
+
+        public async Task<FinancialYear?> GetFinancialYearEntityForDate(DateTime date)
+        {
+            return await _db.FinancialYears
+                .FirstOrDefaultAsync(f => f.StartDate <= date && f.EndDate >= date);
+        }
     }
 }

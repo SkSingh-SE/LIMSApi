@@ -2,7 +2,7 @@
 
 namespace LIMSApi.Models
 {
-    public class TestMethodSpecification : AuditProperty
+    public class TestMethodSpecification : AuditProperty // Test Method Standard
     {
         [Key]
         public long ID { get; set; }
@@ -14,6 +14,11 @@ namespace LIMSApi.Models
         [Required]
         public required string Name { get; set; }
         public string? Part { get; set; }
+
+        // Auto-generated caption shown in dropdowns/lists: "{StdOrg} {TestMethodStandard} {Part} : {ActiveVersion}"
+        [MaxLength(600)]
+        public string? DisplayTitle { get; set; }
+
         public bool IsDisabled { get; set; } = false;
 
         // Phase 7.3: Test method specification enhancements
@@ -26,6 +31,9 @@ namespace LIMSApi.Models
         public string? DefaultParameters { get; set; }
 
         public ICollection<TestMethodSpecificationVersion> Versions { get; set; } = new List<TestMethodSpecificationVersion>();
+
+        // Metal classifications this specification applies to (narrows test-method selection in inward).
+        public ICollection<TestMethodSpecificationMetalClassification> MetalClassifications { get; set; } = new List<TestMethodSpecificationMetalClassification>();
 
     }
 }

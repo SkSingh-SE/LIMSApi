@@ -12,6 +12,7 @@
         Organization,
         Nabl,
         Signatory,
-        Other
+        Other,
+        NablMasterDocument
     }
 }

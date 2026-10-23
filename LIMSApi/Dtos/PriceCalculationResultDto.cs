@@ -11,6 +11,13 @@ namespace LIMSApi.Dtos
         public List<string> Warnings { get; set; } = new();
         public List<string> Errors { get; set; } = new();
         public bool HasFailures => FailureCount > 0;
+
+        // FY-mismatch confirmation: set when the sample's inward FY differs from the
+        // current default FY. The caller must re-invoke with confirmed=true to proceed.
+        public bool RequiresConfirmation { get; set; }
+        public string? InwardFY { get; set; }
+        public string? CurrentFY { get; set; }
+        public string? ConfirmationMessage { get; set; }
     }
 
     public class PriceLineResultDto

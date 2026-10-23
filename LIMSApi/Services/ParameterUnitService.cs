@@ -1,9 +1,10 @@
-﻿using LIMSApi.Data;
+using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
+using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Services
 {
@@ -29,6 +30,16 @@ namespace LIMSApi.Services
             if (exists)
                 throw new InvalidOperationException("ParameterUnit already exists!");
 
+            // Normalize incoming equivalents (fresh insert) + sync inline columns for legacy readers.
+            var order = 0;
+            foreach (var e in model.Equivalents ?? new List<ParameterUnitEquivalent>())
+            {
+                e.ID = 0;
+                e.Name = e.Name?.Trim() ?? string.Empty;
+                e.DisplayOrder = ++order;
+                e.IsActive = true;
+            }
+
             await _ParameterUnitRepository.AddParameterUnit(model);
             _logger.LogInformation("ParameterUnit '{ParameterUnitName}' created successfully.", model.Name);
         }
@@ -47,26 +58,52 @@ namespace LIMSApi.Services
                 throw new InvalidOperationException("ParameterUnit not found!");
 
             existingParameterUnit.Name = model.Name;
-            existingParameterUnit.ConversaionFactor = model.ConversaionFactor;
-            existingParameterUnit.SimilarUnit1 = model.SimilarUnit1;
-            existingParameterUnit.ConversionFactor1 = model.ConversionFactor1;
-            existingParameterUnit.SimilarUnit2 = model.SimilarUnit2;
-            existingParameterUnit.ConversionFactor2 = model.ConversionFactor2;
-            existingParameterUnit.SimilarUnit3 = model.SimilarUnit3;
-            existingParameterUnit.ConversionFactor3 = model.ConversionFactor3;
-            existingParameterUnit.SimilarUnit4 = model.SimilarUnit4;
-            existingParameterUnit.ConversionFactor4 = model.ConversionFactor4;
-            existingParameterUnit.SimilarUnit5 = model.SimilarUnit5;
-            existingParameterUnit.ConversionFactor5 = model.ConversionFactor5;
-            existingParameterUnit.SimilarUnit6 = model.SimilarUnit6;
-            existingParameterUnit.ConversionFactor6 = model.ConversionFactor6;
-            existingParameterUnit.SimilarUnit7 = model.SimilarUnit7;
-            existingParameterUnit.ConversionFactor7 = model.ConversionFactor7;
+            existingParameterUnit.ConversionFactor = model.ConversionFactor;
+
+            // Equivalents = source of truth. Upsert by ID, soft-delete the removed ones
+            // (so future FK references survive), then sync inline columns for legacy readers.
+            ApplyEquivalents(existingParameterUnit, model.Equivalents);
             existingParameterUnit.ModifiedOn = DateTime.UtcNow;
 
             await _ParameterUnitRepository.UpdateParameterUnit(existingParameterUnit);
             _logger.LogInformation("ParameterUnit '{ParameterUnitName}' updated successfully.", model.Name);
         }
+
+        // Upsert child equivalents by ID; soft-delete the ones no longer present.
+        private static void ApplyEquivalents(ParameterUnitMaster existing, ICollection<ParameterUnitEquivalent> incoming)
+        {
+            incoming ??= new List<ParameterUnitEquivalent>();
+            var order = 0;
+            foreach (var inc in incoming)
+            {
+                order++;
+                var match = inc.ID > 0 ? existing.Equivalents.FirstOrDefault(e => e.ID == inc.ID) : null;
+                if (match == null)
+                {
+                    existing.Equivalents.Add(new ParameterUnitEquivalent
+                    {
+                        BaseParameterUnitID = existing.ID,
+                        Name = inc.Name?.Trim() ?? string.Empty,
+                        ConversionFactor = inc.ConversionFactor,
+                        DisplayOrder = order,
+                        IsActive = true
+                    });
+                }
+                else
+                {
+                    match.Name = inc.Name?.Trim() ?? string.Empty;
+                    match.ConversionFactor = inc.ConversionFactor;
+                    match.DisplayOrder = order;
+                    match.IsActive = true;
+                }
+            }
+            // Soft-delete equivalents not present in the incoming set.
+            var incomingIds = incoming.Where(i => i.ID > 0).Select(i => i.ID).ToHashSet();
+            foreach (var e in existing.Equivalents.Where(e => e.IsActive && e.ID > 0 && !incomingIds.Contains(e.ID)))
+                e.IsActive = false;
+        }
+
+
 
         public async Task RemoveParameterUnit(long id)
         {
@@ -100,6 +137,49 @@ namespace LIMSApi.Services
         public async Task<List<DropdwonSelector>> GetParameterUnitDropdown(string? searchTerm, int pageNo, int pageSize)
         {
             return await _ParameterUnitRepository.GetParameterUnitDropdown(searchTerm, pageNo, pageSize);
+        }
+
+        public async Task<List<GroupedUnitDropdownOption>> GetGroupedParameterUnitDropdown(string? searchTerm, int pageNo, int pageSize)
+        {
+            return await _ParameterUnitRepository.GetGroupedParameterUnitDropdown(searchTerm, pageNo, pageSize);
+        }
+
+        public async Task<List<EquivalentUnitOption>> GetEquivalentUnits(long unitId)
+        {
+            var baseUnit = await _context.ParameterUnitMasters
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.ID == unitId && u.IsActive);
+
+            var result = new List<EquivalentUnitOption>();
+            if (baseUnit == null) return result;
+
+            // Base unit first (EquivalentId = null) so the parameter's default unit binds.
+            result.Add(new EquivalentUnitOption
+            {
+                EquivalentId = null,
+                BaseUnitId = baseUnit.ID,
+                Name = baseUnit.Name,
+                ConversionFactor = baseUnit.ConversionFactor,
+                IsBase = true
+            });
+
+            // Then the normalized child equivalents (stable IDs).
+            var equivalents = await _context.ParameterUnitEquivalents
+                .AsNoTracking()
+                .Where(e => e.BaseParameterUnitID == baseUnit.ID && e.IsActive)
+                .OrderBy(e => e.DisplayOrder ?? int.MaxValue).ThenBy(e => e.ID)
+                .Select(e => new EquivalentUnitOption
+                {
+                    EquivalentId = e.ID,
+                    BaseUnitId = baseUnit.ID,
+                    Name = e.Name,
+                    ConversionFactor = e.ConversionFactor,
+                    IsBase = false
+                })
+                .ToListAsync();
+            result.AddRange(equivalents);
+
+            return result;
         }
     }
 }

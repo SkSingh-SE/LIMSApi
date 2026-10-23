@@ -16,5 +16,9 @@ public partial class DepartmentMaster:AuditProperty
 
     public string? Description { get; set; }
 
-   
+    /// <summary>
+    /// True for chemical-analysis departments (Chemical Lab, Spectro Lab).
+    /// Used to separate General vs Chemical test dropdowns in the plan form.
+    /// </summary>
+    public bool IsChemical { get; set; } = false;
 }

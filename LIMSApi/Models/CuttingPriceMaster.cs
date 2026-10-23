@@ -1,8 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
-using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Models
 {
@@ -20,12 +18,18 @@ namespace LIMSApi.Models
         [Required]
         public string UnitType { get; set; } = string.Empty;
 
-        [Required,Precision(10,2)]
-        public decimal RatePerUnit { get; set; }
+        [Column(TypeName = "decimal(7,2)")]
+        public decimal? SizeRangeMin { get; set; }  // null for Water Jet / Gas / EDM
+
+        [Column(TypeName = "decimal(7,2)")]
+        public decimal? SizeRangeMax { get; set; }  // null for Water Jet / Gas / EDM
 
         public string? Remark { get; set; } = string.Empty;
 
         [ForeignKey("SpecimenTypeId"), JsonIgnore]
         public virtual SpecimenTypeMaster? SpecimenType { get; set; }
+
+        // Year-wise rates (Normal/Hard metal). One row per financial year that has its own rate.
+        public virtual ICollection<CuttingPriceVersion> Versions { get; set; } = new List<CuttingPriceVersion>();
     }
 }

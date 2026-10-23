@@ -12,5 +12,7 @@ namespace LIMSApi.Services.Interface
         Task<PagedResponse<object>> FetchTestMasterList(PageFilter filter);
 
         Task<List<DropdwonSelector>> GetTestMasterDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<DropdwonSelector>> GetGeneralTestMasterDropdown(string? searchTerm, int pageNo, int pageSize);
+        Task<List<DropdwonSelector>> GetChemicalTestMasterDropdown(string? searchTerm, int pageNo, int pageSize);
     }
 }

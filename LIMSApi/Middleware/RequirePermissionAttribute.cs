@@ -41,7 +41,10 @@ namespace LIMSApi.Middleware
 
             // Admin bypasses all permission checks
             var role = user.FindFirst(ClaimTypes.Role)?.Value;
-            if (string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase))
+            var isAdminClaim = user.FindFirst("IsAdmin")?.Value;
+            
+            if (string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase) || 
+                string.Equals(isAdminClaim, "True", StringComparison.OrdinalIgnoreCase))
                 return;
 
             // Extract user ID from JWT claims
@@ -67,6 +70,12 @@ namespace LIMSApi.Middleware
             // Note: UserPermission.IsGranted = false REVOKES a role-granted permission
             //       UserPermission absence → fall back to RolePermission
 
+            string? managePermissionName = null;
+            if (_permissionName.StartsWith("CanRead")) managePermissionName = _permissionName.Replace("CanRead", "CanManage");
+            else if (_permissionName.StartsWith("CanCreate")) managePermissionName = _permissionName.Replace("CanCreate", "CanManage");
+            else if (_permissionName.StartsWith("CanUpdate")) managePermissionName = _permissionName.Replace("CanUpdate", "CanManage");
+            else if (_permissionName.StartsWith("CanDelete")) managePermissionName = _permissionName.Replace("CanDelete", "CanManage");
+
             // Step 1: Check user override
             var userOverride = await dbContext.UserPermissions
                 .Include(up => up.Permission)
@@ -74,7 +83,8 @@ namespace LIMSApi.Middleware
                     up.IsActive &&
                     up.UserID == userId &&
                     up.Permission != null &&
-                    up.Permission.Name == _permissionName)
+                    (up.Permission.Name == _permissionName || (managePermissionName != null && up.Permission.Name == managePermissionName)))
+                .OrderByDescending(up => up.Permission.Name == managePermissionName ? 1 : 0) // Manage takes precedence if both exist? Actually we just need any true
                 .Select(up => (bool?)up.IsGranted)
                 .FirstOrDefaultAsync();
 
@@ -105,14 +115,12 @@ namespace LIMSApi.Middleware
                 }
                 else
                 {
-                    hasPermission = await dbContext.RolePermissions
-                        .Include(rp => rp.Permission)
-                        .AnyAsync(rp =>
-                            rp.IsActive &&
-                            rp.RoleID == roleId &&
-                            rp.Permission != null &&
-                            rp.Permission.Name == _permissionName &&
-                            rp.IsGranted);
+                    hasPermission = await (
+                        from rm in dbContext.RoleMenuMappings
+                        join pm in dbContext.PermissionMasters on rm.MenuID equals pm.MenuID
+                        where rm.RoleID == roleId && (pm.Name == _permissionName || (managePermissionName != null && pm.Name == managePermissionName))
+                        select pm
+                    ).AnyAsync();
                 }
             }
 

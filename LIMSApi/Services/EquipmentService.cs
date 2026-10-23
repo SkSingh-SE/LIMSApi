@@ -1,11 +1,12 @@
-﻿using System.Text.RegularExpressions;
-using LIMSApi.Data;
-using Microsoft.EntityFrameworkCore;
+﻿using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Models;
 using LIMSApi.Repositories.Interface;
 using LIMSApi.Services.Interface;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using System.Text.RegularExpressions;
 
 namespace LIMSApi.Services
 {
@@ -15,12 +16,14 @@ namespace LIMSApi.Services
         private readonly ILogger<EquipmentService> _logger;
         private readonly IFileUploadService _uploadService;
         private readonly LIMSContext _context;
+        private LoggedInUserDTO loggedInUser;
         public EquipmentService(IEquipmentRepository equipment, ILogger<EquipmentService> logger, IFileUploadService uploadService, LIMSContext context)
         {
             _equipmentRepository = equipment;
             _logger = logger;
             _uploadService = uploadService;
             _context = context;
+            loggedInUser = LoggedInUserProvider.CurrentUser;
         }
 
         public async Task CreateEquipment(EquipmentMaster model)
@@ -33,6 +36,17 @@ namespace LIMSApi.Services
                 throw new InvalidOperationException("Equipment already exists!");
 
             await _equipmentRepository.AddEquipment(model);
+
+            if (model.AnalysisTechniques != null && model.AnalysisTechniques.Any())
+            {
+                foreach (var t in model.AnalysisTechniques)
+                {
+                    t.EquipmentID = model.ID;
+                    _context.EquipmentAnalysisTechniques.Add(t);
+                }
+                await _context.SaveChangesAsync();
+            }
+
             _logger.LogInformation("Equipment '{EquipmentName}' created successfully.", model.Name);
         }
 
@@ -65,9 +79,12 @@ namespace LIMSApi.Services
             existingEquipment.NextCalibrationDueDate = model.NextCalibrationDueDate;
             existingEquipment.NextMaintenanceDueDate = model.NextMaintenanceDueDate;
             existingEquipment.LastCalibrationDate = model.LastCalibrationDate;
+            existingEquipment.LastMaintenanceDate = model.LastMaintenanceDate;
             existingEquipment.CalibrationFrequencyDays = model.CalibrationFrequencyDays;
             existingEquipment.MaintenanceSchedule = model.MaintenanceSchedule;
             existingEquipment.ModifiedOn = DateTime.UtcNow;
+
+            await SyncAnalysisTechniques(existingEquipment, model.AnalysisTechniques);
 
             await _equipmentRepository.UpdateEquipment(existingEquipment);
             _logger.LogInformation("Equipment '{EquipmentName}' updated successfully.", model.Name);
@@ -91,6 +108,9 @@ namespace LIMSApi.Services
                 model.CertificatePath = fileUploadResponse.FilePath;
                 model.Certificate = fileUploadResponse.OriginalFileName;
                 model.UploadReferenceID = fileUploadResponse.ID;
+                model.Desrciption = model.Desrciption;
+                model.CalibrationCreateBy = loggedInUser.Name;
+                model.CalibrationCreateDate = DateTime.Now;
 
             }
             existingEquipment.NextCalibrationDueDate = model.CalibrationDueDate;
@@ -124,7 +144,9 @@ namespace LIMSApi.Services
                 model.CertificatePath = fileUploadResponse.FilePath;
                 model.Certificate = fileUploadResponse.OriginalFileName;
                 model.UploadReferenceID = fileUploadResponse.ID;
-
+                model.MaintanceCreateDate= DateTime.Now;
+                model.MaintanceCreateBy = loggedInUser.Name;
+                model.Desrciption = model.Desrciption;
             }
             if (existingEquipment.MaintenanceInterval != null)
             {
@@ -214,15 +236,22 @@ namespace LIMSApi.Services
 
             return date;
         }
-        public async Task ReviewCalibration(long calibrationId)
+        public async Task ReviewCalibration(long calibrationId, string reason)
         {
             var calibration = await _context.Set<EquipmentCalibration>().FirstOrDefaultAsync(c => c.ID == calibrationId);
             if (calibration == null)
                 throw new KeyNotFoundException("Calibration record not found!");
 
+            if (string.IsNullOrWhiteSpace(reason))
+                throw new ArgumentException("Review reason is required.");
+
+
             calibration.IsReviewed = true;
+            calibration.ReviewReason = reason.Trim();
+            calibration.ReviewerBy = loggedInUser.Name;
+            calibration.ReviewerDate = DateTime.Now;
             await _context.SaveChangesAsync();
-            _logger.LogInformation("Calibration '{CalibrationId}' marked as reviewed.", calibrationId);
+        _logger.LogInformation("Calibration '{CalibrationId}' marked as reviewed.", calibrationId);
         }
 
         public async Task RemoveEquipment(long id)
@@ -249,9 +278,9 @@ namespace LIMSApi.Services
             var removeSOP = existingEquipment.SOPs?.Where(s => s.ID == sop.ID).FirstOrDefault();
             if (removeSOP != null)
             {
-                if(removeSOP.UploadReferenceID != null)
+                if (removeSOP.UploadReferenceID != null)
                 {
-                     await _uploadService.RemoveFileAsync(removeSOP.UploadReferenceID.Value);
+                    await _uploadService.RemoveFileAsync(removeSOP.UploadReferenceID.Value);
                 }
                 existingEquipment.SOPs?.Remove(removeSOP);
             }
@@ -277,6 +306,25 @@ namespace LIMSApi.Services
         public async Task<List<DropdwonSelector>> GetEquipmentDropdown(string? searchTerm, int pageNo, int pageSize)
         {
             return await _equipmentRepository.GetEquipmentDropdown(searchTerm, pageNo, pageSize);
+        }
+
+        private async Task SyncAnalysisTechniques(EquipmentMaster existing, ICollection<EquipmentAnalysisTechnique>? incoming)
+        {
+            var existingJunctions = await _context.Set<EquipmentAnalysisTechnique>()
+                .Where(j => j.EquipmentID == existing.ID)
+                .ToListAsync();
+            _context.Set<EquipmentAnalysisTechnique>().RemoveRange(existingJunctions);
+
+            if (incoming != null)
+            {
+                foreach (var t in incoming)
+                {
+                    t.EquipmentID = existing.ID;
+                    t.ID = 0;
+                    _context.Set<EquipmentAnalysisTechnique>().Add(t);
+                }
+            }
+            await _context.SaveChangesAsync();
         }
     }
 }

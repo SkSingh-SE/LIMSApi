@@ -61,9 +61,9 @@ namespace LIMSApi.Controllers
             });
         }
         [HttpPatch("calibration/{id}/review")]
-        public async Task<IActionResult> ReviewCalibration(long id)
+        public async Task<IActionResult> ReviewCalibration(long id, [FromBody] string reason)
         {
-            await _equipmentTypeService.ReviewCalibration(id);
+            await _equipmentTypeService.ReviewCalibration(id,reason);
             return Ok(new { status = "success", message = "Calibration marked as reviewed." });
         }
 

@@ -62,5 +62,61 @@ namespace LIMSApi.Controllers
                 message = "Replan request rejected."
             });
         }
+
+        [HttpPost("assign-grade")]
+        [RequirePermission(Permissions.Plan.Update)]
+        public async Task<IActionResult> AssignGrade([FromBody] AssignGradeDto dto)
+        {
+            await _planService.AssignGradeAsync(dto);
+            return Ok(new
+            {
+                status = "success",
+                message = "Grade assigned successfully and audit logged."
+            });
+        }
+
+        // ────────────── 6-Tier Decision Engine Cascade Endpoints ──────────────
+
+        [HttpGet("cascade/product-master/{id}")]
+        public async Task<IActionResult> GetProductMasterCascade(long id)
+        {
+            var result = await _planService.GetProductMasterCascadeAsync(id);
+            return Ok(result);
+        }
+
+        [HttpGet("cascade/product-master/{id}/size/{sizeId}")]
+        public async Task<IActionResult> GetProductMasterSizeLimits(long id, long sizeId)
+        {
+            var result = await _planService.GetProductMasterSizeLimitsAsync(id, sizeId);
+            return Ok(result);
+        }
+
+        [HttpGet("cascade/metal-classification/{id}")]
+        public async Task<IActionResult> GetMetalClassificationCascade(long id)
+        {
+            var result = await _planService.GetMetalClassificationCascadeAsync(id);
+            return Ok(result);
+        }
+
+        [HttpGet("cascade/material-spec/{id}")]
+        public async Task<IActionResult> GetMaterialSpecCascade(long id)
+        {
+            var result = await _planService.GetMaterialSpecCascadeAsync(id);
+            return Ok(result);
+        }
+
+        [HttpGet("cascade/lab-test/{id}")]
+        public async Task<IActionResult> GetLabTestCascade(long id)
+        {
+            var result = await _planService.GetLabTestCascadeAsync(id);
+            return Ok(result);
+        }
+
+        [HttpGet("cascade/technique/{techniqueId}/metal/{metalId}")]
+        public async Task<IActionResult> GetTechniqueAnalysisTypes(long techniqueId, long metalId)
+        {
+            var result = await _planService.GetTechniqueAnalysisTypesAsync(techniqueId, metalId);
+            return Ok(result);
+        }
     }
 }

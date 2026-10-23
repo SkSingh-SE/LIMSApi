@@ -35,15 +35,22 @@ namespace LIMSApi.Models
         public virtual EmployeeMaster? Auditee { get; set; }
 
         [MaxLength(200)]
-        public string? AuiteeName { get; set; }
+        public string? AuditeeName { get; set; }
 
         [MaxLength(200)]
         public string? ISOClause { get; set; }
-
-        public string? ChecklistItemsJson { get; set; } // JSON array of {clause, requirement, finding, status: Compliant/MinorNC/MajorNC/Observation}
-
         public int? NCCount { get; set; }
-
         public int? ObservationCount { get; set; }
+        public string? ChecklistNo { get; set; }
+        public string? AuditPlanNo { get; set; }
+        public long ScheduleItemId { get; set; }
+
+        [MaxLength(100)]
+        public string? ChecklistStatus { get; set; }
+
+        public string? Remarks { get; set; }
+
+        public virtual ICollection<AuditChecklistItem> Items { get; set; } = new List<AuditChecklistItem>();
+
     }
 }

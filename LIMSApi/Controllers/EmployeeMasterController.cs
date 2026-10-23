@@ -1,6 +1,5 @@
 ﻿using LIMSApi.Dtos;
 using LIMSApi.Helpers;
-using LIMSApi.Helpers;
 using LIMSApi.Middleware;
 using LIMSApi.Models;
 using LIMSApi.Services.Interface;
@@ -103,9 +102,9 @@ namespace LIMSApi.Controllers
         }
 
         [HttpGet("dropdown")]
-        public async Task<IActionResult> GetEmployeeDropdown(string? searchTerm, int pageNo, int pageSize,int departmentId)
+        public async Task<IActionResult> GetEmployeeDropdown(string? searchTerm, int pageNo, int pageSize,int departmentId, long? recordId = null)
         {
-            var data = await _employeeService.GetEmployeeDropdown(searchTerm, pageNo, pageSize, departmentId);
+            var data = await _employeeService.GetEmployeeDropdown(searchTerm, pageNo, pageSize, departmentId,recordId);
             return data == null ? NoContent(): Ok(data);
         }
         [HttpGet("equipmentdropdown")]

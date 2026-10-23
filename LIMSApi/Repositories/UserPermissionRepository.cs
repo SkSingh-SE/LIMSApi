@@ -177,11 +177,11 @@ namespace LIMSApi.Repositories
                 })
                 .ToListAsync();
 
-            // 6️ Get User-specific Menu Permissions (Special Permissions)
+            // 6️ Get User-specific Menu Permissions (Special Permissions) — only granted overrides
             var userSpecialPermissions = await _context.UserPermissions
                 .Include(up => up.Permission)
                 .ThenInclude(p => p.Menu)
-                .Where(up => up.UserID == userId)
+                .Where(up => up.UserID == userId && up.IsGranted)
                 .Select(up => new
                 {
                     Menu = up.Permission.Menu,
@@ -273,8 +273,8 @@ namespace LIMSApi.Repositories
                     bool roleGrants = rolePermissionIds.Contains(dto.PermissionID);
                     existingOverrides.TryGetValue(dto.PermissionID, out var existing);
 
-                    // Same as role → remove override
-                    if (roleGrants && dto.IsGranted)
+                    // Matches role baseline → no override needed, remove any stale one
+                    if (roleGrants == dto.IsGranted)
                     {
                         if (existing != null)
                             _context.UserPermissions.Remove(existing);
@@ -282,7 +282,7 @@ namespace LIMSApi.Repositories
                         continue;
                     }
 
-                    // Different from role → store override
+                    // Differs from role → store override
                     if (existing == null)
                     {
                         _context.UserPermissions.Add(new UserPermission

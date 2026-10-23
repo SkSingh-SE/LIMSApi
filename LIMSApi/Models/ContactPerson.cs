@@ -10,22 +10,19 @@ namespace LIMSApi.Models
         [MaxLength(10)]
         public string? Salutation { get; set; }
 
-        [Required]
         [StringLength(100)]
-        public required string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         [MaxLength(100)]
         public string? Department { get; set; }
 
-        [EmailAddress]
         [MaxLength(100)]
         public string? EmailId { get; set; }
 
-        [Phone]
         [MaxLength(15)]
         public string? MobileNo { get; set; }
 
-        public bool IsWhatsappNo { get; set; }
+        public bool IsWhatsappNo { get; set; } // No Longer Use, as we are using in dispatch mode.
 
         [MaxLength(15)]
         public string? TelephoneNo { get; set; }

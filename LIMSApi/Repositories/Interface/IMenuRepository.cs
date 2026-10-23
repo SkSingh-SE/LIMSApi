@@ -17,5 +17,6 @@ namespace LIMSApi.Repositories.Interface
         Task<bool> ExistsByNameAndNotId(string name, long Id);
         Task<bool> UpdateMenuPermission(long menuId, List<PermissionMaster> updatedPermissions);
         Task<List<PermissionMaster>> GetMenuPermissions(long menuId);
+        Task<List<MenuMaster>> GetMenuTree();
     }
 }

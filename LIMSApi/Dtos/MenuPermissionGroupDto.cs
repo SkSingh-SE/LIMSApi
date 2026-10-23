@@ -19,7 +19,6 @@
     {
         public long PermissionID { get; set; }
         public bool IsGranted { get; set; }
-        public bool IsOverride { get; set; }
     }
 
 }

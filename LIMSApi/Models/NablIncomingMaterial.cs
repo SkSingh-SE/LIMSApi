@@ -65,7 +65,7 @@ namespace LIMSApi.Models
         public string? ProductCode { get; set; }
         public string? InspectionPlanNo { get; set; }
         public string? ItemsParametersJson { get; set; }
-        public string? PoNo { get; set; }
+        public long? PoNo { get; set; }
         public string? IndentNoPoNo { get; set; }
         public string? Email { get; set; }
         public string? PhoneNo { get; set; }

@@ -40,7 +40,7 @@ namespace LIMSApi.Repositories
         public async Task<SamplePreparationMaster?> GetSamplePreparationMasterById(long id)
         {
             return await _context.SamplePreparationMasters
-                .Include(x => x.TestMethodStandard)
+                .Include(x => x.TestMethodSpecification)
                 .Include(x => x.LaboratoryTest)
                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
@@ -48,7 +48,7 @@ namespace LIMSApi.Repositories
         public async Task<PagedResponse<object>> GetAllSamplePreparationMasters(PageFilter filter)
         {
             var _query = from sp in _context.SamplePreparationMasters
-                         join tms in _context.TestMethodStandards on sp.TestMethodStandardID equals tms.ID into tmsJoin
+                         join tms in _context.TestMethodSpecifications on sp.TestMethodStandardID equals tms.ID into tmsJoin
                          from tms in tmsJoin.DefaultIfEmpty()
                          join lt in _context.LaboratoryTests on sp.LaboratoryTestID equals lt.ID into ltJoin
                          from lt in ltJoin.DefaultIfEmpty()
@@ -57,7 +57,7 @@ namespace LIMSApi.Repositories
                          {
                              sp.ID,
                              sp.TestMethodStandardID,
-                             TestMethodStandardName = tms != null ? tms.Name : "",
+                             TestMethodSpecificationName = tms != null ? tms.Name : "",
                              sp.LaboratoryTestID,
                              LaboratoryTestName = lt != null ? lt.Name : "",
                              sp.SpecimenType,
@@ -77,7 +77,7 @@ namespace LIMSApi.Repositories
                     (x.SpecimenType != null && x.SpecimenType.Contains(search))
                     || (x.Dimensions != null && x.Dimensions.Contains(search))
                     || (x.MaterialType != null && x.MaterialType.Contains(search))
-                    || (x.TestMethodStandardName != null && x.TestMethodStandardName.Contains(search))
+                    || (x.TestMethodSpecificationName != null && x.TestMethodSpecificationName.Contains(search))
                     || (x.LaboratoryTestName != null && x.LaboratoryTestName.Contains(search)));
             }
 
@@ -148,7 +148,7 @@ namespace LIMSApi.Repositories
         public async Task<List<SamplePreparationMaster>> GetByLaboratoryTestId(long laboratoryTestId)
         {
             return await _context.SamplePreparationMasters
-                .Include(x => x.TestMethodStandard)
+                .Include(x => x.TestMethodSpecification)
                 .Include(x => x.LaboratoryTest)
                 .Where(x => x.LaboratoryTestID == laboratoryTestId && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode)
                 .ToListAsync();

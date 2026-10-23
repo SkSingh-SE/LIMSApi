@@ -31,6 +31,8 @@ namespace LIMSApi.Models
 
         [StringLength(50)]
         public string? GSTNo { get; set; }
+        [StringLength(2)]
+        public string? CustomerStateCode { get; set; }
         [StringLength(50)]
         public string? PANNo { get; set; }
 

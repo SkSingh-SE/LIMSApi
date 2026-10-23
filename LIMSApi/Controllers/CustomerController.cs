@@ -73,9 +73,32 @@ namespace LIMSApi.Controllers
         [HttpPatch("verify/{id}")]
         public async Task<IActionResult> VerifyCustomer(long id, bool status)
         {
-             await _customerService.VerifyCustomer(id, status);
-            
+            await _customerService.VerifyCustomer(id, status);
             return Ok(new { message = "Customer verified successfully." });
+        }
+
+        [RequirePermission(Permissions.Customer.Read)]
+        [HttpGet("change-requests/{customerId}")]
+        public async Task<IActionResult> GetChangeRequests(long customerId)
+        {
+            var data = await _customerService.GetChangeRequests(customerId);
+            return Ok(data);
+        }
+
+        [RequirePermission(Permissions.Customer.Read)]
+        [HttpGet("pending-change/{customerId}")]
+        public async Task<IActionResult> GetPendingChange(long customerId)
+        {
+            var data = await _customerService.GetPendingChangeRequest(customerId);
+            return data == null ? NoContent() : Ok(data);
+        }
+
+        [RequirePermission(Permissions.Customer.Update)]
+        [HttpPost("change-request/review")]
+        public async Task<IActionResult> ReviewChangeRequest(ReviewChangeRequestDto dto)
+        {
+            await _customerService.DirectReviewChangeRequest(dto);
+            return Ok(new { message = $"Change request {dto.Action}d successfully." });
         }
     }
 }

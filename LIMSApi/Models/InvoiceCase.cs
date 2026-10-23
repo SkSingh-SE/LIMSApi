@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace LIMSApi.Models
@@ -13,10 +13,19 @@ namespace LIMSApi.Models
         [ForeignKey(nameof(FinancialYearId))]
         public virtual FinancialYear? FinancialYearEntity { get; set; }
 
+        // Date this price version takes effect. Resolution key for all test-charge lookups
+        // (greatest EffectiveFrom <= sample inward date). FinancialYearId is derived from this on save.
+        public DateTime EffectiveFrom { get; set; }
+
         public long LaboratoryTestID { get; set; }
 
         [ForeignKey(nameof(LaboratoryTestID))]
         public virtual LaboratoryTest? LaboratoryTest { get; set; }
+
+        public long? AnalysisTypeID { get; set; }
+
+        [ForeignKey(nameof(AnalysisTypeID))]
+        public virtual LaboratoryTestAnalysisType? AnalysisType { get; set; }
 
         [StringLength(50)]
         public string? DefaultPricingType { get; set; }

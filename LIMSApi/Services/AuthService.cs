@@ -1,4 +1,4 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Security.Authentication;
 using System.Security.Claims;
@@ -106,7 +106,7 @@ namespace LIMSApi.Services
                 resolvedIsAdmin = user.Employee.Designation.Role.IsAdmin;
             }
 
-            var token = GenerateJwtToken(user, resolvedRoleName);
+            var token = GenerateJwtToken(user, resolvedRoleName, resolvedIsAdmin);
             _logger.LogInformation("User {Username} logged in successfully", user.UserName);
 
             await _userRepository.UpdateUser(user);
@@ -159,14 +159,15 @@ namespace LIMSApi.Services
                     throw new UnauthorizedAccessException($"User not found: {loggedInUserDTO.Email}");
                 }
 
-                // Resolve role via Designation -> Role chain; fallback to direct User.RoleName
                 var resolvedRoleName = user.RoleName;
+                var resolvedIsAdmin = user.IsAdmin;
                 if (user.Employee?.Designation?.Role != null)
                 {
                     resolvedRoleName = user.Employee.Designation.Role.Name;
+                    resolvedIsAdmin = user.Employee.Designation.Role.IsAdmin;
                 }
 
-                var token = GenerateJwtToken(user, resolvedRoleName);
+                var token = GenerateJwtToken(user, resolvedRoleName, resolvedIsAdmin);
 
                 var expireHours = Convert.ToInt32(_configuration["Jwt:ExpirationHours"]);
                 var responseObject = new
@@ -206,7 +207,7 @@ namespace LIMSApi.Services
             _logger.LogInformation("User {Username} registered successfully", model.UserName);
         }
 
-        private string GenerateJwtToken(UserMaster user, string? resolvedRoleName = null)
+        private string GenerateJwtToken(UserMaster user, string? resolvedRoleName = null, bool resolvedIsAdmin = false)
         {
             var roleName = resolvedRoleName ?? user.RoleName ?? string.Empty;
             var expireHours = Convert.ToInt32(_configuration["Jwt:ExpirationHours"]);
@@ -219,6 +220,7 @@ namespace LIMSApi.Services
                     new Claim(ClaimTypes.NameIdentifier, user.ID.ToString()),
                     new Claim(ClaimTypes.Name, user.UserName),
                     new Claim(ClaimTypes.Role, roleName),
+                    new Claim("IsAdmin", resolvedIsAdmin.ToString()),
                     new Claim(ClaimTypes.Email, user.EmailId ?? string.Empty),
                     new Claim("EmployeeID", user.EmployeeID != null ? user.EmployeeID.ToString() : "0"),
                     new Claim("CompanyCode", user.CompanyCode ?? string.Empty)

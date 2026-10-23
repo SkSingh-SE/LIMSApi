@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -79,11 +79,22 @@ namespace LIMSApi.Models
         public bool IsReportUnlocked { get; set; } = false;
         
         public bool IsAmendmentAllowed { get; set; } = true;
+
+        // Stop Report workflow fields
+        public bool IsReportStopped { get; set; } = false;
+        [StringLength(500)]
+        public string? StopReportReason { get; set; }
+        public DateTime? StopReportOn { get; set; }
+        public long? StopReportBy { get; set; }
         
         public decimal TotalTestCharges { get; set; } = 0;
 
         // PO linkage
         public long? PurchaseOrderId { get; set; }
+
+        // Financial year this sample belongs to — stamped from CollectionTime on create.
+        // Used by all pricing subsystems to resolve the correct price version.
+        public long? FinancialYearId { get; set; }
 
         // Navigation Properties
         public virtual ICollection<SampleInwardDispatchMode> DispatchModes { get; set; } = new List<SampleInwardDispatchMode>();
@@ -99,6 +110,9 @@ namespace LIMSApi.Models
 
         [ForeignKey(nameof(PurchaseOrderId))]
         public virtual CustomerPurchaseOrder? PurchaseOrder { get; set; }
+
+        [ForeignKey(nameof(FinancialYearId))]
+        public virtual FinancialYear? FinancialYear { get; set; }
 
         [NotMapped]
        public IFormFile File { get; set; } = null!;

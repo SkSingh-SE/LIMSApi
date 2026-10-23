@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace LIMSApi.Models
@@ -12,6 +12,7 @@ namespace LIMSApi.Models
         public string AliasName { get; set; } = string.Empty;
         public decimal Price { get; set; }
         public long InvoiceCaseConfigID { get; set; }
+        public string? ElementPrices { get; set; }
 
         [ForeignKey(nameof(InvoiceCaseConfigID))]
         public virtual InvoiceCaseConfiguration? Configuration { get; set; }

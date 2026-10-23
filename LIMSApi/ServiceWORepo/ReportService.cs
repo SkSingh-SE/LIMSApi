@@ -1,10 +1,11 @@
-﻿// LIMSApi/ServiceWORepo/ReportingService.cs
+// LIMSApi/ServiceWORepo/ReportingService.cs
 using System.Linq.Dynamic.Core;
 using System.Text.Json;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
 using LIMSApi.Helpers.Enums;
+using LIMSApi.Helpers.StatusFlow;
 using LIMSApi.Models;
 using LIMSApi.Reporting;
 using LIMSApi.Services.Interface;
@@ -48,6 +49,11 @@ namespace LIMSApi.ServiceWORepo
         {
             var userId = loggedInUser.EmployeeID;
 
+            // Entry point: TESTING_VERIFIED (priority 5). Everything at priority 6/7/99 is included via GetAllowedStatuses.
+            var allowedStatuses = StatusFilterHelper.GetAllowedStatuses(WorkflowListType.Reporting)
+                .Append(SampleStatus.TESTING_VERIFIED.ToString())
+                .ToList();
+
             // ----------------------------------------------------------
             // BASE QUERY
             // Start from SampleDetails that have at least one TestResultHeader,
@@ -58,10 +64,11 @@ namespace LIMSApi.ServiceWORepo
                         join inward in _db.SampleInwards
                             on sample.InwardID equals inward.ID
 
-                        // Ensure at least one TestResultHeader exists for this sample
+                        // Only samples that have reached verification or reporting stage
                         where _db.TestResultHeaders.Any(trh => trh.SampleID == sample.ID)
                               && sample.IsActive
                               && inward.CompanyCode == loggedInUser.CompanyCode
+                              && allowedStatuses.Contains(sample.SampleStatus)
 
                         // LEFT JOIN to ReportHeader
                         join rh in _db.ReportHeaders.Where(r => r.IsActive)
@@ -124,12 +131,11 @@ namespace LIMSApi.ServiceWORepo
                             ReportNo = report != null ? report.ReportNo : "",
                             PdfPath = report != null ? report.PdfPath : null,
 
-                            // Derive status: if report exists use its status, else compute from test results
-                            Status = report != null
-                                ? report.Status
-                                : (sample.IsTestingCompleted
-                                    ? "Ready for Report"
-                                    : "Tests In Progress"),
+                            // Authoritative sample-level status (same as Test List)
+                            SampleStatus = sample.SampleStatus,
+
+                            // Report-level status — used for workflow/action logic only
+                            ReportStatus = report != null ? report.Status : null,
 
                             WorkflowStatus = instance == null ? "Pending" : instance.Status,
                             CurrentStep = step != null ? step.Name : null,
@@ -205,18 +211,15 @@ namespace LIMSApi.ServiceWORepo
             {
                 x.sampleId,
                 x.ReportHeaderId,
+                x.InwardId,
                 x.SampleNo,
                 x.CaseNo,
                 x.Customer,
                 x.CustomerID,
                 x.Material,
                 x.Condition,
-                Status =
-    x.Status == "Under Amendment Review"
-        ? "Under Amendment Review"
-        : x.CanTakeAction
-            ? x.WorkflowStatus
-            : x.Status,
+                // Use sample-level status for the badge (consistent with Test List)
+                Status = x.SampleStatus,
 
                 x.ReportNo,
                 x.CurrentStep,
@@ -249,6 +252,16 @@ namespace LIMSApi.ServiceWORepo
                 throw new Exception("No TestResultHeaders found");
 
             var sampleId = headers.First().SampleID;
+
+            var sampleInward = await (from s in _db.SampleDetails
+                                      join i in _db.SampleInwards on s.InwardID equals i.ID
+                                      where s.ID == sampleId
+                                      select i).FirstOrDefaultAsync();
+
+            if (sampleInward != null && sampleInward.IsReportStopped)
+            {
+                throw new InvalidOperationException($"Report generation is stopped for this case. Reason: {sampleInward.StopReportReason}");
+            }
 
             // -------------------------------------------------
             // 2. Report No + Certificate
@@ -603,7 +616,7 @@ namespace LIMSApi.ServiceWORepo
                 LongTermTestId = ltt.ID,
 
                 TestName =
-                    ltt.TestResultHeader?.LaboratoryTest?.SubGroup
+                    ltt.TestResultHeader?.LaboratoryTest?.Name
                     ?? "Long Term Test",
 
                 DurationHours = ltt.DurationHours,
@@ -651,6 +664,10 @@ namespace LIMSApi.ServiceWORepo
                 };
             }
 
+            bool canSubmitForReportApproval = workflowInstance == null
+                && sample.SampleStatus == SampleStatus.TESTING_VERIFIED.ToString()
+                && (reportHeader.Status == "Pending" || reportHeader.Status == "Report Generated");
+
             return new ReportPreviewDto
             {
                 ReportHeaderId = reportHeader.ID,
@@ -696,8 +713,15 @@ namespace LIMSApi.ServiceWORepo
                 LongTermTests = longTermDtos,
 
                 Actions = canTakeAction ? actions : new List<ReportActionDto>(),
-                Status = reportHeader.Status == "Under Amendment Review" ? "Under Amendment Review" : reportHeader.Status == "Pending" ? "Pending for Approval" : reportHeader.Status,
-                Amendment = amendmentDto
+                Status = reportHeader.Status == "Under Amendment Review"
+                    ? "Under Amendment Review"
+                    : reportHeader.Status == "Pending" && workflowInstance != null
+                        ? "Pending for Approval"
+                        : reportHeader.Status == "Pending"
+                            ? "Report Ready"
+                            : reportHeader.Status,
+                Amendment = amendmentDto,
+                CanSubmitForReportApproval = canSubmitForReportApproval
             };
         }
         private LongTermParsedValue? SafeParseLongTermJson(string json)
@@ -1378,6 +1402,12 @@ namespace LIMSApi.ServiceWORepo
                     throw new InvalidOperationException(
                         "Amendment allowed only on generated reports.");
 
+                // Fix 3A — Guard: amendment workflow must be configured before creating amendment record
+                var amendmentEntityType = WorkFlowEntityTypeExtensions.GetEntityType(WorkFlowEntityType.Report_Amendment);
+                if (!await _workflowService.WorkflowExistsForEntityType(amendmentEntityType))
+                    throw new InvalidOperationException(
+                        "Cannot request amendment: No 'Report Amendment' workflow is configured. Contact administrator.");
+
                 // -------------------------------------------------
                 // 1️⃣ Upload Supporting Document
                 // -------------------------------------------------
@@ -1503,11 +1533,11 @@ namespace LIMSApi.ServiceWORepo
                     TestName = testName,
                     TestType = testType,
                     TestCategory = DetermineTestCategory(header, testType),
-                    SpecificationName = header.LaboratoryTest?.SubGroup,
+                    SpecificationName = header.LaboratoryTest?.Name,
                     TestMethod = header.Parameters
                         .Select(p => p.TestMethodUsed)
                         .FirstOrDefault(m => !string.IsNullOrEmpty(m))
-                        ?? header.LaboratoryTest?.SubGroup,
+                        ?? header.LaboratoryTest?.Name,
                     DateOfTesting = header.CompletedAt?.ToString("dd-MM-yyyy") ?? "",
                     Parameters = header.Parameters
                         .OrderBy(p => p.ID)
@@ -1525,7 +1555,14 @@ namespace LIMSApi.ServiceWORepo
                             NablScopeStatus = p.NablScopeStatus,
                             ExpandedUncertainty = p.ExpandedUncertainty,
                             CoverageFactor = p.CoverageFactor,
-                            SubGroup = testType == "Chemical" ? (header.LaboratoryTest?.TestCaption ?? header.LaboratoryTest?.Name) : null
+                            SubGroup = testType == "Chemical"
+                                ? (_db.ChemicalTests
+                                    .Where(ct => ct.SampleTestPlanID == header.TestPlanID)
+                                    .Include(ct => ct.AnalysisType)
+                                        .ThenInclude(at => at.SubGroup)
+                                    .Select(ct => ct.AnalysisType != null && ct.AnalysisType.SubGroup != null ? ct.AnalysisType.SubGroup.ReportTestName : null)
+                                    .FirstOrDefault() ?? header.LaboratoryTest.Name)
+                                : null
                         })
                         .ToList(),
                     Images = header.Images

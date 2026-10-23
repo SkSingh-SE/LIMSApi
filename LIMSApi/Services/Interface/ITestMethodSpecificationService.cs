@@ -14,9 +14,15 @@ namespace LIMSApi.Services.Interface
 
         Task<List<DropdwonSelector>> GetTestMethodSpecificationDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<List<DropdwonSelector>> GetTestMethodsByStandard(long standardId);
+        Task<List<DropdwonSelector>> GetTestMethodsByMetalClassification(long metalClassificationId, string? searchTerm, int pageNo, int pageSize);
         Task ActivateVersion(long specId, long versionId);
+        Task SetDefaultVersion(long specId, long versionId);
         Task WithdrawVersion(long specId, long versionId, string reason);
         Task<int> GetVersionImpactCount(long versionId);
-        Task<List<DropdwonSelector>> GetActiveVersionsBySpecId(long specId);
+        Task<List<DropdwonSelector>> GetVersionsBySpecId(long specId, bool includeAll = false);
+        Task<List<DropdwonSelector>> GetTestMethodSpecificationVersionDropdown(string? searchTerm, int pageNo, int pageSize, long metalId = 0);
+        Task<List<ImportValidationResultDto>> ValidateImport(List<ImportTestMethodSpecItemDto> items);
+        Task<BulkImportResultDto> BulkImport(List<ImportTestMethodSpecItemDto> items);
+        Task<List<DropdwonSelector>> GetAllStandardOrganizations();
     }
 }

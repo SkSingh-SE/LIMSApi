@@ -158,7 +158,7 @@ namespace LIMSApi.Helpers
                     h.Cell().Border(1).Padding(3).Text("Description").Bold();
                     h.Cell().Border(1).Padding(3).AlignCenter().Text("Qty / Element").Bold();
                     h.Cell().Border(1).Padding(3).AlignRight().Text("Rate").Bold();
-                    h.Cell().Border(1).Padding(3).AlignRight().Text("Total Amount (Rs.)").Bold();
+                    h.Cell().Border(1).Padding(3).AlignRight().Text($"Total Amount ({_model.CurrencySymbol})").Bold();
                 });
 
                 foreach (var row in _model.Rows)
@@ -178,16 +178,26 @@ namespace LIMSApi.Helpers
             {
                 row.RelativeColumn().Column(c =>
                 {
-                    c.Item().Text(text =>
+                    if (!_model.IsNonInr)
                     {
-                        text.Span("GST Category: ").Bold();
-                        text.Span("Technical Testing & Analysis Service");
-                    });
-                    c.Item().Text(text =>
+                        c.Item().Text(text =>
+                        {
+                            text.Span("GST Category: ").Bold();
+                            text.Span("Technical Testing & Analysis Service");
+                        });
+                        c.Item().Text(text =>
+                        {
+                            text.Span("HSN / SAC Code: ").Bold();
+                            text.Span("998346");
+                        });
+                    }
+                    else
                     {
-                        text.Span("HSN / SAC Code: ").Bold();
-                        text.Span("998346");
-                    });
+                        c.Item().Text(text =>
+                        {
+                            text.Span("Export of Services — Zero Rated").Bold();
+                        });
+                    }
                 });
 
                 row.ConstantColumn(160).Table(t =>
@@ -206,7 +216,7 @@ namespace LIMSApi.Helpers
                             .Text(amount.ToString("0.00")).FontSize(10).Bold();
                     }
 
-                    Line("Sub Total", _model.SubTotal);
+                    Line($"Sub Total ({_model.CurrencySymbol})", _model.SubTotal);
 
                     // Conditional discount line
                     if (_model.DiscountAmount > 0)
@@ -215,13 +225,28 @@ namespace LIMSApi.Helpers
                             ? $"Discount @ {_model.DiscountPercentage.Value:0.##}%"
                             : "Discount";
                         Line(discLabel, -_model.DiscountAmount);
-                        Line("After Discount", _model.DiscountedSubTotal);
+                        Line($"After Discount ({_model.CurrencySymbol})", _model.DiscountedSubTotal);
                     }
 
-                    Line("CGST @ 9%", _model.CGST);
-                    Line("SGST @ 9%", _model.SGST);
-                    Line("IGST @ 18%", _model.IGST);
-                    Line("Grand Total", _model.GrandTotal, bold: true);
+                    // GST lines — omitted for non-INR (export/foreign customers, zero-rated)
+                    if (!_model.IsNonInr)
+                    {
+                        Line("CGST @ 9%", _model.CGST);
+                        Line("SGST @ 9%", _model.SGST);
+                        Line("IGST @ 18%", _model.IGST);
+                    }
+
+                    Line($"Grand Total ({_model.CurrencySymbol})", _model.GrandTotal, bold: true);
+
+                    // For non-INR: show exchange rate note + foreign currency equivalent
+                    if (_model.IsNonInr && _model.ExchangeRate.HasValue && _model.ForeignCurrencyGrandTotal.HasValue)
+                    {
+                        t.Cell().ColumnSpan(2).Border(1).Padding(3)
+                            .Text($"Rate: 1 {_model.CurrencySymbol} = ₹{_model.ExchangeRate.Value:0.0000}")
+                            .FontSize(8).Italic();
+
+                        Line($"Grand Total ({_model.CurrencySymbol})", _model.ForeignCurrencyGrandTotal.Value, bold: true);
+                    }
                 });
             });
 

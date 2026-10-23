@@ -13,5 +13,8 @@ namespace LIMSApi.Repositories.Interface
         Task<List<DropdwonSelector>> GetInvoiceCaseConfigurationDropdown(string? searchTerm, int pageNo, int pageSize);
         Task<bool> ExistsByName(string name);
         Task<bool> ExistsByNameAndNotId(string name, long Id);
+        Task<bool> ExistsByNameAndSelectionType(string name, string selectionType);
+        Task<bool> ExistsByNameAndSelectionTypeAndNotId(string name, string selectionType, long id);
+        Task<bool> ExistsBaseSpectroConfig();
     }
 }

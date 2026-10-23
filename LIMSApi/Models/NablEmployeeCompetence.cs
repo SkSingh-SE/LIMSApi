@@ -9,9 +9,6 @@ namespace LIMSApi.Models
         // FK to existing Employee master
         public long EmployeeId { get; set; }
 
-        [ForeignKey("EmployeeId")]
-        public virtual EmployeeMaster? Employee { get; set; }
-
         [MaxLength(200)]
         public string? EmployeeName { get; set; }
 
@@ -37,6 +34,8 @@ namespace LIMSApi.Models
         public string? EvaluationDoneBy { get; set; }
 
         public DateTime? EvaluationDate { get; set; }
+        public long DesignationId { get; set; }
+
     }
     [NotMapped]
     public class CompetenceParameter

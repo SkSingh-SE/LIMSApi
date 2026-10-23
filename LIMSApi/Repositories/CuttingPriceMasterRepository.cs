@@ -1,4 +1,4 @@
-﻿using System.Linq.Dynamic.Core;
+using System.Linq.Dynamic.Core;
 using LIMSApi.Data;
 using LIMSApi.Dtos;
 using LIMSApi.Helpers;
@@ -25,25 +25,42 @@ namespace LIMSApi.Repositories
             await _context.SaveChangesAsync();
         }
 
-        public async Task DeleteCuttingPrice(CuttingPriceMaster model)
+        // Persists changes already applied to a tracked CuttingPriceMaster graph
+        // (scalar fields + Versions add/update/soft-delete). No .Update() — the entity is tracked.
+        public async Task SaveChangesAsync()
         {
-           _context.CuttingPriceMasters.Update(model);
             await _context.SaveChangesAsync();
+        }
+
+        public async Task<long?> GetCurrentFinancialYearId()
+        {
+            return await _context.FinancialYears
+                .Where(f => f.IsCurrent)
+                .Select(f => (long?)f.Id)
+                .FirstOrDefaultAsync();
+        }
+
+        public async Task<long?> GetFinancialYearIdForDate(DateTime date)
+        {
+            return await _context.FinancialYears
+                .Where(f => f.StartDate <= date && f.EndDate >= date)
+                .Select(f => (long?)f.Id)
+                .FirstOrDefaultAsync();
         }
 
         public async Task<CuttingPriceMaster?> GetCuttingPriceById(long id)
         {
-            return await _context.CuttingPriceMasters.FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
-        }
-
-        public async Task UpdateCuttingPrice(CuttingPriceMaster model)
-        {
-            _context.CuttingPriceMasters.Update(model);
-            await _context.SaveChangesAsync();
+            return await _context.CuttingPriceMasters
+                .Include(x => x.SpecimenType)
+                .Include(x => x.Versions.Where(v => v.IsActive))
+                    .ThenInclude(v => v.FinancialYear)
+                .FirstOrDefaultAsync(x => x.ID == id && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
         }
 
         public async Task<PagedResponse<object>> GetAllCuttingPrices(PageFilter filter)
         {
+            var today = DateTime.UtcNow.Date;
+
             var _query = from c in _context.CuttingPriceMasters
                          join st in _context.SpecimenTypeMasters on c.SpecimenTypeId equals st.ID into stJoin
                          from st in stJoin.DefaultIfEmpty()
@@ -53,10 +70,20 @@ namespace LIMSApi.Repositories
                              c.ID,
                              c.CuttingType,
                              c.UnitType,
-                             c.RatePerUnit,
+                             c.SizeRangeMin,
+                             c.SizeRangeMax,
                              c.Remark,
                              c.SpecimenTypeId,
                              SpecimenTypeName = st != null ? st.Name : "",
+                             CurrentRatePerUnit = c.Versions
+                                 .Where(v => v.IsActive && v.EffectiveFrom <= today)
+                                 .OrderByDescending(v => v.EffectiveFrom)
+                                 .Select(v => (decimal?)v.RatePerUnit).FirstOrDefault(),
+                             CurrentRatePerUnitHard = c.Versions
+                                 .Where(v => v.IsActive && v.EffectiveFrom <= today)
+                                 .OrderByDescending(v => v.EffectiveFrom)
+                                 .Select(v => (decimal?)v.RatePerUnitHard).FirstOrDefault(),
+                             VersionCount = c.Versions.Count(v => v.IsActive),
                              c.ModifiedOn
                          };
 
@@ -120,6 +147,8 @@ namespace LIMSApi.Repositories
         public async Task<List<CuttingPriceMaster>> GetAllCuttingPricesList()
         {
             return await _context.CuttingPriceMasters
+                .Include(x => x.Versions.Where(v => v.IsActive))
+                    .ThenInclude(v => v.FinancialYear)
                 .Where(x => x.IsActive && x.CompanyCode == loggedInUser.CompanyCode)
                 .ToListAsync();
         }
@@ -127,6 +156,8 @@ namespace LIMSApi.Repositories
         public async Task<CuttingPriceMaster?> GetBySpecimenAndCuttingType(long? specimenTypeId, string cuttingType)
         {
             return await _context.CuttingPriceMasters
+                .Include(x => x.Versions.Where(v => v.IsActive))
+                    .ThenInclude(v => v.FinancialYear)
                 .FirstOrDefaultAsync(x => x.SpecimenTypeId == specimenTypeId
                     && x.CuttingType == cuttingType
                     && x.IsActive

@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using LIMSApi.Models;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -42,6 +42,8 @@ namespace LIMSApi.Dtos
         public string? RequestFileName { get; set; }
         public long? UploadReferenceID { get; set; } = null;
         public string Status { get; set; } = "Sample Received";
+        public bool IsReportStopped { get; set; } = false;
+        public string? StopReportReason { get; set; }
         public DateTime CollectionTime { get; set; } = DateTime.Now;
         public string ReviewStatus { get; set; } = "Pending";
         public long? ReviewedBy { get; set; }
@@ -88,18 +90,19 @@ namespace LIMSApi.Dtos
     public class PartyAddressDto
     {
         public long ID { get; set; }
-        public long ContactPersonID { get; set; }
-        public string ContactPersonName { get; set; }
-        public string Address { get; set; }
-        public string PinCode { get; set; }
-        public string Area { get; set; }
-        public string City { get; set; }
-        public string State { get; set; }
-        public string Country { get; set; }
-        public string Type { get; set; }
+        public long? ContactPersonID { get; set; }
+        public string? ContactPersonName { get; set; } = string.Empty;
+        public string? Address { get; set; } = string.Empty;
+        public string? PinCode { get; set; } = string.Empty;
+        public string? Area { get; set; } = string.Empty;
+        public string? City { get; set; } = string.Empty;
+        public string? State { get; set; } = string.Empty;
+        public string? Country { get; set; } = string.Empty;
+        public string? Type { get; set; } = string.Empty;
         public long InwardID { get; set; }
-        public string EmailId { get; set; } = string.Empty;
-        public string MobileNo { get; set; } = string.Empty;
+        public string? EmailId { get; set; } = string.Empty;
+        public string? MobileNo { get; set; } = string.Empty;
+        public long? CustomerID { get; set; }
     }
 
     public class SampleDetailDto
@@ -111,11 +114,17 @@ namespace LIMSApi.Dtos
         public string? MetalClassificationName { get; set; }
         public long? ProductConditionID { get; set; }
         public string? ProductConditionName { get; set; }
+        // UI hidden per client requirement — retained for data integrity
         public long? ProductFormID { get; set; }
+        // UI hidden per client requirement — retained for data integrity
         public long? SpecimenOrientationID { get; set; }
         public string? Remarks { get; set; }
         public int Quantity { get; set; }
-        public bool Disabled { get; set; }
+        public bool IsCancelled { get; set; }
+        public string? SampleStatus { get; set; }
+        public DateTime? CancelledOn { get; set; }
+        public long? CancelledBy { get; set; }
+        public string? CancellationReason { get; set; }
 
         // Prep flags
         public bool PreparationRequired { get; set; }
@@ -127,6 +136,11 @@ namespace LIMSApi.Dtos
         public long? TpiAgencyID { get; set; }
         public string? Specimen { get; set; }
         public string? TestInstructions { get; set; }
+
+        // TPI joined fields (for display in review screens)
+        public string? TpiAgencyName { get; set; }
+        public string? TpiEmailId { get; set; }
+        public string? TpiContactNo { get; set; }
 
         // File
         public long? UploadReferenceID { get; set; }
@@ -189,6 +203,8 @@ namespace LIMSApi.Dtos
         public string? ReportNo { get; set; }
         public string? UlrNo { get; set; }
         public bool Cancel { get; set; }
+        public long? StandardID { get; set; }
+        public string? StandardName { get; set; }
     }
 
     public class ChemicalTestDto
@@ -198,7 +214,7 @@ namespace LIMSApi.Dtos
         public string? SampleNo { get; set; }
         public string? ReportNo { get; set; } = "";
         public string? UlrNo { get; set; } = "";
-        public Dictionary<string, bool> TestTypes { get; set; } = new();
+        public List<long> TestTypeIds { get; set; } = new();
         public long? MetalClassificationID { get; set; }
         public string? MetalClassificationName { get; set; }
         public long? Specification1 { get; set; }
@@ -248,4 +264,28 @@ namespace LIMSApi.Dtos
         public string Name { get; set; }
         public string Action { get; set; }
     }
+
+    public class PaymentInfoDto
+    {
+        public long? PurchaseOrderId { get; set; }
+        public decimal AdvancePayment { get; set; }
+        public bool BillRequired { get; set; }
+        public bool AdvancePIRequired { get; set; }
+        public bool HoldTestingUntilPIApproved { get; set; }
+    }
+
+    public class SamplePrepReviewDto
+    {
+        public bool PreparationRequired { get; set; }
+        public bool MachiningRequired { get; set; }
+        public decimal MachiningAmount { get; set; }
+        public string? Specimen { get; set; }
+        public bool OtherPreparation { get; set; }
+        public decimal OtherPreparationCharge { get; set; }
+        public string? TestInstructions { get; set; }
+        public bool TpiRequired { get; set; }
+        public long? TpiAgencyID { get; set; }
+    }
 }
+
+
