@@ -41,6 +41,7 @@ namespace LIMSApi.Repositories
                 .Include(x => x.HeatTreatmentCategory)
                 .Include(x => x.CoolingMedium)
                 .Include(x => x.ApplicableClassifications).ThenInclude(ac => ac.MetalClassification)
+                .Include(x => x.Stages.Where(s => s.IsActive)).ThenInclude(s => s.CoolingMedium)
                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
         }
 

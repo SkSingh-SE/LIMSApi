@@ -64,7 +64,8 @@ namespace LIMSApi.Services
             existingProductCondition.Name = model.Name;
             existingProductCondition.Code = model.Code;
             existingProductCondition.ProductConditionCategoryID = model.ProductConditionCategoryID;
-            existingProductCondition.LinkedHeatTreatmentID = model.LinkedHeatTreatmentID;
+            existingProductCondition.LinkedHeatTreatmentID = (model.LinkedHeatTreatmentID == null || model.LinkedHeatTreatmentID == 0) ? null : model.LinkedHeatTreatmentID;
+            existingProductCondition.Description = model.Description;
             existingProductCondition.CalibrationRequired = model.CalibrationRequired;
             existingProductCondition.IsDestructive = model.IsDestructive;
 

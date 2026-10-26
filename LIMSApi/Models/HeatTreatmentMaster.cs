@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -36,4 +36,6 @@ public partial class HeatTreatmentMaster : AuditProperty
     public virtual CoolingMediumMaster? CoolingMedium { get; set; }
 
     public virtual ICollection<HeatTreatmentMetalClassification> ApplicableClassifications { get; set; } = new List<HeatTreatmentMetalClassification>();
+
+    public virtual ICollection<HeatTreatmentStage> Stages { get; set; } = new List<HeatTreatmentStage>();
 }

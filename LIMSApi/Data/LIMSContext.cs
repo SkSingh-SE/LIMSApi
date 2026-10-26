@@ -42,6 +42,7 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<DepartmentMaster> DepartmentMasters { get; set; }
     public virtual DbSet<DesignationMaster> DesignationMasters { get; set; }
     public virtual DbSet<DimensionalFactorMaster> DimensionalFactorMasters { get; set; }
+    public virtual DbSet<DimensionalFactorShapeFormula> DimensionalFactorShapeFormulas { get; set; }
     public virtual DbSet<DisciplineMaster> DisciplineMasters { get; set; }
     public virtual DbSet<DispatchModeMaster> DispatchModeMasters { get; set; }
     public virtual DbSet<EmployeeDocument> EmployeeDocuments { get; set; }
@@ -51,6 +52,7 @@ public partial class LIMSContext : DbContext
     public virtual DbSet<EquipmentTypeMaster> EquipmentTypeMasters { get; set; }
     public virtual DbSet<GroupMaster> GroupMasters { get; set; }
     public virtual DbSet<HeatTreatmentMaster> HeatTreatmentMasters { get; set; }
+    public virtual DbSet<HeatTreatmentStage> HeatTreatmentStages { get; set; }
     public virtual DbSet<IndustryMaster> IndustryMasters { get; set; }
     public virtual DbSet<InvoiceCaseConfiguration> InvoiceCaseConfigurations { get; set; }
     public virtual DbSet<InvoiceCaseAliasName> InvoiceCaseAliasNames { get; set; }

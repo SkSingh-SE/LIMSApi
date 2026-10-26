@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -17,6 +17,23 @@ public partial class SpecimenOrientationMaster : AuditProperty
     public string? Code { get; set; }
 
     public long? SpecimenOrientationCategoryID { get; set; }
+
+    [StringLength(50)]
+    public string? NotationType { get; set; } = "Two-letter";
+
+    [StringLength(10)]
+    public string? LengthAxis { get; set; }
+
+    [StringLength(10)]
+    public string? CrackOrNotchDirection { get; set; }
+
+    [StringLength(20)]
+    public string? StandardNotation { get; set; }
+
+    public long? TestMethodSpecificationID { get; set; }
+
+    [StringLength(100)]
+    public string? TestStandardName { get; set; }
 
     [StringLength(500)]
     public string? Description { get; set; }

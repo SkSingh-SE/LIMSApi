@@ -9,6 +9,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LIMSApi.Repositories
 {
+    /// <summary>
+    /// Repository for DimensionalFactorMaster CRUD operations.
+    /// NOTE (NABL Precision Standard): Decimal places and rounding precision are auto-inherited 
+    /// from the bound Parameter Master in Material Specification (not stored on DimensionalFactorMaster directly).
+    /// </summary>
     public class DimensionalFactorRepository : IDimensionalFactorRepository
     {
         private readonly LIMSContext _context;
@@ -42,7 +47,9 @@ namespace LIMSApi.Repositories
                 .Include(x => x.ParameterUnit)
                 .Include(x => x.ParameterUnitEquivalent)
                 .Include(x => x.DefaultTestMethod)
+                .Include(x => x.DefaultEquipmentType)
                 .Include(x => x.ApplicableForms).ThenInclude(af => af.ProductForm)
+                .Include(x => x.ShapeFormulas.Where(sf => sf.IsActive)).ThenInclude(sf => sf.SpecimenType)
                 .FirstOrDefaultAsync(x => x.ID == id && x.IsActive);
         }
 
@@ -54,14 +61,39 @@ namespace LIMSApi.Repositories
 
         public async Task<PagedResponse<object>> GetAllDimensionalFactors(PageFilter filter)
         {
-            var _query = _context.DimensionalFactorMasters
-                .Where(c => c.IsActive)
-                .Include(x => x.ParameterUnit)
-                .Include(x => x.ParameterUnitEquivalent)
-                .Include(x => x.DefaultTestMethod)
-                .Include(x => x.ApplicableForms).ThenInclude(af => af.ProductForm)
-                .AsQueryable()
-                .ApplyFilters(filter.Filter);
+            var baseQuery = from c in _context.DimensionalFactorMasters
+                            where c.IsActive
+                            join empMod in _context.EmployeeMasters on c.ModifiedBy equals empMod.ID into empModJoin
+                            from empMod in empModJoin.DefaultIfEmpty()
+                            join empCre in _context.EmployeeMasters on c.CreatedBy equals empCre.ID into empCreJoin
+                            from empCre in empCreJoin.DefaultIfEmpty()
+                            join pu in _context.ParameterUnitMasters on c.ParameterUnitID equals pu.ID into puJoin
+                            from pu in puJoin.DefaultIfEmpty()
+                            join eq in _context.EquipmentTypeMasters on c.DefaultEquipmentTypeID equals eq.ID into eqJoin
+                            from eq in eqJoin.DefaultIfEmpty()
+                            select new
+                            {
+                                c.ID,
+                                c.Name,
+                                c.Code,
+                                c.FactorType,
+                                c.ParameterUnitID,
+                                UnitName = pu != null ? pu.Name : null,
+                                ParameterUnit = pu != null ? new { pu.ID, pu.Name } : null,
+                                c.DefaultEquipmentTypeID,
+                                DefaultEquipmentTypeName = eq != null ? eq.Name : null,
+                                DefaultEquipmentType = eq != null ? new { eq.ID, eq.Name } : null,
+                                c.ToleranceType,
+                                c.IsActive,
+                                c.CreatedBy,
+                                c.CreatedOn,
+                                c.ModifiedBy,
+                                ModifiedOn = c.ModifiedOn ?? c.CreatedOn,
+                                CreatedByName = empCre != null ? empCre.Name : null,
+                                ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : null)
+                            };
+
+            var _query = baseQuery.AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {

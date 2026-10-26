@@ -79,6 +79,47 @@ namespace LIMSApi.Services
                 }
             }
 
+            // Sync Stages
+            if (model.Stages != null)
+            {
+                var incomingIds = model.Stages.Where(s => s.ID > 0).Select(s => s.ID).ToHashSet();
+                foreach (var existingStage in existingHeatTreatment.Stages.Where(s => s.IsActive))
+                {
+                    if (!incomingIds.Contains(existingStage.ID))
+                    {
+                        existingStage.IsActive = false;
+                        existingStage.ModifiedOn = DateTime.UtcNow;
+                    }
+                }
+
+                foreach (var incomingStage in model.Stages)
+                {
+                    if (incomingStage.ID > 0)
+                    {
+                        var target = existingHeatTreatment.Stages.FirstOrDefault(s => s.ID == incomingStage.ID);
+                        if (target != null)
+                        {
+                            target.StageNumber = incomingStage.StageNumber;
+                            target.StageName = incomingStage.StageName;
+                            target.TempRangeMin = incomingStage.TempRangeMin;
+                            target.TempRangeMax = incomingStage.TempRangeMax;
+                            target.SoakingDescription = incomingStage.SoakingDescription;
+                            target.CoolingMediumID = (incomingStage.CoolingMediumID == null || incomingStage.CoolingMediumID == 0) ? null : incomingStage.CoolingMediumID;
+                            target.IsActive = true;
+                            target.ModifiedOn = DateTime.UtcNow;
+                        }
+                    }
+                    else
+                    {
+                        incomingStage.HeatTreatmentID = model.ID;
+                        incomingStage.CoolingMediumID = (incomingStage.CoolingMediumID == null || incomingStage.CoolingMediumID == 0) ? null : incomingStage.CoolingMediumID;
+                        incomingStage.IsActive = true;
+                        incomingStage.CreatedOn = DateTime.UtcNow;
+                        existingHeatTreatment.Stages.Add(incomingStage);
+                    }
+                }
+            }
+
             existingHeatTreatment.ModifiedOn = DateTime.UtcNow;
 
             await _heatTreatmentRepository.UpdateHeatTreatment(existingHeatTreatment);

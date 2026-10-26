@@ -37,6 +37,16 @@ namespace LIMSApi.Services
                     throw new InvalidOperationException("Specimen Orientation Code already exists!");
             }
 
+            if (string.IsNullOrWhiteSpace(model.StandardNotation))
+            {
+                if (model.NotationType == "One-letter" || model.NotationType == "1")
+                    model.StandardNotation = model.LengthAxis ?? model.Code;
+                else if (!string.IsNullOrWhiteSpace(model.LengthAxis) && !string.IsNullOrWhiteSpace(model.CrackOrNotchDirection))
+                    model.StandardNotation = $"{model.LengthAxis}-{model.CrackOrNotchDirection}";
+                else
+                    model.StandardNotation = model.Code;
+            }
+
             await _specimenRepository.AddSpecimenOrientation(model);
             _logger.LogInformation("SpecimenOrientation '{SpecimenOrientationName}' created successfully.", model.Name);
         }
@@ -63,7 +73,19 @@ namespace LIMSApi.Services
 
             existingSpecimenOrientation.Name = model.Name;
             existingSpecimenOrientation.Code = model.Code;
-            existingSpecimenOrientation.SpecimenOrientationCategoryID = model.SpecimenOrientationCategoryID;
+            existingSpecimenOrientation.SpecimenOrientationCategoryID = (model.SpecimenOrientationCategoryID == null || model.SpecimenOrientationCategoryID == 0) ? null : model.SpecimenOrientationCategoryID;
+            existingSpecimenOrientation.NotationType = model.NotationType;
+            existingSpecimenOrientation.LengthAxis = model.LengthAxis;
+            existingSpecimenOrientation.CrackOrNotchDirection = model.CrackOrNotchDirection;
+            existingSpecimenOrientation.StandardNotation = !string.IsNullOrWhiteSpace(model.StandardNotation)
+                ? model.StandardNotation
+                : (model.NotationType == "One-letter" || model.NotationType == "1"
+                    ? (model.LengthAxis ?? model.Code)
+                    : (!string.IsNullOrWhiteSpace(model.LengthAxis) && !string.IsNullOrWhiteSpace(model.CrackOrNotchDirection)
+                        ? $"{model.LengthAxis}-{model.CrackOrNotchDirection}"
+                        : model.Code));
+            existingSpecimenOrientation.TestMethodSpecificationID = (model.TestMethodSpecificationID == null || model.TestMethodSpecificationID == 0) ? null : model.TestMethodSpecificationID;
+            existingSpecimenOrientation.TestStandardName = model.TestStandardName;
             existingSpecimenOrientation.Description = model.Description;
 
             // Update ApplicableForms junction

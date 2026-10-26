@@ -5,6 +5,11 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace LIMSApi.Models;
 
+/// <summary>
+/// Dimensional Factor Master entity.
+/// NOTE (NABL Precision Standard): Decimal places and rounding precision are auto-inherited 
+/// from the bound Parameter Master in Material Specification (not stored on DimensionalFactorMaster directly).
+/// </summary>
 public partial class DimensionalFactorMaster : AuditProperty
 {
     [Key]
@@ -37,5 +42,15 @@ public partial class DimensionalFactorMaster : AuditProperty
     [ForeignKey("DefaultTestMethodID")]
     public virtual TestMethodSpecification? DefaultTestMethod { get; set; }
 
+    [StringLength(50)]
+    public string FactorType { get; set; } = "Measured";
+
+    public long? DefaultEquipmentTypeID { get; set; }
+
+    [ForeignKey(nameof(DefaultEquipmentTypeID))]
+    public virtual EquipmentTypeMaster? DefaultEquipmentType { get; set; }
+
     public virtual ICollection<DimensionalFactorProductForm> ApplicableForms { get; set; } = new List<DimensionalFactorProductForm>();
+
+    public virtual ICollection<DimensionalFactorShapeFormula> ShapeFormulas { get; set; } = new List<DimensionalFactorShapeFormula>();
 }
