@@ -42,6 +42,42 @@ builder.Services.AddCors(options =>
 });
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
+// Auto-select correct DB connection for hosting environments:
+bool isStaging = builder.Environment.IsStaging() ||
+                 string.Equals(builder.Environment.EnvironmentName, "Staging", StringComparison.OrdinalIgnoreCase) ||
+                 (Environment.GetEnvironmentVariable("APP_POOL_ID")?.Contains("site1", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                 (Environment.GetEnvironmentVariable("SITE_NAME")?.Contains("site1", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                 AppDomain.CurrentDomain.BaseDirectory.Contains("site1", StringComparison.OrdinalIgnoreCase);
+
+bool isProdSite = (Environment.GetEnvironmentVariable("APP_POOL_ID")?.Contains("site3", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                  (Environment.GetEnvironmentVariable("SITE_NAME")?.Contains("site3", StringComparison.OrdinalIgnoreCase) ?? false) ||
+                  AppDomain.CurrentDomain.BaseDirectory.Contains("site3", StringComparison.OrdinalIgnoreCase);
+
+if (isStaging)
+{
+    var devConn = builder.Configuration.GetConnectionString("LimsDevConnection");
+    if (!string.IsNullOrWhiteSpace(devConn))
+    {
+        connectionString = devConn;
+    }
+}
+else if (isProdSite)
+{
+    var prodConn = builder.Configuration.GetConnectionString("LimsDbConnection");
+    if (!string.IsNullOrWhiteSpace(prodConn))
+    {
+        connectionString = prodConn;
+    }
+}
+else if (!builder.Environment.IsDevelopment() && (connectionString?.Contains("localhost", StringComparison.OrdinalIgnoreCase) == true || connectionString?.Contains("127.0.0.1") == true))
+{
+    var devConn = builder.Configuration.GetConnectionString("LimsDevConnection");
+    if (!string.IsNullOrWhiteSpace(devConn))
+    {
+        connectionString = devConn;
+    }
+}
 // Add services to the container.
 
 // Global upload size limit — safety net for all multipart form endpoints (250 MB)
