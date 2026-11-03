@@ -408,7 +408,8 @@ namespace LIMSApi.ServiceWORepo
 
                     // CRITICAL #3: Allow value==0 (valid for chemical trace elements)
                     // Only block null values for completed tests, not zero
-                    if (header.Status == "Completed" && p.Value == null)
+                    bool isTextParam = param.ParameterType != null && (param.ParameterType.Equals("Qualitative", StringComparison.OrdinalIgnoreCase) || param.ParameterType.Equals("Reported", StringComparison.OrdinalIgnoreCase));
+                    if (header.Status == "Completed" && (isTextParam ? (p.Value == null && string.IsNullOrWhiteSpace(p.Remarks) && string.IsNullOrWhiteSpace(param.ResultStatus)) : p.Value == null))
                         throw new InvalidOperationException($"Parameter '{p.ParameterName}' must have a value after test completion.");
 
                     param.Value = newVal;
@@ -1881,6 +1882,7 @@ namespace LIMSApi.ServiceWORepo
             foreach (var p in specParams)
             {
                 if (existingParamIds.Contains(p.ParameterID)) continue;
+                existingParamIds.Add(p.ParameterID);
                 header.Parameters.Add(new TestResultParameter
                 {
                     ParameterID = p.ParameterID,
@@ -2119,7 +2121,7 @@ namespace LIMSApi.ServiceWORepo
                 foreach (var sgp in labTestSubGroupParams)
                 {
                     var pm = sgp.Parameter;
-                    if (pm == null) continue;
+                    if (pm == null || result.Any(r => r.ParameterID == pm.ID)) continue;
 
                     var specLine = specLines.FirstOrDefault(sl => sl.ParameterID == sgp.ParameterID);
                     var formulaExpr = !string.IsNullOrWhiteSpace(specLine?.Equation) ? specLine.Equation.Trim() : pm.Formula;
@@ -2597,7 +2599,13 @@ namespace LIMSApi.ServiceWORepo
                     throw new InvalidOperationException($"Cannot complete test in '{header.Status}' status. Only 'Started' or 'In-Progress' tests can be completed.");
 
                 // Validate parameter values completeness
-                var missingValues = header.Parameters.Where(p => p.Value == null).ToList();
+                var missingValues = header.Parameters.Where(p =>
+                {
+                    bool isText = p.ParameterType != null && (p.ParameterType.Equals("Qualitative", StringComparison.OrdinalIgnoreCase) || p.ParameterType.Equals("Reported", StringComparison.OrdinalIgnoreCase));
+                    return isText
+                        ? (p.Value == null && string.IsNullOrWhiteSpace(p.Remarks) && string.IsNullOrWhiteSpace(p.ResultStatus))
+                        : (p.Value == null);
+                }).ToList();
                 if (missingValues.Any())
                 {
                     var missingNames = string.Join(", ", missingValues.Select(p => p.ParameterName));
@@ -3335,7 +3343,8 @@ namespace LIMSApi.ServiceWORepo
             if (param == null) throw new KeyNotFoundException("Parameter not found.");
 
             var header = await _db.TestResultHeaders.FindAsync(param.TestResultHeaderID);
-            if (header != null && header.Status != "Pending" && header.Status != "VerificationRejected")
+            var lockedStatuses = new[] { "Completed", "PendingVerification", "Verified" };
+            if (header != null && lockedStatuses.Contains(header.Status))
                 throw new InvalidOperationException($"Cannot delete parameter — test configuration is locked in '{header.Status}' status.");
 
             _db.TestResultParameters.Remove(param);

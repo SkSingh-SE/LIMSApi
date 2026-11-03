@@ -102,13 +102,58 @@ namespace LIMSApi.Repositories
                     .Where(x => x.IsActive && x.CompanyCode == loggedInUser.CompanyCode &&
                                (x.LaboratoryTestID == testId.Value || mappedTemplateIds.Contains(x.ID)));
 
-                // ── TIER 1: EXACT MATCH (Leaf Node + Test Method Specification) ──
+                // ── TIER 1: EXACT OR MAPPED MATCH (Leaf Node + Test Method Specification) ──
                 if ((testMethodId.HasValue && testMethodId.Value > 0) || !string.IsNullOrWhiteSpace(testMethodName))
                 {
                     var cleanMethodName = testMethodName?.Trim().ToLowerInvariant();
+
+                    // Check mappings table first for exact method ID or method name match
+                    var mappedTemplateIdByMethod = await _context.TestLayoutTemplateMappings
+                        .Where(m => m.IsActive && m.CompanyCode == loggedInUser.CompanyCode &&
+                                   (m.LaboratoryTestID == testId.Value) &&
+                                   ((testMethodId.HasValue && m.TestMethodSpecificationID == testMethodId.Value) ||
+                                    (!string.IsNullOrEmpty(cleanMethodName) && m.TestMethodName != null &&
+                                     (m.TestMethodName.Trim().ToLower() == cleanMethodName ||
+                                      m.TestMethodName.ToLower().Contains(cleanMethodName) ||
+                                      cleanMethodName.Contains(m.TestMethodName.ToLower())))))
+                        .OrderByDescending(m => m.IsDefault)
+                        .ThenByDescending(m => m.ID)
+                        .Select(m => m.TestLayoutTemplateID)
+                        .FirstOrDefaultAsync();
+
+                    if (mappedTemplateIdByMethod > 0)
+                    {
+                        var mappedMatch = await _context.TestLayoutTemplates
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(x => x.ID == mappedTemplateIdByMethod && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+                        if (mappedMatch != null) return mappedMatch;
+                    }
+
+                    // Heuristic standard match for Tensile Test (LaboratoryTestID == 1)
+                    if (testId.Value == 1)
+                    {
+                        if (testMethodId == 8 || testMethodId == 10010 || (!string.IsNullOrEmpty(cleanMethodName) && (cleanMethodName.Contains("370") || cleanMethodName.Contains("e8"))))
+                        {
+                            var t5 = await _context.TestLayoutTemplates
+                                .AsNoTracking()
+                                .FirstOrDefaultAsync(x => x.ID == 5 && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+                            if (t5 != null) return t5;
+                        }
+                        if (testMethodId == 6 || testMethodId == 10033 || testMethodId == 2 || (!string.IsNullOrEmpty(cleanMethodName) && cleanMethodName.Contains("1608")))
+                        {
+                            var t13 = await _context.TestLayoutTemplates
+                                .AsNoTracking()
+                                .FirstOrDefaultAsync(x => x.ID == 10013 && x.IsActive && x.CompanyCode == loggedInUser.CompanyCode);
+                            if (t13 != null) return t13;
+                        }
+                    }
+
                     var methodExactMatch = await query
                         .Where(x => (testMethodId.HasValue && x.TestMethodSpecificationID == testMethodId.Value) ||
-                                    (!string.IsNullOrEmpty(cleanMethodName) && x.TestMethodName != null && x.TestMethodName.Trim().ToLower() == cleanMethodName))
+                                    (!string.IsNullOrEmpty(cleanMethodName) && x.TestMethodName != null &&
+                                     (x.TestMethodName.Trim().ToLower() == cleanMethodName ||
+                                      x.TestMethodName.ToLower().Contains(cleanMethodName) ||
+                                      cleanMethodName.Contains(x.TestMethodName.ToLower()))))
                         .OrderByDescending(x => x.IsDefault)
                         .ThenByDescending(x => x.ID)
                         .FirstOrDefaultAsync();

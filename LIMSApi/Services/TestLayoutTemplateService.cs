@@ -80,6 +80,8 @@ namespace LIMSApi.Services
             existing.LaboratoryTestID = model.LaboratoryTestID;
             existing.LaboratoryTestSubGroupID = model.LaboratoryTestSubGroupID;
             existing.LaboratoryTestAnalysisTypeID = model.LaboratoryTestAnalysisTypeID;
+            existing.TestMethodSpecificationID = model.TestMethodSpecificationID;
+            existing.TestMethodName = model.TestMethodName;
             existing.LeafNode = model.LeafNode;
             existing.ApplyToLeaf = model.ApplyToLeaf;
             existing.SectionCount = model.SectionCount;

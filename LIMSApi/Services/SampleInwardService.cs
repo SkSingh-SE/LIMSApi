@@ -207,11 +207,13 @@ namespace LIMSApi.Services
                         Length = s.Length,
 
                         AdditionalDetails = model.SampleAdditionalDetails
-                            .Where(a => a.SampleNo == s.SampleNo)
+                            .Where(a => a.SampleNo == s.SampleNo && !string.IsNullOrWhiteSpace(a.Label))
+                            .GroupBy(a => a.Label.Trim(), StringComparer.OrdinalIgnoreCase)
+                            .Select(g => g.Last())
                             .Select(a => new SampleAdditionalDetail
                             {
                                 SampleNo = $"{year}-{(nextSampleNumber + index):D6}",
-                                Label = a.Label,
+                                Label = a.Label.Trim(),
                                 Value = a.Value
                             }).ToList()
                     }).ToList()
@@ -408,7 +410,7 @@ namespace LIMSApi.Services
                 if (model.ID == 0)
                     throw new ArgumentException("SampleInward ID should not be empty!");
 
-                var entity = await _SampleInwardRepository.GetSampleInwardWithPlans(model.ID);
+                var entity = await _SampleInwardRepository.GetSampleInwardById(model.ID);
                 if (entity == null)
                     throw new Exception("Sample Inward not found");
 
@@ -584,12 +586,18 @@ namespace LIMSApi.Services
                         }
 
                         existingSample.AdditionalDetails.Clear();
-                        foreach (var a in model.SampleAdditionalDetails.Where(a => a.SampleNo == s.SampleNo))
+                        var distinctExistingDetails = model.SampleAdditionalDetails
+                            .Where(a => a.SampleNo == s.SampleNo && !string.IsNullOrWhiteSpace(a.Label))
+                            .GroupBy(a => a.Label.Trim(), StringComparer.OrdinalIgnoreCase)
+                            .Select(g => g.Last())
+                            .ToList();
+
+                        foreach (var a in distinctExistingDetails)
                         {
                             existingSample.AdditionalDetails.Add(new SampleAdditionalDetail
                             {
                                 SampleNo = existingSample.SampleNo,
-                                Label = a.Label,
+                                Label = a.Label.Trim(),
                                 Value = a.Value
                             });
                         }
@@ -655,12 +663,18 @@ namespace LIMSApi.Services
                             newSample.UploadReferenceID = fileUploadResponse.ID;
                         }
 
-                        foreach (var a in model.SampleAdditionalDetails.Where(a => a.SampleNo == s.SampleNo))
+                        var distinctNewDetails = model.SampleAdditionalDetails
+                            .Where(a => a.SampleNo == s.SampleNo && !string.IsNullOrWhiteSpace(a.Label))
+                            .GroupBy(a => a.Label.Trim(), StringComparer.OrdinalIgnoreCase)
+                            .Select(g => g.Last())
+                            .ToList();
+
+                        foreach (var a in distinctNewDetails)
                         {
                             newSample.AdditionalDetails.Add(new SampleAdditionalDetail
                             {
                                 SampleNo = newSampleNo,
-                                Label = a.Label,
+                                Label = a.Label.Trim(),
                                 Value = a.Value
                             });
                         }
@@ -681,6 +695,45 @@ namespace LIMSApi.Services
                 await using var trx = await _context.Database.BeginTransactionAsync();
                 try
                 {
+                    // Clean up existing child collections from DB to avoid duplicate accumulation on detached entity update
+                    var existingSampleIds = entity.SampleDetails.Select(sd => sd.ID).Where(id => id > 0).ToList();
+                    if (existingSampleIds.Any())
+                    {
+                        var existingAdditional = await _context.SampleAdditionalDetails
+                            .Where(ad => existingSampleIds.Contains(ad.SampleID))
+                            .ToListAsync();
+                        if (existingAdditional.Any())
+                        {
+                            _context.SampleAdditionalDetails.RemoveRange(existingAdditional);
+                        }
+                    }
+
+                    var existingDispatch = await _context.InwardDispatchModes.Where(d => d.InwardID == entity.ID).ToListAsync();
+                    if (existingDispatch.Any()) _context.InwardDispatchModes.RemoveRange(existingDispatch);
+
+                    var existingContacts = await _context.InwardContacts.Where(c => c.InwardID == entity.ID).ToListAsync();
+                    if (existingContacts.Any()) _context.InwardContacts.RemoveRange(existingContacts);
+
+                    var existingAddresses = await _context.InwardAddresses.Where(a => a.InwardID == entity.ID).ToListAsync();
+                    if (existingAddresses.Any()) _context.InwardAddresses.RemoveRange(existingAddresses);
+
+                    var customerName = entity.Customer?.Name ?? "";
+                    entity.Customer = null;
+                    entity.PurchaseOrder = null;
+                    entity.FinancialYear = null;
+                    foreach (var sd in entity.SampleDetails)
+                    {
+                        sd.MetalClassification = null;
+                        sd.ProductCondition = null;
+                        sd.ProductMaster = null;
+                        sd.ProductSizeMaster = null;
+                        sd.SpecificationGrade = null;
+                        sd.AssignedGrade = null;
+                        sd.SpecimenOrientation = null;
+                        sd.ProductForm = null;
+                        sd.TestPlans = new List<SampleTestPlan>();
+                    }
+
                     await _SampleInwardRepository.UpdateSampleInward(entity);
                     _logger.LogInformation("SampleInward '{Case}' updated successfully.", entity.CaseNo);
                     foreach (var job in statusJobs)
@@ -703,7 +756,7 @@ namespace LIMSApi.Services
                         {
                             var emailBody = await _templateService.GetTemplateAsync(MessageTemplateKey.SAMPLE_INWARD_UPDATED, NotificationType.Email, new
                             {
-                                CustomerName = entity.Customer.Name,
+                                CustomerName = customerName,
                                 CaseNo = entity.CaseNo
                             });
                             await _emailService.SendEmailAsync(contact.EmailId, $"Sample Inward Completed - {entity.CaseNo}", emailBody);
