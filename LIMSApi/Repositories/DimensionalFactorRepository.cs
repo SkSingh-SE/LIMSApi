@@ -71,6 +71,8 @@ namespace LIMSApi.Repositories
                             from pu in puJoin.DefaultIfEmpty()
                             join eq in _context.EquipmentTypeMasters on c.DefaultEquipmentTypeID equals eq.ID into eqJoin
                             from eq in eqJoin.DefaultIfEmpty()
+                            join tm in _context.TestMethodSpecifications on c.DefaultTestMethodID equals tm.ID into tmJoin
+                            from tm in tmJoin.DefaultIfEmpty()
                             select new
                             {
                                 c.ID,
@@ -83,6 +85,10 @@ namespace LIMSApi.Repositories
                                 c.DefaultEquipmentTypeID,
                                 DefaultEquipmentTypeName = eq != null ? eq.Name : null,
                                 DefaultEquipmentType = eq != null ? new { eq.ID, eq.Name } : null,
+                                c.DefaultTestMethodID,
+                                DefaultTestMethodName = tm != null ? tm.Name : null,
+                                DefaultTestMethod = tm != null ? new { tm.ID, tm.Name } : null,
+                                c.Instrument,
                                 c.ToleranceType,
                                 c.IsActive,
                                 c.CreatedBy,
@@ -98,7 +104,12 @@ namespace LIMSApi.Repositories
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
             {
                 var search = filter.searchTerm.Trim();
-                _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)) || (x.Code != null && x.Code.Contains(search)));
+                _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)) ||
+                (x.Code != null && x.Code.Contains(search)) ||
+                (x.ParameterUnit != null && x.ParameterUnit.Name != null && x.ParameterUnit.Name.Contains(search)) ||
+                (x.DefaultTestMethod != null && x.DefaultTestMethod.Name != null && x.DefaultTestMethod.Name.Contains(search)) ||
+                (x.Instrument != null && x.Instrument.Contains(search)) ||
+                (x.ToleranceType!= null && x.ToleranceType.Contains(search)));
             }
 
             if (filter.SortByColumn != null)

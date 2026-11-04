@@ -68,6 +68,9 @@ namespace LIMSApi.Repositories
                                 c.CreatedOn,
                                 c.ModifiedBy,
                                 ModifiedOn = c.ModifiedOn ?? c.CreatedOn,
+                                c.HasChemicalParams,
+                                c.HasMechanicalParams,
+                                c.MetalType,
                                 CreatedByName = empCre != null ? empCre.Name : null,
                                 ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : null)
                             };
@@ -82,6 +85,7 @@ namespace LIMSApi.Repositories
                     || (x.Code != null && x.Code.Contains(search))
                     || (x.ModifiedByName != null && x.ModifiedByName.Contains(search))
                     || (x.CreatedByName != null && x.CreatedByName.Contains(search))
+                    || (x.MetalType != null && x.MetalType.Contains(search))
                 );
             }
 
