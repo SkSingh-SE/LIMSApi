@@ -1694,6 +1694,358 @@ N'1) DMSL certifies that the tests/calibrations were conducted on the sample sub
                 BEGIN
                     ALTER TABLE [dbo].[MachiningChargeMasters] DROP CONSTRAINT [FK_MachiningChargeMasters_TestMethodSpecifications_TestMethodStandardID];
                 END
+
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'DefaultEquipmentTypeID' AND Object_ID = Object_ID(N'DimensionalFactorMasters'))
+                BEGIN
+                    ALTER TABLE [dbo].[DimensionalFactorMasters] ADD [DefaultEquipmentTypeID] bigint NULL;
+                END
+
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'FactorType' AND Object_ID = Object_ID(N'DimensionalFactorMasters'))
+                BEGIN
+                    ALTER TABLE [dbo].[DimensionalFactorMasters] ADD [FactorType] nvarchar(50) NULL;
+                END
+
+                UPDATE [dbo].[DimensionalFactorMasters] SET [FactorType] = N'Measured' WHERE [FactorType] IS NULL;
+                UPDATE [dbo].[DimensionalFactorMasters] SET [CreatedBy] = 0 WHERE [CreatedBy] IS NULL;
+                UPDATE [dbo].[DimensionalFactorMasters] SET [CreatedOn] = GETUTCDATE() WHERE [CreatedOn] IS NULL;
+
+                -- SpecimenOrientationMasters schema alignment
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'NotationType' AND Object_ID = Object_ID(N'SpecimenOrientationMasters'))
+                BEGIN
+                    ALTER TABLE [dbo].[SpecimenOrientationMasters] ADD [NotationType] nvarchar(50) NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'LengthAxis' AND Object_ID = Object_ID(N'SpecimenOrientationMasters'))
+                BEGIN
+                    ALTER TABLE [dbo].[SpecimenOrientationMasters] ADD [LengthAxis] nvarchar(10) NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'CrackOrNotchDirection' AND Object_ID = Object_ID(N'SpecimenOrientationMasters'))
+                BEGIN
+                    ALTER TABLE [dbo].[SpecimenOrientationMasters] ADD [CrackOrNotchDirection] nvarchar(10) NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'StandardNotation' AND Object_ID = Object_ID(N'SpecimenOrientationMasters'))
+                BEGIN
+                    ALTER TABLE [dbo].[SpecimenOrientationMasters] ADD [StandardNotation] nvarchar(20) NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'TestMethodSpecificationID' AND Object_ID = Object_ID(N'SpecimenOrientationMasters'))
+                BEGIN
+                    ALTER TABLE [dbo].[SpecimenOrientationMasters] ADD [TestMethodSpecificationID] bigint NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'TestStandardName' AND Object_ID = Object_ID(N'SpecimenOrientationMasters'))
+                BEGIN
+                    ALTER TABLE [dbo].[SpecimenOrientationMasters] ADD [TestStandardName] nvarchar(100) NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'Description' AND Object_ID = Object_ID(N'SpecimenOrientationMasters'))
+                BEGIN
+                    ALTER TABLE [dbo].[SpecimenOrientationMasters] ADD [Description] nvarchar(500) NULL;
+                END
+
+                -- ProductConditionMasters schema alignment
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'CalibrationRequired' AND Object_ID = Object_ID(N'ProductConditionMasters'))
+                BEGIN
+                    ALTER TABLE [dbo].[ProductConditionMasters] ADD [CalibrationRequired] bit NOT NULL CONSTRAINT [DF_ProductConditionMasters_CalibrationRequired] DEFAULT 0;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'IsDestructive' AND Object_ID = Object_ID(N'ProductConditionMasters'))
+                BEGIN
+                    ALTER TABLE [dbo].[ProductConditionMasters] ADD [IsDestructive] bit NOT NULL CONSTRAINT [DF_ProductConditionMasters_IsDestructive] DEFAULT 0;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'Description' AND Object_ID = Object_ID(N'ProductConditionMasters'))
+                BEGIN
+                    ALTER TABLE [dbo].[ProductConditionMasters] ADD [Description] nvarchar(500) NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'LinkedHeatTreatmentID' AND Object_ID = Object_ID(N'ProductConditionMasters'))
+                BEGIN
+                    ALTER TABLE [dbo].[ProductConditionMasters] ADD [LinkedHeatTreatmentID] bigint NULL;
+                END
+
+                -- TestResultParameters schema alignment
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'FormulaVersion' AND Object_ID = Object_ID(N'TestResultParameters'))
+                BEGIN
+                    ALTER TABLE [dbo].[TestResultParameters] ADD [FormulaVersion] int NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'IsReportable' AND Object_ID = Object_ID(N'TestResultParameters'))
+                BEGIN
+                    ALTER TABLE [dbo].[TestResultParameters] ADD [IsReportable] bit NOT NULL CONSTRAINT [DF_TestResultParameters_IsReportable] DEFAULT 0;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'ReportableOverrideReason' AND Object_ID = Object_ID(N'TestResultParameters'))
+                BEGIN
+                    ALTER TABLE [dbo].[TestResultParameters] ADD [ReportableOverrideReason] nvarchar(500) NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'RowVersion' AND Object_ID = Object_ID(N'TestResultParameters'))
+                BEGIN
+                    ALTER TABLE [dbo].[TestResultParameters] ADD [RowVersion] rowversion NULL;
+                END
+
+                -- TestResultHeaders schema alignment
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'RowVersion' AND Object_ID = Object_ID(N'TestResultHeaders'))
+                BEGIN
+                    ALTER TABLE [dbo].[TestResultHeaders] ADD [RowVersion] rowversion NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'ApprovalHash' AND Object_ID = Object_ID(N'TestResultHeaders'))
+                BEGIN
+                    ALTER TABLE [dbo].[TestResultHeaders] ADD [ApprovalHash] nvarchar(64) NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'ApprovedAt' AND Object_ID = Object_ID(N'TestResultHeaders'))
+                BEGIN
+                    ALTER TABLE [dbo].[TestResultHeaders] ADD [ApprovedAt] datetime2 NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'ApprovedById' AND Object_ID = Object_ID(N'TestResultHeaders'))
+                BEGIN
+                    ALTER TABLE [dbo].[TestResultHeaders] ADD [ApprovedById] bigint NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'ExecutionExtraJson' AND Object_ID = Object_ID(N'TestResultHeaders'))
+                BEGIN
+                    ALTER TABLE [dbo].[TestResultHeaders] ADD [ExecutionExtraJson] nvarchar(max) NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'LayoutSnapshotJson' AND Object_ID = Object_ID(N'TestResultHeaders'))
+                BEGIN
+                    ALTER TABLE [dbo].[TestResultHeaders] ADD [LayoutSnapshotJson] nvarchar(max) NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'LayoutTemplateId' AND Object_ID = Object_ID(N'TestResultHeaders'))
+                BEGIN
+                    ALTER TABLE [dbo].[TestResultHeaders] ADD [LayoutTemplateId] bigint NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'LayoutVersion' AND Object_ID = Object_ID(N'TestResultHeaders'))
+                BEGIN
+                    ALTER TABLE [dbo].[TestResultHeaders] ADD [LayoutVersion] int NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'ReportSnapshotJson' AND Object_ID = Object_ID(N'TestResultHeaders'))
+                BEGIN
+                    ALTER TABLE [dbo].[TestResultHeaders] ADD [ReportSnapshotJson] nvarchar(max) NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'RetestOfHeaderId' AND Object_ID = Object_ID(N'TestResultHeaders'))
+                BEGIN
+                    ALTER TABLE [dbo].[TestResultHeaders] ADD [RetestOfHeaderId] bigint NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'RetestReasonCode' AND Object_ID = Object_ID(N'TestResultHeaders'))
+                BEGIN
+                    ALTER TABLE [dbo].[TestResultHeaders] ADD [RetestReasonCode] nvarchar(50) NULL;
+                END
+
+                -- TestLayoutTemplates and Mappings alignment
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'TestMethodName' AND Object_ID = Object_ID(N'TestLayoutTemplates'))
+                BEGIN
+                    ALTER TABLE [dbo].[TestLayoutTemplates] ADD [TestMethodName] nvarchar(250) NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'TestMethodSpecificationID' AND Object_ID = Object_ID(N'TestLayoutTemplates'))
+                BEGIN
+                    ALTER TABLE [dbo].[TestLayoutTemplates] ADD [TestMethodSpecificationID] bigint NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'TestMethodName' AND Object_ID = Object_ID(N'TestLayoutTemplateMappings'))
+                BEGIN
+                    ALTER TABLE [dbo].[TestLayoutTemplateMappings] ADD [TestMethodName] nvarchar(250) NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'TestMethodSpecificationID' AND Object_ID = Object_ID(N'TestLayoutTemplateMappings'))
+                BEGIN
+                    ALTER TABLE [dbo].[TestLayoutTemplateMappings] ADD [TestMethodSpecificationID] bigint NULL;
+                END
+
+                -- TestResultAuditLogs Table
+                IF OBJECT_ID(N'dbo.TestResultAuditLogs', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE [dbo].[TestResultAuditLogs] (
+                        [ID] bigint IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                        [TestResultHeaderID] bigint NOT NULL,
+                        [EntityName] nvarchar(100) NOT NULL,
+                        [EntityID] bigint NOT NULL,
+                        [FieldName] nvarchar(100) NOT NULL,
+                        [OldValue] nvarchar(max) NULL,
+                        [NewValue] nvarchar(max) NULL,
+                        [ChangeReason] nvarchar(500) NULL,
+                        [ChangedBy] bigint NOT NULL,
+                        [ChangedOn] datetime2 NOT NULL
+                    );
+                END
+
+                -- TestResultChecklistItems Table
+                IF OBJECT_ID(N'dbo.TestResultChecklistItems', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE [dbo].[TestResultChecklistItems] (
+                        [ID] bigint IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                        [TestResultHeaderID] bigint NOT NULL,
+                        [ItemCode] nvarchar(50) NOT NULL,
+                        [ItemDescription] nvarchar(200) NOT NULL,
+                        [Status] nvarchar(20) NOT NULL,
+                        [Remarks] nvarchar(500) NULL,
+                        [CheckedBy] bigint NULL,
+                        [CheckedAt] datetime2 NULL,
+                        [IsReportable] bit NOT NULL DEFAULT 0,
+                        [IsVoided] bit NOT NULL DEFAULT 0,
+                        [CreatedBy] bigint NOT NULL,
+                        [CreatedOn] datetime2 NOT NULL,
+                        [ModifiedBy] bigint NULL,
+                        [ModifiedOn] datetime2 NULL,
+                        [CompanyCode] nvarchar(max) NOT NULL,
+                        [IsActive] bit NOT NULL
+                    );
+                END
+
+                -- TestResultLocations Table
+                IF OBJECT_ID(N'dbo.TestResultLocations', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE [dbo].[TestResultLocations] (
+                        [ID] bigint IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                        [TestResultHeaderID] bigint NOT NULL,
+                        [LocationCode] nvarchar(50) NOT NULL,
+                        [DisplayName] nvarchar(200) NOT NULL,
+                        [SequenceNo] int NOT NULL,
+                        [IsRuntimeAdded] bit NOT NULL DEFAULT 0,
+                        [AddedReason] nvarchar(500) NULL,
+                        [IsReportable] bit NOT NULL DEFAULT 0,
+                        [IsVoided] bit NOT NULL DEFAULT 0,
+                        [VoidReason] nvarchar(500) NULL,
+                        [CreatedBy] bigint NOT NULL,
+                        [CreatedOn] datetime2 NOT NULL,
+                        [ModifiedBy] bigint NULL,
+                        [ModifiedOn] datetime2 NULL,
+                        [CompanyCode] nvarchar(max) NOT NULL,
+                        [IsActive] bit NOT NULL
+                    );
+                END
+
+                -- TestResultObservations Table
+                IF OBJECT_ID(N'dbo.TestResultObservations', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE [dbo].[TestResultObservations] (
+                        [ID] bigint IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                        [TestResultHeaderID] bigint NOT NULL,
+                        [ObservationCode] nvarchar(50) NOT NULL,
+                        [Category] nvarchar(100) NOT NULL,
+                        [ObservationText] nvarchar(max) NOT NULL,
+                        [IsRuntimeAdded] bit NOT NULL DEFAULT 0,
+                        [AddedReason] nvarchar(500) NULL,
+                        [IsReportable] bit NOT NULL DEFAULT 0,
+                        [IsVoided] bit NOT NULL DEFAULT 0,
+                        [VoidReason] nvarchar(500) NULL,
+                        [CreatedBy] bigint NOT NULL,
+                        [CreatedOn] datetime2 NOT NULL,
+                        [ModifiedBy] bigint NULL,
+                        [ModifiedOn] datetime2 NULL,
+                        [CompanyCode] nvarchar(max) NOT NULL,
+                        [IsActive] bit NOT NULL
+                    );
+                END
+
+                -- TestResultReadings Table
+                IF OBJECT_ID(N'dbo.TestResultReadings', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE [dbo].[TestResultReadings] (
+                        [ID] bigint IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                        [TestResultHeaderID] bigint NOT NULL,
+                        [TestResultParameterID] bigint NULL,
+                        [ParameterCode] nvarchar(50) NOT NULL,
+                        [SpecimenCode] nvarchar(20) NOT NULL,
+                        [LocationCode] nvarchar(50) NULL,
+                        [SequenceNo] int NOT NULL,
+                        [Value] decimal(18,6) NULL,
+                        [Unit] nvarchar(50) NULL,
+                        [IsVoided] bit NOT NULL DEFAULT 0,
+                        [VoidReason] nvarchar(500) NULL,
+                        [CreatedBy] bigint NOT NULL,
+                        [CreatedOn] datetime2 NOT NULL,
+                        [ModifiedBy] bigint NULL,
+                        [ModifiedOn] datetime2 NULL,
+                        [CompanyCode] nvarchar(max) NOT NULL,
+                        [IsActive] bit NOT NULL
+                    );
+                END
+
+                -- TestResultTraversePoints Table
+                IF OBJECT_ID(N'dbo.TestResultTraversePoints', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE [dbo].[TestResultTraversePoints] (
+                        [ID] bigint IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                        [TestResultHeaderID] bigint NOT NULL,
+                        [SpecimenCode] nvarchar(20) NOT NULL,
+                        [SequenceNo] int NOT NULL,
+                        [Distance] decimal(10,4) NOT NULL,
+                        [HardnessValue] decimal(18,4) NULL,
+                        [HardnessUnit] nvarchar(50) NOT NULL,
+                        [IsBelowCutoff] bit NOT NULL DEFAULT 0,
+                        [IsVoided] bit NOT NULL DEFAULT 0,
+                        [CreatedBy] bigint NOT NULL,
+                        [CreatedOn] datetime2 NOT NULL,
+                        [ModifiedBy] bigint NULL,
+                        [ModifiedOn] datetime2 NULL,
+                        [CompanyCode] nvarchar(max) NOT NULL,
+                        [IsActive] bit NOT NULL
+                    );
+                END
+
+                -- DimensionalFactorShapeFormulas Table
+                IF OBJECT_ID(N'dbo.DimensionalFactorShapeFormulas', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE [dbo].[DimensionalFactorShapeFormulas] (
+                        [ID] bigint IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                        [DimensionalFactorID] bigint NOT NULL,
+                        [SpecimenTypeID] bigint NULL,
+                        [SpecimenShape] nvarchar(100) NOT NULL,
+                        [FormulaExpression] nvarchar(200) NOT NULL,
+                        [Variables] nvarchar(100) NULL,
+                        [CreatedBy] bigint NOT NULL,
+                        [CreatedOn] datetime2 NOT NULL,
+                        [ModifiedBy] bigint NULL,
+                        [ModifiedOn] datetime2 NULL,
+                        [CompanyCode] nvarchar(max) NOT NULL,
+                        [IsActive] bit NOT NULL
+                    );
+                END
+
+                -- HeatTreatmentStages Table
+                IF OBJECT_ID(N'dbo.HeatTreatmentStages', N'U') IS NULL
+                BEGIN
+                    CREATE TABLE [dbo].[HeatTreatmentStages] (
+                        [ID] bigint IDENTITY(1,1) NOT NULL PRIMARY KEY,
+                        [HeatTreatmentID] bigint NOT NULL,
+                        [StageNumber] int NOT NULL,
+                        [StageName] nvarchar(100) NOT NULL,
+                        [TempRangeMin] decimal(10,2) NOT NULL,
+                        [TempRangeMax] decimal(10,2) NOT NULL,
+                        [SoakingDescription] nvarchar(200) NULL,
+                        [CoolingMediumID] bigint NULL,
+                        [CreatedBy] bigint NOT NULL,
+                        [CreatedOn] datetime2 NOT NULL,
+                        [ModifiedBy] bigint NULL,
+                        [ModifiedOn] datetime2 NULL,
+                        [CompanyCode] nvarchar(max) NOT NULL,
+                        [IsActive] bit NOT NULL
+                    );
+                END
+
+                -- Child tables RowVersion alignment
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'RowVersion' AND Object_ID = Object_ID(N'TestResultChecklistItems'))
+                BEGIN
+                    ALTER TABLE [dbo].[TestResultChecklistItems] ADD [RowVersion] rowversion NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'RowVersion' AND Object_ID = Object_ID(N'TestResultLocations'))
+                BEGIN
+                    ALTER TABLE [dbo].[TestResultLocations] ADD [RowVersion] rowversion NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'RowVersion' AND Object_ID = Object_ID(N'TestResultObservations'))
+                BEGIN
+                    ALTER TABLE [dbo].[TestResultObservations] ADD [RowVersion] rowversion NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'RowVersion' AND Object_ID = Object_ID(N'TestResultReadings'))
+                BEGIN
+                    ALTER TABLE [dbo].[TestResultReadings] ADD [RowVersion] rowversion NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'RowVersion' AND Object_ID = Object_ID(N'TestResultTraversePoints'))
+                BEGIN
+                    ALTER TABLE [dbo].[TestResultTraversePoints] ADD [RowVersion] rowversion NULL;
+                END
+
+                -- LabScopeSpecificationParameters hierarchy alignment
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'DisciplineID' AND Object_ID = Object_ID(N'LabScopeSpecificationParameters'))
+                BEGIN
+                    ALTER TABLE [dbo].[LabScopeSpecificationParameters] ADD [DisciplineID] bigint NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'GroupID' AND Object_ID = Object_ID(N'LabScopeSpecificationParameters'))
+                BEGIN
+                    ALTER TABLE [dbo].[LabScopeSpecificationParameters] ADD [GroupID] bigint NULL;
+                END
+                IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = N'SubGroupID' AND Object_ID = Object_ID(N'LabScopeSpecificationParameters'))
+                BEGIN
+                    ALTER TABLE [dbo].[LabScopeSpecificationParameters] ADD [SubGroupID] bigint NULL;
+                END
             ");
             logger.LogInformation("DataSeeder: MachiningChargeMasters foreign key constraints updated to polymorphic references.");
         }

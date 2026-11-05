@@ -78,7 +78,7 @@ namespace LIMSApi.Repositories
                                 c.ID,
                                 c.Name,
                                 c.Code,
-                                c.FactorType,
+                                FactorType = c.FactorType ?? "Measured",
                                 c.ParameterUnitID,
                                 UnitName = pu != null ? pu.Name : null,
                                 ParameterUnit = pu != null ? new { pu.ID, pu.Name } : null,
@@ -106,10 +106,10 @@ namespace LIMSApi.Repositories
                 var search = filter.searchTerm.Trim();
                 _query = _query.Where(x => (x.Name != null && x.Name.Contains(search)) ||
                 (x.Code != null && x.Code.Contains(search)) ||
-                (x.ParameterUnit != null && x.ParameterUnit.Name != null && x.ParameterUnit.Name.Contains(search)) ||
-                (x.DefaultTestMethod != null && x.DefaultTestMethod.Name != null && x.DefaultTestMethod.Name.Contains(search)) ||
+                (x.UnitName != null && x.UnitName.Contains(search)) ||
+                (x.DefaultTestMethodName != null && x.DefaultTestMethodName.Contains(search)) ||
                 (x.Instrument != null && x.Instrument.Contains(search)) ||
-                (x.ToleranceType!= null && x.ToleranceType.Contains(search)));
+                (x.ToleranceType != null && x.ToleranceType.Contains(search)));
             }
 
             if (filter.SortByColumn != null)

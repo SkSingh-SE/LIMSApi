@@ -43,7 +43,7 @@ public partial class DimensionalFactorMaster : AuditProperty
     public virtual TestMethodSpecification? DefaultTestMethod { get; set; }
 
     [StringLength(50)]
-    public string FactorType { get; set; } = "Measured";
+    public string? FactorType { get; set; } = "Measured";
 
     public long? DefaultEquipmentTypeID { get; set; }
 
