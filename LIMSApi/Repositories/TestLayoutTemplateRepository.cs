@@ -251,6 +251,8 @@ namespace LIMSApi.Repositories
                              SubGroupName = t.SubGroup != null ? t.SubGroup.Name : "",
                              t.LaboratoryTestAnalysisTypeID,
                              AnalysisTypeName = t.AnalysisType != null ? t.AnalysisType.Name : "",
+                             t.TestMethodSpecificationID,
+                             t.TestMethodName,
                              t.LeafNode,
                              t.ApplyToLeaf,
                              t.SectionCount,
@@ -266,6 +268,9 @@ namespace LIMSApi.Repositories
                     (x.LayoutCode != null && x.LayoutCode.Contains(search))
                     || (x.LayoutName != null && x.LayoutName.Contains(search))
                     || (x.LaboratoryTestName != null && x.LaboratoryTestName.Contains(search))
+                    || (x.TestMethodName != null && x.TestMethodName.Contains(search))
+                    || (x.SubGroupName != null && x.SubGroupName.Contains(search))
+                    || (x.AnalysisTypeName != null && x.AnalysisTypeName.Contains(search))
                     || (x.Revision != null && x.Revision.Contains(search))
                     || (x.ArchetypeSummary != null && x.ArchetypeSummary.Contains(search))
                     || (x.LeafNode != null && x.LeafNode.Contains(search))

@@ -165,7 +165,19 @@ namespace LIMSApi.Controllers
                     l.MaxValue,
                     l.MinTolerance,
                     l.MaxTolerance,
-                    UnitName = l.ParameterUnit != null ? l.ParameterUnit.Name : null
+                    UnitName = l.ParameterUnit != null ? l.ParameterUnit.Name : null,
+                    l.DimensionalFactorID,
+                    l.HeatTreatmentID,
+                    l.ProductConditionID1,
+                    l.ProductConditionID2,
+                    l.SpecimenOrientationID,
+                    l.LaboratoryTestID,
+                    l.Equation,
+                    AcceptanceCriteria = l.Notes,
+                    l.LowerLimitValue,
+                    l.UpperLimitValue,
+                    l.LowerLimitDecimalValue,
+                    l.UpperLimitDecimalValue
                 })
                 .ToListAsync();
             return Ok(lines);
