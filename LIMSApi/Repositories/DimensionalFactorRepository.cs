@@ -80,9 +80,11 @@ namespace LIMSApi.Repositories
                                 c.Code,
                                 FactorType = c.FactorType ?? "Measured",
                                 c.ParameterUnitID,
+                                Unit = pu != null ? pu.Name : null,
                                 UnitName = pu != null ? pu.Name : null,
                                 ParameterUnit = pu != null ? new { pu.ID, pu.Name } : null,
                                 c.DefaultEquipmentTypeID,
+                                DefaultEquipment = eq != null ? eq.Name : null,
                                 DefaultEquipmentTypeName = eq != null ? eq.Name : null,
                                 DefaultEquipmentType = eq != null ? new { eq.ID, eq.Name } : null,
                                 c.DefaultTestMethodID,
@@ -99,6 +101,17 @@ namespace LIMSApi.Repositories
                                 ModifiedByName = empMod != null ? empMod.Name : (empCre != null ? empCre.Name : null)
                             };
 
+            if (filter.Filter != null)
+            {
+                foreach (var f in filter.Filter)
+                {
+                    if (string.Equals(f.Column, "unit", StringComparison.OrdinalIgnoreCase))
+                        f.Column = "UnitName";
+                    else if (string.Equals(f.Column, "defaultEquipment", StringComparison.OrdinalIgnoreCase))
+                        f.Column = "DefaultEquipmentTypeName";
+                }
+            }
+
             var _query = baseQuery.AsQueryable().ApplyFilters(filter.Filter);
 
             if (!string.IsNullOrWhiteSpace(filter.searchTerm))
@@ -112,9 +125,15 @@ namespace LIMSApi.Repositories
                 (x.ToleranceType != null && x.ToleranceType.Contains(search)));
             }
 
-            if (filter.SortByColumn != null)
+            if (!string.IsNullOrWhiteSpace(filter.SortByColumn))
             {
-                _query = _query.OrderBy($"{filter.SortByColumn} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
+                var sortCol = filter.SortByColumn.Trim();
+                if (string.Equals(sortCol, "unit", StringComparison.OrdinalIgnoreCase))
+                    sortCol = "UnitName";
+                else if (string.Equals(sortCol, "defaultEquipment", StringComparison.OrdinalIgnoreCase))
+                    sortCol = "DefaultEquipmentTypeName";
+
+                _query = _query.OrderBy($"{sortCol} {(filter.SortOrder == "asc" ? "ascending" : "descending")}");
             }
 
             return await _query.Cast<object>().ToPagedAsync(filter);
