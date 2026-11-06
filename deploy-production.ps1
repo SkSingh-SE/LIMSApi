@@ -32,6 +32,15 @@ if (Test-Path $SecretsSrc) {
     $secrets | ConvertTo-Json -Depth 10 | Set-Content $SecretsDst -Encoding UTF8
 }
 
+# Synchronize Database Schema Declaratively (Approach 3: State-Based DACPAC)
+$SyncScript = Join-Path $PSScriptRoot "db-sync-schema.ps1"
+if (Test-Path $SyncScript) {
+    Write-Host "==========================================" -ForegroundColor Cyan
+    Write-Host " Synchronizing Production Database Schema..." -ForegroundColor Cyan
+    Write-Host "==========================================" -ForegroundColor Cyan
+    & powershell -ExecutionPolicy Bypass -File $SyncScript -TargetEnv "Production"
+}
+
 Write-Host "==========================================" -ForegroundColor Green
 Write-Host " Deploying to IIS Production Server..." -ForegroundColor Green
 Write-Host " Site: dmspl91-001-site3" -ForegroundColor Green
